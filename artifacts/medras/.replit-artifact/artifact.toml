@@ -1,0 +1,34 @@
+kind = "web"
+previewPath = "/"
+title = "MedRAS"
+version = "0.1.0"
+id = "artifacts/medras"
+router = "path"
+
+[[services]]
+name = "MedRAS Web"
+paths = ["/"]
+localPort = 8000
+
+[services.development]
+run = "MEDRAS_RELOAD=true PORT=8000 python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload"
+
+[services.production]
+
+[services.production.run]
+args = [
+  "python",
+  "-m",
+  "uvicorn",
+  "main:app",
+  "--host",
+  "0.0.0.0",
+  "--port",
+  "8000",
+]
+
+[services.production.run.env]
+PORT = "8000"
+
+[services.production.health.startup]
+path = "/api/healthz"
