@@ -3,13 +3,15 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: API specification for Novus document rewriter
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: documents
+    description: Document upload and rewriting operations
 paths:
   /healthz:
     get:
@@ -24,6 +26,94 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /documents/upload:
+    post:
+      operationId: uploadDocument
+      tags: [documents]
+      summary: Upload a PDF or DOCX document
+      description: Upload a document to extract its text content
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+              required:
+                - file
+      responses:
+        "200":
+          description: Document uploaded and text extracted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadResult"
+        "400":
+          description: Invalid file
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /documents/rewrite:
+    post:
+      operationId: rewriteDocument
+      tags: [documents]
+      summary: Rewrite document text
+      description: Rewrite extracted text to reduce plagiarism and AI detection
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RewriteRequest"
+      responses:
+        "200":
+          description: Document rewritten successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RewriteResult"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /documents/download:
+    post:
+      operationId: downloadDocument
+      tags: [documents]
+      summary: Generate downloadable DOCX from rewritten text
+      description: Convert rewritten text back to a downloadable DOCX file
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DownloadRequest"
+      responses:
+        "200":
+          description: DOCX file generated
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 components:
   schemas:
     HealthStatus:
@@ -33,4 +123,61 @@ components:
           type: string
       required:
         - status
-
+    UploadResult:
+      type: object
+      properties:
+        text:
+          type: string
+        filename:
+          type: string
+        wordCount:
+          type: integer
+        charCount:
+          type: integer
+      required:
+        - text
+        - filename
+        - wordCount
+        - charCount
+    RewriteRequest:
+      type: object
+      properties:
+        text:
+          type: string
+        mode:
+          type: string
+          enum: [standard, aggressive, academic]
+      required:
+        - text
+    RewriteResult:
+      type: object
+      properties:
+        rewrittenText:
+          type: string
+        originalWordCount:
+          type: integer
+        rewrittenWordCount:
+          type: integer
+        mode:
+          type: string
+      required:
+        - rewrittenText
+        - originalWordCount
+        - rewrittenWordCount
+        - mode
+    DownloadRequest:
+      type: object
+      properties:
+        text:
+          type: string
+        filename:
+          type: string
+      required:
+        - text
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error

@@ -5,7 +5,9 @@
  * API specification for Novus document rewriter
  * OpenAPI spec version: 0.1.0
  */
+import type { RewriteRequestMode } from "./rewriteRequestMode";
 
-export interface HealthStatus {
-  status: string;
+export interface RewriteRequest {
+  text: string;
+  mode?: RewriteRequestMode;
 }
