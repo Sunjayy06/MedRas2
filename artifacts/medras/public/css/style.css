@@ -355,6 +355,19 @@ ul {
   color: var(--color-success);
 }
 
+.module-card-link {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--color-accent);
+  margin-top: auto;
+  align-self: flex-start;
+}
+
+.module-card-link:hover {
+  color: var(--color-accent-dark);
+  text-decoration: underline;
+}
+
 /* =========================================================================
    Workflow
    ========================================================================= */

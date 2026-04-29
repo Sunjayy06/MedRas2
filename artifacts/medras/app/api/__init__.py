@@ -10,6 +10,8 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from .health import router as health_router
+from .sample_size import router as sample_size_router
 
 router = APIRouter()
 router.include_router(health_router, tags=["system"])
+router.include_router(sample_size_router)

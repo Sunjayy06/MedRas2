@@ -43,7 +43,19 @@ Each new module gets its own router file under `app/api/<module>.py` and is moun
 
 ## Modules Implemented
 
-- **Foundation only.** Landing page, health endpoints, and architectural scaffolding for all six modules. No module-specific functionality has been built yet.
+- **Module 02 — Sample Size Calculator** (`/sample-size.html`)
+  - Three-step UI: enter objective → choose/confirm formula and parameters → view result.
+  - Backend endpoints: `POST /api/sample-size/analyze`, `POST /api/sample-size/calculate`.
+  - Supported formulas: single proportion, single mean, two independent proportions,
+    two independent means, paired means (before–after), one-way ANOVA (≥3 groups,
+    normal-approx).
+  - Objective analyzer uses OpenAI when `OPENAI_API_KEY` is set; otherwise a
+    rule-based heuristic classifies group count, outcome type, and study design.
+  - Z-scores derived from Acklam's inverse-normal algorithm (no SciPy dependency).
+  - Result panel always shows: per-group n, statistically-required total, dropout-
+    adjusted total, full input list, all derived constants (Z(α/2), Z(β), p̄, …),
+    and an optional comparison against the researcher's expected sample size.
+- Other five modules: scaffolded on the landing page, not yet implemented.
 
 ## Environment Variables
 
