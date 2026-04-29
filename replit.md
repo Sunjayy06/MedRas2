@@ -55,6 +55,13 @@ Each new module gets its own router file under `app/api/<module>.py` and is moun
   - Result panel always shows: per-group n, statistically-required total, dropout-
     adjusted total, full input list, all derived constants (Z(α/2), Z(β), p̄, …),
     and an optional comparison against the researcher's expected sample size.
+  - **Reverse mode (two-proportions only):** if the researcher knows the
+    baseline rate (p₁) and how many participants they can recruit but does
+    not know p₂, a checkbox swaps the form into back-calculation mode. The
+    calculator solves the same formula for p₂ via bisection and reports the
+    minimum detectable second proportion in each direction (decrease /
+    increase) plus the corresponding minimum detectable difference.
+    Endpoint: `POST /api/sample-size/reverse-two-proportions`.
 - Other five modules: scaffolded on the landing page, not yet implemented.
 
 ## Environment Variables

@@ -144,6 +144,7 @@
     objective: "",
     selectedFormula: null,
     lastAnalysis: null,
+    reverseMode: false, // only meaningful when selectedFormula === 'two_proportions'
   };
 
   // -----------------------------------------------------------------------
@@ -173,7 +174,14 @@
 
   function bindStep2() {
     document.getElementById("formula-select").addEventListener("change", function (event) {
+      state.reverseMode = false;
+      var toggle = document.getElementById("reverse-toggle");
+      if (toggle) toggle.checked = false;
       renderFormulaFields(event.target.value);
+    });
+    document.getElementById("reverse-toggle").addEventListener("change", function (event) {
+      state.reverseMode = !!event.target.checked;
+      renderFormulaFields(state.selectedFormula);
     });
     document.getElementById("calculate-btn").addEventListener("click", onCalculate);
     document.getElementById("back-to-step-1").addEventListener("click", function () {
@@ -198,6 +206,7 @@
     state.objective = "";
     state.selectedFormula = null;
     state.lastAnalysis = null;
+    state.reverseMode = false;
     var ids = ["objective", "expected"];
     ids.forEach(function (id) {
       var el = document.getElementById(id);
@@ -206,6 +215,10 @@
     document.getElementById("alpha").value = "0.05";
     document.getElementById("power").value = "0.80";
     document.getElementById("dropout").value = "0";
+    var toggle = document.getElementById("reverse-toggle");
+    if (toggle) toggle.checked = false;
+    var toggleWrap = document.getElementById("reverse-toggle-wrap");
+    if (toggleWrap) toggleWrap.hidden = true;
     var panel = document.getElementById("analysis-panel");
     if (panel) panel.hidden = true;
     var err = document.getElementById("parameters-error");
@@ -283,17 +296,43 @@
   // Step 2 — parameters
   // -----------------------------------------------------------------------
 
+  // Field used in reverse mode to capture the available per-group sample size.
+  var REVERSE_N_FIELD = {
+    key: "n_per_group",
+    label: "Available sample size per group",
+    help: "How many participants you can realistically recruit in each arm.",
+    type: "number", min: 4, max: 1000000, step: 1, placeholder: "e.g., 100",
+  };
+
   function renderFormulaFields(formulaKey) {
     state.selectedFormula = formulaKey;
     var spec = FORMULAS[formulaKey];
     document.getElementById("formula-select").value = formulaKey;
-    document.getElementById("formula-summary").textContent = spec.expression;
+
+    // Reverse-mode toggle is only available for two_proportions today.
+    var toggleWrap = document.getElementById("reverse-toggle-wrap");
+    if (toggleWrap) toggleWrap.hidden = formulaKey !== "two_proportions";
+    if (formulaKey !== "two_proportions") state.reverseMode = false;
+
+    // Build the per-formula fields. In reverse mode for two_proportions we
+    // swap p2 out for the available-n field.
+    var fieldsToRender = spec.fields;
+    if (formulaKey === "two_proportions" && state.reverseMode) {
+      fieldsToRender = spec.fields
+        .filter(function (f) { return f.key !== "p2"; })
+        .concat([REVERSE_N_FIELD]);
+    }
+
+    document.getElementById("formula-summary").textContent =
+      state.reverseMode
+        ? "Solve the same expression for p₂ instead of n: " + spec.expression
+        : spec.expression;
 
     var container = document.getElementById("formula-fields");
     container.innerHTML = "";
     var row = document.createElement("div");
     row.className = "field-row";
-    spec.fields.forEach(function (field) {
+    fieldsToRender.forEach(function (field) {
       row.appendChild(buildFieldEl(field));
     });
     container.appendChild(row);
@@ -302,6 +341,13 @@
     var powerField = document.querySelector("[data-power-field]");
     if (powerField) {
       powerField.style.display = spec.usesPower ? "" : "none";
+    }
+
+    // The "expected sample size" target is meaningless in reverse mode —
+    // the researcher's available n IS the input. Hide it to avoid confusion.
+    var expectedFieldset = document.getElementById("expected").closest("fieldset");
+    if (expectedFieldset) {
+      expectedFieldset.style.display = state.reverseMode ? "none" : "";
     }
   }
 
@@ -337,9 +383,19 @@
 
   function onCalculate() {
     var spec = FORMULAS[state.selectedFormula];
+    var isReverse =
+      state.reverseMode && state.selectedFormula === "two_proportions";
+
+    // Determine which fields the user must have filled.
+    var fieldsToRead = isReverse
+      ? spec.fields
+          .filter(function (f) { return f.key !== "p2"; })
+          .concat([REVERSE_N_FIELD])
+      : spec.fields;
+
     var params = {};
     var missing = [];
-    spec.fields.forEach(function (field) {
+    fieldsToRead.forEach(function (field) {
       var raw = document.getElementById("param-" + field.key).value;
       if (raw === "" || raw === null) {
         missing.push(field.label);
@@ -369,22 +425,37 @@
     }
     errEl.hidden = true;
 
-    var expectedRaw = document.getElementById("expected").value.trim();
-    var expected = expectedRaw === "" ? null : Math.max(1, Math.floor(Number(expectedRaw)));
-
     var btn = document.getElementById("calculate-btn");
     btn.disabled = true;
     btn.textContent = "Calculating…";
 
-    var body = {
-      formula: state.selectedFormula,
-      parameters: params,
-    };
-    if (expected !== null && !Number.isNaN(expected)) {
-      body.expected_sample_size = expected;
+    var url, body, restoreLabel;
+    if (isReverse) {
+      url = "/api/sample-size/reverse-two-proportions";
+      // Reverse endpoint takes a flat payload, not {formula, parameters}.
+      body = {
+        p1: params.p1,
+        n_per_group: Math.floor(params.n_per_group),
+        alpha: params.alpha,
+        power: params.power,
+        dropout: params.dropout,
+      };
+      restoreLabel = "Calculate detectable difference";
+    } else {
+      url = "/api/sample-size/calculate";
+      body = { formula: state.selectedFormula, parameters: params };
+      var expectedRaw = document.getElementById("expected").value.trim();
+      var expected =
+        expectedRaw === ""
+          ? null
+          : Math.max(1, Math.floor(Number(expectedRaw)));
+      if (expected !== null && !Number.isNaN(expected)) {
+        body.expected_sample_size = expected;
+      }
+      restoreLabel = "Calculate sample size";
     }
 
-    fetch("/api/sample-size/calculate", {
+    fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify(body),
@@ -396,7 +467,11 @@
         });
       })
       .then(function (data) {
-        renderResult(data);
+        if (isReverse) {
+          renderReverseResult(data);
+        } else {
+          renderResult(data);
+        }
         goToStep(3);
       })
       .catch(function (err) {
@@ -405,7 +480,7 @@
       })
       .finally(function () {
         btn.disabled = false;
-        btn.textContent = "Calculate sample size";
+        btn.textContent = restoreLabel;
       });
   }
 
@@ -414,6 +489,14 @@
   // -----------------------------------------------------------------------
 
   function renderResult(data) {
+    // Forward-mode layout: hide reverse panel, show the standard headline.
+    var reversePanel = document.getElementById("result-reverse");
+    if (reversePanel) reversePanel.hidden = true;
+    var fwdHeadline = document.getElementById("result-forward-headline");
+    if (fwdHeadline) fwdHeadline.style.display = "";
+    var heading = document.getElementById("result-heading");
+    if (heading) heading.textContent = "3. Required sample size";
+
     setText("text-result-formula", data.formula_label + " · " + data.formula_expression);
     setText("text-n-per-group", formatN(data.n_per_group, data.number_of_groups));
     setText("text-total-n", String(data.total_n));
@@ -458,6 +541,78 @@
   }
 
   // -----------------------------------------------------------------------
+  // Step 3 — reverse result (back-calculated p₂)
+  // -----------------------------------------------------------------------
+
+  function renderReverseResult(data) {
+    var heading = document.getElementById("result-heading");
+    if (heading) heading.textContent = "3. Minimum detectable difference";
+
+    setText(
+      "text-result-formula",
+      data.formula_label + " · " + data.formula_expression
+    );
+
+    // Hide forward-only sections, show the reverse panel.
+    document.getElementById("result-forward-headline").style.display = "none";
+    document.getElementById("result-comparison").hidden = true;
+    document.getElementById("result-reverse").hidden = false;
+
+    setText("text-formula-expression", data.formula_expression);
+
+    var det = data.detectable || {};
+    setText("text-p2-lower", det.p2_lower == null ? "Not detectable" : formatProb(det.p2_lower));
+    setText("text-p2-higher", det.p2_higher == null ? "Not detectable" : formatProb(det.p2_higher));
+    setText(
+      "text-mdd-lower",
+      det.min_detectable_decrease == null
+        ? "—"
+        : formatDelta(det.min_detectable_decrease)
+    );
+    setText(
+      "text-mdd-higher",
+      det.min_detectable_increase == null
+        ? "—"
+        : formatDelta(det.min_detectable_increase)
+    );
+    setText("text-analyzable", String(data.inputs.n_per_group_analyzable));
+
+    fillTable("table-inputs", data.inputs, INPUT_LABELS);
+    fillTable("table-constants", data.constants, CONSTANT_LABELS);
+
+    // Notes
+    var notesSection = document.getElementById("result-notes-section");
+    var notesList = document.querySelector('[data-testid="list-result-notes"]');
+    notesList.innerHTML = "";
+    if (data.notes && data.notes.length) {
+      notesSection.hidden = false;
+      data.notes.forEach(function (note) {
+        var li = document.createElement("li");
+        li.textContent = note;
+        notesList.appendChild(li);
+      });
+    } else {
+      notesSection.hidden = true;
+    }
+
+    // Warnings (e.g. p2 not detectable in one or both directions)
+    var warnList = document.getElementById("reverse-warnings-list");
+    warnList.innerHTML = "";
+    (data.warnings || []).forEach(function (w) {
+      var li = document.createElement("li");
+      li.textContent = w;
+      warnList.appendChild(li);
+    });
+  }
+
+  function formatProb(v) {
+    return (v * 100).toFixed(1) + "%  (" + v.toFixed(4) + ")";
+  }
+  function formatDelta(v) {
+    return (v * 100).toFixed(1) + " percentage points";
+  }
+
+  // -----------------------------------------------------------------------
   // Helpers
   // -----------------------------------------------------------------------
 
@@ -476,6 +631,8 @@
     alpha: "Alpha (α — Type I error)",
     power: "Power (1 − β)",
     dropout_rate: "Anticipated dropout rate",
+    n_per_group_recruited: "Available n per group (recruited)",
+    n_per_group_analyzable: "Analysable n per group (after dropout)",
   };
 
   var CONSTANT_LABELS = {

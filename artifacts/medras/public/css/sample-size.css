@@ -419,3 +419,37 @@
     gap: 12px;
   }
 }
+
+/* ----- Reverse-mode toggle (two-proportions only) ----- */
+.reverse-toggle {
+  margin: 0 0 1.25rem;
+  padding: 0.85rem 1rem;
+  background: #f3f7ff;
+  border: 1px solid #cfdcf3;
+  border-radius: 8px;
+}
+.reverse-toggle-label {
+  display: flex;
+  gap: 0.65rem;
+  align-items: flex-start;
+  font-size: 0.95rem;
+  color: #102a55;
+  cursor: pointer;
+  line-height: 1.45;
+}
+.reverse-toggle-label input[type="checkbox"] {
+  margin-top: 0.2rem;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+.reverse-toggle-label strong { color: #2f6fed; }
+
+/* ----- Reverse result panel ----- */
+.result-reverse {
+  margin-bottom: 1.5rem;
+}
+.result-reverse .result-headline {
+  margin-bottom: 1rem;
+}

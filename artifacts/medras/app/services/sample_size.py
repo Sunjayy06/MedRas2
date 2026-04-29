@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import asdict, dataclass, field
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from .normal import z_power, z_two_tailed
 
@@ -402,6 +402,162 @@ def anova_means(
             "added when the Statistical Analysis Engine ships).",
         ],
     )
+
+
+# ---------------------------------------------------------------------------
+# Reverse / "minimum detectable difference" — two independent proportions
+# ---------------------------------------------------------------------------
+
+
+def _two_prop_required_n_continuous(
+    p1: float, p2: float, z_a: float, z_b: float
+) -> float:
+    """Continuous (non-ceiling) required n/group for two-proportion test.
+
+    Used by the bisection solver below — we need a smooth function so that
+    f(p2) = required_n(p2) - n_target has well-defined roots.
+    """
+    if p1 == p2:
+        return float("inf")
+    p_bar = (p1 + p2) / 2
+    q_bar = 1 - p_bar
+    q1, q2 = 1 - p1, 1 - p2
+    numerator = (
+        z_a * math.sqrt(2 * p_bar * q_bar) + z_b * math.sqrt(p1 * q1 + p2 * q2)
+    ) ** 2
+    return numerator / (p1 - p2) ** 2
+
+
+def _bisect_p2(
+    n_target: float,
+    p1: float,
+    z_a: float,
+    z_b: float,
+    low: float,
+    high: float,
+    tol: float = 1e-7,
+    max_iter: int = 100,
+) -> Optional[float]:
+    """Find p2 in (low, high) such that required_n(p1, p2) == n_target.
+
+    Returns None if the interval doesn't bracket a root — i.e. even maximum
+    separation in this direction can't be detected with the given n_target.
+    """
+    f_low = _two_prop_required_n_continuous(p1, low, z_a, z_b) - n_target
+    f_high = _two_prop_required_n_continuous(p1, high, z_a, z_b) - n_target
+    if f_low * f_high > 0:
+        return None
+    for _ in range(max_iter):
+        mid = (low + high) / 2
+        f_mid = _two_prop_required_n_continuous(p1, mid, z_a, z_b) - n_target
+        if abs(f_mid) < 1e-9 or (high - low) < tol:
+            return mid
+        if f_low * f_mid <= 0:
+            high = mid
+            f_high = f_mid
+        else:
+            low = mid
+            f_low = f_mid
+    return (low + high) / 2
+
+
+def reverse_two_proportions(
+    p1: float,
+    n_per_group: int,
+    alpha: float = 0.05,
+    power: float = 0.80,
+    dropout: float = 0.0,
+) -> Dict[str, Any]:
+    """Back-calculate the minimum detectable second proportion.
+
+    Given a known baseline ``p1`` and a fixed available ``n_per_group``, find
+    the two values of p2 (one below, one above p1) that the study could just
+    detect at the chosen alpha and power. The detectable difference equals
+    |p1 − p2| in each direction.
+
+    The available n is first deflated by the anticipated dropout rate so that
+    the answer reflects the actual number of analysable participants.
+    """
+    _check_alpha(alpha)
+    _check_power(power)
+    if not 0 < p1 < 1:
+        raise ValueError("p1 must be in (0, 1).")
+    if not isinstance(n_per_group, (int, float)) or isinstance(n_per_group, bool):
+        raise ValueError("n_per_group must be a number.")
+    if isinstance(n_per_group, float) and not n_per_group.is_integer():
+        raise ValueError("n_per_group must be a whole number.")
+    n_per_group = int(n_per_group)
+    if n_per_group < 4:
+        raise ValueError("n per group must be at least 4 to be analytically meaningful.")
+    if dropout < 0 or dropout >= 1:
+        raise ValueError("dropout must be in [0, 1).")
+
+    n_analyzable = int(math.floor(n_per_group * (1 - dropout)))
+    if n_analyzable < 4:
+        raise ValueError(
+            "After applying the dropout rate, fewer than 4 analysable "
+            "participants per group remain. Recruit more or lower dropout."
+        )
+
+    z_a = z_two_tailed(alpha)
+    z_b = z_power(power)
+    eps = 1e-4
+    p2_lower = _bisect_p2(n_analyzable, p1, z_a, z_b, eps, p1 - eps)
+    p2_higher = _bisect_p2(n_analyzable, p1, z_a, z_b, p1 + eps, 1 - eps)
+
+    notes = [
+        "We solved the two-proportion sample-size formula for p₂ given your "
+        "fixed sample size — Z(α/2)·√(2·p̄·q̄) + Z(β)·√(p₁·q₁ + p₂·q₂) "
+        "remains the variance term.",
+        "Two answers are reported because the test is two-sided: one if the "
+        "intervention raises the outcome rate, one if it lowers it.",
+    ]
+    if dropout > 0:
+        notes.append(
+            f"Dropout deflated your recruited n ({n_per_group}) to "
+            f"{n_analyzable} analysable per group before back-calculation."
+        )
+    warnings: List[str] = []
+    if p2_lower is None:
+        warnings.append(
+            "Even the largest possible decrease (p₂ → 0) cannot be detected "
+            "with this sample size at the chosen α and power."
+        )
+    if p2_higher is None:
+        warnings.append(
+            "Even the largest possible increase (p₂ → 1) cannot be detected "
+            "with this sample size at the chosen α and power."
+        )
+
+    return {
+        "formula": "two_proportions",
+        "mode": "reverse",
+        "formula_label": "Two independent proportions — back-calculated p₂",
+        "formula_expression": (
+            "solve for p₂:  n/group = [Z(α/2)·√(2·p̄·q̄) + Z(β)·√(p₁·q₁ + p₂·q₂)]² / (p₁ − p₂)²"
+        ),
+        "inputs": {
+            "p1": p1,
+            "n_per_group_recruited": n_per_group,
+            "n_per_group_analyzable": n_analyzable,
+            "alpha": alpha,
+            "power": power,
+            "dropout_rate": dropout,
+        },
+        "constants": _round_constants({"Z_alpha_over_2": z_a, "Z_beta": z_b}),
+        "detectable": {
+            "p2_lower": round(p2_lower, 4) if p2_lower is not None else None,
+            "p2_higher": round(p2_higher, 4) if p2_higher is not None else None,
+            "min_detectable_decrease": (
+                round(p1 - p2_lower, 4) if p2_lower is not None else None
+            ),
+            "min_detectable_increase": (
+                round(p2_higher - p1, 4) if p2_higher is not None else None
+            ),
+        },
+        "notes": notes,
+        "warnings": warnings,
+    }
 
 
 # ---------------------------------------------------------------------------
