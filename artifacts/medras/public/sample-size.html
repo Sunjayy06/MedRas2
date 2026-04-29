@@ -135,7 +135,6 @@
           <div
             class="reverse-toggle"
             id="reverse-toggle-wrap"
-            hidden
             data-testid="panel-reverse-toggle"
           >
             <label class="reverse-toggle-label">
@@ -145,9 +144,13 @@
                 data-testid="checkbox-reverse"
               />
               <span>
-                <strong>I do not know the second proportion (p₂).</strong>
-                Back-calculate the smallest difference my available sample
-                size can detect.
+                <strong id="reverse-toggle-headline">
+                  I do not know the effect size yet.
+                </strong>
+                <span id="reverse-toggle-detail">
+                  Back-calculate the smallest effect my available sample
+                  size can detect.
+                </span>
               </span>
             </label>
           </div>
@@ -229,37 +232,21 @@
             <p id="result-formula" class="calc-formula-summary" data-testid="text-result-formula"></p>
           </header>
 
-          <!-- Reverse-calculation summary (only shown in reverse mode) -->
+          <!-- Reverse-calculation summary (only shown in reverse mode).
+               The headline cards inside [data-testid="list-reverse-headline"]
+               are rendered dynamically from the API response so this panel
+               works for every formula's back-calculation. -->
           <div
             class="result-reverse"
             id="result-reverse"
             hidden
             data-testid="panel-reverse-result"
           >
-            <div class="result-headline">
-              <div class="result-stat">
-                <span class="result-stat-label">Detectable p₂ if outcome <em>decreases</em></span>
-                <span class="result-stat-value" data-testid="text-p2-lower">—</span>
-              </div>
-              <div class="result-stat">
-                <span class="result-stat-label">Detectable p₂ if outcome <em>increases</em></span>
-                <span class="result-stat-value" data-testid="text-p2-higher">—</span>
-              </div>
-            </div>
-            <dl class="analysis-grid">
-              <div>
-                <dt>Min detectable decrease (p₁ − p₂)</dt>
-                <dd data-testid="text-mdd-lower">—</dd>
-              </div>
-              <div>
-                <dt>Min detectable increase (p₂ − p₁)</dt>
-                <dd data-testid="text-mdd-higher">—</dd>
-              </div>
-              <div>
-                <dt>Analysable per group (after dropout)</dt>
-                <dd data-testid="text-analyzable">—</dd>
-              </div>
-            </dl>
+            <div
+              class="result-headline"
+              id="reverse-headline"
+              data-testid="list-reverse-headline"
+            ></div>
             <ul
               class="analysis-warnings"
               id="reverse-warnings-list"

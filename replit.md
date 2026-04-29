@@ -55,13 +55,19 @@ Each new module gets its own router file under `app/api/<module>.py` and is moun
   - Result panel always shows: per-group n, statistically-required total, dropout-
     adjusted total, full input list, all derived constants (Z(α/2), Z(β), p̄, …),
     and an optional comparison against the researcher's expected sample size.
-  - **Reverse mode (two-proportions only):** if the researcher knows the
-    baseline rate (p₁) and how many participants they can recruit but does
-    not know p₂, a checkbox swaps the form into back-calculation mode. The
-    calculator solves the same formula for p₂ via bisection and reports the
-    minimum detectable second proportion in each direction (decrease /
-    increase) plus the corresponding minimum detectable difference.
-    Endpoint: `POST /api/sample-size/reverse-two-proportions`.
+  - **Reverse mode (all 6 formulas):** when the researcher knows what they
+    can recruit but doesn't have a pre-specified effect size, a checkbox on
+    step 2 swaps the form into back-calculation mode and solves the chosen
+    formula for the smallest effect the available n can detect:
+      - single_proportion / single_mean → smallest precision (margin of error)
+      - two_proportions → smallest detectable p₂ in each direction (bisection)
+      - two_means → smallest detectable Δ (plus equivalent Cohen's d)
+      - paired_means → smallest detectable within-pair Δ (plus dz)
+      - anova_means → smallest detectable Cohen's f (plus qualitative label)
+    Single endpoint: `POST /api/sample-size/reverse` with body
+    `{formula, parameters}`. The response carries a uniform `headline[]`
+    array of `{label, value, sublabel?}` so the frontend renders any
+    formula's reverse result through one generic component.
 - Other five modules: scaffolded on the landing page, not yet implemented.
 
 ## Environment Variables

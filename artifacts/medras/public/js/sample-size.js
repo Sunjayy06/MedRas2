@@ -174,6 +174,8 @@
 
   function bindStep2() {
     document.getElementById("formula-select").addEventListener("change", function (event) {
+      // Switching formulas resets reverse mode so each formula starts at its
+      // own forward-calc default.
       state.reverseMode = false;
       var toggle = document.getElementById("reverse-toggle");
       if (toggle) toggle.checked = false;
@@ -217,8 +219,8 @@
     document.getElementById("dropout").value = "0";
     var toggle = document.getElementById("reverse-toggle");
     if (toggle) toggle.checked = false;
-    var toggleWrap = document.getElementById("reverse-toggle-wrap");
-    if (toggleWrap) toggleWrap.hidden = true;
+    // Toggle wrapper itself stays in the DOM but is irrelevant on step 1;
+    // it'll be unhidden again when renderFormulaFields runs on step 2.
     var panel = document.getElementById("analysis-panel");
     if (panel) panel.hidden = true;
     var err = document.getElementById("parameters-error");
@@ -296,36 +298,97 @@
   // Step 2 — parameters
   // -----------------------------------------------------------------------
 
-  // Field used in reverse mode to capture the available per-group sample size.
-  var REVERSE_N_FIELD = {
-    key: "n_per_group",
-    label: "Available sample size per group",
-    help: "How many participants you can realistically recruit in each arm.",
-    type: "number", min: 4, max: 1000000, step: 1, placeholder: "e.g., 100",
+  // -----------------------------------------------------------------------
+  // Reverse-mode specs — what each formula's back-calculation needs.
+  //
+  // Each entry says:
+  //   removeFields  — keys to drop from the standard form when reverse mode
+  //                   is active (the "unknown" inputs the researcher would
+  //                   normally need to specify, e.g. p2 or Cohen's f)
+  //   nField        — the sample-size field that gets added in their place
+  //   solvesFor     — short label shown next to the formula expression
+  //   detail        — human description for the toggle text
+  // -----------------------------------------------------------------------
+
+  var REVERSE_SPECS = {
+    single_proportion: {
+      removeFields: ["precision"],
+      nField: nField("n", "Available sample size", "How many participants you can recruit."),
+      solvesFor: "the smallest precision (margin of error) it can achieve",
+      detail: "Back-calculate the tightest confidence interval my available sample size can support.",
+    },
+    single_mean: {
+      removeFields: ["precision"],
+      nField: nField("n", "Available sample size", "How many participants you can recruit."),
+      solvesFor: "the smallest precision (margin of error) it can achieve",
+      detail: "Back-calculate the tightest confidence interval my available sample size can support.",
+    },
+    two_proportions: {
+      removeFields: ["p2"],
+      nField: nField("n_per_group", "Available sample size per group", "How many participants in each arm."),
+      solvesFor: "the smallest detectable second proportion (p₂)",
+      detail: "Back-calculate the smallest p₂ — both above and below p₁ — my sample can detect.",
+    },
+    two_means: {
+      removeFields: ["mean1", "mean2"],
+      nField: nField("n_per_group", "Available sample size per group", "How many participants in each arm."),
+      solvesFor: "the smallest detectable mean difference (Δ)",
+      detail: "Back-calculate the smallest difference between the two group means my sample can detect.",
+    },
+    paired_means: {
+      removeFields: ["mean_diff"],
+      nField: nField("n", "Available sample size (number of pairs)", "How many matched pairs / before-after subjects."),
+      solvesFor: "the smallest detectable within-pair change (Δ)",
+      detail: "Back-calculate the smallest before-vs-after change my paired sample can detect.",
+    },
+    anova_means: {
+      removeFields: ["effect_size_f"],
+      nField: nField("n_per_group", "Available sample size per group", "How many participants in each of the k groups.", 5),
+      solvesFor: "the smallest detectable Cohen's f",
+      detail: "Back-calculate the smallest between-group spread my sample can detect.",
+    },
   };
+
+  function nField(key, label, help, minN) {
+    return {
+      key: key,
+      label: label,
+      help: help,
+      type: "number",
+      min: minN || 4,
+      max: 1000000,
+      step: 1,
+      placeholder: "e.g., 100",
+    };
+  }
 
   function renderFormulaFields(formulaKey) {
     state.selectedFormula = formulaKey;
     var spec = FORMULAS[formulaKey];
+    var revSpec = REVERSE_SPECS[formulaKey];
     document.getElementById("formula-select").value = formulaKey;
 
-    // Reverse-mode toggle is only available for two_proportions today.
+    // Every formula now has a reverse mode, so the toggle is always visible.
     var toggleWrap = document.getElementById("reverse-toggle-wrap");
-    if (toggleWrap) toggleWrap.hidden = formulaKey !== "two_proportions";
-    if (formulaKey !== "two_proportions") state.reverseMode = false;
+    if (toggleWrap) toggleWrap.hidden = false;
 
-    // Build the per-formula fields. In reverse mode for two_proportions we
-    // swap p2 out for the available-n field.
+    // Update the toggle's secondary text so it accurately describes what
+    // back-calculation means for THIS specific formula.
+    var detail = document.getElementById("reverse-toggle-detail");
+    if (detail && revSpec) detail.textContent = revSpec.detail;
+
+    // Build the per-formula fields. In reverse mode swap the "unknown
+    // effect" input(s) for the available-n field.
     var fieldsToRender = spec.fields;
-    if (formulaKey === "two_proportions" && state.reverseMode) {
+    if (state.reverseMode && revSpec) {
       fieldsToRender = spec.fields
-        .filter(function (f) { return f.key !== "p2"; })
-        .concat([REVERSE_N_FIELD]);
+        .filter(function (f) { return revSpec.removeFields.indexOf(f.key) === -1; })
+        .concat([revSpec.nField]);
     }
 
     document.getElementById("formula-summary").textContent =
-      state.reverseMode
-        ? "Solve the same expression for p₂ instead of n: " + spec.expression
+      state.reverseMode && revSpec
+        ? "Solving for " + revSpec.solvesFor + ":  " + spec.expression
         : spec.expression;
 
     var container = document.getElementById("formula-fields");
@@ -348,6 +411,14 @@
     var expectedFieldset = document.getElementById("expected").closest("fieldset");
     if (expectedFieldset) {
       expectedFieldset.style.display = state.reverseMode ? "none" : "";
+    }
+
+    // Update the calculate button label to match the mode.
+    var calcBtn = document.getElementById("calculate-btn");
+    if (calcBtn && !calcBtn.disabled) {
+      calcBtn.textContent = state.reverseMode
+        ? "Calculate detectable effect"
+        : "Calculate sample size";
     }
   }
 
@@ -383,14 +454,14 @@
 
   function onCalculate() {
     var spec = FORMULAS[state.selectedFormula];
-    var isReverse =
-      state.reverseMode && state.selectedFormula === "two_proportions";
+    var revSpec = REVERSE_SPECS[state.selectedFormula];
+    var isReverse = !!state.reverseMode && !!revSpec;
 
     // Determine which fields the user must have filled.
     var fieldsToRead = isReverse
       ? spec.fields
-          .filter(function (f) { return f.key !== "p2"; })
-          .concat([REVERSE_N_FIELD])
+          .filter(function (f) { return revSpec.removeFields.indexOf(f.key) === -1; })
+          .concat([revSpec.nField])
       : spec.fields;
 
     var params = {};
@@ -405,6 +476,10 @@
       if (Number.isNaN(num)) {
         missing.push(field.label);
         return;
+      }
+      // Sample-size fields must be whole numbers; the API rejects fractional n.
+      if (field.key === "n" || field.key === "n_per_group" || field.key === "k") {
+        num = Math.floor(num);
       }
       params[field.key] = num;
     });
@@ -429,21 +504,11 @@
     btn.disabled = true;
     btn.textContent = "Calculating…";
 
-    var url, body, restoreLabel;
-    if (isReverse) {
-      url = "/api/sample-size/reverse-two-proportions";
-      // Reverse endpoint takes a flat payload, not {formula, parameters}.
-      body = {
-        p1: params.p1,
-        n_per_group: Math.floor(params.n_per_group),
-        alpha: params.alpha,
-        power: params.power,
-        dropout: params.dropout,
-      };
-      restoreLabel = "Calculate detectable difference";
-    } else {
-      url = "/api/sample-size/calculate";
-      body = { formula: state.selectedFormula, parameters: params };
+    var url = isReverse
+      ? "/api/sample-size/reverse"
+      : "/api/sample-size/calculate";
+    var body = { formula: state.selectedFormula, parameters: params };
+    if (!isReverse) {
       var expectedRaw = document.getElementById("expected").value.trim();
       var expected =
         expectedRaw === ""
@@ -452,8 +517,10 @@
       if (expected !== null && !Number.isNaN(expected)) {
         body.expected_sample_size = expected;
       }
-      restoreLabel = "Calculate sample size";
     }
+    var restoreLabel = isReverse
+      ? "Calculate detectable effect"
+      : "Calculate sample size";
 
     fetch(url, {
       method: "POST",
@@ -462,7 +529,7 @@
     })
       .then(function (resp) {
         return resp.json().then(function (data) {
-          if (!resp.ok) throw new Error(data.detail || "Calculation failed.");
+          if (!resp.ok) throw new Error(humanizeError(data.detail));
           return data;
         });
       })
@@ -482,6 +549,21 @@
         btn.disabled = false;
         btn.textContent = restoreLabel;
       });
+  }
+
+  // FastAPI's 422 returns detail as an array of validation errors.
+  function humanizeError(detail) {
+    if (!detail) return "Calculation failed.";
+    if (typeof detail === "string") return detail;
+    if (Array.isArray(detail)) {
+      return detail
+        .map(function (d) {
+          var loc = (d.loc || []).slice(-1)[0] || "value";
+          return loc + ": " + (d.msg || "invalid");
+        })
+        .join("; ");
+    }
+    return "Calculation failed.";
   }
 
   // -----------------------------------------------------------------------
@@ -541,12 +623,18 @@
   }
 
   // -----------------------------------------------------------------------
-  // Step 3 — reverse result (back-calculated p₂)
+  // Step 3 — reverse result (generic for all 6 formulas)
+  //
+  // The API returns a `headline` array of {label, value, sublabel?} stats
+  // already formatted as strings; we render one card per entry. This way
+  // the same UI works whether the back-calculated quantity is a precision
+  // (single proportion/mean), a probability (two_proportions), a difference
+  // in the original units (two_means/paired_means), or Cohen's f (ANOVA).
   // -----------------------------------------------------------------------
 
   function renderReverseResult(data) {
     var heading = document.getElementById("result-heading");
-    if (heading) heading.textContent = "3. Minimum detectable difference";
+    if (heading) heading.textContent = "3. Minimum detectable effect";
 
     setText(
       "text-result-formula",
@@ -560,22 +648,28 @@
 
     setText("text-formula-expression", data.formula_expression);
 
-    var det = data.detectable || {};
-    setText("text-p2-lower", det.p2_lower == null ? "Not detectable" : formatProb(det.p2_lower));
-    setText("text-p2-higher", det.p2_higher == null ? "Not detectable" : formatProb(det.p2_higher));
-    setText(
-      "text-mdd-lower",
-      det.min_detectable_decrease == null
-        ? "—"
-        : formatDelta(det.min_detectable_decrease)
-    );
-    setText(
-      "text-mdd-higher",
-      det.min_detectable_increase == null
-        ? "—"
-        : formatDelta(det.min_detectable_increase)
-    );
-    setText("text-analyzable", String(data.inputs.n_per_group_analyzable));
+    // Render headline cards from the API response.
+    var headlineEl = document.getElementById("reverse-headline");
+    headlineEl.innerHTML = "";
+    (data.headline || []).forEach(function (stat) {
+      var card = document.createElement("div");
+      card.className = "result-stat";
+      var label = document.createElement("span");
+      label.className = "result-stat-label";
+      label.textContent = stat.label;
+      card.appendChild(label);
+      var value = document.createElement("span");
+      value.className = "result-stat-value";
+      value.textContent = stat.value;
+      card.appendChild(value);
+      if (stat.sublabel) {
+        var sub = document.createElement("span");
+        sub.className = "result-stat-sublabel";
+        sub.textContent = stat.sublabel;
+        card.appendChild(sub);
+      }
+      headlineEl.appendChild(card);
+    });
 
     fillTable("table-inputs", data.inputs, INPUT_LABELS);
     fillTable("table-constants", data.constants, CONSTANT_LABELS);
@@ -595,7 +689,7 @@
       notesSection.hidden = true;
     }
 
-    // Warnings (e.g. p2 not detectable in one or both directions)
+    // Warnings (e.g. an effect direction that isn't detectable at all).
     var warnList = document.getElementById("reverse-warnings-list");
     warnList.innerHTML = "";
     (data.warnings || []).forEach(function (w) {
@@ -603,13 +697,6 @@
       li.textContent = w;
       warnList.appendChild(li);
     });
-  }
-
-  function formatProb(v) {
-    return (v * 100).toFixed(1) + "%  (" + v.toFixed(4) + ")";
-  }
-  function formatDelta(v) {
-    return (v * 100).toFixed(1) + " percentage points";
   }
 
   // -----------------------------------------------------------------------
@@ -633,6 +720,8 @@
     dropout_rate: "Anticipated dropout rate",
     n_per_group_recruited: "Available n per group (recruited)",
     n_per_group_analyzable: "Analysable n per group (after dropout)",
+    n_recruited: "Available n (recruited)",
+    n_analyzable: "Analysable n (after dropout)",
   };
 
   var CONSTANT_LABELS = {

@@ -97,31 +97,47 @@ class CalculateResponse(BaseModel):
     expected_comparison: Optional[ExpectedComparison] = None
 
 
-class ReverseTwoProportionsRequest(BaseModel):
-    p1: float = Field(..., gt=0, lt=1, description="Known baseline proportion.")
-    n_per_group: int = Field(
-        ..., ge=4, le=1_000_000, description="Available sample size per arm."
-    )
-    alpha: float = Field(default=0.05, gt=0, lt=1)
-    power: float = Field(default=0.80, gt=0, lt=1)
-    dropout: float = Field(default=0.0, ge=0, lt=1)
+class ReverseRequest(BaseModel):
+    formula: Literal[
+        "single_proportion",
+        "single_mean",
+        "two_proportions",
+        "two_means",
+        "paired_means",
+        "anova_means",
+    ]
+    parameters: Dict[str, Any]
+
+    @field_validator("parameters")
+    @classmethod
+    def parameters_not_empty(cls, value: Dict[str, Any]) -> Dict[str, Any]:
+        if not value:
+            raise ValueError("parameters cannot be empty")
+        return value
 
 
-class DetectableP2(BaseModel):
-    p2_lower: Optional[float] = None
-    p2_higher: Optional[float] = None
-    min_detectable_decrease: Optional[float] = None
-    min_detectable_increase: Optional[float] = None
+class HeadlineStat(BaseModel):
+    label: str
+    value: str
+    sublabel: Optional[str] = None
 
 
-class ReverseTwoProportionsResponse(BaseModel):
+class ReverseResponse(BaseModel):
+    """Generic shape returned by every reverse-mode formula.
+
+    ``headline`` is the 1-3 stats the UI shows at the top of the result
+    panel; ``detectable`` carries the same values in raw form for callers
+    that want to do further math.
+    """
+
     formula: str
     mode: str
     formula_label: str
     formula_expression: str
     inputs: Dict[str, Any]
     constants: Dict[str, float]
-    detectable: DetectableP2
+    headline: List[HeadlineStat]
+    detectable: Dict[str, Any]
     notes: List[str]
     warnings: List[str]
 
@@ -200,37 +216,30 @@ async def calculate_endpoint(payload: CalculateRequest, request: Request) -> Cal
     )
 
 
-@router.post(
-    "/reverse-two-proportions",
-    response_model=ReverseTwoProportionsResponse,
-)
+@router.post("/reverse", response_model=ReverseResponse)
 @limiter.limit("60/minute")
-async def reverse_two_proportions_endpoint(
-    payload: ReverseTwoProportionsRequest, request: Request
-) -> ReverseTwoProportionsResponse:
-    """Back-calculate detectable p₂ values from a fixed sample size and known p₁.
+async def reverse_endpoint(
+    payload: ReverseRequest, request: Request
+) -> ReverseResponse:
+    """Back-calculate the smallest detectable effect for the chosen formula.
 
-    Use this when the researcher knows their baseline rate and how many
-    participants they can recruit, but does not have a pre-specified value
-    for the second proportion.
+    Use this when the researcher knows how many participants they can recruit
+    but does not have a pre-specified effect size (e.g. they don't know p₂,
+    or the expected mean difference, or Cohen's f). The endpoint dispatches
+    to the per-formula reverse function and returns a uniform shape with a
+    ``headline`` array that the UI renders generically.
     """
     try:
-        result = ss_engine.reverse_two_proportions(
-            p1=payload.p1,
-            n_per_group=payload.n_per_group,
-            alpha=payload.alpha,
-            power=payload.power,
-            dropout=payload.dropout,
-        )
+        result = ss_engine.reverse_calculate(payload.formula, payload.parameters)
     except (TypeError, ValueError) as exc:
+        # TypeError → wrong / extra parameter names; ValueError → out-of-range.
         raise HTTPException(status_code=400, detail=str(exc))
 
     log.info(
-        "sample_size.reverse_two_proportions",
+        "sample_size.reverse",
         extra={
-            "n_per_group": payload.n_per_group,
-            "p2_lower_found": result["detectable"]["p2_lower"] is not None,
-            "p2_higher_found": result["detectable"]["p2_higher"] is not None,
+            "formula": payload.formula,
+            "warning_count": len(result.get("warnings", [])),
         },
     )
-    return ReverseTwoProportionsResponse(**result)
+    return ReverseResponse(**result)
