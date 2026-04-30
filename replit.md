@@ -85,6 +85,26 @@ Each new module gets its own router file under `app/api/<module>.py` and is moun
   - Result panel always shows: per-group n, statistically-required total, dropout-
     adjusted total, full input list, all derived constants (Z(α/2), Z(β), p̄, …),
     and an optional comparison against the researcher's expected sample size.
+  - **Step 3 "Recommended statistical formula" callout** appears at the top
+    of every result (forward and reverse). Shows the formula label, a
+    plain-language "Ideal for: …" description from the `IDEAL_FOR` map in
+    `sample-size.js` (one entry per formula), an optional "Why this formula
+    was selected" rationale (only when the user came via the analyze flow
+    AND `state.lastAnalysis.suggested_formula` matches the active formula),
+    and an "Assumptions:" line summarising α, power, dropout, and forward
+    vs reverse mode.
+  - **"Download full report" button** on Step 3 generates a self-contained
+    HTML report client-side (no backend round-trip) via
+    `Blob([html],{type:'text/html'})`, named
+    `medras-sample-size-<formula_key>-<YYYY-MM-DD>.html`. The report
+    contains the objective, the recommended-formula callout (label, ideal-
+    for, rationale), the headline result cards (per-group / total /
+    adjusted, or back-calculated effect cards in reverse mode), the formula
+    expression, full input and constants tables, notes, warnings, and a
+    MedRAS footer. Users can open it in any browser and print to PDF. All
+    untrusted fields (formula label, ideal-for, rationale, objective,
+    table keys/values, notes, warnings, headline cards, total_n,
+    adjusted_n) are escaped via a local `escapeHtml` helper.
   - **Mode dropdown on step 2** ("What information do you have for this
     study?") replaces the older reverse-mode checkbox. Two options:
       - *forward* — the researcher has the statistical inputs (effect

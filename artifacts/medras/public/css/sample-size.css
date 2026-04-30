@@ -528,3 +528,57 @@
   color: #6b7c93;
   margin-left: 0.35rem;
 }
+
+/* ----- Step 3 "Recommended statistical formula" callout ----- */
+.result-recommended {
+  margin: 0 0 1.25rem;
+  padding: 1rem 1.25rem;
+  background: #eef5ff;
+  border: 1px solid #c5d9f1;
+  border-left: 4px solid #2c6cb6;
+  border-radius: 6px;
+}
+.result-recommended-title {
+  margin: 0 0 0.4rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #1f3d6b;
+}
+.result-recommended-name {
+  margin: 0 0 0.35rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #0f1f3d;
+}
+.result-recommended-ideal {
+  margin: 0 0 0.4rem;
+  font-size: 0.92rem;
+  color: #2d3a52;
+}
+.result-recommended-rationale {
+  margin: 0.4rem 0;
+  padding: 0.5rem 0.75rem;
+  background: #fff8d6;
+  border-radius: 4px;
+  font-size: 0.88rem;
+  color: #5b4708;
+}
+.result-recommended-assumptions {
+  margin: 0.4rem 0 0;
+  font-size: 0.82rem;
+  color: #4a5b7a;
+  font-style: italic;
+}
+
+/* ----- Step 3 "Download full report" button ----- */
+#download-report-btn {
+  background: #1f7a3a;
+  color: #fff;
+  border: 1px solid #1f7a3a;
+}
+#download-report-btn:hover {
+  background: #185f2d;
+  border-color: #185f2d;
+}

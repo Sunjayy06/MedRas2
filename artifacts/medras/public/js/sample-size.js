@@ -395,6 +395,63 @@
     selectedFormula: null,
     lastAnalysis: null,
     reverseMode: false, // only meaningful when selectedFormula === 'two_proportions'
+    lastResult: null,   // most recent /calculate or /reverse response (for the
+                        // downloadable report)
+  };
+
+  // -----------------------------------------------------------------------
+  // IDEAL_FOR — plain-language description of when each formula is the
+  // statistically appropriate choice. Used by the "Recommended statistical
+  // formula" callout on Step 3 so the researcher always sees, in their own
+  // words, why this formula fits their study.
+  // -----------------------------------------------------------------------
+  var IDEAL_FOR = {
+    single_proportion:
+      "Estimating a single prevalence or rate in one population " +
+      "(e.g., the proportion of adults with hypertension) to a desired " +
+      "absolute precision.",
+    single_mean:
+      "Estimating a single population mean of a continuous outcome " +
+      "(e.g., mean systolic blood pressure) to a desired precision.",
+    two_proportions:
+      "Comparing the prevalence/cure/event rate between TWO independent " +
+      "groups (e.g., treatment vs control) where the outcome is binary.",
+    two_means:
+      "Comparing the mean of a continuous outcome between TWO independent " +
+      "groups, when both groups are measured once and assumed to share a " +
+      "common SD.",
+    paired_means:
+      "Detecting a within-subject change on a continuous outcome — " +
+      "before/after, matched pairs, or crossover designs.",
+    anova_means:
+      "Comparing the means of a continuous outcome across THREE or more " +
+      "independent groups in a one-way design.",
+    repeated_measures:
+      "Two-arm longitudinal study where the same subjects are measured " +
+      "at multiple timepoints; uses the within-subject correlation to " +
+      "reduce the required n.",
+    repeated_measures_anova:
+      "Mixed (between × within) design with k groups measured across m " +
+      "timepoints — tests for a time × group interaction.",
+    correlation:
+      "Estimating or detecting a Pearson correlation between two " +
+      "continuous variables in one sample.",
+    survival_logrank:
+      "Two-arm time-to-event study (e.g., overall survival, " +
+      "progression-free survival) compared with the log-rank test under " +
+      "proportional hazards.",
+    linear_regression:
+      "Multiple linear regression where you want enough power to detect " +
+      "the model's overall R² with the planned number of predictors.",
+    prediction_model:
+      "Building a clinical prediction model — sizes the dataset using the " +
+      "events-per-variable rule (Peduzzi 1996) instead of α/β.",
+    kappa_agreement:
+      "Estimating Cohen's κ for inter-rater agreement on a categorical " +
+      "outcome with a desired CI half-width around κ.",
+    roc_auc:
+      "Diagnostic accuracy study — estimating the AUC of a single test " +
+      "with a desired CI half-width (Hanley & McNeil 1982).",
   };
 
   // -----------------------------------------------------------------------
@@ -462,6 +519,13 @@
       resetCalculator();
       goToStep(1);
     });
+    var dl = document.getElementById("download-report-btn");
+    if (dl) {
+      dl.addEventListener("click", function () {
+        if (!state.lastResult) return;
+        downloadReport(state.lastResult, state.reverseMode);
+      });
+    }
   }
 
   // Wipe every researcher-entered value so the next study starts clean.
@@ -472,6 +536,7 @@
     state.selectedFormula = null;
     state.lastAnalysis = null;
     state.reverseMode = false;
+    state.lastResult = null;
     var ids = ["objective", "expected"];
     ids.forEach(function (id) {
       var el = document.getElementById(id);
@@ -1182,6 +1247,9 @@
     var heading = document.getElementById("result-heading");
     if (heading) heading.textContent = "3. Required sample size";
 
+    state.lastResult = data;
+    renderRecommendedPanel(data, false);
+
     setText("text-result-formula", data.formula_label + " · " + data.formula_expression);
     setText("text-n-per-group", formatN(data.n_per_group, data.number_of_groups));
     setText("text-total-n", String(data.total_n));
@@ -1238,6 +1306,9 @@
   function renderReverseResult(data) {
     var heading = document.getElementById("result-heading");
     if (heading) heading.textContent = "3. Minimum detectable effect";
+
+    state.lastResult = data;
+    renderRecommendedPanel(data, true);
 
     setText(
       "text-result-formula",
@@ -1441,5 +1512,239 @@
       }
     }
     window.scrollTo({ top: document.querySelector(".calc-shell").offsetTop - 24, behavior: "smooth" });
+  }
+
+  // -----------------------------------------------------------------------
+  // "Recommended statistical formula" callout — always visible at the top
+  // of Step 3. Shows the formula name, what it's ideal for, the analyzer's
+  // rationale (if the user came through the analyse flow), and the
+  // statistical assumptions (α, power, dropout, mode).
+  // -----------------------------------------------------------------------
+  function renderRecommendedPanel(data, isReverse) {
+    var key = data.formula;
+    var spec = FORMULAS[key] || {};
+    var label = data.formula_label || spec.label || key;
+
+    setText("text-ideal-formula-name", label);
+    setText(
+      "text-ideal-formula-use",
+      "Ideal for: " +
+        (IDEAL_FOR[key] ||
+          "the statistical question described in your objective.")
+    );
+
+    // Rationale only shown when it came from the analyzer (i.e. the user
+    // went through "Analyse objective" rather than picking manually).
+    var rationaleEl = document.getElementById("result-recommended-rationale");
+    var rationale = state.lastAnalysis && state.lastAnalysis.rationale;
+    var came = state.lastAnalysis && state.lastAnalysis.suggested_formula === key;
+    if (rationaleEl) {
+      if (came && rationale) {
+        rationaleEl.hidden = false;
+        rationaleEl.textContent = "Why this formula was selected: " + rationale;
+      } else {
+        rationaleEl.hidden = true;
+        rationaleEl.textContent = "";
+      }
+    }
+
+    var inputs = data.inputs || {};
+    var bits = [];
+    if (inputs.alpha != null) {
+      bits.push("two-sided α = " + inputs.alpha);
+    }
+    if (inputs.power != null) {
+      bits.push("power = " + Math.round(inputs.power * 100) + "%");
+    }
+    var dropoutVal =
+      inputs.dropout_rate != null ? inputs.dropout_rate : inputs.dropout;
+    if (dropoutVal != null) {
+      bits.push(
+        "dropout adjustment = " + Math.round(dropoutVal * 100) + "%"
+      );
+    }
+    bits.push(isReverse ? "back-calculated effect mode" : "forward (n) mode");
+    setText(
+      "text-ideal-formula-assumptions",
+      "Assumptions: " + bits.join(" · ")
+    );
+  }
+
+  // -----------------------------------------------------------------------
+  // Downloadable HTML report. Generates a self-contained .html file the
+  // user can open in any browser, print to PDF from Chrome/Safari, or
+  // attach to a proposal. We render HTML rather than PDF/DOCX to keep the
+  // calculator a single static page (no extra backend dependencies).
+  // -----------------------------------------------------------------------
+  function downloadReport(data, isReverse) {
+    var key = data.formula;
+    var spec = FORMULAS[key] || {};
+    var label = data.formula_label || spec.label || key;
+    var ideal = IDEAL_FOR[key] || "";
+    var rationale =
+      state.lastAnalysis &&
+      state.lastAnalysis.suggested_formula === key &&
+      state.lastAnalysis.rationale;
+    var objective = state.objective || "";
+
+    var inputsRows = renderTableRowsForReport(
+      data.inputs || {},
+      INPUT_LABELS
+    );
+    var constantsRows = renderTableRowsForReport(
+      data.constants || {},
+      CONSTANT_LABELS
+    );
+
+    var headlineHtml;
+    if (isReverse) {
+      var cards = (data.headline || [])
+        .map(function (s) {
+          return (
+            '<div class="card"><div class="card-label">' +
+            escapeHtml(s.label) +
+            '</div><div class="card-value">' +
+            escapeHtml(s.value) +
+            "</div>" +
+            (s.sublabel
+              ? '<div class="card-sub">' + escapeHtml(s.sublabel) + "</div>"
+              : "") +
+            "</div>"
+          );
+        })
+        .join("");
+      headlineHtml =
+        '<h2>Minimum detectable effect</h2><div class="cards">' +
+        cards +
+        "</div>";
+    } else {
+      headlineHtml =
+        '<h2>Required sample size</h2><div class="cards">' +
+        '<div class="card"><div class="card-label">Per group</div><div class="card-value">' +
+        escapeHtml(formatN(data.n_per_group, data.number_of_groups)) +
+        "</div></div>" +
+        '<div class="card"><div class="card-label">Total (statistically required)</div><div class="card-value">' +
+        escapeHtml(String(data.total_n)) +
+        "</div></div>" +
+        '<div class="card"><div class="card-label">Adjusted for dropout</div><div class="card-value">' +
+        escapeHtml(String(data.adjusted_n)) +
+        "</div></div>" +
+        "</div>";
+    }
+
+    var notes = (data.notes || [])
+      .map(function (n) { return "<li>" + escapeHtml(n) + "</li>"; })
+      .join("");
+    var warnings = (data.warnings || [])
+      .map(function (w) { return "<li>" + escapeHtml(w) + "</li>"; })
+      .join("");
+
+    var rationaleBlock = rationale
+      ? '<p class="rationale"><strong>Why this formula was selected:</strong> ' +
+        escapeHtml(rationale) +
+        "</p>"
+      : "";
+    var objectiveBlock = objective
+      ? '<section><h2>Research objective</h2><p>' +
+        escapeHtml(objective) +
+        "</p></section>"
+      : "";
+
+    var generated = new Date().toISOString().replace("T", " ").slice(0, 16) + " UTC";
+    var html =
+      '<!doctype html><html lang="en"><head><meta charset="utf-8">' +
+      "<title>MedRAS — Sample Size Report (" + escapeHtml(label) + ")</title>" +
+      "<style>" +
+      "body{font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#0f172a;max-width:780px;margin:32px auto;padding:0 24px;line-height:1.5;}" +
+      "h1{font-size:24px;margin:0 0 4px;}h2{font-size:18px;margin:28px 0 8px;border-bottom:1px solid #e2e8f0;padding-bottom:4px;}h3{font-size:15px;margin:16px 0 6px;color:#334155;}" +
+      ".meta{color:#64748b;font-size:13px;margin:0 0 24px;}" +
+      ".callout{background:#eff6ff;border-left:4px solid #2563eb;padding:14px 18px;border-radius:6px;margin:16px 0;}" +
+      ".callout strong{display:block;color:#1e3a8a;margin-bottom:4px;}" +
+      ".cards{display:flex;gap:12px;flex-wrap:wrap;margin:12px 0;}" +
+      ".card{flex:1;min-width:160px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px 14px;}" +
+      ".card-label{font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:.04em;}" +
+      ".card-value{font-size:22px;font-weight:600;color:#0f172a;margin-top:4px;}" +
+      ".card-sub{font-size:12px;color:#64748b;margin-top:2px;}" +
+      "code,.formula{background:#f1f5f9;padding:6px 10px;border-radius:4px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;display:inline-block;}" +
+      "table{border-collapse:collapse;width:100%;margin-top:8px;}td,th{text-align:left;padding:6px 10px;border-bottom:1px solid #e2e8f0;font-size:14px;}" +
+      "th{color:#475569;font-weight:600;background:#f8fafc;}" +
+      ".rationale{background:#fef9c3;padding:10px 14px;border-radius:6px;color:#713f12;}" +
+      "ul{margin:6px 0 12px 22px;}li{margin:4px 0;}" +
+      "footer{margin-top:40px;color:#94a3b8;font-size:12px;border-top:1px solid #e2e8f0;padding-top:12px;}" +
+      "@media print{body{margin:0;padding:18px;}.cards{break-inside:avoid;}}" +
+      "</style></head><body>" +
+      "<h1>MedRAS — Sample Size Report</h1>" +
+      '<p class="meta">Generated ' + generated + " · Module 02 · Sample Size Calculator</p>" +
+      objectiveBlock +
+      '<section class="callout"><strong>Recommended statistical formula</strong>' +
+      "<div><strong style=\"color:#0f172a;font-weight:600;\">" + escapeHtml(label) + "</strong></div>" +
+      (ideal ? "<p style=\"margin:6px 0 0;\"><em>Ideal for:</em> " + escapeHtml(ideal) + "</p>" : "") +
+      rationaleBlock +
+      "</section>" +
+      "<section>" + headlineHtml + "</section>" +
+      "<section><h2>Formula</h2><div class=\"formula\">" +
+      escapeHtml(data.formula_expression || "") +
+      "</div></section>" +
+      "<section><h2>Inputs you provided</h2><table><thead><tr><th>Parameter</th><th>Value</th></tr></thead><tbody>" +
+      inputsRows +
+      "</tbody></table></section>" +
+      "<section><h2>Constants used in the calculation</h2><table><thead><tr><th>Constant</th><th>Value</th></tr></thead><tbody>" +
+      constantsRows +
+      "</tbody></table></section>" +
+      (notes ? "<section><h2>Notes</h2><ul>" + notes + "</ul></section>" : "") +
+      (warnings ? "<section><h2>Warnings</h2><ul>" + warnings + "</ul></section>" : "") +
+      "<footer>MedRAS — Medical Research Acceleration System. " +
+      "All statistics computed by validated formulas, not language models. " +
+      "Cite this report's formula and constants in your protocol's sample-size justification." +
+      "</footer></body></html>";
+
+    var blob = new Blob([html], { type: "text/html;charset=utf-8" });
+    var url = URL.createObjectURL(blob);
+    var fname =
+      "medras-sample-size-" +
+      key +
+      "-" +
+      new Date().toISOString().slice(0, 10) +
+      ".html";
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = fname;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function () {
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }, 0);
+  }
+
+  function renderTableRowsForReport(obj, labelMap) {
+    var keys = Object.keys(obj || {});
+    if (!keys.length) {
+      return '<tr><td colspan="2"><em>None</em></td></tr>';
+    }
+    return keys
+      .map(function (k) {
+        var v = obj[k];
+        if (typeof v === "number") {
+          v = Number.isInteger(v) ? String(v) : v.toFixed(4).replace(/0+$/, "").replace(/\.$/, "");
+        }
+        return (
+          "<tr><td>" +
+          escapeHtml(labelMap[k] || k) +
+          "</td><td>" +
+          escapeHtml(String(v)) +
+          "</td></tr>"
+        );
+      })
+      .join("");
+  }
+
+  function escapeHtml(s) {
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
   }
 })();

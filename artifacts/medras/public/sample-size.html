@@ -295,6 +295,28 @@
             <p id="result-formula" class="calc-formula-summary" data-testid="text-result-formula"></p>
           </header>
 
+          <!-- "Ideal formula for your study" callout — shows the user the
+               recommended/selected formula by name with a plain-language
+               description of when this formula is statistically appropriate
+               and why it was chosen for their study. -->
+          <section
+            class="result-recommended"
+            data-testid="panel-ideal-formula"
+          >
+            <h3 class="result-recommended-title">
+              Recommended statistical formula
+            </h3>
+            <p class="result-recommended-name" data-testid="text-ideal-formula-name"></p>
+            <p class="result-recommended-ideal" data-testid="text-ideal-formula-use"></p>
+            <p
+              class="result-recommended-rationale"
+              id="result-recommended-rationale"
+              data-testid="text-ideal-formula-rationale"
+              hidden
+            ></p>
+            <p class="result-recommended-assumptions" data-testid="text-ideal-formula-assumptions"></p>
+          </section>
+
           <!-- Reverse-calculation summary (only shown in reverse mode).
                The headline cards inside [data-testid="list-reverse-headline"]
                are rendered dynamically from the API response so this panel
@@ -368,6 +390,9 @@
           </section>
 
           <div class="calc-card-actions">
+            <button type="button" class="btn btn-primary" id="download-report-btn" data-testid="button-download-report">
+              Download full report
+            </button>
             <button type="button" class="btn btn-secondary" id="back-to-step-2" data-testid="button-back-2">
               Adjust parameters
             </button>
