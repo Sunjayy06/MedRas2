@@ -1080,11 +1080,21 @@
     document.querySelectorAll(".entry-card").forEach(function (btn) {
       btn.addEventListener("click", function () {
         var entry = btn.getAttribute("data-entry");
+        state.entryPath = entry; // remember where the user came from
         if (entry === "A") goToStep("A");
         else if (entry === "B") goToStep(1);
         else if (entry === "C") { wizardReset(); goToStep("C"); }
       });
     });
+  }
+
+  // Smart back: from Step 2, return to whichever entry the user came from
+  // so they can edit their previous answers without losing them.
+  function backToEntry() {
+    var p = state.entryPath;
+    if (p === "A") goToStep("A");
+    else if (p === "C") goToStep("C");
+    else goToStep(1); // default: Card B / direct entry
   }
 
   function bindCardA() {
@@ -1261,6 +1271,8 @@
       state.lastAnalysis = null;
       goToStep(2, "two_means");
     });
+    var home1 = document.getElementById("home-from-step-1");
+    if (home1) home1.addEventListener("click", function () { goToStep(0); });
     document.getElementById("accept-btn").addEventListener("click", function () {
       // If the analyzer routed to a non-formulaic study type (qualitative,
       // FGD, pilot, …) we have no formula to open. The recommendation panel
@@ -1298,9 +1310,9 @@
       renderFormulaFields(state.selectedFormula);
     });
     document.getElementById("calculate-btn").addEventListener("click", onCalculate);
-    document.getElementById("back-to-step-1").addEventListener("click", function () {
-      goToStep(0);
-    });
+    document.getElementById("back-to-step-1").addEventListener("click", backToEntry);
+    var home2 = document.getElementById("home-from-step-2");
+    if (home2) home2.addEventListener("click", function () { goToStep(0); });
   }
 
   function bindStep3() {
@@ -1311,6 +1323,8 @@
       resetCalculator();
       goToStep(0);
     });
+    var home3 = document.getElementById("home-from-step-3");
+    if (home3) home3.addEventListener("click", function () { goToStep(0); });
     var dl = document.getElementById("download-report-btn");
     if (dl) {
       dl.addEventListener("click", function () {

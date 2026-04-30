@@ -785,3 +785,16 @@
 }
 .genetic-checklist ul { margin: 6px 0 0 18px; padding: 0; }
 .genetic-checklist li { margin: 4px 0; color: #1e3a8a; font-size: 0.9rem; }
+
+/* Subtle link-style button for "Start over" navigation actions */
+.btn-link {
+  background: transparent;
+  border: none;
+  color: #2563eb;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0.5rem 0.75rem;
+  font: inherit;
+  font-weight: 500;
+}
+.btn-link:hover { color: #1d4ed8; text-decoration: none; }
