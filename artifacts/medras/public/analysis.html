@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Statistical Analysis — MedRAS</title>
+    <meta
+      name="description"
+      content="Upload your Excel data, classify variables, and run normality-aware statistical tests with publication-grade output."
+    />
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%232f6fed'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-family='Inter,sans-serif' font-size='18' font-weight='700' fill='white'%3EM%3C/text%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="/css/style.css" />
+    <link rel="stylesheet" href="/css/analysis.css" />
+  </head>
+  <body>
+    <header class="site-header" data-testid="site-header">
+      <div class="header-inner">
+        <a href="/" class="brand" data-testid="link-home">
+          <span class="brand-mark">M</span>
+          <span class="brand-text">MedRAS</span>
+        </a>
+        <nav class="primary-nav" aria-label="Primary">
+          <a href="/" class="nav-link" data-testid="link-nav-home">Home</a>
+          <a href="/sample-size.html" class="nav-link" data-testid="link-nav-sample">Sample size</a>
+          <a href="/#modules" class="nav-link" data-testid="link-nav-modules">Modules</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="analysis-main">
+      <section class="ana-intro">
+        <p class="eyebrow" data-testid="text-eyebrow">Module 03</p>
+        <h1 data-testid="text-page-title">Statistical Analysis Engine</h1>
+        <p class="ana-lede" data-testid="text-lede">
+          Upload your dataset (or generate a realistic dummy file), let MedRAS classify
+          your variables, then run an automatic test that respects assumptions of
+          normality, group count and variable type.
+          <span class="beta-pill" aria-label="Beta release" data-testid="badge-beta">Beta</span>
+        </p>
+      </section>
+
+      <!-- Stepper -->
+      <ol class="ana-steps" aria-label="Analysis steps" data-testid="step-tracker">
+        <li class="ana-step is-active" data-step="1" data-testid="step-1">
+          <span class="ana-step-num">1</span><span class="ana-step-label">Data source</span>
+        </li>
+        <li class="ana-step" data-step="2" data-testid="step-2">
+          <span class="ana-step-num">2</span><span class="ana-step-label">Classify variables</span>
+        </li>
+        <li class="ana-step is-todo" data-step="3" data-testid="step-3">
+          <span class="ana-step-num">3</span><span class="ana-step-label">Clean data</span>
+          <span class="ana-step-tag">later</span>
+        </li>
+        <li class="ana-step" data-step="4" data-testid="step-4">
+          <span class="ana-step-num">4</span><span class="ana-step-label">Choose analysis</span>
+        </li>
+        <li class="ana-step is-todo" data-step="5" data-testid="step-5">
+          <span class="ana-step-num">5</span><span class="ana-step-label">Run with progress</span>
+          <span class="ana-step-tag">later</span>
+        </li>
+        <li class="ana-step" data-step="6" data-testid="step-6">
+          <span class="ana-step-num">6</span><span class="ana-step-label">Results</span>
+        </li>
+        <li class="ana-step is-todo" data-step="7" data-testid="step-7">
+          <span class="ana-step-num">7</span><span class="ana-step-label">Export</span>
+          <span class="ana-step-tag">later</span>
+        </li>
+      </ol>
+
+      <!-- =================================================================== -->
+      <!-- STEP 1: data source                                                 -->
+      <!-- =================================================================== -->
+      <section class="ana-panel" id="panel-1" data-testid="panel-1">
+        <header class="ana-panel-head">
+          <h2>Step 1 · Where is your data coming from?</h2>
+          <p>Pick one entry point. You can switch later by clicking <em>Start over</em>.</p>
+        </header>
+
+        <div class="ana-cards" role="list">
+          <article class="ana-card is-clickable" role="listitem" data-source="upload" data-testid="card-upload">
+            <span class="ana-card-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="17 8 12 3 7 8"/>
+                <line x1="12" y1="3" x2="12" y2="15"/>
+              </svg>
+            </span>
+            <h3>Upload my own dataset</h3>
+            <p>Excel (.xlsx, .xls) or CSV. Up to 8&nbsp;MB. We never store your file.</p>
+            <input type="file" id="file-input" accept=".xlsx,.xls,.csv" hidden data-testid="input-file" />
+            <button type="button" class="btn btn-primary" data-action="open-file" data-testid="button-open-file">
+              Choose file…
+            </button>
+          </article>
+
+          <article class="ana-card is-clickable" role="listitem" data-source="dummy" data-testid="card-dummy">
+            <span class="ana-card-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 5h18v14H3z"/>
+                <path d="M3 9h18M9 5v14"/>
+              </svg>
+            </span>
+            <h3>Use a realistic dummy dataset</h3>
+            <p>Practice the workflow on a clinically-plausible Anaemia, Diabetes or Hypertension trial.</p>
+            <div class="ana-dummy-controls" data-testid="dummy-controls">
+              <label>
+                <span>Template</span>
+                <select id="dummy-template" data-testid="select-template">
+                  <option value="anaemia">Anaemia trial (Hb, Ferritin)</option>
+                  <option value="diabetes">Diabetes trial (HbA1c, FBS)</option>
+                  <option value="hypertension">Hypertension trial (SBP, DBP)</option>
+                </select>
+              </label>
+              <label>
+                <span>Patients</span>
+                <input type="number" id="dummy-n" min="20" max="2000" step="10" value="150" data-testid="input-n" />
+              </label>
+              <label>
+                <span>Groups</span>
+                <select id="dummy-groups" data-testid="select-groups">
+                  <option value="2">Two arms</option>
+                  <option value="3">Three arms</option>
+                  <option value="1">Single cohort</option>
+                </select>
+              </label>
+            </div>
+            <button type="button" class="btn btn-primary" data-action="generate-dummy" data-testid="button-generate">
+              Generate dataset
+            </button>
+          </article>
+
+          <article class="ana-card is-disabled" role="listitem" data-testid="card-merge">
+            <span class="ana-card-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="6" cy="6" r="3"/>
+                <circle cx="18" cy="6" r="3"/>
+                <circle cx="12" cy="18" r="3"/>
+                <path d="M8 8l3 7M16 8l-3 7"/>
+              </svg>
+            </span>
+            <h3>Merge files from multiple researchers</h3>
+            <p>Combine Excels with conflict resolution. Coming in the next phase.</p>
+            <span class="ana-soon">Coming next</span>
+          </article>
+        </div>
+
+        <div id="upload-status" class="ana-status" role="status" aria-live="polite" data-testid="status-upload"></div>
+      </section>
+
+      <!-- =================================================================== -->
+      <!-- STEP 2: classify                                                    -->
+      <!-- =================================================================== -->
+      <section class="ana-panel is-hidden" id="panel-2" data-testid="panel-2">
+        <header class="ana-panel-head">
+          <h2>Step 2 · Confirm what each column is</h2>
+          <p>
+            We auto-classified each column. Review and override anything that looks
+            wrong, then continue. The variable type drives which test runs in Step&nbsp;4.
+          </p>
+        </header>
+
+        <div class="ana-meta" id="dataset-meta" data-testid="dataset-meta"></div>
+
+        <div class="ana-table-wrap">
+          <table class="ana-table" id="classify-table" data-testid="table-classify">
+            <thead>
+              <tr>
+                <th>Column</th>
+                <th>Detected type</th>
+                <th>Unique</th>
+                <th>Missing</th>
+                <th>Sample values</th>
+                <th>Why</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+        <details class="ana-preview">
+          <summary>Preview first 5 rows</summary>
+          <div class="ana-table-wrap">
+            <table class="ana-table" id="preview-table" data-testid="table-preview"><thead></thead><tbody></tbody></table>
+          </div>
+        </details>
+
+        <div class="ana-actions">
+          <button type="button" class="btn btn-secondary" data-action="restart" data-testid="button-restart">
+            Start over
+          </button>
+          <button type="button" class="btn btn-primary" data-action="confirm-classify" data-testid="button-confirm-classify">
+            Continue to analysis →
+          </button>
+        </div>
+      </section>
+
+      <!-- =================================================================== -->
+      <!-- STEP 4: choose analysis                                             -->
+      <!-- =================================================================== -->
+      <section class="ana-panel is-hidden" id="panel-4" data-testid="panel-4">
+        <header class="ana-panel-head">
+          <h2>Step 4 · What are you comparing?</h2>
+          <p>
+            Pick the outcome you want to study and (optionally) a grouping or predictor
+            variable. We will choose the right test based on the variable types.
+          </p>
+        </header>
+
+        <div class="ana-form">
+          <label class="ana-field">
+            <span>Primary outcome variable</span>
+            <select id="select-outcome" data-testid="select-outcome"></select>
+            <small id="outcome-hint" class="ana-hint" data-testid="hint-outcome"></small>
+          </label>
+
+          <label class="ana-field">
+            <span>Group / predictor variable <em>(optional)</em></span>
+            <select id="select-group" data-testid="select-group"></select>
+            <small id="group-hint" class="ana-hint" data-testid="hint-group"></small>
+          </label>
+
+          <label class="ana-field ana-field-narrow">
+            <span>Significance level (α)</span>
+            <select id="select-alpha" data-testid="select-alpha">
+              <option value="0.05">0.05 (standard)</option>
+              <option value="0.01">0.01 (strict)</option>
+              <option value="0.10">0.10 (exploratory)</option>
+            </select>
+          </label>
+        </div>
+
+        <div id="recommendation" class="ana-callout" aria-live="polite" data-testid="recommendation"></div>
+
+        <div class="ana-actions">
+          <button type="button" class="btn btn-secondary" data-action="back-to-classify" data-testid="button-back-classify">
+            ← Back to classification
+          </button>
+          <button type="button" class="btn btn-primary" data-action="run-analysis" data-testid="button-run-analysis">
+            Run analysis →
+          </button>
+        </div>
+      </section>
+
+      <!-- =================================================================== -->
+      <!-- STEP 6: results                                                     -->
+      <!-- =================================================================== -->
+      <section class="ana-panel is-hidden" id="panel-6" data-testid="panel-6">
+        <header class="ana-panel-head">
+          <h2>Step 6 · Results</h2>
+          <p>Auto-selected test, with assumptions, descriptives and a plain-English interpretation.</p>
+        </header>
+        <div id="results-body" data-testid="results-body"></div>
+
+        <div class="ana-actions">
+          <button type="button" class="btn btn-secondary" data-action="back-to-analysis" data-testid="button-back-analysis">
+            ← Adjust analysis
+          </button>
+          <button type="button" class="btn btn-secondary" data-action="restart" data-testid="button-restart-from-results">
+            Start over with new dataset
+          </button>
+          <a href="/" class="btn btn-tertiary" data-testid="link-home-results">
+            Back to MedRAS home
+          </a>
+        </div>
+
+        <p class="ana-soon-note" data-testid="note-export">
+          Export to Word / PDF / Excel coming in the next phase.
+        </p>
+      </section>
+    </main>
+
+    <footer class="site-footer" data-testid="site-footer">
+      <div class="footer-inner">
+        <span>&copy; MedRAS — Medical Research Acceleration System</span>
+        <span class="footer-meta">Beta · for research use</span>
+      </div>
+    </footer>
+
+    <script src="/js/analysis.js" defer></script>
+  </body>
+</html>
