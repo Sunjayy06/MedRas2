@@ -17,6 +17,38 @@
   // Formula schema — what each formula needs from the researcher.
   // -----------------------------------------------------------------------
 
+  // -----------------------------------------------------------------------
+  // Per-formula dropout-display rule (CHANGE 6).
+  //   "show"   → render the existing dropout select normally
+  //   "hide"   → never show the dropout select (single-timepoint or
+  //              estimation-only formulas)
+  //   "rename:experimental_failure" → show but relabel to "Expected
+  //              experimental failure rate (%)" (in-vitro)
+  //   "rename:animal_loss" → relabel to "Expected animal loss (%)" (in-vivo)
+  // Defaults to "show" if not set.
+  // -----------------------------------------------------------------------
+  var DROPOUT_RULES = {
+    single_proportion: "show",
+    single_mean: "show",
+    two_proportions: "show",
+    two_means: "show",
+    paired_means: "show",
+    anova_means: "show",
+    repeated_measures: "show",
+    repeated_measures_anova: "show",
+    linear_regression: "show",
+    prediction_model: "show",
+    correlation: "hide",
+    survival_logrank: "show",
+    kappa_agreement: "hide",
+    roc_auc: "hide",
+    diagnostic_accuracy: "hide",
+    icc: "hide",
+    bayesian_credible: "show",
+    non_inferiority: "show",
+    equivalence: "show",
+  };
+
   var FORMULAS = {
     single_proportion: {
       label: "Single proportion (one-sample prevalence)",
@@ -330,6 +362,68 @@
         },
       ],
     },
+    // ---------------------------------------------------------------------
+    // CHANGE 7 — Five new formulas computed entirely on the client.
+    // These do NOT call the backend; clientCompute(...) returns a response
+    // shaped like the API response so the existing renderResult pipeline
+    // works unchanged.
+    // ---------------------------------------------------------------------
+    non_inferiority: {
+      label: "Non-inferiority trial (continuous outcome)",
+      expression: "n/group = 2·σ²·(Z(α) + Z(β))² / (δ + M)²",
+      usesPower: true,
+      clientCompute: true,
+      fields: [
+        { key: "ni_margin", label: "Non-inferiority margin (M)", help: "Largest acceptable inferiority of new vs standard, in original units. Use one-sided α (typically 0.025).", type: "number", min: 0.0001, step: 0.1, placeholder: "e.g., 5" },
+        { key: "true_diff", label: "Expected true difference (δ)", help: "Anticipated difference favouring the new treatment (often 0). Must be > −M.", type: "number", step: 0.1, placeholder: "e.g., 0" },
+        { key: "sigma", label: "Common standard deviation (σ)", type: "number", min: 0.0001, step: 0.1, placeholder: "e.g., 15" },
+      ],
+    },
+    equivalence: {
+      label: "Equivalence trial (TOST)",
+      expression: "n/group = 2·σ²·(Z(α) + Z(β/2))² / (M − |δ|)²",
+      usesPower: true,
+      clientCompute: true,
+      fields: [
+        { key: "eq_margin", label: "Equivalence margin (M)", help: "Symmetric margin; both arms differ by less than ±M to declare equivalence.", type: "number", min: 0.0001, step: 0.1, placeholder: "e.g., 5" },
+        { key: "true_diff", label: "Expected true difference (δ)", help: "Anticipated absolute difference between treatments. Must be < M.", type: "number", step: 0.1, placeholder: "e.g., 0" },
+        { key: "sigma", label: "Common standard deviation (σ)", type: "number", min: 0.0001, step: 0.1, placeholder: "e.g., 15" },
+      ],
+    },
+    diagnostic_accuracy: {
+      label: "Diagnostic accuracy (sensitivity/specificity)",
+      expression: "n_cases = Z(α/2)² · Se(1−Se) / d²;  n_controls = Z(α/2)² · Sp(1−Sp) / d²",
+      usesPower: false,
+      clientCompute: true,
+      fields: [
+        { key: "sensitivity", label: "Expected sensitivity (Se)", type: "number", min: 0.01, max: 0.999, step: 0.01, placeholder: "e.g., 0.90" },
+        { key: "specificity", label: "Expected specificity (Sp)", type: "number", min: 0.01, max: 0.999, step: 0.01, placeholder: "e.g., 0.85" },
+        { key: "precision", label: "Margin of error (d, ±)", type: "number", min: 0.005, max: 0.2, step: 0.005, placeholder: "e.g., 0.05" },
+        { key: "prevalence", label: "Disease prevalence", help: "Used to scale total n: n_total = max(n_cases / prev, n_controls / (1 − prev)).", type: "number", min: 0.001, max: 0.999, step: 0.01, placeholder: "e.g., 0.20" },
+      ],
+    },
+    icc: {
+      label: "Intraclass Correlation Coefficient (ICC)",
+      expression: "n = 1 + 2·(Z(α/2)+Z(β))²·(1−ρ₀)²·(1+(k−1)ρ₁)² / (k(k−1)·(ρ₁ − ρ₀)²)  [Bonett 2002]",
+      usesPower: true,
+      clientCompute: true,
+      fields: [
+        { key: "rho0", label: "Null ICC (ρ₀)", help: "Lowest acceptable agreement.", type: "number", min: 0, max: 0.99, step: 0.05, placeholder: "e.g., 0.40" },
+        { key: "rho1", label: "Alternative ICC (ρ₁)", help: "Anticipated true agreement (must be > ρ₀).", type: "number", min: 0.01, max: 0.999, step: 0.05, placeholder: "e.g., 0.70" },
+        { key: "raters", label: "Number of raters / repeated measurements (k)", type: "number", min: 2, max: 20, step: 1, placeholder: "e.g., 3" },
+      ],
+    },
+    bayesian_credible: {
+      label: "Bayesian sample size (credible-interval width)",
+      expression: "n = (Z(α/2) · σ_post / w)²  with normal–normal conjugate prior",
+      usesPower: false,
+      clientCompute: true,
+      fields: [
+        { key: "sigma", label: "Likelihood standard deviation (σ)", type: "number", min: 0.0001, step: 0.1, placeholder: "e.g., 15" },
+        { key: "prior_sigma", label: "Prior standard deviation (σ₀)", help: "Larger σ₀ = weaker prior. Use 1e6 for an essentially flat prior.", type: "number", min: 0.0001, step: 0.1, placeholder: "e.g., 30" },
+        { key: "ci_halfwidth", label: "Desired credible-interval half-width (w)", type: "number", min: 0.0001, step: 0.1, placeholder: "e.g., 2" },
+      ],
+    },
   };
 
   // -----------------------------------------------------------------------
@@ -358,6 +452,60 @@
     survival_logrank: {
       hazard_ratio: 0.7, overall_event_rate: 0.4, allocation_ratio: 1,
     },
+    non_inferiority: { ni_margin: 5, true_diff: 0, sigma: 15 },
+    equivalence: { eq_margin: 5, true_diff: 0, sigma: 15 },
+    diagnostic_accuracy: {
+      sensitivity: 0.9, specificity: 0.85, precision: 0.05, prevalence: 0.2,
+    },
+    icc: { rho0: 0.4, rho1: 0.7, raters: 3 },
+    bayesian_credible: { sigma: 15, prior_sigma: 30, ci_halfwidth: 2 },
+  };
+
+  // -----------------------------------------------------------------------
+  // WHY_DEFAULTS — short justification for each auto-fillable parameter
+  // (CHANGE 3 "Auto-filled defaults" table). Keyed by field key OR by
+  // "<formula>.<field>" if a formula needs an override.
+  // -----------------------------------------------------------------------
+  var WHY_DEFAULTS = {
+    alpha: "Standard type I error rate (95% confidence)",
+    power: "Minimum acceptable power",
+    dropout: "Typical outpatient study attrition",
+    p: "Worst-case proportion (maximises required n)",
+    p1: "Conservative starting estimate",
+    p2: "Conservative starting estimate",
+    sigma: "Conservative SD pending pilot data",
+    sigma_diff: "Conservative SD of paired differences",
+    mean1: "Reference baseline",
+    mean2: "Reference baseline",
+    mean_diff: "Small-to-medium effect size",
+    rho: "Typical within-subject correlation",
+    expected_r: "Cohen 1988 medium effect",
+    expected_kappa: "Substantial agreement (Landis & Koch)",
+    auc: "Conventionally good test (AUC 0.75)",
+    case_ratio: "Balanced case-control design",
+    r_squared: "Cohen f² medium effect",
+    event_rate: "Common-event scenario",
+    epv_target: "Peduzzi 1996 standard",
+    overall_event_rate: "Moderate-event scenario",
+    hazard_ratio: "Clinically relevant treatment effect",
+    allocation_ratio: "Balanced randomisation",
+    effect_size_f: "Cohen 1988 medium effect",
+    precision: "Conventional ±5% precision",
+    predictors: "Typical multivariable model size",
+    k: "Smallest k that requires ANOVA",
+    m_timepoints: "Common longitudinal design",
+    k_groups: "Two-arm trial",
+    ni_margin: "Common non-inferiority margin",
+    eq_margin: "Common equivalence margin",
+    true_diff: "Null assumption (no true difference)",
+    sensitivity: "High-performing test target",
+    specificity: "High-performing test target",
+    prevalence: "Moderate-prevalence condition",
+    rho0: "Lowest acceptable agreement",
+    rho1: "Substantial agreement target",
+    raters: "Typical 3-rater study",
+    prior_sigma: "Weakly informative prior",
+    ci_halfwidth: "Conventional precision",
   };
 
   // Human-readable labels for reference params shown in the "defaults used"
@@ -452,6 +600,24 @@
     roc_auc:
       "Diagnostic accuracy study — estimating the AUC of a single test " +
       "with a desired CI half-width (Hanley & McNeil 1982).",
+    non_inferiority:
+      "Non-inferiority trial — proving a new treatment is not unacceptably " +
+      "worse than the standard by more than a pre-specified margin M.",
+    equivalence:
+      "Equivalence (TOST) trial — proving two treatments differ by less " +
+      "than ±M (typical for bioequivalence and biosimilar studies).",
+    diagnostic_accuracy:
+      "Estimating the sensitivity and specificity of a binary diagnostic " +
+      "test with a desired absolute precision; total n is scaled by " +
+      "disease prevalence.",
+    icc:
+      "Estimating an Intraclass Correlation Coefficient against a null " +
+      "value — used for inter-rater or test-retest reliability with " +
+      "k raters/measurements per subject.",
+    bayesian_credible:
+      "Bayesian sample size by precision — sizes n so the posterior 95% " +
+      "credible interval has a desired half-width, given a normal-normal " +
+      "conjugate prior.",
   };
 
   // -----------------------------------------------------------------------
@@ -459,10 +625,635 @@
   // -----------------------------------------------------------------------
 
   document.addEventListener("DOMContentLoaded", function () {
+    bindStep0();
+    bindCardA();
+    bindCardC();
     bindStep1();
     bindStep2();
     bindStep3();
   });
+
+  // -----------------------------------------------------------------------
+  // CHANGE 2 — client-side objective parser. Pure regex; no API call.
+  // Returns: { flags: {...}, formula: <key|null>, chips: [...] }
+  // -----------------------------------------------------------------------
+
+  function objectiveParser(text) {
+    var t = String(text || "").toLowerCase();
+    var flags = {
+      groups: 1,
+      compare: false,
+      outcome: null,           // "binary" | "continuous" | "time-to-event" | "agreement" | "diagnostic" | null
+      longitudinal: false,
+      genetic: false,
+      complexity: "simple",    // "simple" | "complex"
+      design: null,            // "non_inferiority" | "equivalence" | null
+      survey: false,
+      paired: false,
+    };
+
+    // Comparison keywords
+    var twoCompare = /\b(compare|vs\.?|versus|between|control vs|treatment vs|cases vs)\b/;
+    var threePlus  = /\b(three|four|five|multiple)\b.*\b(groups?|arms?)\b|\b(anova|three-?arm|three arms|four arms)\b/;
+    if (twoCompare.test(t)) { flags.compare = true; flags.groups = 2; }
+    if (threePlus.test(t))  { flags.compare = true; flags.groups = 3; }
+    var nGroupsMatch = t.match(/\b([2-9])\s*(?:arms?|groups?)\b/);
+    if (nGroupsMatch) { flags.compare = true; flags.groups = Math.max(flags.groups, parseInt(nGroupsMatch[1], 10)); }
+
+    // Paired / before-after / crossover
+    if (/\b(before[- ]?after|pre[- ]?post|paired|matched|crossover|change from baseline|within[- ]subject)\b/.test(t)) {
+      flags.paired = true;
+    }
+
+    // Outcome type
+    if (/\b(prevalence|proportion|incidence|cure rate|response rate|positive|infection rate|mortality rate|seropositive|seroprevalence)\b/.test(t)) {
+      flags.outcome = "binary";
+    }
+    if (/\b(mean|average|level|score|hba1c|blood pressure|systolic|diastolic|cholesterol|continuous|change in)\b/.test(t)) {
+      flags.outcome = flags.outcome || "continuous";
+    }
+    if (/\b(survival|time[- ]to[- ]event|progression[- ]free|hazard|kaplan[- ]?meier|log[- ]?rank|overall survival|pfs)\b/.test(t)) {
+      flags.outcome = "time-to-event";
+    }
+    if (/\b(agreement|kappa|inter[- ]?rater|intra[- ]?rater|reliability|icc)\b/.test(t)) {
+      flags.outcome = "agreement";
+    }
+    if (/\b(sensitivity|specificity|diagnostic accuracy|roc|auc|positive predictive value|ppv|npv)\b/.test(t)) {
+      flags.outcome = "diagnostic";
+    }
+
+    // Longitudinal / repeated measures
+    if (/\b(longitudinal|repeated measures|over time|follow[- ]?up|months?|weeks?|timepoints?|6 months|12 months|baseline and|cohort)\b/.test(t)) {
+      flags.longitudinal = true;
+    }
+
+    // Genetic
+    if (/\b(snp|gwas|genom(e|ic)|genotype|allele|polymorphism|gene |genetic|hla|haplotype|pharmacogenom|carrier|linkage)\b/.test(t)) {
+      flags.genetic = true;
+    }
+
+    // Survey / cross-sectional / prevalence-only
+    if (/\b(survey|cross[- ]?sectional|kap study|knowledge attitude|questionnaire|prevalence study|seroprevalence)\b/.test(t)) {
+      flags.survey = true;
+    }
+
+    // Trial design
+    if (/\b(non[- ]?inferiority|noninferiority)\b/.test(t)) flags.design = "non_inferiority";
+    if (/\b(equivalence|bioequivalence|biosimilar)\b/.test(t)) flags.design = "equivalence";
+
+    // Complexity heuristic
+    var complexHits = 0;
+    if (/\b(multicent(re|er)|multi[- ]?site|multi[- ]?arm)\b/.test(t)) complexHits++;
+    if (/\b(adaptive|interim|group sequential)\b/.test(t)) complexHits++;
+    if (/\b(composite (primary )?outcome|primary outcomes?)\b/.test(t) && /\b(and|,)\b/.test(t)) complexHits++;
+    if (flags.longitudinal && flags.compare) complexHits++;
+    if (complexHits >= 2) flags.complexity = "complex";
+
+    // Routing priority table
+    var formula = null;
+    if (flags.genetic) {
+      formula = null; // routed via genetic engine
+    } else if (flags.design === "non_inferiority") {
+      formula = "non_inferiority";
+    } else if (flags.design === "equivalence") {
+      formula = "equivalence";
+    } else if (flags.outcome === "time-to-event") {
+      formula = "survival_logrank";
+    } else if (flags.outcome === "diagnostic") {
+      formula = "diagnostic_accuracy";
+    } else if (flags.outcome === "agreement") {
+      // ICC for continuous, kappa for categorical
+      formula = /\bcontinuous|measur(e|ement)\b/.test(t) ? "icc" : "kappa_agreement";
+    } else if (flags.longitudinal && flags.compare && flags.groups >= 3) {
+      formula = "repeated_measures_anova";
+    } else if (flags.longitudinal && flags.compare) {
+      formula = "repeated_measures";
+    } else if (flags.compare && flags.groups >= 3) {
+      formula = "anova_means";
+    } else if (flags.compare && flags.outcome === "binary") {
+      formula = "two_proportions";
+    } else if (flags.compare && (flags.outcome === "continuous" || flags.outcome === null)) {
+      formula = flags.paired ? "paired_means" : "two_means";
+    } else if (flags.outcome === "binary") {
+      formula = "single_proportion";
+    } else if (flags.outcome === "continuous") {
+      formula = "single_mean";
+    } else if (flags.survey) {
+      formula = "single_proportion";
+    } else if (/\bcorrelat/.test(t)) {
+      formula = "correlation";
+    }
+
+    // Build human-readable chips
+    var chips = [];
+    if (flags.compare) chips.push((flags.groups || 2) + " groups");
+    else chips.push("single group");
+    if (flags.outcome) chips.push(flags.outcome + " outcome");
+    if (flags.longitudinal) chips.push("longitudinal");
+    if (flags.paired) chips.push("paired/within-subject");
+    if (flags.genetic) chips.push("genetic study");
+    if (flags.design) chips.push(flags.design.replace("_", "-"));
+    if (flags.complexity === "complex") chips.push("complex design");
+    if (flags.survey) chips.push("survey/cross-sectional");
+
+    return { flags: flags, formula: formula, chips: chips };
+  }
+
+  // -----------------------------------------------------------------------
+  // CHANGE 7 — client-side compute helpers (pure JS, no backend).
+  // Each returns a response object compatible with the existing
+  // renderResult() pipeline.
+  // -----------------------------------------------------------------------
+
+  function zFromAlpha(alpha, oneSided) {
+    // Two-sided unless oneSided===true
+    var p = oneSided ? 1 - alpha : 1 - alpha / 2;
+    return inverseNormalCdf(p);
+  }
+  function zFromPower(power) { return inverseNormalCdf(power); }
+
+  // Beasley-Springer-Moro inverse-normal CDF (good to ~7 decimals).
+  function inverseNormalCdf(p) {
+    if (p <= 0 || p >= 1) {
+      if (p === 0) return -Infinity;
+      if (p === 1) return Infinity;
+      return NaN;
+    }
+    var a = [-3.969683028665376e+01, 2.209460984245205e+02, -2.759285104469687e+02, 1.383577518672690e+02, -3.066479806614716e+01, 2.506628277459239e+00];
+    var b = [-5.447609879822406e+01, 1.615858368580409e+02, -1.556989798598866e+02, 6.680131188771972e+01, -1.328068155288572e+01];
+    var c = [-7.784894002430293e-03, -3.223964580411365e-01, -2.400758277161838e+00, -2.549732539343734e+00, 4.374664141464968e+00, 2.938163982698783e+00];
+    var d = [7.784695709041462e-03, 3.224671290700398e-01, 2.445134137142996e+00, 3.754408661907416e+00];
+    var pLow = 0.02425, pHigh = 1 - pLow, q, r;
+    if (p < pLow) {
+      q = Math.sqrt(-2 * Math.log(p));
+      return (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) /
+        ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1);
+    }
+    if (p <= pHigh) {
+      q = p - 0.5; r = q * q;
+      return (((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5]) * q /
+        (((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1);
+    }
+    q = Math.sqrt(-2 * Math.log(1 - p));
+    return -(((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) /
+      ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1);
+  }
+
+  function _ceil(x) { return Math.ceil(x); }
+
+  function clientComputeForward(formula, params) {
+    var alpha = params.alpha != null ? params.alpha : 0.05;
+    var power = params.power != null ? params.power : 0.8;
+    var dropout = params.dropout != null ? params.dropout : 0;
+    var spec = FORMULAS[formula];
+    var nPerGroup = 0, totalN = 0, numGroups = 1;
+    var notes = [], constants = {};
+
+    if (formula === "non_inferiority") {
+      // One-sided α (regulatory standard)
+      var Za = zFromAlpha(alpha, true);
+      var Zb = zFromPower(power);
+      var sigma = params.sigma;
+      var M = params.ni_margin;
+      var delta = params.true_diff;
+      var denom = (delta + M);
+      if (denom <= 0) {
+        throw new Error("Non-inferiority requires δ + M > 0 (true effect must be better than the negative margin).");
+      }
+      nPerGroup = _ceil(2 * sigma * sigma * Math.pow(Za + Zb, 2) / (denom * denom));
+      numGroups = 2;
+      totalN = nPerGroup * 2;
+      constants = { Z_alpha_one_sided: round(Za, 4), Z_beta: round(Zb, 4), effect_minus_margin: round(denom, 4) };
+      notes.push("Non-inferiority uses one-sided α = " + alpha + " (regulatory convention).");
+      notes.push("Margin (M) = " + M + ";  expected true difference (δ) = " + delta + ".");
+    } else if (formula === "equivalence") {
+      var Za2 = zFromAlpha(alpha, true);              // TOST: one-sided α each side
+      var Zb2 = zFromAlpha(1 - power, true);          // Z(β/2) → use β/2 for two one-sided tests
+      Zb2 = zFromPower(1 - (1 - power) / 2);
+      var sg = params.sigma;
+      var Mq = params.eq_margin;
+      var dq = Math.abs(params.true_diff);
+      var diff = Mq - dq;
+      if (diff <= 0) {
+        throw new Error("Equivalence requires |δ| < M (the expected difference must be smaller than the margin).");
+      }
+      nPerGroup = _ceil(2 * sg * sg * Math.pow(Za2 + Zb2, 2) / (diff * diff));
+      numGroups = 2;
+      totalN = nPerGroup * 2;
+      constants = { Z_alpha_one_sided: round(Za2, 4), Z_beta_over_2: round(Zb2, 4), margin_minus_abs_diff: round(diff, 4) };
+      notes.push("TOST uses one-sided α = " + alpha + " on EACH side of the symmetric ±M margin.");
+    } else if (formula === "diagnostic_accuracy") {
+      var Z = zFromAlpha(alpha, false);
+      var Se = params.sensitivity, Sp = params.specificity, d = params.precision, prev = params.prevalence;
+      var nCases    = _ceil(Z * Z * Se * (1 - Se) / (d * d));
+      var nControls = _ceil(Z * Z * Sp * (1 - Sp) / (d * d));
+      // Total n constrained by prevalence: need enough total so that
+      //   prev * total ≥ nCases  AND  (1-prev)*total ≥ nControls
+      var tFromCases    = Math.ceil(nCases / prev);
+      var tFromControls = Math.ceil(nControls / (1 - prev));
+      totalN = Math.max(tFromCases, tFromControls);
+      numGroups = 1;
+      nPerGroup = totalN;
+      constants = {
+        Z_alpha_over_2: round(Z, 4),
+        n_cases_required: nCases,
+        n_controls_required: nControls,
+        scaled_by_prevalence: prev,
+      };
+      notes.push("n_cases needed for sensitivity CI ±" + d + " = " + nCases + ".");
+      notes.push("n_controls needed for specificity CI ±" + d + " = " + nControls + ".");
+      notes.push("Total n scaled to prevalence " + prev + " so both case and control counts are met.");
+    } else if (formula === "icc") {
+      var Zi = zFromAlpha(alpha, false);
+      var Zib = zFromPower(power);
+      var rho0 = params.rho0, rho1 = params.rho1, k = params.raters;
+      if (rho1 <= rho0) throw new Error("ICC requires ρ₁ > ρ₀ (alternative agreement must exceed null).");
+      // Walter, Eliasziw & Donner (1998) approximation
+      var theta0 = rho0 / (1 - rho0 + 1e-12);
+      var theta1 = rho1 / (1 - rho1 + 1e-12);
+      // Use Bonett (2002) closed-form approximation:
+      //   n = 1 + 2·k·(Z(α/2)+Z(β))²·(1-ρ₀)²·(1+(k-1)ρ₁)² / (k(k-1)·(ρ₁-ρ₀)²)
+      var num = 2 * Math.pow(Zi + Zib, 2) * Math.pow(1 - rho0, 2) * Math.pow(1 + (k - 1) * rho1, 2);
+      var denomI = k * (k - 1) * Math.pow(rho1 - rho0, 2);
+      nPerGroup = _ceil(1 + num / denomI);
+      numGroups = 1;
+      totalN = nPerGroup;
+      constants = { Z_alpha_over_2: round(Zi, 4), Z_beta: round(Zib, 4), raters: k, theta0: round(theta0, 4), theta1: round(theta1, 4) };
+      notes.push("Subjects each rated by " + k + " raters; total ratings = " + (nPerGroup * k) + ".");
+      notes.push("Approximation: Bonett 2002 (Statistics in Medicine 21:1331-1335).");
+    } else if (formula === "bayesian_credible") {
+      // Normal-normal conjugate.  Posterior precision = 1/σ₀² + n/σ²
+      // Posterior SD = √(1/(1/σ₀² + n/σ²)).  Solve for n given desired
+      // half-width w at credibility level (1−α).
+      var Zc = zFromAlpha(alpha, false);
+      var sigma2 = Math.pow(params.sigma, 2);
+      var prior2 = Math.pow(params.prior_sigma, 2);
+      var w = params.ci_halfwidth;
+      // Want Z·√(1/(1/σ₀² + n/σ²)) ≤ w
+      //   → 1/σ₀² + n/σ² ≥ Z²/w²
+      //   → n ≥ σ² (Z²/w² − 1/σ₀²)
+      var rhs = (Zc * Zc) / (w * w) - 1 / prior2;
+      if (rhs <= 0) {
+        nPerGroup = 1;
+        notes.push("Prior alone already meets the desired half-width — n=1 suffices.");
+      } else {
+        nPerGroup = _ceil(sigma2 * rhs);
+      }
+      numGroups = 1;
+      totalN = nPerGroup;
+      constants = {
+        Z_credibility: round(Zc, 4),
+        prior_precision: round(1 / prior2, 6),
+        likelihood_variance: round(sigma2, 4),
+      };
+      notes.push("Normal-normal conjugate; posterior 95% credible interval target half-width = " + w + ".");
+    } else {
+      throw new Error("Unknown client-side formula: " + formula);
+    }
+
+    var adjustedN = dropout > 0 && dropout < 1
+      ? Math.ceil(totalN / (1 - dropout))
+      : totalN;
+
+    // Build response shape compatible with renderResult().
+    var inputs = Object.assign({ alpha: alpha, dropout_rate: dropout }, params);
+    if (spec.usesPower) inputs.power = power;
+    delete inputs.dropout;
+
+    return {
+      formula: formula,
+      formula_label: spec.label,
+      formula_expression: spec.expression,
+      n_per_group: nPerGroup,
+      number_of_groups: numGroups,
+      total_n: totalN,
+      adjusted_n: adjustedN,
+      inputs: inputs,
+      constants: constants,
+      notes: notes,
+    };
+  }
+
+  function round(v, dp) {
+    var f = Math.pow(10, dp || 4);
+    return Math.round(v * f) / f;
+  }
+
+  // -----------------------------------------------------------------------
+  // CHANGE 4 — Complex-trial layered pipeline.
+  // Takes a baseline result (n_per_group/total_n) and applies, in order:
+  //   1. composite-outcome Bonferroni (multiple primary outcomes, with ρ)
+  //   2. repeated-measures variance reduction
+  //   3. multicentre design-effect inflation (DEFF = 1 + (m-1)·ICC)
+  //   4. adaptive-design α-spending penalty
+  // Returns { result, layers } where layers is a list of {name, multiplier,
+  // n_per_group, total_n} suitable for the layered breakdown table.
+  // -----------------------------------------------------------------------
+  function applyComplexLayers(baseResult, cx) {
+    var layers = [{
+      name: "Baseline (statistical formula)",
+      adj: "—",
+      n_per_group: baseResult.n_per_group,
+      total_n: baseResult.total_n,
+      multiplier: 1,
+    }];
+    var nPerGroup = baseResult.n_per_group;
+    var totalN = baseResult.total_n;
+    // Use the actual study α (not a hardcoded 0.05) so adjustments scale
+    // correctly for stricter levels (e.g. 0.01 or GWAS 5e-8).
+    var studyAlpha = (baseResult.inputs && baseResult.inputs.alpha != null)
+      ? baseResult.inputs.alpha
+      : 0.05;
+
+    // 1. Composite outcomes — TRUE Šidák correction with ρ-adjusted m_eff.
+    if (cx.outcomes > 1) {
+      var k = cx.outcomes;
+      var rho = cx.rho_outcomes != null ? cx.rho_outcomes : 0.4;
+      // Effective independent tests under correlation ρ (Conneely & Boehnke 2007 approx)
+      var effTests = 1 + (k - 1) * (1 - rho);
+      // True Šidák: α_per = 1 − (1 − α)^(1/m_eff)
+      var alphaPer = 1 - Math.pow(1 - studyAlpha, 1 / effTests);
+      var Zbase = zFromAlpha(studyAlpha, false);
+      var Zadj  = zFromAlpha(alphaPer,   false);
+      var mult = Math.pow(Zadj / Zbase, 2);
+      nPerGroup = Math.ceil(nPerGroup * mult);
+      totalN    = Math.ceil(totalN * mult);
+      layers.push({
+        name: "Composite outcomes (k=" + k + ", ρ=" + rho + ", true Šidák)",
+        adj: "× " + mult.toFixed(3) +
+             "  (m_eff=" + effTests.toFixed(2) +
+             ", α_per=" + alphaPer.toExponential(2) + ")",
+        n_per_group: nPerGroup, total_n: totalN, multiplier: mult,
+      });
+    }
+
+    // 2. Repeated measures variance reduction
+    if (cx.timepoints > 1) {
+      var m = cx.timepoints;
+      var rT = cx.rho_time != null ? cx.rho_time : 0.5;
+      // Variance-reduction multiplier for paired/RM analysis
+      var rmMult = (1 + (m - 1) * rT) / m;
+      // RM REDUCES required n
+      nPerGroup = Math.max(2, Math.ceil(nPerGroup * rmMult));
+      totalN    = Math.max(2, Math.ceil(totalN * rmMult));
+      layers.push({
+        name: "Repeated measures (m=" + m + ", ρ=" + rT + ")",
+        adj: "× " + rmMult.toFixed(3) + "  (efficiency gain)",
+        n_per_group: nPerGroup, total_n: totalN, multiplier: rmMult,
+      });
+    }
+
+    // 3. Multicentre design-effect inflation
+    if (cx.multicentre === "yes") {
+      var sites = cx.sites || 10;
+      var icc = cx.icc != null ? cx.icc : 0.05;
+      var avgClusterSize = totalN / sites;
+      var DEFF = 1 + (avgClusterSize - 1) * icc;
+      if (DEFF < 1) DEFF = 1;
+      nPerGroup = Math.ceil(nPerGroup * DEFF);
+      totalN    = Math.ceil(totalN * DEFF);
+      layers.push({
+        name: "Multicentre DEFF (sites=" + sites + ", ICC=" + icc + ")",
+        adj: "× " + DEFF.toFixed(3),
+        n_per_group: nPerGroup, total_n: totalN, multiplier: DEFF,
+      });
+    }
+
+    // 4. Adaptive-design α-spending penalty
+    if (cx.adaptive === "yes") {
+      var interims = cx.interims || 1;
+      var penalty = interims === 1 ? 1.05 : interims === 2 ? 1.07 : 1.10;
+      nPerGroup = Math.ceil(nPerGroup * penalty);
+      totalN    = Math.ceil(totalN * penalty);
+      layers.push({
+        name: "Adaptive design (" + interims + " interims)",
+        adj: "× " + penalty.toFixed(2) + "  (α-spending penalty)",
+        n_per_group: nPerGroup, total_n: totalN, multiplier: penalty,
+      });
+    }
+
+    var dropout = baseResult.inputs && (baseResult.inputs.dropout_rate || 0);
+    var adjusted = dropout > 0 && dropout < 1 ? Math.ceil(totalN / (1 - dropout)) : totalN;
+
+    var newResult = Object.assign({}, baseResult, {
+      n_per_group: nPerGroup,
+      total_n: totalN,
+      adjusted_n: adjusted,
+    });
+    return { result: newResult, layers: layers };
+  }
+
+  // -----------------------------------------------------------------------
+  // CHANGE 5 — Genetic engine wrapper. Maps a sub-type onto an existing
+  // formula with the appropriate α + parameters, then returns the result
+  // with a "genetic" tag so renderResult can show the genetic checklist.
+  // -----------------------------------------------------------------------
+  function geneticEngineSelect(subtype) {
+    // Returns { formula, defaultAlpha, lockedAlpha (boolean), notes[] }
+    switch (subtype) {
+      case "candidate_gene":
+        return { formula: "two_proportions", defaultAlpha: 0.05, lockedAlpha: false,
+          notes: ["Candidate-gene case-control: standard α = 0.05 with Bonferroni for the number of SNPs tested."] };
+      case "gwas":
+        return { formula: "two_proportions", defaultAlpha: 5e-8, lockedAlpha: true,
+          notes: ["GWAS uses genome-wide significance α = 5×10⁻⁸ to control FWER across ~10⁶ independent SNPs."] };
+      case "pharmacogenomic":
+        return { formula: "anova_means", defaultAlpha: 0.05, lockedAlpha: false,
+          notes: ["Pharmacogenomic study: comparing drug response across genotype groups (AA / Aa / aa)."] };
+      case "carrier":
+        return { formula: "single_proportion", defaultAlpha: 0.05, lockedAlpha: false,
+          notes: ["Carrier study: estimating allele frequency in the population."] };
+      case "linkage":
+        return { formula: null, defaultAlpha: null, lockedAlpha: true,
+          notes: ["Linkage analysis is family-based; sample size depends on family structure and disease model.",
+                  "Use SIMLINK or GENEHUNTER software. LOD ≥ 3.0 = genome-wide significance."] };
+      default:
+        return { formula: "two_proportions", defaultAlpha: 0.05, lockedAlpha: false, notes: [] };
+    }
+  }
+
+  // -----------------------------------------------------------------------
+  // CHANGE 1 — Step 0 / Card A / Card C wiring
+  // -----------------------------------------------------------------------
+
+  function bindStep0() {
+    document.querySelectorAll(".entry-card").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var entry = btn.getAttribute("data-entry");
+        if (entry === "A") goToStep("A");
+        else if (entry === "B") goToStep(1);
+        else if (entry === "C") { wizardReset(); goToStep("C"); }
+      });
+    });
+  }
+
+  function bindCardA() {
+    var back = document.getElementById("cardA-back");
+    if (back) back.addEventListener("click", function () { goToStep(0); });
+    var go = document.getElementById("cardA-go");
+    if (go) go.addEventListener("click", onCardAGo);
+  }
+
+  function onCardAGo() {
+    var errEl = document.getElementById("cardA-error");
+    errEl.hidden = true; errEl.textContent = "";
+    var nRaw = document.getElementById("cardA-n").value.trim();
+    var n = parseInt(nRaw, 10);
+    if (!nRaw || Number.isNaN(n) || n < 2) {
+      errEl.hidden = false;
+      errEl.textContent = "Please enter your available sample size (whole number ≥ 2).";
+      return;
+    }
+    var objective = document.getElementById("cardA-objective").value.trim();
+    state.objective = objective;
+    var parsed = objectiveParser(objective);
+    state.lastParsed = parsed;
+    state.lastAnalysis = null;
+
+    // Pick formula. Default to two_proportions if parser couldn't decide.
+    var formula = parsed.formula || "two_proportions";
+
+    // Card A invariant: n is given → must run REVERSE mode. If the parser
+    // chose a formula that has no reverse spec (e.g. non_inferiority,
+    // diagnostic_accuracy, icc, bayesian_credible), substitute the closest
+    // reverse-capable formula based on parser flags so the user's n is
+    // actually consumed. Surface the substitution as a chip + note.
+    if (!REVERSE_SPECS[formula]) {
+      var fallback;
+      var f = parsed.flags || {};
+      if (f.groups === 1 && f.outcome === "binary")        fallback = "single_proportion";
+      else if (f.groups === 1 && f.outcome !== "binary")    fallback = "single_mean";
+      else if (f.outcome === "binary")                      fallback = "two_proportions";
+      else                                                  fallback = "two_means";
+      parsed.chips = (parsed.chips || []).concat([
+        "auto-switched to " + (FORMULAS[fallback] && FORMULAS[fallback].label || fallback) +
+        " (so we can solve for what your n=" + n + " can detect)",
+      ]);
+      formula = fallback;
+    }
+    state.reverseMode = true;
+    state.selectedFormula = formula;
+
+    // Pre-fill the parameter form with defaults + n, then jump straight
+    // to results by calling onCalculate via renderFormulaFields.
+    goToStep(2, formula);
+    // Set the n input
+    var revSpec = REVERSE_SPECS[formula];
+    if (revSpec) {
+      var nInput = document.getElementById("param-" + revSpec.nField.key);
+      if (nInput) nInput.value = String(n);
+    }
+    // Auto-trigger calculate
+    setTimeout(function () { document.getElementById("calculate-btn").click(); }, 50);
+  }
+
+  // ---------- Card C wizard ----------
+  var WIZ = { q: 1, answers: {} };
+  function wizardReset() {
+    WIZ = { q: 1, answers: {} };
+    document.querySelectorAll(".wizard-step").forEach(function (s) { s.hidden = s.getAttribute("data-q") !== "1"; });
+    document.querySelectorAll(".wizard-dot").forEach(function (d, i) { d.classList.toggle("is-active", i === 0); d.classList.remove("is-complete"); });
+    var ids = ["wiz-objective", "wiz-n"];
+    ids.forEach(function (id) { var el = document.getElementById(id); if (el) el.value = ""; });
+    document.querySelectorAll('input[name="wiz-compare"], input[name="wiz-groups"], input[name="wiz-haven"]').forEach(function (r) { r.checked = false; });
+  }
+  function showWizQ(q) {
+    WIZ.q = q;
+    document.querySelectorAll(".wizard-step").forEach(function (s) { s.hidden = String(q) !== s.getAttribute("data-q"); });
+    document.querySelectorAll(".wizard-dot").forEach(function (d, i) {
+      d.classList.toggle("is-active", i + 1 === q);
+      d.classList.toggle("is-complete", i + 1 < q);
+    });
+    if (q === 5) {
+      var haven = WIZ.answers.haven;
+      document.getElementById("wiz-q5-haven-yes").hidden = haven !== "yes";
+      document.getElementById("wiz-q5-haven-no").hidden  = haven !== "no";
+    }
+    var nextBtn = document.getElementById("wiz-next");
+    if (nextBtn) nextBtn.textContent = q === 5 ? "Calculate →" : "Next →";
+  }
+  function bindCardC() {
+    var nextBtn = document.getElementById("wiz-next");
+    var backBtn = document.getElementById("wiz-back");
+    if (!nextBtn || !backBtn) return;
+    nextBtn.addEventListener("click", function () {
+      // Capture answer for current q
+      if (WIZ.q === 1) {
+        WIZ.answers.objective = document.getElementById("wiz-objective").value.trim();
+      } else if (WIZ.q === 2) {
+        var c = document.querySelector('input[name="wiz-compare"]:checked');
+        if (!c) return alert("Please pick one.");
+        WIZ.answers.compare = c.value;
+      } else if (WIZ.q === 3) {
+        var g = document.querySelector('input[name="wiz-groups"]:checked');
+        if (!g) return alert("Please pick one.");
+        WIZ.answers.groups = parseInt(g.value, 10);
+      } else if (WIZ.q === 4) {
+        var h = document.querySelector('input[name="wiz-haven"]:checked');
+        if (!h) return alert("Please pick one.");
+        WIZ.answers.haven = h.value;
+      } else if (WIZ.q === 5) {
+        if (WIZ.answers.haven === "yes") {
+          var nv = parseInt(document.getElementById("wiz-n").value, 10);
+          if (!nv || nv < 2) return alert("Enter a sample size ≥ 2.");
+          WIZ.answers.n = nv;
+        } else {
+          WIZ.answers.alpha = parseFloat(document.getElementById("wiz-alpha").value);
+        }
+        return wizardFinish();
+      }
+      // Skip Q3 if Q2 said "no compare"
+      var nextQ = WIZ.q + 1;
+      if (nextQ === 3 && WIZ.answers.compare === "no") nextQ = 4;
+      showWizQ(nextQ);
+    });
+    backBtn.addEventListener("click", function () {
+      if (WIZ.q === 1) return goToStep(0);
+      var prev = WIZ.q - 1;
+      if (prev === 3 && WIZ.answers.compare === "no") prev = 2;
+      showWizQ(prev);
+    });
+  }
+  function wizardFinish() {
+    var a = WIZ.answers;
+    state.objective = a.objective || "";
+    var parsed = objectiveParser(state.objective);
+    state.lastParsed = parsed;
+    state.lastAnalysis = null;
+
+    // Override parser with explicit wizard answers
+    if (a.compare === "no") {
+      parsed.formula = parsed.formula && /single|correlation|kappa|roc|icc|diagnostic|bayesian/.test(parsed.formula)
+        ? parsed.formula
+        : (parsed.flags.outcome === "binary" ? "single_proportion" : "single_mean");
+    } else if (a.groups >= 3) {
+      parsed.formula = parsed.flags.longitudinal ? "repeated_measures_anova" : "anova_means";
+    } else if (a.groups === 2) {
+      if (parsed.flags.outcome === "binary") parsed.formula = "two_proportions";
+      else if (parsed.flags.outcome === "time-to-event") parsed.formula = "survival_logrank";
+      else if (parsed.flags.longitudinal) parsed.formula = "repeated_measures";
+      else parsed.formula = parsed.flags.paired ? "paired_means" : "two_means";
+    }
+    var formula = parsed.formula || "two_means";
+    state.selectedFormula = formula;
+    state.reverseMode = a.haven === "yes" && !!REVERSE_SPECS[formula];
+
+    goToStep(2, formula);
+    if (a.alpha != null) {
+      var alphaSel = document.getElementById("alpha");
+      if (alphaSel) alphaSel.value = String(a.alpha);
+    }
+    if (state.reverseMode) {
+      var revSpec = REVERSE_SPECS[formula];
+      var nInput = document.getElementById("param-" + revSpec.nField.key);
+      if (nInput) nInput.value = String(a.n);
+    } else if (a.n) {
+      // user has expected n in mind but in forward mode → put in expected field
+      var expected = document.getElementById("expected");
+      if (expected) expected.value = String(a.n);
+    }
+    setTimeout(function () { document.getElementById("calculate-btn").click(); }, 50);
+  }
 
   function bindStep1() {
     document.getElementById("analyze-btn").addEventListener("click", onAnalyze);
@@ -495,6 +1286,7 @@
   }
 
   function bindStep2() {
+    bindComplexityControls();
     document.getElementById("formula-select").addEventListener("change", function (event) {
       // Switching formulas keeps the chosen mode (forward / reverse) so that
       // a researcher who picked "I only have a sample size" doesn't have to
@@ -507,7 +1299,7 @@
     });
     document.getElementById("calculate-btn").addEventListener("click", onCalculate);
     document.getElementById("back-to-step-1").addEventListener("click", function () {
-      goToStep(1);
+      goToStep(0);
     });
   }
 
@@ -517,7 +1309,7 @@
     });
     document.getElementById("restart-btn").addEventListener("click", function () {
       resetCalculator();
-      goToStep(1);
+      goToStep(0);
     });
     var dl = document.getElementById("download-report-btn");
     if (dl) {
@@ -1040,12 +1832,97 @@
       expectedFieldset.style.display = state.reverseMode ? "none" : "";
     }
 
+    // CHANGE 6 — apply per-formula dropout rule
+    applyDropoutRule(formulaKey);
+
     // Update the calculate button label to match the mode.
     var calcBtn = document.getElementById("calculate-btn");
     if (calcBtn && !calcBtn.disabled) {
       calcBtn.textContent = state.reverseMode
         ? "Calculate detectable effect"
         : "Calculate sample size";
+    }
+  }
+
+  // CHANGE 6 — show/hide/relabel the dropout select per formula.
+  function applyDropoutRule(formulaKey) {
+    var rule = DROPOUT_RULES[formulaKey] || "show";
+    var field = document.getElementById("dropout-field");
+    var label = document.getElementById("dropout-label");
+    var sel = document.getElementById("dropout");
+    if (!field || !sel) return;
+    if (rule === "hide") {
+      field.style.display = "none";
+      sel.value = "0"; // ensure no dropout adjustment when hidden
+    } else if (rule.indexOf("rename:") === 0) {
+      field.style.display = "";
+      var kind = rule.split(":")[1];
+      label.textContent = kind === "experimental_failure"
+        ? "Expected experimental failure rate (%)"
+        : "Expected animal loss (%)";
+    } else {
+      field.style.display = "";
+      label.textContent = "Anticipated dropout / non-response";
+    }
+  }
+
+  // CHANGE 1 — bind complexity radios + genetic sub-type chooser
+  function bindComplexityControls() {
+    if (bindComplexityControls._bound) return;
+    bindComplexityControls._bound = true;
+    document.querySelectorAll('input[name="complexity"]').forEach(function (r) {
+      r.addEventListener("change", function () { applyComplexityVisibility(); });
+    });
+    var gType = document.getElementById("genetic-type");
+    if (gType) gType.addEventListener("change", applyGeneticSubtypeUI);
+    // Sub-toggles inside the complex fieldset
+    ["cx-outcomes", "cx-timepoints", "cx-multicentre", "cx-adaptive"].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.addEventListener("change", applyComplexSubRows);
+    });
+  }
+  function getComplexity() {
+    var el = document.querySelector('input[name="complexity"]:checked');
+    return el ? el.value : "simple";
+  }
+  function applyComplexityVisibility() {
+    var c = getComplexity();
+    document.getElementById("complex-fieldset").hidden = c !== "complex";
+    document.getElementById("genetic-group").hidden    = c !== "genetic";
+    if (c === "complex") applyComplexSubRows();
+    if (c === "genetic") applyGeneticSubtypeUI();
+  }
+  function applyComplexSubRows() {
+    var k = parseInt(document.getElementById("cx-outcomes").value, 10) || 1;
+    var m = parseInt(document.getElementById("cx-timepoints").value, 10) || 1;
+    document.getElementById("cx-composite-row").hidden = !(k > 1);
+    document.getElementById("cx-rm-row").hidden        = !(m > 1);
+    document.getElementById("cx-multicentre-row").hidden = document.getElementById("cx-multicentre").value !== "yes";
+    document.getElementById("cx-adaptive-row").hidden    = document.getElementById("cx-adaptive").value !== "yes";
+  }
+  function applyGeneticSubtypeUI() {
+    var sub = document.getElementById("genetic-type").value;
+    document.getElementById("genetic-gwas-warning").hidden    = sub !== "gwas";
+    document.getElementById("genetic-linkage-info").hidden    = sub !== "linkage";
+    var info = geneticEngineSelect(sub);
+    var alphaSel = document.getElementById("alpha");
+    if (info.lockedAlpha && info.defaultAlpha != null) {
+      // Add the special α option if missing, then select it.
+      if (info.defaultAlpha === 5e-8) {
+        if (!Array.prototype.find.call(alphaSel.options, function (o) { return o.value === "5e-8"; })) {
+          var opt = document.createElement("option");
+          opt.value = "5e-8";
+          opt.textContent = "5×10⁻⁸ (GWAS genome-wide significance)";
+          alphaSel.appendChild(opt);
+        }
+        alphaSel.value = "5e-8";
+      }
+    }
+    // Show the appropriate underlying formula
+    if (info.formula) {
+      var sel = document.getElementById("formula-select");
+      if (sel) sel.value = info.formula;
+      renderFormulaFields(info.formula);
     }
   }
 
@@ -1172,23 +2049,48 @@
     btn.disabled = true;
     btn.textContent = "Calculating…";
 
+    var expectedRaw = document.getElementById("expected").value.trim();
+    var expected =
+      expectedRaw === ""
+        ? null
+        : Math.max(1, Math.floor(Number(expectedRaw)));
+
+    var restoreLabel = isReverse
+      ? "Calculate detectable effect"
+      : "Calculate sample size";
+
+    // CHANGE 7 — Client-side compute path for the 5 new formulas.
+    if (spec.clientCompute && !isReverse) {
+      try {
+        var data = clientComputeForward(state.selectedFormula, params);
+        // Note which inputs were left blank so the autofilled defaults
+        // table can flag them.
+        data._autofilledKeys = collectAutofilledKeys(visibleFields, defaults);
+        if (expected !== null) data.expected_sample_size = expected;
+        var post = postProcess(data, expected);
+        renderResult(post);
+        goToStep(3);
+      } catch (err) {
+        errEl.hidden = false;
+        errEl.textContent = err.message || "Calculation failed.";
+      } finally {
+        btn.disabled = false;
+        btn.textContent = restoreLabel;
+      }
+      return;
+    }
+
     var url = isReverse
       ? "/api/sample-size/reverse"
       : "/api/sample-size/calculate";
     var body = { formula: state.selectedFormula, parameters: params };
     if (!isReverse) {
-      var expectedRaw = document.getElementById("expected").value.trim();
-      var expected =
-        expectedRaw === ""
-          ? null
-          : Math.max(1, Math.floor(Number(expectedRaw)));
       if (expected !== null && !Number.isNaN(expected)) {
         body.expected_sample_size = expected;
       }
     }
-    var restoreLabel = isReverse
-      ? "Calculate detectable effect"
-      : "Calculate sample size";
+
+    var autofilledKeys = collectAutofilledKeys(visibleFields, defaults);
 
     fetch(url, {
       method: "POST",
@@ -1203,9 +2105,12 @@
       })
       .then(function (data) {
         if (isReverse) {
+          state.lastResult = data;
           renderReverseResult(data);
         } else {
-          renderResult(data);
+          data._autofilledKeys = autofilledKeys;
+          var post = postProcess(data, expected);
+          renderResult(post);
         }
         goToStep(3);
       })
@@ -1217,6 +2122,81 @@
         btn.disabled = false;
         btn.textContent = restoreLabel;
       });
+  }
+
+  // Track which fields were left blank by the user (so the autofilled
+  // defaults table flags them).
+  function collectAutofilledKeys(visibleFields, defaults) {
+    var keys = [];
+    visibleFields.forEach(function (f) {
+      var el = document.getElementById("param-" + f.key);
+      if (!el) return;
+      if ((el.value === "" || el.value === null) && defaults.hasOwnProperty(f.key)) {
+        keys.push(f.key);
+      }
+    });
+    // Constants (alpha/power/dropout) are never blank in the UI but we still
+    // disclose them as "auto-filled standards" if untouched by the wizard.
+    var alphaSel = document.getElementById("alpha");
+    var powerSel = document.getElementById("power");
+    var dropSel  = document.getElementById("dropout");
+    if (alphaSel && alphaSel.value === "0.05") keys.push("alpha");
+    if (powerSel && powerSel.value === "0.80") keys.push("power");
+    if (dropSel && dropSel.value === "0") keys.push("dropout");
+    return keys;
+  }
+
+  // Apply complex-trial layering and attach verdict + chip metadata.
+  function postProcess(data, expected) {
+    state.lastLayers = null;
+    var c = getComplexity();
+    if (c === "complex") {
+      var cx = readComplexInputs();
+      var layered = applyComplexLayers(data, cx);
+      data = layered.result;
+      state.lastLayers = layered.layers;
+      data.notes = (data.notes || []).concat([
+        "Complex-trial pipeline applied: " + layered.layers.length + " layer" +
+        (layered.layers.length === 1 ? "" : "s") + ".",
+      ]);
+    } else if (c === "genetic") {
+      var sub = document.getElementById("genetic-type").value;
+      var info = geneticEngineSelect(sub);
+      data._genetic = { subtype: sub, info: info };
+      data.notes = (data.notes || []).concat(info.notes || []);
+    }
+    if (expected != null && !Number.isNaN(expected)) {
+      data._verdict = computeVerdict(expected, data.adjusted_n || data.total_n);
+    }
+    state.lastResult = data;
+    return data;
+  }
+  function readComplexInputs() {
+    return {
+      outcomes:    parseInt(document.getElementById("cx-outcomes").value, 10) || 1,
+      timepoints:  parseInt(document.getElementById("cx-timepoints").value, 10) || 1,
+      multicentre: document.getElementById("cx-multicentre").value,
+      adaptive:    document.getElementById("cx-adaptive").value,
+      rho_outcomes: parseFloat(document.getElementById("cx-rho-outcomes").value) || 0.4,
+      rho_time:     parseFloat(document.getElementById("cx-rho-time").value) || 0.5,
+      sites:        parseInt(document.getElementById("cx-sites").value, 10) || 10,
+      icc:          parseFloat(document.getElementById("cx-icc").value) || 0.05,
+      interims:     parseInt(document.getElementById("cx-interims").value, 10) || 1,
+    };
+  }
+  function computeVerdict(expected, required) {
+    if (!required) return null;
+    var ratio = expected / required;
+    if (ratio >= 1) {
+      return { color: "green", badge: "✅ ADEQUATELY POWERED",
+        message: "Your sample of " + expected + " meets the requirement of " + required + " (" + Math.round(ratio * 100) + "%). Good to proceed." };
+    }
+    if (ratio >= 0.8) {
+      return { color: "amber", badge: "⚠ MARGINALLY UNDERPOWERED",
+        message: "Your sample of " + expected + " is " + Math.round(ratio * 100) + "% of the required " + required + ". Consider increasing recruitment or accept reduced power." };
+    }
+    return { color: "red", badge: "❌ UNDERPOWERED",
+      message: "Your sample of " + expected + " is only " + Math.round(ratio * 100) + "% of the required " + required + ". Either increase recruitment, accept a smaller detectable effect, or simplify the study design." };
   }
 
   // FastAPI's 422 returns detail as an array of validation errors.
@@ -1286,6 +2266,115 @@
     } else {
       compPanel.hidden = true;
     }
+
+    // CHANGE 3 — Verdict card (traffic light)
+    renderVerdictCard(data);
+    // CHANGE 3 — Auto-filled defaults table
+    renderAutofilledTable(data);
+    // CHANGE 2 — Detected chips (only when objective parser ran)
+    renderDetectedChips();
+    // CHANGE 4 — Layer-by-layer breakdown (only when complex layers applied)
+    renderLayerBreakdown();
+    // CHANGE 5 — Genetic checklist (only for genetic results)
+    var gPanel = document.getElementById("genetic-checklist");
+    if (gPanel) gPanel.hidden = !data._genetic;
+  }
+
+  function renderVerdictCard(data) {
+    var card = document.getElementById("verdict-card");
+    var nums = document.getElementById("verdict-numbers");
+    var badge = document.getElementById("verdict-badge");
+    var msg = document.getElementById("verdict-message");
+    if (!card) return;
+    card.classList.remove("verdict-green", "verdict-amber", "verdict-red", "verdict-blue");
+    var v = data._verdict;
+    if (!v) {
+      card.classList.add("verdict-blue");
+      nums.hidden = true;
+      badge.textContent = "ℹ︎ For your information";
+      msg.textContent = "You did not provide an expected sample size. The required total is " +
+        (data.adjusted_n || data.total_n) + " (after dropout: " + (data.adjusted_n || data.total_n) + ").";
+      return;
+    }
+    card.classList.add("verdict-" + v.color);
+    nums.hidden = false;
+    setText("text-verdict-yours", String(data.expected_sample_size != null ? data.expected_sample_size : data._verdict.yours || "—"));
+    setText("text-verdict-required", String(data.adjusted_n || data.total_n));
+    badge.textContent = v.badge;
+    msg.textContent = v.message;
+  }
+
+  function renderAutofilledTable(data) {
+    var section = document.getElementById("autofilled-section");
+    if (!section) return;
+    var keys = (data._autofilledKeys || []).filter(Boolean);
+    if (!keys.length) { section.hidden = true; return; }
+    section.hidden = false;
+    var tbody = section.querySelector("tbody");
+    tbody.innerHTML = "";
+    var labels = Object.assign({}, INPUT_LABELS, DEFAULT_LABELS, {
+      alpha: "Alpha (α)",
+      power: "Power (1−β)",
+      dropout: "Anticipated dropout",
+    });
+    var defaults = DEFAULTS[data.formula] || {};
+    var statics = { alpha: 0.05, power: 0.80, dropout: 0 };
+    keys.forEach(function (k) {
+      var v = (defaults[k] != null) ? defaults[k] : statics[k];
+      if (v == null) return;
+      var tr = document.createElement("tr");
+      var th = document.createElement("th"); th.textContent = labels[k] || k; tr.appendChild(th);
+      var td = document.createElement("td"); td.textContent = formatValue(v); tr.appendChild(td);
+      var td2 = document.createElement("td"); td2.textContent = WHY_DEFAULTS[k] || "Standard default"; tr.appendChild(td2);
+      tbody.appendChild(tr);
+    });
+  }
+
+  function renderDetectedChips() {
+    var row = document.getElementById("detected-row");
+    if (!row) return;
+    var p = state.lastParsed;
+    if (!p || !p.chips || !p.chips.length) { row.hidden = true; return; }
+    row.hidden = false;
+    var box = document.getElementById("detected-chips");
+    box.innerHTML = "";
+    p.chips.forEach(function (c) {
+      var span = document.createElement("span");
+      span.className = "chip";
+      span.textContent = c;
+      box.appendChild(span);
+    });
+    var pick = document.getElementById("detected-pick");
+    var spec = FORMULAS[state.selectedFormula];
+    pick.textContent = "We picked " + (spec ? spec.label : state.selectedFormula) +
+      " because of these signals. Use the formula dropdown above to change it.";
+  }
+
+  function renderLayerBreakdown() {
+    var section = document.getElementById("layer-breakdown-section");
+    if (!section) return;
+    var L = state.lastLayers;
+    if (!L || L.length <= 1) { section.hidden = true; return; }
+    section.hidden = false;
+    var tbody = section.querySelector("tbody");
+    tbody.innerHTML = "";
+    L.forEach(function (layer) {
+      var tr = document.createElement("tr");
+      ["name", "adj", "n_per_group", "total_n"].forEach(function (k) {
+        var td = document.createElement("td");
+        td.textContent = String(layer[k]);
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    });
+    // Sensitivity line: ±20% on each multiplier
+    var base = L[0].total_n;
+    var finalN = L[L.length - 1].total_n;
+    var lo = Math.round(finalN * 0.8);
+    var hi = Math.round(finalN * 1.2);
+    setText("text-layer-sensitivity",
+      "Sensitivity range (±20% on multipliers): " + lo + " — " + hi +
+      " total. Baseline before adjustments was " + base + ".");
   }
 
   function formatN(nPerGroup, numGroups) {
@@ -1371,6 +2460,37 @@
       li.textContent = w;
       warnList.appendChild(li);
     });
+
+    // CHANGE 3 — In reverse mode, render a blue "estimate" verdict card so
+    // Card A users always get the top-of-result summary they expect.
+    var card = document.getElementById("verdict-card");
+    if (card) {
+      card.classList.remove("verdict-green", "verdict-amber", "verdict-red");
+      card.classList.add("verdict-blue");
+      var nums = document.getElementById("verdict-numbers");
+      if (nums) nums.hidden = true;
+      var badge = document.getElementById("verdict-badge");
+      var msg = document.getElementById("verdict-message");
+      if (badge) badge.textContent = "ℹ︎ What your sample can detect";
+      if (msg) {
+        var headlineSummary = (data.headline && data.headline[0])
+          ? data.headline[0].label + ": " + data.headline[0].value
+          : "See detectable effect below.";
+        msg.textContent = "You provided n. We solved the formula for the smallest effect detectable at α=" +
+          (data.inputs && data.inputs.alpha ? data.inputs.alpha : "0.05") +
+          " with power=" + (data.inputs && data.inputs.power ? data.inputs.power : "0.80") +
+          ". " + headlineSummary;
+      }
+    }
+    // CHANGE 2 — Detected chips also render in reverse mode (objective parser).
+    renderDetectedChips();
+    // Hide forward-only panels (autofilled, layer breakdown, genetic checklist)
+    var af = document.getElementById("autofilled-section");
+    if (af) af.hidden = true;
+    var lb = document.getElementById("layer-breakdown-section");
+    if (lb) lb.hidden = true;
+    var gc = document.getElementById("genetic-checklist");
+    if (gc) gc.hidden = true;
   }
 
   // -----------------------------------------------------------------------
@@ -1488,13 +2608,18 @@
   }
 
   function goToStep(step, formulaKey) {
-    [1, 2, 3].forEach(function (n) {
+    // Hide every step section
+    [0, "A", "C", 1, 2, 3].forEach(function (n) {
       var section = document.querySelector('[data-step="' + n + '"]');
-      if (section) section.hidden = n !== step;
+      if (section) section.hidden = String(n) !== String(step);
+    });
+    // Indicator (1/2/3): Step 0/A/C all map to indicator 1; otherwise normal
+    var indicatorStep = (step === 2 || step === 3) ? step : 1;
+    [1, 2, 3].forEach(function (n) {
       var indicator = document.querySelector('[data-step-indicator="' + n + '"]');
       if (indicator) {
-        indicator.classList.toggle("is-active", n === step);
-        indicator.classList.toggle("is-complete", n < step);
+        indicator.classList.toggle("is-active", n === indicatorStep);
+        indicator.classList.toggle("is-complete", n < indicatorStep);
       }
     });
     if (step === 2) {

@@ -44,7 +44,7 @@
         <ol class="calc-steps" data-testid="list-steps">
           <li class="calc-step is-active" data-step-indicator="1">
             <span class="calc-step-num">1</span>
-            <span class="calc-step-label">Objective</span>
+            <span class="calc-step-label">Choose path</span>
           </li>
           <li class="calc-step" data-step-indicator="2">
             <span class="calc-step-num">2</span>
@@ -57,9 +57,156 @@
         </ol>
 
         <!-- ============================================================= -->
-        <!-- Step 1 — Objective                                             -->
+        <!-- Step 0 — Three-tier entry chooser                              -->
         <!-- ============================================================= -->
-        <section class="calc-card" data-step="1" data-testid="section-step-1">
+        <section class="calc-card" data-step="0" data-testid="section-step-0">
+          <header class="calc-card-header">
+            <h2>How would you like to start?</h2>
+            <p>Pick the path that matches what you already know about your study.</p>
+          </header>
+          <div class="entry-cards" data-testid="panel-entry-cards">
+            <button type="button" class="entry-card" data-entry="A" data-testid="card-entry-a">
+              <span class="entry-card-icon" aria-hidden="true">◎</span>
+              <span class="entry-card-title">I just have a sample size</span>
+              <span class="entry-card-sub">
+                Tell us your n and we'll tell you what it can detect.
+              </span>
+            </button>
+            <button type="button" class="entry-card" data-entry="B" data-testid="card-entry-b">
+              <span class="entry-card-icon" aria-hidden="true">≡</span>
+              <span class="entry-card-title">I know my study details</span>
+              <span class="entry-card-sub">
+                Standard calculation with your inputs.
+              </span>
+            </button>
+            <button type="button" class="entry-card" data-entry="C" data-testid="card-entry-c">
+              <span class="entry-card-icon" aria-hidden="true">✦</span>
+              <span class="entry-card-title">Guide me step by step</span>
+              <span class="entry-card-sub">
+                Answer simple questions, we do the rest.
+              </span>
+            </button>
+          </div>
+        </section>
+
+        <!-- ============================================================= -->
+        <!-- Card A — Lazy n-only path (objective + n)                      -->
+        <!-- ============================================================= -->
+        <section class="calc-card" data-step="A" hidden data-testid="section-card-a">
+          <header class="calc-card-header">
+            <h2>Tell us your sample size</h2>
+            <p>Optional: paste your research objective so we can pick the right formula automatically.</p>
+          </header>
+
+          <label class="field-label" for="cardA-objective">Paste your research objective <span class="field-help-inline">(optional but recommended)</span></label>
+          <textarea
+            id="cardA-objective"
+            class="field-textarea"
+            rows="4"
+            data-testid="input-card-a-objective"
+            placeholder="Example: Compare HbA1c between metformin and placebo arms after 12 weeks."
+          ></textarea>
+
+          <div class="field-row">
+            <div class="field">
+              <label class="field-label" for="cardA-n">What is your available sample size?</label>
+              <input
+                id="cardA-n"
+                type="number"
+                min="2"
+                step="1"
+                class="field-input"
+                data-testid="input-card-a-n"
+                placeholder="e.g., 200"
+              />
+            </div>
+          </div>
+
+          <div class="calc-card-actions">
+            <button type="button" class="btn btn-secondary" id="cardA-back" data-testid="button-card-a-back">Back</button>
+            <button type="button" class="btn btn-primary" id="cardA-go" data-testid="button-card-a-go">
+              Analyse my sample size →
+            </button>
+          </div>
+          <p class="calc-error" id="cardA-error" hidden data-testid="text-card-a-error"></p>
+        </section>
+
+        <!-- ============================================================= -->
+        <!-- Card C — Guided wizard (one question at a time)                -->
+        <!-- ============================================================= -->
+        <section class="calc-card" data-step="C" hidden data-testid="section-card-c">
+          <header class="calc-card-header">
+            <h2>Guided sample-size wizard</h2>
+            <ol class="wizard-dots" id="wizard-dots" data-testid="list-wizard-dots">
+              <li class="wizard-dot is-active" data-q="1"></li>
+              <li class="wizard-dot" data-q="2"></li>
+              <li class="wizard-dot" data-q="3"></li>
+              <li class="wizard-dot" data-q="4"></li>
+              <li class="wizard-dot" data-q="5"></li>
+            </ol>
+          </header>
+
+          <div class="wizard-step" data-q="1" data-testid="panel-wizard-q1">
+            <label class="field-label" for="wiz-objective">Q1. What is your research objective?</label>
+            <textarea
+              id="wiz-objective"
+              class="field-textarea"
+              rows="4"
+              data-testid="input-wiz-objective"
+              placeholder="Example: Compare cure rates between drug A and placebo."
+            ></textarea>
+          </div>
+
+          <div class="wizard-step" data-q="2" hidden data-testid="panel-wizard-q2">
+            <p class="field-label">Q2. Are you comparing groups?</p>
+            <div class="wizard-choices">
+              <label><input type="radio" name="wiz-compare" value="yes" data-testid="radio-wiz-compare-yes"> Yes, I'm comparing groups</label>
+              <label><input type="radio" name="wiz-compare" value="no" data-testid="radio-wiz-compare-no"> No, single group / descriptive</label>
+            </div>
+          </div>
+
+          <div class="wizard-step" data-q="3" hidden data-testid="panel-wizard-q3">
+            <p class="field-label">Q3. How many groups?</p>
+            <div class="wizard-choices">
+              <label><input type="radio" name="wiz-groups" value="1" data-testid="radio-wiz-groups-1"> 1</label>
+              <label><input type="radio" name="wiz-groups" value="2" data-testid="radio-wiz-groups-2"> 2</label>
+              <label><input type="radio" name="wiz-groups" value="3" data-testid="radio-wiz-groups-3"> 3 or more</label>
+            </div>
+          </div>
+
+          <div class="wizard-step" data-q="4" hidden data-testid="panel-wizard-q4">
+            <p class="field-label">Q4. Do you already have a sample size in mind?</p>
+            <div class="wizard-choices">
+              <label><input type="radio" name="wiz-haven" value="yes" data-testid="radio-wiz-haven-yes"> Yes</label>
+              <label><input type="radio" name="wiz-haven" value="no" data-testid="radio-wiz-haven-no"> No, calculate it for me</label>
+            </div>
+          </div>
+
+          <div class="wizard-step" data-q="5" hidden data-testid="panel-wizard-q5">
+            <div id="wiz-q5-haven-yes" hidden>
+              <label class="field-label" for="wiz-n">Q5. What sample size do you have?</label>
+              <input id="wiz-n" type="number" min="2" step="1" class="field-input" data-testid="input-wiz-n" placeholder="e.g., 200" />
+            </div>
+            <div id="wiz-q5-haven-no" hidden>
+              <label class="field-label" for="wiz-alpha">Q5. What alpha level?</label>
+              <select id="wiz-alpha" class="field-input" data-testid="select-wiz-alpha">
+                <option value="0.05" selected>0.05 (95% confidence — standard)</option>
+                <option value="0.01">0.01 (99% confidence — strict)</option>
+                <option value="0.10">0.10 (90% confidence — exploratory)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="calc-card-actions">
+            <button type="button" class="btn btn-secondary" id="wiz-back" data-testid="button-wiz-back">Back</button>
+            <button type="button" class="btn btn-primary" id="wiz-next" data-testid="button-wiz-next">Next →</button>
+          </div>
+        </section>
+
+        <!-- ============================================================= -->
+        <!-- Step 1 — Objective (Card B path)                               -->
+        <!-- ============================================================= -->
+        <section class="calc-card" data-step="1" hidden data-testid="section-step-1">
           <header class="calc-card-header">
             <h2>1. Describe your research objective</h2>
             <p>
@@ -161,8 +308,40 @@
             <p id="formula-summary" class="calc-formula-summary" data-testid="text-formula-summary"></p>
           </header>
 
+          <!-- CHANGE 1 — complexity radio (Card B only) -->
+          <fieldset class="field-group complexity-group" id="complexity-group" data-testid="panel-complexity">
+            <legend>How complex is your study?</legend>
+            <div class="wizard-choices wizard-choices-stack">
+              <label><input type="radio" name="complexity" value="simple" checked data-testid="radio-complexity-simple"> Simple <span class="field-help-inline">(student project, pilot, single centre, one outcome, one timepoint)</span></label>
+              <label><input type="radio" name="complexity" value="standard" data-testid="radio-complexity-standard"> Standard <span class="field-help-inline">(observational study, basic RCT, survey, cross-sectional)</span></label>
+              <label><input type="radio" name="complexity" value="complex" data-testid="radio-complexity-complex"> Complex trial <span class="field-help-inline">(multicentre, adaptive, composite outcomes, multiple timepoints)</span></label>
+              <label><input type="radio" name="complexity" value="genetic" data-testid="radio-complexity-genetic"> Genetic study <span class="field-help-inline">(SNP, GWAS, candidate gene, pharmacogenomics)</span></label>
+            </div>
+          </fieldset>
+
+          <!-- CHANGE 5 — Genetic engine sub-type chooser (only when complexity=genetic) -->
+          <fieldset class="field-group genetic-group" id="genetic-group" hidden data-testid="panel-genetic">
+            <legend>What type of genetic study?</legend>
+            <select id="genetic-type" class="field-input" data-testid="select-genetic-type">
+              <option value="candidate_gene" selected>Candidate gene association study</option>
+              <option value="gwas">GWAS — genome-wide association</option>
+              <option value="pharmacogenomic">Pharmacogenomic study</option>
+              <option value="carrier">Hereditary disease / carrier study</option>
+              <option value="linkage">Linkage analysis (family-based)</option>
+            </select>
+            <div class="genetic-warning" id="genetic-gwas-warning" hidden data-testid="panel-gwas-warning">
+              <strong>GWAS uses genome-wide significance threshold:</strong>
+              α = 5×10⁻⁸ (not 0.05). Typical sample sizes: 5,000 to 100,000+. This is biobank-level recruitment.
+            </div>
+            <div class="genetic-info" id="genetic-linkage-info" hidden data-testid="panel-linkage-info">
+              Linkage analysis uses LOD score ≥ 3.0 as genome-wide significance threshold,
+              not a p-value. Sample size depends on family structure and disease model.
+              Use SIMLINK or GENEHUNTER software for precise calculation.
+            </div>
+          </fieldset>
+
           <div class="field-row">
-            <div class="field">
+            <div class="field" id="formula-select-wrap">
               <label class="field-label" for="formula-select">Formula</label>
               <select id="formula-select" class="field-input" data-testid="select-formula">
                 <optgroup label="Descriptive (one sample)">
@@ -191,9 +370,89 @@
                 <optgroup label="Time-to-event">
                   <option value="survival_logrank">Survival — two-group log-rank (Schoenfeld)</option>
                 </optgroup>
+                <optgroup label="Trial designs">
+                  <option value="non_inferiority">Non-inferiority trial</option>
+                  <option value="equivalence">Equivalence trial</option>
+                </optgroup>
+                <optgroup label="Estimation / agreement">
+                  <option value="diagnostic_accuracy">Diagnostic accuracy (sensitivity/specificity)</option>
+                  <option value="icc">Intraclass Correlation Coefficient (ICC)</option>
+                  <option value="bayesian_credible">Bayesian sample size (credible-interval width)</option>
+                </optgroup>
               </select>
             </div>
           </div>
+
+          <!-- CHANGE 4 — Complex-trial fieldsets (only when complexity=complex) -->
+          <fieldset class="field-group complex-fieldset" id="complex-fieldset" hidden data-testid="panel-complex-fields">
+            <legend>Complex-trial design adjustments</legend>
+            <div class="field-row">
+              <div class="field">
+                <label class="field-label" for="cx-outcomes">Number of primary outcomes</label>
+                <select id="cx-outcomes" class="field-input" data-testid="select-cx-outcomes">
+                  <option value="1" selected>1</option>
+                  <option value="2">2</option>
+                  <option value="3">3</option>
+                  <option value="4">4</option>
+                  <option value="5">5+</option>
+                </select>
+              </div>
+              <div class="field">
+                <label class="field-label" for="cx-timepoints">Number of timepoints</label>
+                <input id="cx-timepoints" type="number" min="1" step="1" value="1" class="field-input" data-testid="input-cx-timepoints" />
+              </div>
+              <div class="field">
+                <label class="field-label" for="cx-multicentre">Multicentre?</label>
+                <select id="cx-multicentre" class="field-input" data-testid="select-cx-multicentre">
+                  <option value="no" selected>No</option>
+                  <option value="yes">Yes</option>
+                </select>
+              </div>
+              <div class="field">
+                <label class="field-label" for="cx-adaptive">Adaptive design?</label>
+                <select id="cx-adaptive" class="field-input" data-testid="select-cx-adaptive">
+                  <option value="no" selected>No</option>
+                  <option value="yes">Yes</option>
+                </select>
+              </div>
+            </div>
+            <div class="field-row" id="cx-composite-row" hidden>
+              <div class="field">
+                <label class="field-label" for="cx-rho-outcomes">Correlation between primary outcomes (ρ)</label>
+                <input id="cx-rho-outcomes" type="number" min="0" max="1" step="0.05" value="0.40" class="field-input" data-testid="input-cx-rho-outcomes" />
+                <p class="field-help">If unsure, use 0.40 as a conservative estimate.</p>
+              </div>
+            </div>
+            <div class="field-row" id="cx-rm-row" hidden>
+              <div class="field">
+                <label class="field-label" for="cx-rho-time">Within-subject correlation across timepoints (ρ)</label>
+                <input id="cx-rho-time" type="number" min="0" max="0.999" step="0.05" value="0.60" class="field-input" data-testid="input-cx-rho-time" />
+                <p class="field-help">Haematological markers: 0.60. Clinical outcomes: 0.50. Repeated measures REDUCE required n — this is a statistical efficiency gain.</p>
+              </div>
+            </div>
+            <div class="field-row" id="cx-multicentre-row" hidden>
+              <div class="field">
+                <label class="field-label" for="cx-sites">Number of study sites</label>
+                <input id="cx-sites" type="number" min="2" step="1" value="10" class="field-input" data-testid="input-cx-sites" />
+              </div>
+              <div class="field">
+                <label class="field-label" for="cx-icc">Intra-cluster correlation (ICC)</label>
+                <input id="cx-icc" type="number" min="0" max="0.999" step="0.01" value="0.05" class="field-input" data-testid="input-cx-icc" />
+                <p class="field-help">Lab/blood: 0.05. Clinical: 0.10. Behavioural: 0.15. Multicentre design INFLATES required n due to between-site variation.</p>
+              </div>
+            </div>
+            <div class="field-row" id="cx-adaptive-row" hidden>
+              <div class="field">
+                <label class="field-label" for="cx-interims">Number of planned interim analyses</label>
+                <select id="cx-interims" class="field-input" data-testid="select-cx-interims">
+                  <option value="1" selected>1 interim (×1.05)</option>
+                  <option value="2">2 interims (×1.07)</option>
+                  <option value="3">3 interims (×1.10)</option>
+                </select>
+                <p class="field-help">Adaptive penalty preserves overall α across interim looks.</p>
+              </div>
+            </div>
+          </fieldset>
 
           <div
             class="mode-select"
@@ -239,8 +498,8 @@
                   <option value="0.95">0.95 (95% power · β = 0.05)</option>
                 </select>
               </div>
-              <div class="field">
-                <label class="field-label" for="dropout">Anticipated dropout / non-response</label>
+              <div class="field" id="dropout-field">
+                <label class="field-label" for="dropout" id="dropout-label">Anticipated dropout / non-response</label>
                 <select id="dropout" class="field-input" data-testid="select-dropout">
                   <option value="0" selected>0% (none)</option>
                   <option value="0.05">5%</option>
@@ -295,10 +554,38 @@
             <p id="result-formula" class="calc-formula-summary" data-testid="text-result-formula"></p>
           </header>
 
-          <!-- "Ideal formula for your study" callout — shows the user the
-               recommended/selected formula by name with a plain-language
-               description of when this formula is statistically appropriate
-               and why it was chosen for their study. -->
+          <!-- CHANGE 3 — Traffic-light verdict card. Shown at the top of
+               every result. GREEN/AMBER/RED when the researcher provided
+               an expected n; BLUE info card otherwise. -->
+          <section class="verdict-card verdict-blue" id="verdict-card" data-testid="panel-verdict">
+            <div class="verdict-numbers" id="verdict-numbers" hidden>
+              <div class="verdict-num"><span class="verdict-num-label">Your sample</span><span class="verdict-num-value" data-testid="text-verdict-yours">—</span></div>
+              <div class="verdict-num"><span class="verdict-num-label">Required</span><span class="verdict-num-value" data-testid="text-verdict-required">—</span></div>
+            </div>
+            <div class="verdict-badge" id="verdict-badge" data-testid="text-verdict-badge">—</div>
+            <p class="verdict-message" id="verdict-message" data-testid="text-verdict-message">—</p>
+          </section>
+
+          <!-- CHANGE 2 — "Detected" chip row (only when objective parser ran) -->
+          <section class="detected-row" id="detected-row" hidden data-testid="panel-detected">
+            <p class="detected-label">Detected from your objective:</p>
+            <div class="chips" id="detected-chips" data-testid="list-detected-chips"></div>
+            <p class="detected-pick" id="detected-pick" data-testid="text-detected-pick"></p>
+          </section>
+
+          <!-- CHANGE 4 — Layer-by-layer breakdown table (complex trial mode) -->
+          <section class="result-section" id="layer-breakdown-section" hidden data-testid="panel-layer-breakdown">
+            <h3>Layered sample-size breakdown</h3>
+            <table class="kv-table layer-table" data-testid="table-layers">
+              <thead>
+                <tr><th>Layer</th><th>Adjustment applied</th><th>n per arm</th><th>Total n</th></tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+            <p class="layer-sensitivity" id="layer-sensitivity" data-testid="text-layer-sensitivity"></p>
+          </section>
+
+          <!-- "Ideal formula for your study" callout -->
           <section
             class="result-recommended"
             data-testid="panel-ideal-formula"
@@ -384,9 +671,31 @@
             </table>
           </section>
 
+          <!-- CHANGE 3 — Auto-filled defaults table -->
+          <section class="result-section" id="autofilled-section" hidden data-testid="panel-autofilled">
+            <h3>Auto-filled defaults</h3>
+            <table class="kv-table" data-testid="table-autofilled">
+              <thead>
+                <tr><th>Parameter</th><th>Default used</th><th>Why this default</th></tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </section>
+
           <section class="result-section" id="result-notes-section" hidden>
             <h3>Notes</h3>
             <ul class="analysis-warnings" data-testid="list-result-notes"></ul>
+          </section>
+
+          <!-- CHANGE 5 — Genetic study standard checklist (always shown for genetic results) -->
+          <section class="result-section genetic-checklist" id="genetic-checklist" hidden data-testid="panel-genetic-checklist">
+            <h3>Genetic study requirements</h3>
+            <ul>
+              <li>✓ Verify Hardy-Weinberg Equilibrium</li>
+              <li>✓ Control for population stratification (PCA)</li>
+              <li>✓ Apply appropriate multiple testing correction</li>
+              <li>✓ Validate with: Quanto / genpwr R / Genetic Power Calculator</li>
+            </ul>
           </section>
 
           <div class="calc-card-actions">

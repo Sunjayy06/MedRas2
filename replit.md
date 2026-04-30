@@ -141,6 +141,61 @@ Each new module gets its own router file under `app/api/<module>.py` and is moun
   - JS spec flags `usesAlpha` and `usesPower` per formula gate which
     statistical-assumption fields are sent and shown — `prediction_model`
     sets both to `false` because the EPV rule is rule-of-thumb based.
+  - **Master UX upgrade (April 2026)** — implements 7 changes from the
+    final master prompt while preserving everything above:
+      1. **Three-tier entry chooser (Step 0).** Card A "I just have a
+         sample size" (lazy n-only path; auto-runs reverse mode and
+         falls back to the closest reverse-capable formula if the
+         parser-chosen one has no reverse spec). Card B "I know my
+         study details" (drops into the existing Step 1 form). Card C
+         "Guide me step by step" (5-question wizard: objective →
+         compare? → groups? → have n? → α; Q3 is skipped when no
+         comparison; the final calc uses `objectiveParser` plus the
+         wizard answers).
+      2. **Client-side objective parser (`objectiveParser`).** Regex-
+         based flag detection (groups, outcome type, longitudinal,
+         genetic, design=non_inferiority|equivalence) with a priority
+         table that routes to a formula and emits "Detected: [chip]
+         [chip]" labels rendered as `panel-detected` chips above the
+         result. Visible on Card A and Card C results.
+      3. **Traffic-light verdict card (Step 3, top).** Compares
+         `expected_n` vs `adjusted_n`: GREEN ≥100 %, AMBER ≥80 %, RED
+         <80 %; falls back to a BLUE "Estimate" card when no
+         expected_n was given (Card A always lands here). New
+         "Auto-filled defaults" table between constants and notes
+         lists every input that was blanked-and-defaulted, with the
+         `WHY_DEFAULTS` rationale.
+      4. **Complex-trial layered pipeline (`applyComplexLayers`).**
+         Activates only when the Step 2 complexity radio is set to
+         "complex". Layered adjustments: composite outcomes (TRUE
+         Šidák correction `α_per = 1−(1−α)^(1/m_eff)` using the study
+         α, not a hardcoded 0.05), repeated measures (Diggle variance
+         reduction `(1+(m−1)ρ)/m`), multicentre design effect
+         `DEFF = 1+(c̄−1)·ICC`, adaptive α-spending penalty (5/7/10 %
+         for 1/2/≥3 interims). Renders a layer-by-layer table plus a
+         ±20 % sensitivity range.
+      5. **Genetic study engine (`geneticEngineSelect`).** Triggered
+         by the Step 2 "genetic" radio or the parser GENETIC flag.
+         Five sub-types: candidate_gene, gwas (forces α=5e-8 and
+         shows a warning panel), pharmacogenomic, carrier, linkage
+         (info-only — LOD-score-based, not powered like a frequentist
+         test). Maps each to an existing formula with the appropriate
+         α + parameters and renders a blue genetic checklist on the
+         result.
+      6. **Conditional dropout (`DROPOUT_RULES` map).** The dropout
+         field is hidden for kappa, roc_auc, correlation, icc,
+         diagnostic_accuracy, in_vitro, in_vivo and surveys; renamed
+         to "Experimental failure rate" for in-vitro work and
+         "Animal loss rate" for in-vivo work where applicable.
+      7. **Five new formulas (all client-side, no API call).**
+         `non_inferiority` (one-sided α; `n/group = 2σ²(Z_α+Z_β)² /
+         (δ+M)²`), `equivalence` (TOST: `n/group = 2σ²(Z_α+Z_{β/2})²
+         / (M−|δ|)²`), `diagnostic_accuracy` (Hajian-Tilaki
+         sensitivity/specificity CI; total n scaled by prevalence),
+         `icc` (Bonett 2002 closed-form for ρ₀ vs ρ₁ with k raters),
+         `bayesian_credible` (normal-normal conjugate; solves for n
+         given desired credible-interval half-width). Forward-only;
+         routed via `FORMULAS[*].clientCompute` flag in `onCalculate`.
 - Other five modules: scaffolded on the landing page, not yet implemented.
 
 ## Environment Variables

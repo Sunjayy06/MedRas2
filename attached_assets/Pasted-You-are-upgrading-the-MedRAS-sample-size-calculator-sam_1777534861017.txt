@@ -1,0 +1,604 @@
+You are upgrading the MedRAS sample size calculator (sample-size.html 
++ sample-size.js + sample-size.css). 
+
+The calculator already has:
+- Two proportions, two means, one sample, one-way ANOVA formulas
+- Reverse calculation (back-calculate effect from available n)
+- Repeated timepoints / longitudinal support
+- Qualitative/Pilot/In-vitro/In-vivo study types with hardcoded defaults
+- "I only have expected n" vs "I have statistical inputs" mode switch
+- Auto-fill for missing alpha/beta
+- Recommended formula callout with "Why selected" amber box
+- Formula display, inputs table, constants table
+- Download full report button (HTML export)
+
+DO NOT rebuild any of the above.
+Extend only what is listed in the 7 CHANGES below.
+Implement in the exact order given.
+After each change, state what you built and confirm it 
+works in preview before moving to the next.
+
+════════════════════════════════════════════════════════
+CHANGE 1 — THREE-TIER ENTRY SCREEN (replaces current Step 1)
+════════════════════════════════════════════════════════
+
+Replace the current Step 1 with a clean 3-card entry screen.
+The researcher picks ONE of three paths. 
+No other inputs are shown until they pick.
+
+CARD A — "I just have a sample size"
+  Icon: target symbol
+  Subtitle: "Tell us your n and we'll tell 
+             you what it can detect"
+  → On click: show ONLY these two fields:
+      1. "Paste your research objective" 
+         (large textarea, optional but recommended)
+      2. "What is your available sample size?" 
+         (number input)
+      Then ONE button: "Analyse my sample size →"
+  → System auto-detects study type from objective text,
+    auto-selects formula, back-calculates detectable 
+    effect, shows verdict immediately
+  → If no objective pasted: use two-proportion formula 
+    as safe default, show result with note 
+    "No objective detected — used two-proportion default"
+
+CARD B — "I know my study details"
+  Icon: list/form symbol  
+  Subtitle: "Standard calculation with your inputs"
+  → On click: show the existing Step 1 → Step 2 → Step 3 
+    flow exactly as it currently works
+  → Add ONE new question at top of Step 2:
+    "How complex is your study?"
+    Radio buttons:
+    ○ Simple (student project, pilot, single centre, 
+      one outcome, one timepoint)
+    ○ Standard (observational study, basic RCT, 
+      survey, cross-sectional)
+    ○ Complex trial (multicentre, adaptive, 
+      composite outcomes, multiple timepoints)
+    ○ Genetic study (SNP, GWAS, candidate gene, 
+      pharmacogenomics)
+  → Route to correct engine based on selection
+    (see CHANGE 4 and CHANGE 5)
+
+CARD C — "Guide me step by step"
+  Icon: chat/wizard symbol
+  Subtitle: "Answer simple questions, 
+             we do the rest"
+  → On click: show a wizard that asks 
+    ONE question at a time:
+    Q1: "What is your research objective?" 
+        (textarea — parse this for auto-routing)
+    Q2: "Are you comparing groups?" (Yes/No)
+    Q3 (if Yes): "How many groups?" (1, 2, 3+)
+    Q4: "Do you already have a sample size 
+         in mind?" (Yes/No)
+    Q4a (if Yes): "What is it?" (number)
+    Q4b (if No): "What alpha level?" 
+                 (dropdown with defaults)
+    → Calculate and show result
+    → Never show more than one question 
+      at a time on screen
+    → Progress dots at top (● ○ ○ ○)
+
+════════════════════════════════════════════════════════
+CHANGE 2 — OBJECTIVE PARSER (used by Card A and Card C)
+════════════════════════════════════════════════════════
+
+When a research objective is pasted, automatically 
+scan for these keywords and set flags:
+
+Groups detection:
+  "two groups" / "two arms" / "compare" / "versus" / 
+  "vs" / "control group" → TWO_GROUPS = true
+  "three groups" / "three arms" / "multiple groups" / 
+  "k groups" → MULTI_GROUPS = true
+  "one group" / "single group" / "descriptive" / 
+  "prevalence" → ONE_GROUP = true
+
+Outcome type detection:
+  "proportion" / "prevalence" / "rate" / "percentage" / 
+  "incidence" / "mortality" / "survival" → PROPORTION = true
+  "mean" / "average" / "score" / "level" / "mg/dL" / 
+  "mmHg" / "g/dL" / "units" → MEAN = true
+  "correlation" / "association" / "relationship" → CORRELATION = true
+  "survival" / "time to event" / "hazard" → SURVIVAL = true
+
+Timepoint detection:
+  "baseline" + any week/month/timepoint mention → LONGITUDINAL = true
+  "follow-up" / "longitudinal" / "trajectory" / 
+  "timepoints" / "weeks" / "months" → LONGITUDINAL = true
+
+Complexity detection:
+  "multicentre" / "multicenter" / "multiple sites" / 
+  "centres" → MULTICENTRE = true
+  "adaptive" / "interim analysis" → ADAPTIVE = true
+  "composite" / "primary outcomes" (plural) → COMPOSITE = true
+  "randomised" / "RCT" / "randomized controlled" → RCT = true
+  "SNP" / "gene" / "genetic" / "allele" / "GWAS" / 
+  "polymorphism" / "genomic" → GENETIC = true
+  "elderly" / "≥65" / "≥ 65" / "paediatric" / 
+  "children" → HIGH_ATTRITION = true
+  "qualitative" / "focus group" / "interview" → QUALITATIVE = true
+  "pilot" / "feasibility" → PILOT = true
+  "in vitro" / "in-vitro" / "cell line" / 
+  "culture" → INVITRO = true
+  "in vivo" / "animal" / "murine" / "rat model" → INVIVO = true
+  "questionnaire" / "survey" / "cross-sectional" → SURVEY = true
+
+Formula auto-selection logic:
+  GENETIC → route to Genetic Engine (CHANGE 5)
+  QUALITATIVE → n = 12–15, show saturation note
+  PILOT → n = 25 total, show pilot note
+  INVITRO → n = 3 replicates minimum, no dropout
+  SURVEY + ONE_GROUP → n = 384, show questionnaire note
+  LONGITUDINAL + TWO_GROUPS → Repeated Measures
+  SURVIVAL → Log-rank / Survival analysis
+  CORRELATION → Pearson/Spearman correlation formula
+  MULTI_GROUPS + MEAN → One-way ANOVA
+  TWO_GROUPS + PROPORTION → Two independent proportions
+  TWO_GROUPS + MEAN → Two independent means
+  ONE_GROUP + PROPORTION → One proportion
+  ONE_GROUP + MEAN → One sample mean
+  Default fallback → Two independent proportions
+
+After parsing, show a small "Detected:" chip row 
+before the result, e.g.:
+  [2 groups] [Proportions] [Longitudinal] [Multicentre]
+  "Based on your objective, we selected: 
+   Repeated Measures — Two Groups"
+  [Change formula ▾] (dropdown to override)
+
+════════════════════════════════════════════════════════
+CHANGE 3 — TRAFFIC LIGHT VERDICT (output panel upgrade)
+════════════════════════════════════════════════════════
+
+At the very TOP of the result panel (Step 3), 
+before anything else, show a verdict card:
+
+When researcher provided their own expected n:
+
+  ┌─────────────────────────────────┐
+  │  YOUR SAMPLE    REQUIRED        │
+  │  100            127             │
+  │                                 │
+  │  [RED] Underpowered             │
+  │  Your n is 21% below required.  │
+  │  Increase to 127 or accept      │
+  │  reduced power of 68%.          │
+  └─────────────────────────────────┘
+
+Colour rules:
+  GREEN  — expected n ≥ required n
+           Message: "Adequate. Your study 
+           is well-powered."
+  AMBER  — expected n is 1–25% below required
+           Message: "Borderline. Consider 
+           increasing by [difference]."
+  RED    — expected n is >25% below required
+           Message: "Underpowered. Increase 
+           to [required n] or your study 
+           may miss a real effect."
+
+When researcher did NOT provide expected n 
+(forward calculation only):
+  Show a single blue card:
+  "Required sample size: [n] per group / [n] total"
+  No verdict needed.
+
+Below the verdict card, keep all existing output 
+sections: recommended formula callout, formula 
+expression, inputs table, constants table, notes, 
+download button.
+
+Add one new section between constants and notes:
+
+  AUTO-FILLED DEFAULTS
+  Show a small table listing any value that was 
+  auto-filled rather than entered by the researcher.
+  Each row: Parameter | Default used | "Why this default"
+  Example:
+  Alpha        | 0.05 | Standard type I error rate
+  Power        | 80%  | Minimum acceptable power
+  Dropout rate | 10%  | Typical outpatient study
+
+  Label each auto-filled value in the inputs table 
+  with a small grey italic tag "(auto-filled)"
+
+════════════════════════════════════════════════════════
+CHANGE 4 — COMPLEX TRIAL LAYER PIPELINE
+════════════════════════════════════════════════════════
+
+Activate ONLY when researcher selects 
+"Complex trial" in CHANGE 1 Card B.
+Do NOT activate for Simple or Standard modes.
+
+Show these additional fields in sequence, 
+revealing each only if the previous answer 
+makes it relevant:
+
+FIELD SET A — always show in complex mode:
+  - Number of primary outcomes 
+    (dropdown: 1, 2, 3, 4, 5+)
+  - Number of timepoints 
+    (number input, min 1)
+  - Is this multicentre? (Yes / No toggle)
+  - Is this an adaptive design? (Yes / No toggle)
+
+FIELD SET B — show if primary outcomes ≥ 2:
+  - "Estimated correlation between your 
+     primary outcomes (0 to 1.0)"
+    Default: 0.40
+    Help text: "If unsure, use 0.40 as a 
+    conservative estimate"
+  Layer 2 activates: 
+    α_adj = α / k_outcomes
+    n_composite = n_base / ρ_min
+
+FIELD SET C — show if timepoints > 1:
+  - "Within-subject correlation across 
+     timepoints (ρ)"
+    Default: 0.60
+    Help text: "For haematological markers 
+    use 0.60. For clinical outcomes use 0.50"
+  Layer 3 activates (reduces n):
+    n = n / [1 + (m−1) × ρ_time]
+  Show label: "Repeated measures reduces 
+  required n — this is a statistical 
+  efficiency gain."
+
+FIELD SET D — show if multicentre = Yes:
+  - Number of study sites (default 10)
+  - ICC value (default 0.05)
+    Help text: "Lab/blood outcomes: 0.05. 
+    Clinical outcomes: 0.10. 
+    Behavioural outcomes: 0.15"
+  Layer 4 activates:
+    DEFF = 1 + (n/sites − 1) × ICC
+    n_multicentre = n × DEFF
+  Show note: "Multicentre design INFLATES 
+  required n due to between-site variation"
+
+FIELD SET E — show if adaptive = Yes:
+  - Number of planned interim analyses 
+    (1, 2, or 3)
+  Layer 6 activates:
+    1 interim → multiply final n by 1.05
+    2 interims → multiply final n by 1.07
+    3 interims → multiply final n by 1.10
+  Show note: "Adaptive penalty preserves 
+  overall alpha across interim looks"
+
+OUTPUT for complex trial mode:
+  Show layer-by-layer breakdown TABLE 
+  (only layers that were activated):
+
+  | Layer | Adjustment Applied      | n per arm | Total n |
+  |-------|-------------------------|-----------|---------|
+  | 1     | Base formula            | 105       | 210     |
+  | 2     | Composite outcomes      | 477       | 954     |
+  | 3     | Repeated measures       | 140       | 280     |
+  | 4     | Multicentre ICC (DEFF)  | 273       | 546     |
+  | 5     | Dropout 25%             | 364       | 728     |
+  | 6     | Adaptive penalty (+7%)  | 390       | 780     |
+  | FINAL |                         | 390       | 780     |
+
+  Below table, show:
+  "Sensitivity analysis: if dropout 
+  increases to 30%, required n = [X]. 
+  If ICC = 0.10, required n = [Y]."
+
+════════════════════════════════════════════════════════
+CHANGE 5 — GENETIC STUDY ENGINE
+════════════════════════════════════════════════════════
+
+Activate when:
+- Researcher selects "Genetic study" in Card B, OR
+- Objective parser detects GENETIC = true
+
+When activated, HIDE all existing formula dropdowns.
+Show a new dropdown: "What type of genetic study?"
+
+Option G1 — Candidate gene association study:
+  Show fields:
+    Risk allele frequency in cases (p1): number 0–1
+    Risk allele frequency in controls (p2): number 0–1
+    Genetic model: dropdown Additive / Dominant / Recessive
+    Case:Control ratio: dropdown 1:1 / 1:2 / 1:3
+    Alpha: 0.05 (default)
+    Power: 0.80 (default)
+  Formula: modified two-proportion using 
+    Hardy-Weinberg genotype frequencies
+  Output note (always show for G1):
+    "Hardy-Weinberg Equilibrium must be 
+     verified in your sample before analysis.
+     Recommended validation: Quanto software 
+     or genpwr R package."
+
+Option G2 — GWAS (genome-wide association):
+  Do NOT use standard formula.
+  Show a prominent warning card first:
+    "GWAS uses genome-wide significance 
+     threshold: α = 5×10⁻⁸ (not 0.05).
+     Typical sample sizes: 5,000 to 100,000+.
+     This is biobank-level recruitment."
+  Show fields:
+    Odds ratio per allele: default 1.3
+    Minor allele frequency (MAF): default 0.20
+    Power: 0.80 (default)
+  Output: estimated n with note
+    "Validate using Quanto software or 
+     genpwr R package before finalising."
+
+Option G3 — Pharmacogenomic study:
+  Show fields:
+    Number of genotype groups: 2, 3, 4
+    Expected response difference between 
+    groups (%): number input
+    Allele frequency of commonest genotype: 0–1
+  Use one-way ANOVA formula stratified by genotype
+  Output note: "Stratify randomisation 
+    by genotype group in your trial protocol."
+
+Option G4 — Hereditary disease / carrier study:
+  Show fields:
+    Known carrier frequency (%): number input
+    Desired margin of error (%): default 5%
+  Formula: n = Z² × p(1−p) / e²
+  Output note: "Carrier frequency estimates 
+    should come from population-specific data."
+
+Option G5 — Linkage analysis (family-based):
+  Show info box (no formula calculation):
+    "Linkage analysis uses LOD score ≥ 3.0 
+     as genome-wide significance threshold, 
+     not a p-value. Sample size depends on 
+     family structure and disease model.
+     Use SIMLINK or GENEHUNTER software 
+     for precise calculation."
+  Show fields as reference only:
+    Disease model: Dominant / Recessive
+    Penetrance estimate (%): number
+  Output: show reference ranges, 
+    direct to specialist software.
+
+ALL genetic outputs must show at bottom:
+  Blue info box:
+  "Genetic study requirements:
+   ✓ Verify Hardy-Weinberg Equilibrium
+   ✓ Control for population stratification (PCA)
+   ✓ Apply appropriate multiple testing correction
+   ✓ Validate with: Quanto / genpwr R / 
+     Genetic Power Calculator"
+
+════════════════════════════════════════════════════════
+CHANGE 6 — CONDITIONAL DROPOUT DISPLAY
+════════════════════════════════════════════════════════
+
+Dropout rate field visibility rules:
+
+SHOW dropout field for:
+  Two proportions, Two means, One-way ANOVA,
+  Cohort study, Case-control, RCT, 
+  Longitudinal/Repeated measures, Survival analysis,
+  Regression (longitudinal only),
+  Non-inferiority, Equivalence, Crossover trial
+
+HIDE dropout field for:
+  In-vitro studies → replace with 
+    "Expected experimental failure rate (%)" 
+    labelled differently, default 10%
+  In-vivo animal studies → replace with 
+    "Expected animal loss (%)" default 10%
+  Cross-sectional survey → hide completely 
+    (no follow-up, no dropout)
+  Kappa agreement studies → hide completely
+  Diagnostic accuracy studies → hide completely
+  Correlation (single timepoint) → hide completely
+
+NEVER show dropout for:
+  Qualitative / focus group / pilot / 
+  in-vitro / in-vivo → these use 
+  hardcoded n, no dropout adjustment needed
+
+════════════════════════════════════════════════════════
+CHANGE 7 — MISSING FORMULAS IN DROPDOWN
+════════════════════════════════════════════════════════
+
+Add these formulas to the existing dropdown 
+(they are missing from your current list):
+
+1. Pearson/Spearman Correlation
+   Formula: n = (Z_α/2 + Z_β)² / (0.5 × ln[(1+r)/(1−r)])² + 3
+   Inputs: Expected correlation (r), alpha, power
+   Dropout: HIDE (single timepoint)
+   Ideal for: "Measuring strength of linear 
+   relationship between two continuous variables"
+
+2. Repeated Measures ANOVA
+   Formula: n per group = (Z_α/2 + Z_β)² × 2σ² / 
+   (δ² × m × (1−ρ))
+   Inputs: number of timepoints (m), 
+   within-subject correlation (ρ), 
+   effect size (δ), SD (σ)
+   Dropout: SHOW
+   Ideal for: "Comparing groups measured 
+   at 3+ timepoints — more powerful than 
+   repeated t-tests"
+
+3. Survival Analysis / Log-rank test
+   Formula: d = (Z_α/2 + Z_β)² / 
+   (log(HR))² × 4
+   n = d / (p_event1 + p_event2)
+   Inputs: Hazard ratio (HR), 
+   event probability in each group,
+   median survival times, 
+   study duration, accrual period
+   Dropout: SHOW
+   Ideal for: "Time-to-event outcomes: 
+   mortality, disease progression, 
+   hospital discharge"
+
+4. Bayesian Sample Size
+   Formula: n based on posterior 
+   credible interval width or 
+   Bayes Factor threshold
+   Inputs: Prior distribution parameters,
+   desired credible interval width,
+   minimum Bayes Factor (default 3)
+   Dropout: SHOW
+   Show note: "Bayesian estimates depend 
+   heavily on prior specification. 
+   Report prior assumptions clearly."
+   Ideal for: "Studies with strong prior 
+   evidence or adaptive Bayesian trials"
+
+5. Non-inferiority Trial
+   Formula: n = (Z_α + Z_β)² × 2σ² / 
+   (δ − NI_margin)²
+   Inputs: Non-inferiority margin (δ),
+   expected difference, SD
+   Note: Use one-tailed alpha (0.025 
+   for 5% overall)
+   Dropout: SHOW
+   Ideal for: "Showing a new treatment 
+   is not meaningfully worse than standard care"
+
+6. Equivalence Trial
+   Formula: n = (Z_α/2 + Z_β)² × 2σ² / 
+   (EQ_margin − |δ|)²
+   Inputs: Equivalence margin,
+   expected difference, SD
+   Dropout: SHOW
+   Ideal for: "Showing two treatments 
+   produce the same result (e.g. 
+   generic vs branded drug)"
+
+7. Diagnostic Accuracy Study
+   Formula: n = Z² × Se × (1−Se) / d²
+   (separate for sensitivity and specificity)
+   Inputs: Expected sensitivity,
+   expected specificity, 
+   margin of error (d), 
+   disease prevalence
+   Dropout: HIDE
+   Ideal for: "Validating a new diagnostic 
+   test against a gold standard"
+
+8. Intraclass Correlation Coefficient (ICC)
+   Formula: n = 1 + (Z_α/2 + Z_β)² × 
+   2(1−ρ₀)² / (ρ₁−ρ₀)²
+   Inputs: Null ICC (ρ₀), 
+   Alternative ICC (ρ₁), 
+   number of raters (k)
+   Dropout: HIDE
+   Ideal for: "Measuring agreement between 
+   raters or repeated measurements of 
+   same instrument"
+
+════════════════════════════════════════════════════════
+IMPLEMENTATION ORDER — checkpoint after each step
+════════════════════════════════════════════════════════
+
+Step 1: Build the 3-card entry screen (CHANGE 1)
+  Test: clicking each card shows the right flow
+  Do not proceed until all 3 cards route correctly
+
+Step 2: Build the objective parser (CHANGE 2)
+  Test with these 5 objectives:
+  a) "Prevalence of anaemia in adults" 
+     → should detect: one group, proportion
+  b) "Compare haemoglobin between treatment 
+     and control groups at baseline, 4 and 8 weeks"
+     → should detect: two groups, mean, longitudinal
+  c) "GWAS for type 2 diabetes susceptibility"
+     → should detect: genetic, route to GWAS
+  d) "Pilot study on dietary intervention"
+     → should detect: pilot, n=25
+  e) "Multicentre adaptive RCT composite outcomes"
+     → should detect: complex trial, all flags
+
+Step 3: Add traffic light verdict (CHANGE 3)
+  Test: enter n=100 on a study requiring 127
+  Expected: RED card, correct message
+
+Step 4: Add complex trial layer pipeline (CHANGE 4)
+  Test: multicentre + composite + longitudinal 
+  combination — verify 6-layer table appears
+
+Step 5: Build genetic engine (CHANGE 5)
+  Test G1 (candidate gene) and G2 (GWAS) separately
+
+Step 6: Fix conditional dropout display (CHANGE 6)
+  Test: in-vitro hides dropout, 
+  RCT shows dropout, survey hides dropout
+
+Step 7: Add missing formulas (CHANGE 7)
+  Test: each new formula shows correct 
+  input fields and produces valid output
+
+Step 8: Full end-to-end test
+  Run these 3 complete journeys:
+  Journey A: Laziest user — paste objective, 
+    enter n=50, get verdict, download report
+  Journey B: PhD student — Card B, Standard, 
+    two proportions, forward calc, download
+  Journey C: Clinical trialist — Card B, 
+    Complex trial, multicentre + adaptive + 
+    composite, full layer table, download
+
+Only after all 8 steps pass, update replit.md 
+with a summary of all changes made.
+
+════════════════════════════════════════════════════════
+UI / UX RULES (apply to all changes)
+════════════════════════════════════════════════════════
+
+1. The laziest possible user must be able to 
+   get a result in 2 clicks maximum via Card A
+
+2. Never show more than 5 input fields at once
+   — reveal additional fields progressively 
+   only when they are needed
+
+3. Every field must have a help text tooltip 
+   (small ? icon) with plain English explanation
+
+4. All auto-filled values must be visually 
+   distinguished from researcher-entered values
+   (grey italic label "(auto-filled default)")
+
+5. The "Change formula" override must always 
+   be accessible — never lock the researcher 
+   into the auto-selected formula
+
+6. Error states must be friendly:
+   "Looks like p1 and p2 are the same — 
+   if there's no expected difference, we 
+   can't calculate a sample size. 
+   Try entering slightly different values."
+
+7. On mobile (screen < 768px):
+   Stack all cards vertically
+   Make all touch targets minimum 44px height
+   Input font size minimum 16px 
+   (prevents iOS zoom on focus)
+
+8. Result panel must print cleanly 
+   (CSS @media print rules):
+   Hide: entry cards, navigation, 
+   Change formula button
+   Show: all result sections, verdict card, 
+   formula, tables, MedRAS header
+
+9. The Download report button must always 
+   be visible at bottom of result — 
+   never hidden behind scroll
+   Filename format: 
+   medras-[formula-slug]-[date].html
+
+10. Reset / Start over button must be 
+    visible at all times during Step 2 and 3
+    so researchers can easily restart 
+    without refreshing the page

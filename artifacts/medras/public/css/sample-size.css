@@ -582,3 +582,206 @@
   background: #185f2d;
   border-color: #185f2d;
 }
+
+/* ====================================================================
+ * MASTER UPGRADE — Step 0 entry chooser, wizard, complexity, verdict,
+ * detected chips, layered breakdown, genetic checklist
+ * ==================================================================== */
+
+/* ----- Step 0: 3 entry cards ----- */
+.entry-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  margin-top: 18px;
+}
+.entry-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 22px 20px;
+  background: #ffffff;
+  border: 2px solid #d8e0ec;
+  border-radius: 12px;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s ease;
+  font: inherit;
+  color: #0f1f3d;
+  min-height: 150px;
+}
+.entry-card:hover {
+  border-color: #2563eb;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.12);
+  transform: translateY(-1px);
+}
+.entry-card-icon {
+  font-size: 28px;
+  color: #2563eb;
+  line-height: 1;
+}
+.entry-card-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #0f1f3d;
+}
+.entry-card-sub {
+  font-size: 0.86rem;
+  color: #5b6b85;
+  line-height: 1.4;
+}
+
+/* ----- Card C: wizard ----- */
+.wizard-dots {
+  display: flex;
+  gap: 8px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.wizard-dot {
+  width: 28px;
+  height: 6px;
+  border-radius: 3px;
+  background: #d8e0ec;
+}
+.wizard-dot.is-active { background: #2563eb; }
+.wizard-dot.is-complete { background: #1f7a3a; }
+.wizard-step { padding: 16px 0; }
+.wizard-choices {
+  display: grid;
+  gap: 10px;
+  margin-top: 8px;
+}
+.wizard-choices-stack { gap: 8px; }
+.wizard-choices label {
+  padding: 10px 14px;
+  background: #f6f9ff;
+  border: 1px solid #d8e0ec;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.92rem;
+}
+.wizard-choices label:hover { background: #ebf2ff; border-color: #93b4f5; }
+.wizard-choices input[type="radio"] { margin-right: 8px; }
+
+/* ----- Step 2: complexity radio + complex-trial fieldset ----- */
+.complexity-group { margin-bottom: 14px; }
+.complex-fieldset, .genetic-group {
+  background: #f8fbff;
+  border: 1px dashed #93b4f5;
+  border-radius: 8px;
+  padding: 14px 18px;
+  margin: 14px 0;
+}
+.field-help-inline {
+  color: #6b7c95;
+  font-weight: normal;
+  font-size: 0.82rem;
+}
+.genetic-warning, .genetic-info {
+  margin-top: 12px;
+  padding: 12px 14px;
+  background: #fff7ed;
+  border-left: 4px solid #d97706;
+  border-radius: 4px;
+  font-size: 0.88rem;
+  color: #7a4a05;
+}
+.genetic-info {
+  background: #eff6ff;
+  border-left-color: #2563eb;
+  color: #1e3a8a;
+}
+
+/* ----- Step 3: traffic-light verdict card ----- */
+.verdict-card {
+  margin: 8px 0 18px;
+  padding: 16px 20px;
+  border-radius: 10px;
+  border-left: 6px solid #94a3b8;
+  background: #f8fafc;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.verdict-numbers {
+  display: flex;
+  gap: 24px;
+  align-items: center;
+}
+.verdict-num {
+  display: flex;
+  flex-direction: column;
+}
+.verdict-num-label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #475569;
+}
+.verdict-num-value {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+.verdict-badge {
+  font-weight: 700;
+  font-size: 1rem;
+}
+.verdict-message {
+  margin: 0;
+  font-size: 0.95rem;
+  color: #1f3a5c;
+}
+.verdict-green  { background: #ecfdf5; border-left-color: #10b981; }
+.verdict-green  .verdict-badge { color: #047857; }
+.verdict-amber  { background: #fffbeb; border-left-color: #f59e0b; }
+.verdict-amber  .verdict-badge { color: #b45309; }
+.verdict-red    { background: #fef2f2; border-left-color: #ef4444; }
+.verdict-red    .verdict-badge { color: #b91c1c; }
+.verdict-blue   { background: #eff6ff; border-left-color: #2563eb; }
+.verdict-blue   .verdict-badge { color: #1d4ed8; }
+
+/* ----- Step 3: detected chips ----- */
+.detected-row { margin: 6px 0 16px; }
+.detected-label {
+  margin: 0 0 6px;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #1f3d6b;
+}
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  display: inline-block;
+  padding: 4px 10px;
+  background: #e0e7ff;
+  color: #1e3a8a;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+.detected-pick { margin: 8px 0 0; font-size: 0.85rem; color: #4b5b7a; font-style: italic; }
+
+/* ----- Step 3: layered breakdown table ----- */
+.layer-table { margin-top: 8px; }
+.layer-sensitivity {
+  margin-top: 10px;
+  padding: 8px 12px;
+  background: #f1f5f9;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  color: #475569;
+}
+
+/* ----- Step 3: genetic checklist ----- */
+.genetic-checklist {
+  background: #eff6ff;
+  border-left: 4px solid #2563eb;
+  border-radius: 4px;
+  padding: 12px 18px;
+}
+.genetic-checklist ul { margin: 6px 0 0 18px; padding: 0; }
+.genetic-checklist li { margin: 4px 0; color: #1e3a8a; font-size: 0.9rem; }
