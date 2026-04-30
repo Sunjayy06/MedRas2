@@ -9,7 +9,7 @@
       content="MedRAS is a structured research operating system for medical and academic research. Plan, calculate, analyse, write, and verify — end to end."
     />
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%232f6fed'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-family='Inter,sans-serif' font-size='18' font-weight='700' fill='white'%3EM%3C/text%3E%3C/svg%3E" />
-    <link rel="stylesheet" href="/css/style.css" />
+    <link rel="stylesheet" href="/css/style.css?v=2026043003" />
   </head>
   <body>
     <header class="site-header" data-testid="site-header">
@@ -29,65 +29,27 @@
 
     <main>
       <section class="hero">
-        <div class="hero-inner hero-inner-split">
-          <div class="hero-copy">
-            <p class="eyebrow" data-testid="text-eyebrow">Medical Research Acceleration System</p>
-            <h1 class="hero-title" data-testid="text-hero-title">
-              A structured research operating system for medical and academic researchers.
-            </h1>
-            <p class="hero-subtitle" data-testid="text-hero-subtitle">
-              From research objective to submission-ready manuscript — guided, statistically
-              validated, and compliance-aware at every step.
-            </p>
-            <div class="hero-actions">
-              <a href="#modules" class="btn btn-primary" data-testid="button-explore">
-                Explore the modules
-              </a>
-              <a href="#workflow" class="btn btn-secondary" data-testid="button-workflow">
-                See the workflow
-              </a>
-            </div>
-            <p class="hero-status" data-testid="text-status">
-              <span class="status-dot" aria-hidden="true"></span>
-              Foundation ready &middot; modules coming online
-            </p>
+        <div class="hero-inner">
+          <p class="eyebrow" data-testid="text-eyebrow">Medical Research Acceleration System</p>
+          <h1 class="hero-title" data-testid="text-hero-title">
+            A structured research operating system for medical and academic researchers.
+          </h1>
+          <p class="hero-subtitle" data-testid="text-hero-subtitle">
+            From research objective to submission-ready manuscript — guided, statistically
+            validated, and compliance-aware at every step.
+          </p>
+          <div class="hero-actions">
+            <a href="#modules" class="btn btn-primary" data-testid="button-explore">
+              Explore the modules
+            </a>
+            <a href="#workflow" class="btn btn-secondary" data-testid="button-workflow">
+              See the workflow
+            </a>
           </div>
-
-          <!-- Hero diagram: a small "operating system" map showing all 6 modules -->
-          <div class="hero-diagram" aria-hidden="true" data-testid="hero-diagram">
-            <svg viewBox="0 0 320 320" xmlns="http://www.w3.org/2000/svg">
-              <defs>
-                <radialGradient id="hero-core" cx="50%" cy="50%" r="50%">
-                  <stop offset="0%" stop-color="#3a82ff" stop-opacity="0.95"/>
-                  <stop offset="100%" stop-color="#1e54c8" stop-opacity="0.9"/>
-                </radialGradient>
-              </defs>
-              <!-- orbit ring -->
-              <circle cx="160" cy="160" r="118" fill="none" stroke="rgba(255,255,255,0.12)" stroke-dasharray="2 4"/>
-              <!-- spokes -->
-              <g stroke="rgba(255,255,255,0.18)" stroke-width="1">
-                <line x1="160" y1="160" x2="160" y2="42"/>
-                <line x1="160" y1="160" x2="262" y2="101"/>
-                <line x1="160" y1="160" x2="262" y2="219"/>
-                <line x1="160" y1="160" x2="160" y2="278"/>
-                <line x1="160" y1="160" x2="58" y2="219"/>
-                <line x1="160" y1="160" x2="58" y2="101"/>
-              </g>
-              <!-- core -->
-              <circle cx="160" cy="160" r="46" fill="url(#hero-core)"/>
-              <text x="160" y="158" text-anchor="middle" font-family="Inter,sans-serif" font-size="13" font-weight="700" fill="#ffffff" letter-spacing="0.04em">MEDRAS</text>
-              <text x="160" y="174" text-anchor="middle" font-family="Inter,sans-serif" font-size="9" font-weight="500" fill="rgba(255,255,255,0.78)" letter-spacing="0.18em">CORE</text>
-              <!-- 6 module nodes -->
-              <g font-family="Inter,sans-serif" font-size="9" font-weight="600" fill="#ffffff" text-anchor="middle">
-                <g><circle cx="160" cy="42" r="22" fill="#6b5bd2"/><text x="160" y="46">PLAN</text></g>
-                <g><circle cx="262" cy="101" r="22" fill="#2f6fed"/><text x="262" y="105">SIZE</text></g>
-                <g><circle cx="262" cy="219" r="22" fill="#2f6fed"/><text x="262" y="223">STATS</text></g>
-                <g><circle cx="160" cy="278" r="22" fill="#9333ea"/><text x="160" y="282">PROP</text></g>
-                <g><circle cx="58" cy="219" r="22" fill="#9333ea"/><text x="58" y="223">WRITE</text></g>
-                <g><circle cx="58" cy="101" r="22" fill="#0d9488"/><text x="58" y="105">CHECK</text></g>
-              </g>
-            </svg>
-          </div>
+          <p class="hero-status" data-testid="text-status">
+            <span class="status-dot" aria-hidden="true"></span>
+            Foundation ready &middot; modules coming online
+          </p>
         </div>
       </section>
 
@@ -97,162 +59,158 @@
             <p class="eyebrow">Phase 1 — Six Core Modules</p>
             <h2 data-testid="text-modules-heading">The MedRAS workflow, end to end</h2>
             <p class="section-lead">
-              Each module operates independently and feeds the next. You can start at any
-              step or follow the guided sequence from idea to publication.
+              Hover or tap any module on the orbit to see what it does, then click to open it.
+              Available modules glow blue; the rest are coming soon.
             </p>
-            <ul class="category-legend" aria-label="Module categories" data-testid="list-legend">
-              <li><span class="legend-dot" data-cat="plan"></span>Plan</li>
-              <li><span class="legend-dot" data-cat="compute"></span>Compute</li>
-              <li><span class="legend-dot" data-cat="write"></span>Write</li>
-              <li><span class="legend-dot" data-cat="verify"></span>Verify</li>
-            </ul>
           </header>
 
-          <ol class="module-grid" data-testid="list-modules">
-            <li class="module-card" data-cat="plan" data-testid="card-module-1">
-              <div class="module-head">
-                <span class="module-icon" aria-hidden="true">
-                  <!-- Clipboard with checklist -->
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-                    <rect x="5" y="4" width="14" height="17" rx="2"/>
-                    <path d="M9 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1"/>
-                    <path d="M9 11l1.5 1.5L14 9"/>
-                    <path d="M9 16h6"/>
-                  </svg>
-                </span>
-                <span class="module-index" aria-hidden="true">01</span>
-              </div>
-              <h3>Study Builder</h3>
-              <p>
-                Translate a research objective into a structured methodology — design,
-                variables, inclusion criteria, and sampling strategy.
-              </p>
-              <p class="module-output">→ Methodology blueprint with sampling plan</p>
-              <span class="module-status status-planned">Planned</span>
-            </li>
+          <!-- Interactive circle-and-spoke orbit. Each module node is a small
+               circle that expands into a card on hover/focus. On mobile the
+               orbit collapses into a stacked card list (no hover required). -->
+          <div class="orbit" data-testid="orbit">
+            <svg class="orbit-spokes" viewBox="0 0 600 600" aria-hidden="true" focusable="false">
+              <circle class="orbit-ring" cx="300" cy="300" r="216" fill="none" />
+              <g class="orbit-lines">
+                <line x1="300" y1="300" x2="300" y2="84"  />
+                <line x1="300" y1="300" x2="487" y2="192" />
+                <line x1="300" y1="300" x2="487" y2="408" />
+                <line x1="300" y1="300" x2="300" y2="516" />
+                <line x1="300" y1="300" x2="113" y2="408" />
+                <line x1="300" y1="300" x2="113" y2="192" />
+              </g>
+            </svg>
 
-            <li class="module-card is-available" data-cat="compute" data-testid="card-module-2">
-              <div class="module-head">
-                <span class="module-icon" aria-hidden="true">
-                  <!-- Calculator -->
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-                    <rect x="5" y="3" width="14" height="18" rx="2"/>
-                    <rect x="8" y="6" width="8" height="3" rx="0.5"/>
-                    <circle cx="9" cy="13" r="0.6" fill="currentColor"/>
-                    <circle cx="12" cy="13" r="0.6" fill="currentColor"/>
-                    <circle cx="15" cy="13" r="0.6" fill="currentColor"/>
-                    <circle cx="9" cy="16" r="0.6" fill="currentColor"/>
-                    <circle cx="12" cy="16" r="0.6" fill="currentColor"/>
-                    <circle cx="15" cy="16" r="0.6" fill="currentColor"/>
-                    <circle cx="9" cy="19" r="0.6" fill="currentColor"/>
-                    <circle cx="12" cy="19" r="0.6" fill="currentColor"/>
-                    <circle cx="15" cy="19" r="0.6" fill="currentColor"/>
-                  </svg>
-                </span>
-                <span class="module-index" aria-hidden="true">02</span>
-              </div>
-              <h3>Sample Size Calculator</h3>
-              <p>
-                Formula-driven sample size estimation with explicit assumptions for
-                power, alpha, and effect size — not guesswork.
-              </p>
-              <p class="module-output">→ Validated n with full assumption report</p>
-              <a href="/sample-size.html" class="module-card-link" data-testid="link-sample-size">
-                Open calculator →
-              </a>
-              <span class="module-status status-active">Available</span>
-            </li>
+            <div class="orbit-core" aria-hidden="true">
+              <span class="orbit-core-mark">M</span>
+              <span class="orbit-core-name">MedRAS</span>
+              <span class="orbit-core-tag">Research OS</span>
+            </div>
 
-            <li class="module-card" data-cat="compute" data-testid="card-module-3">
-              <div class="module-head">
-                <span class="module-icon" aria-hidden="true">
-                  <!-- Bar chart -->
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M4 20h16"/>
-                    <rect x="6" y="12" width="3" height="7" rx="0.5"/>
-                    <rect x="11" y="7" width="3" height="12" rx="0.5"/>
-                    <rect x="16" y="14" width="3" height="5" rx="0.5"/>
-                    <path d="M5 8l4-3 4 4 5-4" stroke-dasharray="2 2"/>
-                  </svg>
-                </span>
-                <span class="module-index" aria-hidden="true">03</span>
-              </div>
-              <h3>Statistical Analysis Engine</h3>
-              <p>
-                Upload Excel data, classify variables, and run normality-aware parametric
-                or non-parametric tests with publication-grade outputs.
-              </p>
-              <p class="module-output">→ Test results, charts &amp; APA tables</p>
-              <a href="/analysis.html" class="module-card-link" data-testid="link-analysis">
-                Open analysis engine →
-              </a>
-              <span class="module-status status-active">Available · Beta</span>
-            </li>
+            <ol class="orbit-nodes" data-testid="list-modules">
+              <li class="orbit-slot" style="--top:14%;--left:50%;">
+                <a class="orbit-node is-planned" data-cat="plan"
+                   href="#modules" aria-disabled="true"
+                   data-testid="card-module-1"
+                   aria-label="Module 1, Study Builder. Status: Planned.">
+                  <span class="orbit-node-mini" aria-hidden="true">
+                    <span class="orbit-node-num">01</span>
+                    <span class="orbit-node-abbr">Plan</span>
+                  </span>
+                  <span class="orbit-node-card">
+                    <span class="orbit-node-title">Study Builder</span>
+                    <span class="orbit-node-desc">
+                      Translate a research objective into a structured methodology.
+                    </span>
+                    <span class="orbit-node-status status-planned">Planned</span>
+                  </span>
+                </a>
+              </li>
 
-            <li class="module-card" data-cat="write" data-testid="card-module-4">
-              <div class="module-head">
-                <span class="module-icon" aria-hidden="true">
-                  <!-- Document with stamp -->
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M7 3h7l4 4v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/>
-                    <path d="M14 3v4h4"/>
-                    <circle cx="12" cy="14" r="2.5"/>
-                    <path d="M12 11.5v-1M12 17.5v-1M9.5 14h-1M15.5 14h-1"/>
-                  </svg>
-                </span>
-                <span class="module-index" aria-hidden="true">04</span>
-              </div>
-              <h3>Proposal Generator</h3>
-              <p>
-                Draft ICMR, ethics committee, and university proposals in
-                submission-ready format from your methodology and sample-size work.
-              </p>
-              <p class="module-output">→ Submission-ready proposal (.docx / .pdf)</p>
-              <span class="module-status status-planned">Planned</span>
-            </li>
+              <li class="orbit-slot" style="--top:32%;--left:81.18%;">
+                <a class="orbit-node is-available" data-cat="compute"
+                   href="/sample-size.html"
+                   data-testid="card-module-2"
+                   aria-label="Module 2, Sample Size Calculator. Available. Open calculator.">
+                  <span class="orbit-node-mini" aria-hidden="true">
+                    <span class="orbit-node-num">02</span>
+                    <span class="orbit-node-abbr">Size</span>
+                  </span>
+                  <span class="orbit-node-card">
+                    <span class="orbit-node-title">Sample Size Calculator</span>
+                    <span class="orbit-node-desc">
+                      Formula-driven n with explicit power, alpha and effect size — 14 designs.
+                    </span>
+                    <span class="orbit-node-cta" data-testid="link-sample-size">Open calculator →</span>
+                    <span class="orbit-node-status status-active">Available</span>
+                  </span>
+                </a>
+              </li>
 
-            <li class="module-card" data-cat="write" data-testid="card-module-5">
-              <div class="module-head">
-                <span class="module-icon" aria-hidden="true">
-                  <!-- Pen on document -->
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M5 4h9l4 4v5"/>
-                    <path d="M5 4v16a1 1 0 0 0 1 1h6"/>
-                    <path d="M14 4v4h4"/>
-                    <path d="M14.5 19.5l5-5 1.5 1.5-5 5-2 .5z"/>
-                  </svg>
-                </span>
-                <span class="module-index" aria-hidden="true">05</span>
-              </div>
-              <h3>Thesis &amp; Article Writer</h3>
-              <p>
-                Compile structured manuscripts and dissertation chapters with auto-inserted
-                tables and validated references.
-              </p>
-              <p class="module-output">→ Chapter-ready manuscript with citations</p>
-              <span class="module-status status-planned">Planned</span>
-            </li>
+              <li class="orbit-slot" style="--top:68%;--left:81.18%;">
+                <a class="orbit-node is-available" data-cat="compute"
+                   href="/analysis.html"
+                   data-testid="card-module-3"
+                   aria-label="Module 3, Statistical Analysis Engine. Available, Beta. Open analysis engine.">
+                  <span class="orbit-node-mini" aria-hidden="true">
+                    <span class="orbit-node-num">03</span>
+                    <span class="orbit-node-abbr">Stats</span>
+                  </span>
+                  <span class="orbit-node-card">
+                    <span class="orbit-node-title">Statistical Analysis Engine</span>
+                    <span class="orbit-node-desc">
+                      Upload Excel, classify variables, run normality-aware tests with APA outputs.
+                    </span>
+                    <span class="orbit-node-cta" data-testid="link-analysis">Open analysis engine →</span>
+                    <span class="orbit-node-status status-active">Available · Beta</span>
+                  </span>
+                </a>
+              </li>
 
-            <li class="module-card" data-cat="verify" data-testid="card-module-6">
-              <div class="module-head">
-                <span class="module-icon" aria-hidden="true">
-                  <!-- Shield with check -->
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M12 3l8 3v6c0 5-3.5 8.5-8 9-4.5-.5-8-4-8-9V6l8-3z"/>
-                    <path d="M8.5 12l2.5 2.5L16 10"/>
-                  </svg>
-                </span>
-                <span class="module-index" aria-hidden="true">06</span>
-              </div>
-              <h3>Plagiarism &amp; Compliance</h3>
-              <p>
-                Continuous originality scoring, citation verification, and integrity
-                checks before submission.
-              </p>
-              <p class="module-output">→ Originality score &amp; citation audit</p>
-              <span class="module-status status-planned">Planned</span>
-            </li>
-          </ol>
+              <li class="orbit-slot" style="--top:86%;--left:50%;">
+                <a class="orbit-node is-planned" data-cat="write"
+                   href="#modules" aria-disabled="true"
+                   data-testid="card-module-4"
+                   aria-label="Module 4, Proposal Generator. Status: Planned.">
+                  <span class="orbit-node-mini" aria-hidden="true">
+                    <span class="orbit-node-num">04</span>
+                    <span class="orbit-node-abbr">Prop</span>
+                  </span>
+                  <span class="orbit-node-card">
+                    <span class="orbit-node-title">Proposal Generator</span>
+                    <span class="orbit-node-desc">
+                      Draft ICMR, ethics and university proposals from your methodology.
+                    </span>
+                    <span class="orbit-node-status status-planned">Planned</span>
+                  </span>
+                </a>
+              </li>
+
+              <li class="orbit-slot" style="--top:68%;--left:18.82%;">
+                <a class="orbit-node is-planned" data-cat="write"
+                   href="#modules" aria-disabled="true"
+                   data-testid="card-module-5"
+                   aria-label="Module 5, Thesis and Article Writer. Status: Planned.">
+                  <span class="orbit-node-mini" aria-hidden="true">
+                    <span class="orbit-node-num">05</span>
+                    <span class="orbit-node-abbr">Write</span>
+                  </span>
+                  <span class="orbit-node-card">
+                    <span class="orbit-node-title">Thesis &amp; Article Writer</span>
+                    <span class="orbit-node-desc">
+                      Compile structured manuscripts with auto tables and validated references.
+                    </span>
+                    <span class="orbit-node-status status-planned">Planned</span>
+                  </span>
+                </a>
+              </li>
+
+              <li class="orbit-slot" style="--top:32%;--left:18.82%;">
+                <a class="orbit-node is-planned" data-cat="verify"
+                   href="#modules" aria-disabled="true"
+                   data-testid="card-module-6"
+                   aria-label="Module 6, Plagiarism and Compliance. Status: Planned.">
+                  <span class="orbit-node-mini" aria-hidden="true">
+                    <span class="orbit-node-num">06</span>
+                    <span class="orbit-node-abbr">Check</span>
+                  </span>
+                  <span class="orbit-node-card">
+                    <span class="orbit-node-title">Plagiarism &amp; Compliance</span>
+                    <span class="orbit-node-desc">
+                      Originality scoring, citation verification and integrity checks.
+                    </span>
+                    <span class="orbit-node-status status-planned">Planned</span>
+                  </span>
+                </a>
+              </li>
+            </ol>
+          </div>
+
+          <ul class="category-legend" aria-label="Module categories" data-testid="list-legend">
+            <li><span class="legend-dot" data-cat="plan"></span>Plan</li>
+            <li><span class="legend-dot" data-cat="compute"></span>Compute</li>
+            <li><span class="legend-dot" data-cat="write"></span>Write</li>
+            <li><span class="legend-dot" data-cat="verify"></span>Verify</li>
+          </ul>
         </div>
       </section>
 

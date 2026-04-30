@@ -10,8 +10,28 @@
 
   document.addEventListener("DOMContentLoaded", function () {
     enableSmoothAnchors();
+    blockDisabledAnchors();
     pingBackend();
   });
+
+  // Anchors marked aria-disabled="true" (planned modules in the orbit) must
+  // NOT navigate or hash-jump on click / Enter / Space — they are visual-only
+  // placeholders. Native <a> elements ignore aria-disabled, so we cancel
+  // activation here.
+  function blockDisabledAnchors() {
+    var disabled = document.querySelectorAll('a[aria-disabled="true"]');
+    disabled.forEach(function (a) {
+      a.addEventListener("click", function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+      });
+      a.addEventListener("keydown", function (e) {
+        if (e.key === "Enter" || e.key === " " || e.key === "Spacebar") {
+          e.preventDefault();
+        }
+      });
+    });
+  }
 
   function enableSmoothAnchors() {
     var links = document.querySelectorAll('a[href^="#"]');

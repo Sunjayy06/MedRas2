@@ -288,84 +288,319 @@ ul {
 }
 
 /* =========================================================================
-   Module grid
+   Module orbit — circle-and-spoke interactive infographic
    ========================================================================= */
 
-.module-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 20px;
+.orbit {
+  position: relative;
+  width: 100%;
+  max-width: 640px;
+  aspect-ratio: 1 / 1;
+  margin: 24px auto 0;
 }
 
-.module-card {
-  background: #ffffff;
-  border: 1px solid var(--color-border);
-  border-left: 3px solid var(--color-navy-800);
-  border-radius: var(--radius-lg);
-  padding: 24px;
-  box-shadow: var(--shadow-card);
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
-  position: relative;
+/* Spokes layer (decorative). */
+.orbit-spokes {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.orbit-ring {
+  stroke: var(--color-border);
+  stroke-width: 1;
+  stroke-dasharray: 3 5;
+  opacity: 0.7;
+}
+.orbit-lines line {
+  stroke: var(--color-border);
+  stroke-width: 1;
+}
+
+/* Central core. */
+.orbit-core {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 26%;
+  aspect-ratio: 1 / 1;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--color-accent) 0%, var(--color-accent-dark) 100%);
+  color: #ffffff;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  box-shadow: 0 14px 40px -8px rgba(47, 111, 237, 0.45);
+  z-index: 2;
 }
-
-.module-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 2px 4px rgba(14, 26, 51, 0.05),
-    0 16px 32px -16px rgba(14, 26, 51, 0.18);
+.orbit-core-mark {
+  font-size: 1.4rem;
+  font-weight: 800;
+  line-height: 1;
+  margin-bottom: 4px;
+  opacity: 0.85;
 }
-
-.module-index {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  color: var(--color-text-muted);
-  letter-spacing: 0.06em;
+.orbit-core-name {
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
 }
-
-.module-card h3 {
-  margin: 0;
-  font-size: 18px;
-  letter-spacing: -0.005em;
-}
-
-.module-card p {
-  margin: 0;
-  color: var(--color-text-muted);
-  font-size: 14.5px;
-}
-
-.module-status {
-  display: inline-block;
-  margin-top: auto;
-  align-self: flex-start;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
+.orbit-core-tag {
+  font-size: 0.65rem;
+  font-weight: 500;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
-  padding: 4px 10px;
+  opacity: 0.78;
+  margin-top: 2px;
+}
+
+/* Node positioning layer. */
+.orbit-nodes {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.orbit-slot {
+  position: absolute;
+  top: var(--top);
+  left: var(--left);
+  transform: translate(-50%, -50%);
+}
+
+/* The clickable node itself. Default = small circle; expands on hover/focus. */
+.orbit-node {
+  position: relative;
+  display: block;
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 2px solid var(--color-border);
+  color: var(--color-text);
+  text-decoration: none;
+  cursor: pointer;
+  z-index: 3;
+  transition:
+    width 0.32s cubic-bezier(0.2, 0.8, 0.2, 1),
+    height 0.32s cubic-bezier(0.2, 0.8, 0.2, 1),
+    border-radius 0.28s ease,
+    box-shadow 0.28s ease,
+    border-color 0.28s ease;
+}
+
+/* Mini state — shown by default. */
+.orbit-node-mini {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  text-align: center;
+  opacity: 1;
+  transition: opacity 0.18s ease;
+}
+.orbit-node-num {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--color-text-muted);
+}
+.orbit-node-abbr {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+/* Expanded card — hidden by default, fades in when the node grows. */
+.orbit-node-card {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 6px;
+  padding: 16px 18px;
+  text-align: left;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease 0.1s;
+}
+.orbit-node-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--color-navy-900);
+  line-height: 1.25;
+  /* Leave room for the absolutely-positioned status pill in the corner. */
+  padding-right: 76px;
+}
+.orbit-node-desc {
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--color-text-muted);
+}
+.orbit-node-cta {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-accent);
+  margin-top: 2px;
+}
+.orbit-node-status {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 2px 8px;
   border-radius: 999px;
   background: var(--color-navy-100);
   color: var(--color-navy-800);
+  white-space: nowrap;
 }
-
-.module-status.status-active {
-  background: rgba(31, 138, 76, 0.12);
+.orbit-node-status.status-active {
+  background: rgba(31, 138, 76, 0.14);
   color: var(--color-success);
 }
 
-.module-card-link {
-  font-size: 13.5px;
-  font-weight: 600;
-  color: var(--color-accent);
-  margin-top: auto;
-  align-self: flex-start;
+/* Expansion trigger — hover, focus-visible, and focus-within for keyboard. */
+.orbit-node:hover,
+.orbit-node:focus-visible,
+.orbit-node:focus-within {
+  width: 252px;
+  height: 168px;
+  border-radius: 18px;
+  border-color: var(--color-accent);
+  box-shadow: 0 18px 44px -12px rgba(14, 26, 51, 0.25);
+  z-index: 20;
+}
+/* Explicit, high-contrast keyboard focus ring on top of the expansion. */
+.orbit-node:focus-visible {
+  outline: 3px solid var(--color-accent);
+  outline-offset: 3px;
+}
+.orbit-node:focus { outline: none; }
+.orbit-node:hover .orbit-node-mini,
+.orbit-node:focus-visible .orbit-node-mini,
+.orbit-node:focus-within .orbit-node-mini {
+  opacity: 0;
+}
+.orbit-node:hover .orbit-node-card,
+.orbit-node:focus-visible .orbit-node-card,
+.orbit-node:focus-within .orbit-node-card {
+  opacity: 1;
+  pointer-events: auto;
 }
 
-.module-card-link:hover {
-  color: var(--color-accent-dark);
-  text-decoration: underline;
+/* Available modules glow blue to advertise that they are clickable. */
+.orbit-node.is-available {
+  border-color: rgba(47, 111, 237, 0.55);
+  box-shadow:
+    0 0 0 4px rgba(47, 111, 237, 0.08),
+    0 12px 28px -16px rgba(47, 111, 237, 0.45);
+}
+.orbit-node.is-available .orbit-node-num,
+.orbit-node.is-available .orbit-node-abbr {
+  color: var(--color-accent);
+}
+.orbit-node.is-available:hover,
+.orbit-node.is-available:focus-visible,
+.orbit-node.is-available:focus-within {
+  box-shadow:
+    0 0 0 4px rgba(47, 111, 237, 0.12),
+    0 22px 50px -16px rgba(47, 111, 237, 0.55);
+}
+
+/* Planned modules feel inert — soft, no glow, gentle pointer. */
+.orbit-node.is-planned {
+  cursor: help;
+  background: #fafbfd;
+}
+.orbit-node.is-planned .orbit-node-abbr {
+  color: var(--color-text-muted);
+}
+
+/* Per-category accent colours on the mini label. */
+.orbit-node[data-cat="plan"] .orbit-node-abbr    { color: #6b5bd2; }
+.orbit-node[data-cat="compute"] .orbit-node-abbr { color: #2f6fed; }
+.orbit-node[data-cat="write"] .orbit-node-abbr   { color: #9333ea; }
+.orbit-node[data-cat="verify"] .orbit-node-abbr  { color: #0d9488; }
+
+/* Touch / coarse-pointer devices at any width get the same always-expanded
+   stacked layout — they have no hover, so the orbit's hover-to-reveal
+   pattern would silently hide module info on a single tap. */
+@media (hover: none) and (pointer: coarse), (max-width: 720px) {
+  .orbit {
+    aspect-ratio: auto;
+    max-width: 520px;
+  }
+  .orbit-spokes,
+  .orbit-core { display: none; }
+
+  .orbit-nodes {
+    position: static;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .orbit-slot {
+    position: static;
+    transform: none;
+    width: 100%;
+  }
+  .orbit-node {
+    width: 100%;
+    height: auto;
+    min-height: 92px;
+    border-radius: 14px;
+    display: flex;
+    align-items: stretch;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+  /* Disable the desktop expand transition — both states are already visible. */
+  .orbit-node:hover,
+  .orbit-node:focus-visible,
+  .orbit-node:focus-within {
+    width: 100%;
+    height: auto;
+    border-radius: 14px;
+  }
+  .orbit-node-mini {
+    position: static;
+    width: 86px;
+    flex: 0 0 86px;
+    border-right: 1px solid var(--color-border);
+  }
+  .orbit-node-card {
+    position: static;
+    flex: 1;
+    opacity: 1;
+    pointer-events: auto;
+    padding: 14px 18px 14px 16px;
+    /* Push card content down a touch so the absolute status pill never
+       collides with the title even on narrow screens. */
+    padding-top: 36px;
+  }
+  .orbit-node-title { padding-right: 0; }
+  .orbit-node-status {
+    position: absolute;
+    top: 10px;
+    right: 12px;
+  }
+  .orbit-node:hover .orbit-node-mini,
+  .orbit-node:focus-visible .orbit-node-mini,
+  .orbit-node:focus-within .orbit-node-mini {
+    opacity: 1;
+  }
 }
 
 /* =========================================================================
@@ -471,54 +706,15 @@ ul {
 }
 
 /* =========================================================================
-   Hero — split layout with diagram
-   ========================================================================= */
-
-.hero-inner-split {
-  max-width: var(--container-width);
-  display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
-  gap: 56px;
-  align-items: center;
-  text-align: left;
-}
-
-.hero-inner-split .hero-title,
-.hero-inner-split .hero-subtitle { margin-left: 0; margin-right: 0; }
-.hero-inner-split .hero-actions { justify-content: flex-start; }
-.hero-inner-split .hero-subtitle { max-width: 540px; }
-
-.hero-diagram {
-  width: 100%;
-  max-width: 380px;
-  margin-left: auto;
-  filter: drop-shadow(0 12px 40px rgba(47, 111, 237, 0.25));
-}
-.hero-diagram svg { width: 100%; height: auto; }
-
-@media (max-width: 880px) {
-  .hero-inner-split {
-    grid-template-columns: 1fr;
-    text-align: center;
-    gap: 36px;
-  }
-  .hero-inner-split .hero-title,
-  .hero-inner-split .hero-subtitle { margin-left: auto; margin-right: auto; }
-  .hero-inner-split .hero-subtitle { max-width: 620px; }
-  .hero-inner-split .hero-actions { justify-content: center; }
-  .hero-diagram { margin: 0 auto; max-width: 300px; }
-}
-
-/* =========================================================================
-   Module category accents
+   Module category legend (used below the orbit)
    ========================================================================= */
 
 .category-legend {
-  display: inline-flex;
+  display: flex;
   flex-wrap: wrap;
   justify-content: center;
   gap: 18px;
-  margin-top: 20px;
+  margin: 32px auto 0;
   padding: 0;
   font-size: 13px;
   color: var(--color-text-muted);
@@ -538,57 +734,6 @@ ul {
 .legend-dot[data-cat="compute"] { background: #2f6fed; }
 .legend-dot[data-cat="write"]   { background: #9333ea; }
 .legend-dot[data-cat="verify"]  { background: #0d9488; }
-
-.module-card[data-cat="plan"]    { border-left-color: #6b5bd2; }
-.module-card[data-cat="compute"] { border-left-color: #2f6fed; }
-.module-card[data-cat="write"]   { border-left-color: #9333ea; }
-.module-card[data-cat="verify"]  { border-left-color: #0d9488; }
-
-.module-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 2px;
-}
-
-.module-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 44px;
-  height: 44px;
-  border-radius: 10px;
-  background: rgba(47, 111, 237, 0.10);
-  color: var(--color-accent);
-}
-.module-icon svg { width: 24px; height: 24px; }
-
-.module-card[data-cat="plan"]    .module-icon { background: rgba(107, 91, 210, 0.12); color: #6b5bd2; }
-.module-card[data-cat="compute"] .module-icon { background: rgba(47, 111, 237, 0.12); color: #2f6fed; }
-.module-card[data-cat="write"]   .module-icon { background: rgba(147, 51, 234, 0.12); color: #9333ea; }
-.module-card[data-cat="verify"]  .module-icon { background: rgba(13, 148, 136, 0.12); color: #0d9488; }
-
-.module-output {
-  font-size: 13px !important;
-  color: var(--color-text) !important;
-  background: var(--color-bg-muted);
-  border-radius: var(--radius-sm);
-  padding: 8px 12px;
-  margin: 4px 0 0 !important;
-  font-weight: 500;
-}
-
-/* Highlight the available module so users see what they can use right now */
-.module-card.is-available {
-  border: 1px solid rgba(47, 111, 237, 0.5);
-  border-left: 3px solid #2f6fed;
-  background:
-    linear-gradient(180deg, rgba(47, 111, 237, 0.04) 0%, #ffffff 60%);
-  box-shadow:
-    0 1px 2px rgba(14, 26, 51, 0.05),
-    0 12px 28px -16px rgba(47, 111, 237, 0.45);
-}
 
 /* =========================================================================
    Workflow — horizontal stepper
