@@ -2245,11 +2245,15 @@
   // -----------------------------------------------------------------------
 
   function renderResult(data) {
-    // Forward-mode layout: hide reverse panel, show the new hero pair.
+    // Forward-mode layout: show forward hero, hide reverse panel + reverse hero + extras.
     var reversePanel = document.getElementById("result-reverse");
     if (reversePanel) reversePanel.hidden = true;
     var hero = document.getElementById("result-hero");
     if (hero) hero.hidden = false;
+    var heroReverse = document.getElementById("result-hero-reverse");
+    if (heroReverse) heroReverse.hidden = true;
+    var heroExtras = document.getElementById("result-hero-extras");
+    if (heroExtras) { heroExtras.hidden = true; heroExtras.innerHTML = ""; }
     var heading = document.getElementById("result-heading");
     if (heading) heading.textContent = "3. Required sample size";
 
@@ -2427,6 +2431,29 @@
     return nPerGroup + " per group (× " + numGroups + " groups)";
   }
 
+  // Pull the most relevant "user-entered sample size" from a reverse-mode
+  // response's inputs object. Different formulas use different keys, so we
+  // try the common ones in priority order: per-group totals first (because
+  // most studies are reported that way), then total n.
+  var REVERSE_N_KEYS = [
+    "n_per_group_recruited",
+    "n_per_group_analyzable",
+    "n_per_group",
+    "n_recruited",
+    "n_analyzable",
+    "total_n",
+    "n_total",
+    "sample_size",
+    "n",
+  ];
+  function pickReverseSampleSize(inputs) {
+    for (var i = 0; i < REVERSE_N_KEYS.length; i++) {
+      var k = REVERSE_N_KEYS[i];
+      if (inputs[k] != null && inputs[k] !== "") return inputs[k];
+    }
+    return null;
+  }
+
   // -----------------------------------------------------------------------
   // Step 3 — reverse result (generic for all 6 formulas)
   //
@@ -2449,15 +2476,81 @@
       data.formula_label + " · " + data.formula_expression
     );
 
-    // Hide forward-only sections, show the reverse panel.
+    // Reverse-mode layout: hide the forward hero, show the dedicated
+    // reverse hero pair + the (kept-but-hidden) reverse panel for warnings.
     var heroPanel = document.getElementById("result-hero");
     if (heroPanel) heroPanel.hidden = true;
+    var heroRev = document.getElementById("result-hero-reverse");
+    if (heroRev) heroRev.hidden = false;
     document.getElementById("result-comparison").hidden = true;
     document.getElementById("result-reverse").hidden = false;
 
     setText("text-formula-expression", data.formula_expression);
 
-    // Render headline cards from the API response.
+    // ---- NEW REVERSE HERO PAIR ----------------------------------------
+    // Left card: the user's own sample size, pulled from the inputs they
+    // typed (different formulas use different keys; pick the most relevant).
+    var userN = pickReverseSampleSize(data.inputs || {});
+    setText(
+      "text-reverse-yours",
+      userN != null ? String(userN) : "—"
+    );
+    var alpha = (data.inputs && data.inputs.alpha) || 0.05;
+    var power = (data.inputs && data.inputs.power) || 0.80;
+    var subText =
+      "what you can recruit · α=" + alpha + ", power=" + power;
+    setText("text-reverse-yours-sub", subText);
+
+    // Right card: the primary detectable stat from the API response.
+    var primary = (data.headline && data.headline[0]) || null;
+    var extras  = (data.headline || []).slice(1);
+    setText(
+      "text-reverse-primary-label",
+      primary ? primary.label : "Smallest detectable effect"
+    );
+    setText(
+      "text-reverse-primary-value",
+      primary ? primary.value : "—"
+    );
+    setText(
+      "text-reverse-primary-sub",
+      (primary && primary.sublabel) ||
+        "the smallest effect this sample can detect"
+    );
+
+    // Extra detectable stats (e.g. detectable increase + decrease) render
+    // as a slim chip row directly below the hero so users see them too.
+    var extrasEl = document.getElementById("result-hero-extras");
+    if (extrasEl) {
+      extrasEl.innerHTML = "";
+      if (extras.length === 0) {
+        extrasEl.hidden = true;
+      } else {
+        extras.forEach(function (stat) {
+          var row = document.createElement("div");
+          row.className = "result-hero-extra";
+          var l = document.createElement("span");
+          l.className = "result-hero-extra-label";
+          l.textContent = stat.label;
+          var v = document.createElement("span");
+          v.className = "result-hero-extra-value";
+          v.textContent = stat.value;
+          row.appendChild(l);
+          row.appendChild(v);
+          if (stat.sublabel) {
+            var s = document.createElement("span");
+            s.className = "result-hero-extra-sub";
+            s.textContent = stat.sublabel;
+            row.appendChild(s);
+          }
+          extrasEl.appendChild(row);
+        });
+        extrasEl.hidden = false;
+      }
+    }
+
+    // Keep the legacy hidden #reverse-headline list populated for any
+    // tests/external callers that still query it by data-testid.
     var headlineEl = document.getElementById("reverse-headline");
     headlineEl.innerHTML = "";
     (data.headline || []).forEach(function (stat) {

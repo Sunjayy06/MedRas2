@@ -10,7 +10,7 @@
     />
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%232f6fed'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-family='Inter,sans-serif' font-size='18' font-weight='700' fill='white'%3EM%3C/text%3E%3C/svg%3E" />
     <link rel="stylesheet" href="/css/style.css?v=2026043003" />
-    <link rel="stylesheet" href="/css/sample-size.css?v=2026043003" />
+    <link rel="stylesheet" href="/css/sample-size.css?v=2026043004" />
   </head>
   <body>
     <header class="site-header">
@@ -561,7 +561,10 @@
             <p id="result-formula" class="calc-formula-summary" data-testid="text-result-formula"></p>
           </header>
 
-          <!-- Reverse-calculation summary (only shown in reverse mode). -->
+          <!-- Reverse-calculation panel. The headline cards are kept in DOM
+               for backwards-compat tests but visually hidden — the new
+               #result-hero-reverse pair is the user-facing display. The
+               warnings list still surfaces critical messages. -->
           <div
             class="result-reverse"
             id="result-reverse"
@@ -572,6 +575,7 @@
               class="result-headline"
               id="reverse-headline"
               data-testid="list-reverse-headline"
+              hidden
             ></div>
             <ul
               class="analysis-warnings"
@@ -580,8 +584,7 @@
             ></ul>
           </div>
 
-          <!-- HERO PAIR — the two numbers the researcher cares about, side by
-               side and bold. Forward mode only. -->
+          <!-- HERO PAIR — forward mode: Expected vs Significant sample size. -->
           <div class="result-hero" id="result-hero" data-testid="panel-result-hero">
             <div class="hero-stat hero-stat-expected">
               <span class="hero-stat-label">Expected sample size</span>
@@ -597,6 +600,24 @@
               </span>
             </div>
           </div>
+
+          <!-- HERO PAIR — reverse mode: "your sample" vs "what it detects". -->
+          <div class="result-hero" id="result-hero-reverse" hidden data-testid="panel-result-hero-reverse">
+            <div class="hero-stat hero-stat-expected">
+              <span class="hero-stat-label">Your sample size</span>
+              <span class="hero-stat-value" data-testid="text-reverse-yours">—</span>
+              <span class="hero-stat-sublabel" data-testid="text-reverse-yours-sub">what you can recruit</span>
+            </div>
+            <div class="hero-stat hero-stat-significant">
+              <span class="hero-stat-label" data-testid="text-reverse-primary-label">Smallest detectable effect</span>
+              <span class="hero-stat-value" data-testid="text-reverse-primary-value">—</span>
+              <span class="hero-stat-sublabel" data-testid="text-reverse-primary-sub">at the alpha and power you chose</span>
+            </div>
+          </div>
+
+          <!-- Extra detectable stats (e.g. detectable increase + decrease)
+               render here when reverse mode returns more than one. -->
+          <div class="result-hero-extras" id="result-hero-extras" hidden data-testid="panel-result-hero-extras"></div>
 
           <!-- Compact verdict banner (was a large card; now a slim pill+message). -->
           <section class="verdict-card verdict-blue verdict-card-slim" id="verdict-card" data-testid="panel-verdict">
