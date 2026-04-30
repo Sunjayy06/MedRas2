@@ -404,6 +404,387 @@ def anova_means(
     )
 
 
+# ---------------------------------------------------------------------------
+# 7. Repeated measures (longitudinal — two groups, m timepoints)
+# ---------------------------------------------------------------------------
+
+
+def repeated_measures(
+    mean1: float,
+    mean2: float,
+    sigma: float,
+    rho: float,
+    m_timepoints: int,
+    alpha: float = 0.05,
+    power: float = 0.80,
+    dropout: float = 0.0,
+) -> SampleSizeResult:
+    """Two-group comparison with m repeated measurements per subject.
+
+    n_per_group = 2·σ²·(Zα/2 + Zβ)²·(1 + (m−1)·ρ) / (m·Δ²)
+
+    Reference: Diggle, Heagerty, Liang & Zeger (2002), *Analysis of
+    Longitudinal Data*. With m=1 this reduces to the standard two-means
+    formula. As within-subject correlation ρ → 1 the variance factor
+    approaches 1 (no benefit from repeats); as ρ → 0 it approaches 1/m
+    (full benefit).
+    """
+    _check_alpha(alpha)
+    _check_power(power)
+    if sigma <= 0:
+        raise ValueError("σ must be positive.")
+    if mean1 == mean2:
+        raise ValueError("Means must differ — there is no effect to detect.")
+    if not 0 <= rho < 1:
+        raise ValueError("Within-subject correlation ρ must be in [0, 1).")
+    if isinstance(m_timepoints, bool) or not isinstance(m_timepoints, (int, float)):
+        raise ValueError("m_timepoints must be a number.")
+    if isinstance(m_timepoints, float) and not m_timepoints.is_integer():
+        raise ValueError("m_timepoints must be a whole number.")
+    m = int(m_timepoints)
+    if m < 2:
+        raise ValueError(
+            "m_timepoints must be ≥ 2. For a single timepoint use 'two_means'."
+        )
+
+    z_a = z_two_tailed(alpha)
+    z_b = z_power(power)
+    delta = mean1 - mean2
+    var_factor = (1 + (m - 1) * rho) / m
+    n_each = _ceil(2 * (sigma ** 2) * ((z_a + z_b) ** 2) * var_factor / (delta ** 2))
+    total = n_each * 2
+    return SampleSizeResult(
+        formula="repeated_measures",
+        formula_label=f"Two-group longitudinal study ({m} timepoints)",
+        formula_expression=(
+            "n/group = 2·σ²·(Z(α/2) + Z(β))²·(1 + (m−1)·ρ) / (m·Δ²)"
+        ),
+        n_per_group=n_each,
+        number_of_groups=2,
+        total_n=total,
+        adjusted_n=_apply_dropout(total, dropout),
+        inputs={
+            "mean1": mean1,
+            "mean2": mean2,
+            "standard_deviation": sigma,
+            "within_subject_correlation": rho,
+            "number_of_timepoints": m,
+            "alpha": alpha,
+            "power": power,
+            "dropout_rate": dropout,
+        },
+        constants=_round_constants(
+            {
+                "Z_alpha_over_2": z_a,
+                "Z_beta": z_b,
+                "effect_size_diff": abs(delta),
+                "variance_factor": var_factor,
+                "cohens_d": abs(delta) / sigma,
+            }
+        ),
+        notes=[
+            "Use this for longitudinal designs where each participant is "
+            "measured at multiple timepoints and you compare two groups.",
+            f"With ρ={rho} and m={m}, the variance factor is "
+            f"{var_factor:.3f}× the single-timepoint variance.",
+            "Dropout in longitudinal studies is typically larger — consider "
+            "raising your dropout rate above the standard 10–20%.",
+        ],
+    )
+
+
+# ---------------------------------------------------------------------------
+# 8. Linear regression (testing R² with p predictors)
+# ---------------------------------------------------------------------------
+
+
+def linear_regression(
+    r_squared: float,
+    predictors: int,
+    alpha: float = 0.05,
+    power: float = 0.80,
+    dropout: float = 0.0,
+) -> SampleSizeResult:
+    """Sample size for testing R² > 0 in a multiple regression.
+
+    n = (Z(α/2) + Z(β))² · (1−R²) / R²  +  p + 1
+
+    Where p is the number of predictors. The +p+1 absorbs the degrees of
+    freedom lost to estimation. This is Cohen's (1988) z-approximation; for
+    a precise noncentral-F result, use G*Power.
+    """
+    _check_alpha(alpha)
+    _check_power(power)
+    if not 0 < r_squared < 1:
+        raise ValueError("r_squared must be in (0, 1).")
+    if isinstance(predictors, bool) or not isinstance(predictors, (int, float)):
+        raise ValueError("predictors must be a number.")
+    if isinstance(predictors, float) and not predictors.is_integer():
+        raise ValueError("predictors must be a whole number.")
+    p = int(predictors)
+    if p < 1:
+        raise ValueError("predictors must be ≥ 1.")
+
+    z_a = z_two_tailed(alpha)
+    z_b = z_power(power)
+    f_squared = r_squared / (1 - r_squared)
+    n_total = _ceil(((z_a + z_b) ** 2) * (1 - r_squared) / r_squared + p + 1)
+    return SampleSizeResult(
+        formula="linear_regression",
+        formula_label=f"Multiple linear regression ({p} predictor{'s' if p != 1 else ''})",
+        formula_expression="n = (Z(α/2) + Z(β))²·(1−R²)/R² + p + 1",
+        n_per_group=n_total,
+        number_of_groups=1,
+        total_n=n_total,
+        adjusted_n=_apply_dropout(n_total, dropout),
+        inputs={
+            "expected_r_squared": r_squared,
+            "number_of_predictors": p,
+            "alpha": alpha,
+            "power": power,
+            "dropout_rate": dropout,
+        },
+        constants=_round_constants(
+            {
+                "Z_alpha_over_2": z_a,
+                "Z_beta": z_b,
+                "cohens_f_squared": f_squared,
+            }
+        ),
+        notes=[
+            "Use this when the objective is to test whether a multiple "
+            "linear regression model explains a non-zero proportion of "
+            "variance (R² > 0).",
+            "Cohen's f² conventions: small = 0.02, medium = 0.15, large = 0.35.",
+            "Z-approximation; for exact noncentral-F use G*Power.",
+        ],
+    )
+
+
+# ---------------------------------------------------------------------------
+# 9. Prediction model (events-per-variable rule)
+# ---------------------------------------------------------------------------
+
+
+def prediction_model(
+    predictors: int,
+    event_rate: float,
+    epv_target: float = 10.0,
+    dropout: float = 0.0,
+) -> SampleSizeResult:
+    """Total n required to fit a prediction model with a given EPV target.
+
+    n_total = ceil(epv_target × predictors / event_rate)
+
+    The Peduzzi et al. (1996) rule of thumb requires roughly 10 events per
+    candidate predictor (EPV ≥ 10) for a stable logistic-regression model;
+    Riley et al. (2020) refined this with formulas tailored to particular
+    performance targets. Use ``epv_target`` to switch between conservatism
+    levels (e.g. 5, 10, 20).
+
+    Note: this formula does not use α or β — it is a degrees-of-freedom
+    rule, not a power calculation. Use it for sample-size planning of
+    diagnostic / prognostic prediction models.
+    """
+    if isinstance(predictors, bool) or not isinstance(predictors, (int, float)):
+        raise ValueError("predictors must be a number.")
+    if isinstance(predictors, float) and not predictors.is_integer():
+        raise ValueError("predictors must be a whole number.")
+    p = int(predictors)
+    if p < 1:
+        raise ValueError("predictors must be ≥ 1.")
+    if not 0 < event_rate < 1:
+        raise ValueError("event_rate must be in (0, 1).")
+    if epv_target <= 0:
+        raise ValueError("epv_target must be positive.")
+
+    n_events = epv_target * p
+    n_total = _ceil(n_events / event_rate)
+    return SampleSizeResult(
+        formula="prediction_model",
+        formula_label=f"Prediction model ({p} candidate predictor{'s' if p != 1 else ''})",
+        formula_expression="n = ceil(EPV × predictors / event_rate)",
+        n_per_group=n_total,
+        number_of_groups=1,
+        total_n=n_total,
+        adjusted_n=_apply_dropout(n_total, dropout),
+        inputs={
+            "number_of_predictors": p,
+            "event_rate": event_rate,
+            "epv_target": epv_target,
+            "dropout_rate": dropout,
+        },
+        constants=_round_constants(
+            {
+                "required_events": n_events,
+                "events_per_variable": epv_target,
+            }
+        ),
+        notes=[
+            f"Rule of thumb: at least {epv_target:g} event{'s' if epv_target != 1 else ''} "
+            f"per candidate predictor (Peduzzi et al., 1996).",
+            f"Total events needed: {int(math.ceil(n_events))}; "
+            f"with an event rate of {event_rate * 100:.1f}%, this requires "
+            f"{n_total} total participants.",
+            "For a more precise calculation accounting for expected model "
+            "performance, see Riley et al. (2020).",
+        ],
+    )
+
+
+# ---------------------------------------------------------------------------
+# 10. Cohen's kappa (inter-rater agreement)
+# ---------------------------------------------------------------------------
+
+
+def kappa_agreement(
+    expected_kappa: float,
+    precision: float,
+    alpha: float = 0.05,
+    dropout: float = 0.0,
+) -> SampleSizeResult:
+    """Sample size for estimating Cohen's κ within a chosen precision.
+
+    n = Z(α/2)² · κ(1−κ) / d²
+
+    Simplified precision-based formula (Cantor, 1996; Bujang & Baharum,
+    2017). Assumes balanced marginal proportions (~50/50 positive/negative
+    ratings); for highly skewed marginals, the actual variance can be
+    larger. Subjects rated by two raters with a binary outcome.
+    """
+    _check_alpha(alpha)
+    if not 0 < expected_kappa < 1:
+        raise ValueError("expected_kappa must be in (0, 1).")
+    if not 0 < precision < 1:
+        raise ValueError("precision (CI half-width) must be in (0, 1).")
+
+    z_a = z_two_tailed(alpha)
+    n_total = _ceil((z_a ** 2) * expected_kappa * (1 - expected_kappa) / (precision ** 2))
+    return SampleSizeResult(
+        formula="kappa_agreement",
+        formula_label="Cohen's κ (inter-rater agreement, binary outcome)",
+        formula_expression="n = Z(α/2)² · κ(1−κ) / d²",
+        n_per_group=n_total,
+        number_of_groups=1,
+        total_n=n_total,
+        adjusted_n=_apply_dropout(n_total, dropout),
+        inputs={
+            "expected_kappa": expected_kappa,
+            "absolute_precision": precision,
+            "alpha": alpha,
+            "dropout_rate": dropout,
+        },
+        constants=_round_constants(
+            {
+                "Z_alpha_over_2": z_a,
+                "kappa_variance_factor": expected_kappa * (1 - expected_kappa),
+            }
+        ),
+        notes=[
+            "Sample size for estimating κ within ±d at the chosen confidence.",
+            "Assumes balanced marginal proportions (~50/50). For skewed "
+            "marginals, the variance can be larger — confirm with a "
+            "study-specific calculation.",
+            "κ interpretation (Landis & Koch, 1977): 0.0–0.2 slight, "
+            "0.21–0.4 fair, 0.41–0.6 moderate, 0.61–0.8 substantial, "
+            "0.81–1.0 almost perfect.",
+        ],
+    )
+
+
+# ---------------------------------------------------------------------------
+# 11. ROC / AUC (single-test diagnostic accuracy)
+# ---------------------------------------------------------------------------
+
+
+def _hanley_mcneil_q(auc: float) -> tuple:
+    """Hanley & McNeil (1982) Q1 and Q2 — distribution-free variance terms."""
+    q1 = auc / (2 - auc)
+    q2 = 2 * (auc ** 2) / (1 + auc)
+    return q1, q2
+
+
+def roc_auc(
+    auc: float,
+    case_ratio: float,
+    precision: float,
+    alpha: float = 0.05,
+    dropout: float = 0.0,
+) -> SampleSizeResult:
+    """Cases needed to estimate AUC within ±d using Hanley & McNeil (1982).
+
+    Solves for n_cases given the AUC, the controls-per-case ratio (k), and
+    the desired half-width d of the (1−α) CI. With n_b = k · n_a:
+
+        Var(AUC) = [AUC(1−AUC) + (n_a−1)(Q1−AUC²) + (n_b−1)(Q2−AUC²)]
+                   / (n_a · n_b)
+        d = Z(α/2) · √Var(AUC)
+
+    Where Q1 = AUC/(2−AUC) and Q2 = 2·AUC²/(1+AUC). Approximating
+    (n_a − 1) ≈ n_a gives a quadratic in n_a that we solve directly.
+    """
+    _check_alpha(alpha)
+    if not 0.5 < auc < 1:
+        raise ValueError("AUC must be in (0.5, 1) — values ≤ 0.5 indicate no diagnostic value.")
+    if case_ratio <= 0:
+        raise ValueError("case_ratio (controls per case) must be positive.")
+    if not 0 < precision < 0.5:
+        raise ValueError("precision must be in (0, 0.5).")
+
+    z_a = z_two_tailed(alpha)
+    q1, q2 = _hanley_mcneil_q(auc)
+    auc_var = auc * (1 - auc)
+
+    # Quadratic: a·n² + b·n + c = 0 in n_a (cases).
+    a = (precision ** 2) * case_ratio
+    b = -(z_a ** 2) * ((q1 - auc ** 2) + case_ratio * (q2 - auc ** 2))
+    c = -(z_a ** 2) * auc_var
+    discriminant = b ** 2 - 4 * a * c
+    if discriminant < 0:
+        raise ValueError(
+            "Could not solve for n_cases — check inputs (AUC near 0.5 with "
+            "very tight precision needs an enormous sample)."
+        )
+    n_cases = _ceil((-b + math.sqrt(discriminant)) / (2 * a))
+    n_controls = _ceil(case_ratio * n_cases)
+    total = n_cases + n_controls
+    return SampleSizeResult(
+        formula="roc_auc",
+        formula_label="Single-test diagnostic AUC (ROC curve)",
+        formula_expression=(
+            "n_cases solves: d² = Z(α/2)² · "
+            "[AUC(1−AUC) + (n_a−1)(Q1−AUC²) + (n_b−1)(Q2−AUC²)] / (n_a·n_b)"
+        ),
+        n_per_group=n_cases,
+        number_of_groups=1,
+        total_n=total,
+        adjusted_n=_apply_dropout(total, dropout),
+        inputs={
+            "expected_auc": auc,
+            "controls_per_case_ratio": case_ratio,
+            "absolute_precision": precision,
+            "alpha": alpha,
+            "dropout_rate": dropout,
+        },
+        constants=_round_constants(
+            {
+                "Z_alpha_over_2": z_a,
+                "Q1_hanley": q1,
+                "Q2_hanley": q2,
+                "auc_variance_term": auc_var,
+            }
+        ),
+        notes=[
+            f"Required: {n_cases} cases (diseased) plus {n_controls} controls "
+            f"(non-diseased) at a {case_ratio}:1 controls-to-cases ratio.",
+            "Variance from Hanley & McNeil (1982) — distribution-free, "
+            "exponential-derived approximation.",
+            "Interpretation of AUC: 0.5 = no discrimination; 0.7–0.8 = "
+            "acceptable; 0.8–0.9 = excellent; >0.9 = outstanding.",
+        ],
+    )
+
+
 # ===========================================================================
 # REVERSE MODE — back-calculate the smallest effect detectable from a fixed n.
 # ---------------------------------------------------------------------------
@@ -1006,6 +1387,446 @@ def _cohens_f_label(f_val: float) -> str:
     return "large effect (Cohen)"
 
 
+def _cohens_f2_label(f2: float) -> str:
+    if f2 < 0.02:
+        return "below conventional small effect (f² < 0.02)"
+    if f2 < 0.15:
+        return "small effect (Cohen)"
+    if f2 < 0.35:
+        return "medium effect (Cohen)"
+    return "large effect (Cohen)"
+
+
+def _kappa_label(k_val: float) -> str:
+    """Landis & Koch (1977) descriptors for Cohen's κ."""
+    if k_val < 0.0:
+        return "no agreement"
+    if k_val < 0.21:
+        return "slight agreement"
+    if k_val < 0.41:
+        return "fair agreement"
+    if k_val < 0.61:
+        return "moderate agreement"
+    if k_val < 0.81:
+        return "substantial agreement"
+    return "almost perfect agreement"
+
+
+# ---------------------------------------------------------------------------
+# 7r. Reverse — Repeated measures
+# ---------------------------------------------------------------------------
+
+
+def reverse_repeated_measures(
+    sigma: float,
+    rho: float,
+    m_timepoints: int,
+    n_per_group: int,
+    alpha: float = 0.05,
+    power: float = 0.80,
+    dropout: float = 0.0,
+) -> Dict[str, Any]:
+    """Solve the longitudinal formula for the smallest detectable Δ:
+
+        Δ = (Z(α/2) + Z(β)) · σ · √(2·(1 + (m−1)·ρ) / (m·n))
+    """
+    _check_alpha(alpha)
+    _check_power(power)
+    if sigma <= 0:
+        raise ValueError("σ must be positive.")
+    if not 0 <= rho < 1:
+        raise ValueError("ρ must be in [0, 1).")
+    if isinstance(m_timepoints, bool) or not isinstance(m_timepoints, (int, float)):
+        raise ValueError("m_timepoints must be a number.")
+    if isinstance(m_timepoints, float) and not m_timepoints.is_integer():
+        raise ValueError("m_timepoints must be a whole number.")
+    m = int(m_timepoints)
+    if m < 2:
+        raise ValueError("m_timepoints must be ≥ 2.")
+    n_recruited = _coerce_n(n_per_group, "n_per_group", minimum=4)
+    n_keep = _analyzable(n_recruited, dropout)
+    if n_keep < 4:
+        raise ValueError("Need ≥ 4 analysable participants per group after dropout.")
+
+    z_a = z_two_tailed(alpha)
+    z_b = z_power(power)
+    var_factor = (1 + (m - 1) * rho) / m
+    delta = (z_a + z_b) * sigma * math.sqrt(2 * var_factor / n_keep)
+    cohens_d = delta / sigma
+
+    notes = [
+        "We inverted the longitudinal formula for the smallest mean "
+        "difference (Δ) detectable with your per-group sample size.",
+        f"Variance factor with ρ={rho} and m={m}: {var_factor:.3f}.",
+    ]
+    drop = _dropout_note(n_recruited, n_keep, dropout)
+    if drop:
+        notes.append(drop)
+
+    return {
+        "formula": "repeated_measures",
+        "mode": "reverse",
+        "formula_label": f"Two-group longitudinal study ({m} timepoints) — back-calculated Δ",
+        "formula_expression": "solve for Δ:  Δ = (Z(α/2) + Z(β))·σ·√(2·(1+(m−1)ρ)/(m·n))",
+        "inputs": {
+            "standard_deviation": sigma,
+            "within_subject_correlation": rho,
+            "number_of_timepoints": m,
+            "n_per_group_recruited": n_recruited,
+            "n_per_group_analyzable": n_keep,
+            "alpha": alpha,
+            "power": power,
+            "dropout_rate": dropout,
+        },
+        "constants": _round_constants(
+            {"Z_alpha_over_2": z_a, "Z_beta": z_b, "variance_factor": var_factor}
+        ),
+        "headline": [
+            {
+                "label": "Minimum detectable mean difference (Δ)",
+                "value": f"{delta:.3f}",
+                "sublabel": f"Cohen's d ≈ {cohens_d:.3f}",
+            }
+        ],
+        "detectable": {
+            "min_detectable_delta": round(delta, 4),
+            "cohens_d": round(cohens_d, 4),
+        },
+        "notes": notes,
+        "warnings": [],
+    }
+
+
+# ---------------------------------------------------------------------------
+# 8r. Reverse — Linear regression
+# ---------------------------------------------------------------------------
+
+
+def reverse_linear_regression(
+    predictors: int,
+    n: int,
+    alpha: float = 0.05,
+    power: float = 0.80,
+    dropout: float = 0.0,
+) -> Dict[str, Any]:
+    """Solve the regression formula for the smallest detectable R²:
+
+        f² = (Z(α/2) + Z(β))² / (n − p − 1)
+        R² = f² / (1 + f²)
+    """
+    _check_alpha(alpha)
+    _check_power(power)
+    if isinstance(predictors, bool) or not isinstance(predictors, (int, float)):
+        raise ValueError("predictors must be a number.")
+    if isinstance(predictors, float) and not predictors.is_integer():
+        raise ValueError("predictors must be a whole number.")
+    p = int(predictors)
+    if p < 1:
+        raise ValueError("predictors must be ≥ 1.")
+    n_recruited = _coerce_n(n, "n", minimum=p + 5)
+    n_keep = _analyzable(n_recruited, dropout)
+    if n_keep < p + 5:
+        raise ValueError(
+            f"Need ≥ {p + 5} analysable participants after dropout to fit a "
+            f"regression with {p} predictor{'s' if p != 1 else ''}."
+        )
+
+    z_a = z_two_tailed(alpha)
+    z_b = z_power(power)
+    f_squared = ((z_a + z_b) ** 2) / (n_keep - p - 1)
+    r_squared = f_squared / (1 + f_squared)
+
+    notes = [
+        f"We inverted Cohen's z-approximation for R² given n={n_keep} and "
+        f"{p} predictor{'s' if p != 1 else ''}.",
+        "Cohen's f² conventions: small = 0.02, medium = 0.15, large = 0.35.",
+    ]
+    drop = _dropout_note(n_recruited, n_keep, dropout)
+    if drop:
+        notes.append(drop)
+
+    return {
+        "formula": "linear_regression",
+        "mode": "reverse",
+        "formula_label": f"Multiple linear regression ({p} predictor{'s' if p != 1 else ''}) — back-calculated R²",
+        "formula_expression": "solve for R²:  f² = (Z(α/2) + Z(β))² / (n − p − 1);  R² = f²/(1+f²)",
+        "inputs": {
+            "number_of_predictors": p,
+            "n_recruited": n_recruited,
+            "n_analyzable": n_keep,
+            "alpha": alpha,
+            "power": power,
+            "dropout_rate": dropout,
+        },
+        "constants": _round_constants(
+            {"Z_alpha_over_2": z_a, "Z_beta": z_b, "cohens_f_squared": f_squared}
+        ),
+        "headline": [
+            {
+                "label": "Minimum detectable R²",
+                "value": f"{r_squared:.4f}",
+                "sublabel": f"Cohen's f² ≈ {f_squared:.4f} ({_cohens_f2_label(f_squared)})",
+            }
+        ],
+        "detectable": {
+            "min_detectable_r_squared": round(r_squared, 6),
+            "cohens_f_squared": round(f_squared, 6),
+        },
+        "notes": notes,
+        "warnings": [],
+    }
+
+
+# ---------------------------------------------------------------------------
+# 9r. Reverse — Prediction model (max supported predictors)
+# ---------------------------------------------------------------------------
+
+
+def reverse_prediction_model(
+    event_rate: float,
+    n_total: int,
+    epv_target: float = 10.0,
+    dropout: float = 0.0,
+) -> Dict[str, Any]:
+    """Solve the EPV rule for the maximum number of candidate predictors:
+
+        n_events = floor(n × event_rate)
+        max_predictors = floor(n_events / epv_target)
+    """
+    if not 0 < event_rate < 1:
+        raise ValueError("event_rate must be in (0, 1).")
+    if epv_target <= 0:
+        raise ValueError("epv_target must be positive.")
+    n_recruited = _coerce_n(n_total, "n_total", minimum=10)
+    n_keep = _analyzable(n_recruited, dropout)
+    if n_keep < 10:
+        raise ValueError(
+            "Need at least 10 analysable participants to fit any prediction "
+            "model under the EPV rule."
+        )
+
+    n_events = math.floor(n_keep * event_rate)
+    max_predictors = math.floor(n_events / epv_target)
+
+    notes = [
+        f"With n={n_keep} and an event rate of {event_rate * 100:.1f}% you "
+        f"will have ~{n_events} events.",
+        f"At the {epv_target:g}-events-per-variable rule, this supports "
+        f"up to {max_predictors} candidate predictor"
+        f"{'s' if max_predictors != 1 else ''}.",
+    ]
+    drop = _dropout_note(n_recruited, n_keep, dropout)
+    if drop:
+        notes.append(drop)
+    warnings: List[str] = []
+    if max_predictors < 1:
+        warnings.append(
+            "Your sample produces fewer than the events needed for even one "
+            "predictor at this EPV target — increase n, raise the event "
+            "rate, or relax EPV (use with caution)."
+        )
+
+    return {
+        "formula": "prediction_model",
+        "mode": "reverse",
+        "formula_label": "Prediction model — back-calculated maximum predictors",
+        "formula_expression": "max_predictors = floor((n × event_rate) / EPV)",
+        "inputs": {
+            "event_rate": event_rate,
+            "epv_target": epv_target,
+            "n_recruited": n_recruited,
+            "n_analyzable": n_keep,
+            "dropout_rate": dropout,
+        },
+        "constants": _round_constants(
+            {"events_available": float(n_events), "events_per_variable": epv_target}
+        ),
+        "headline": [
+            {
+                "label": "Maximum candidate predictors",
+                "value": str(max_predictors),
+                "sublabel": f"based on ~{n_events} events at EPV = {epv_target:g}",
+            }
+        ],
+        "detectable": {
+            "max_predictors": int(max_predictors),
+            "expected_events": int(n_events),
+        },
+        "notes": notes,
+        "warnings": warnings,
+    }
+
+
+# ---------------------------------------------------------------------------
+# 10r. Reverse — Cohen's kappa
+# ---------------------------------------------------------------------------
+
+
+def reverse_kappa_agreement(
+    expected_kappa: float,
+    n: int,
+    alpha: float = 0.05,
+    dropout: float = 0.0,
+) -> Dict[str, Any]:
+    """Solve the κ-precision formula for the achievable CI half-width:
+
+        d = Z(α/2) · √(κ(1−κ) / n)
+    """
+    _check_alpha(alpha)
+    if not 0 < expected_kappa < 1:
+        raise ValueError("expected_kappa must be in (0, 1).")
+    n_recruited = _coerce_n(n, "n", minimum=10)
+    n_keep = _analyzable(n_recruited, dropout)
+    if n_keep < 10:
+        raise ValueError("Need ≥ 10 analysable subjects to estimate κ.")
+
+    z_a = z_two_tailed(alpha)
+    d = z_a * math.sqrt(expected_kappa * (1 - expected_kappa) / n_keep)
+    ci_low = max(0.0, expected_kappa - d)
+    ci_high = min(1.0, expected_kappa + d)
+
+    notes = [
+        f"Inverted the κ-precision formula for d given n={n_keep} and "
+        f"expected κ={expected_kappa}.",
+        f"Approximate {(1 - alpha) * 100:.0f}% CI: [{ci_low:.3f}, {ci_high:.3f}] "
+        f"around κ={expected_kappa}.",
+        "Assumes balanced marginal proportions (~50/50). Skewed marginals "
+        "produce wider intervals.",
+    ]
+    drop = _dropout_note(n_recruited, n_keep, dropout)
+    if drop:
+        notes.append(drop)
+
+    return {
+        "formula": "kappa_agreement",
+        "mode": "reverse",
+        "formula_label": "Cohen's κ — back-calculated precision",
+        "formula_expression": "solve for d:  d = Z(α/2)·√(κ(1−κ)/n)",
+        "inputs": {
+            "expected_kappa": expected_kappa,
+            "n_recruited": n_recruited,
+            "n_analyzable": n_keep,
+            "alpha": alpha,
+            "dropout_rate": dropout,
+        },
+        "constants": _round_constants(
+            {"Z_alpha_over_2": z_a, "kappa_variance_factor": expected_kappa * (1 - expected_kappa)}
+        ),
+        "headline": [
+            {
+                "label": "Achievable CI half-width (±d)",
+                "value": f"±{d:.3f}",
+                "sublabel": f"approx. {(1 - alpha) * 100:.0f}% CI: [{ci_low:.3f}, {ci_high:.3f}]",
+            },
+            {
+                "label": "Interpretation at expected κ",
+                "value": _kappa_label(expected_kappa),
+                "sublabel": "Landis & Koch (1977)",
+            },
+        ],
+        "detectable": {
+            "achievable_precision": round(d, 4),
+            "ci_low": round(ci_low, 4),
+            "ci_high": round(ci_high, 4),
+        },
+        "notes": notes,
+        "warnings": [],
+    }
+
+
+# ---------------------------------------------------------------------------
+# 11r. Reverse — ROC / AUC
+# ---------------------------------------------------------------------------
+
+
+def reverse_roc_auc(
+    auc: float,
+    case_ratio: float,
+    n_per_group: int,
+    alpha: float = 0.05,
+    dropout: float = 0.0,
+) -> Dict[str, Any]:
+    """Plug the Hanley & McNeil variance into d = Z(α/2)·√Var(AUC).
+
+    ``n_per_group`` is the number of cases (diseased subjects); the number
+    of controls is case_ratio × n_cases.
+    """
+    _check_alpha(alpha)
+    if not 0.5 < auc < 1:
+        raise ValueError("AUC must be in (0.5, 1).")
+    if case_ratio <= 0:
+        raise ValueError("case_ratio must be positive.")
+    n_cases_recruited = _coerce_n(n_per_group, "n_per_group (cases)", minimum=5)
+    n_cases_keep = _analyzable(n_cases_recruited, dropout)
+    if n_cases_keep < 5:
+        raise ValueError("Need ≥ 5 analysable cases after dropout.")
+    n_controls_keep = max(1, math.floor(case_ratio * n_cases_keep))
+
+    z_a = z_two_tailed(alpha)
+    q1, q2 = _hanley_mcneil_q(auc)
+    var = (
+        auc * (1 - auc)
+        + (n_cases_keep - 1) * (q1 - auc ** 2)
+        + (n_controls_keep - 1) * (q2 - auc ** 2)
+    ) / (n_cases_keep * n_controls_keep)
+    if var <= 0:
+        raise ValueError(
+            "Computed AUC variance is non-positive — check inputs (very high "
+            "AUC with very large n can be numerically unstable)."
+        )
+    d = z_a * math.sqrt(var)
+    ci_low = max(0.5, auc - d)
+    ci_high = min(1.0, auc + d)
+
+    notes = [
+        f"Inverted Hanley & McNeil (1982) variance for d given n_cases="
+        f"{n_cases_keep} and n_controls={n_controls_keep}.",
+        f"Approximate {(1 - alpha) * 100:.0f}% CI for AUC: [{ci_low:.3f}, "
+        f"{ci_high:.3f}].",
+    ]
+    drop = _dropout_note(n_cases_recruited, n_cases_keep, dropout)
+    if drop:
+        notes.append(drop)
+
+    return {
+        "formula": "roc_auc",
+        "mode": "reverse",
+        "formula_label": "Single-test diagnostic AUC — back-calculated precision",
+        "formula_expression": "solve for d:  d = Z(α/2)·√Var(AUC)  [Hanley & McNeil 1982]",
+        "inputs": {
+            "expected_auc": auc,
+            "controls_per_case_ratio": case_ratio,
+            "n_cases_recruited": n_cases_recruited,
+            "n_cases_analyzable": n_cases_keep,
+            "n_controls_analyzable": n_controls_keep,
+            "alpha": alpha,
+            "dropout_rate": dropout,
+        },
+        "constants": _round_constants(
+            {
+                "Z_alpha_over_2": z_a,
+                "Q1_hanley": q1,
+                "Q2_hanley": q2,
+                "auc_variance": var,
+            }
+        ),
+        "headline": [
+            {
+                "label": "Achievable CI half-width (±d) for AUC",
+                "value": f"±{d:.4f}",
+                "sublabel": f"{(1 - alpha) * 100:.0f}% CI: [{ci_low:.3f}, {ci_high:.3f}]",
+            }
+        ],
+        "detectable": {
+            "achievable_precision": round(d, 4),
+            "ci_low": round(ci_low, 4),
+            "ci_high": round(ci_high, 4),
+        },
+        "notes": notes,
+        "warnings": [],
+    }
+
+
 # ---------------------------------------------------------------------------
 # Dispatch
 # ---------------------------------------------------------------------------
@@ -1018,6 +1839,11 @@ FORMULAS = {
     "two_means": two_means,
     "paired_means": paired_means,
     "anova_means": anova_means,
+    "repeated_measures": repeated_measures,
+    "linear_regression": linear_regression,
+    "prediction_model": prediction_model,
+    "kappa_agreement": kappa_agreement,
+    "roc_auc": roc_auc,
 }
 
 
@@ -1028,6 +1854,11 @@ REVERSE_FORMULAS = {
     "two_means": reverse_two_means,
     "paired_means": reverse_paired_means,
     "anova_means": reverse_anova_means,
+    "repeated_measures": reverse_repeated_measures,
+    "linear_regression": reverse_linear_regression,
+    "prediction_model": reverse_prediction_model,
+    "kappa_agreement": reverse_kappa_agreement,
+    "roc_auc": reverse_roc_auc,
 }
 
 

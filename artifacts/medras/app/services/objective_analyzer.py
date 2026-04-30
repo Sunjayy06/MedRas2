@@ -42,6 +42,11 @@ VALID_FORMULAS = {
     "two_means",
     "paired_means",
     "anova_means",
+    "repeated_measures",
+    "linear_regression",
+    "prediction_model",
+    "kappa_agreement",
+    "roc_auc",
 }
 
 VALID_OUTCOME_TYPES = {"proportion", "mean", "unknown"}
@@ -50,6 +55,11 @@ VALID_DESIGNS = {
     "comparative",
     "paired",
     "anova",
+    "longitudinal",
+    "regression",
+    "prediction",
+    "agreement",
+    "diagnostic",
     "unknown",
 }
 
@@ -88,7 +98,10 @@ _THREE_PLUS_HINTS = re.compile(
 _TWO_GROUP_HINTS = re.compile(
     r"\b(compare|comparison|versus|vs\.?|between\s+(two|2)\s+groups?|"
     r"(case[ -]control|treatment\s+(vs|versus|and)\s+control|intervention\s+"
-    r"(vs|versus|and)\s+control))\b",
+    r"(vs|versus|and)\s+control)|"
+    # two-arm RCT / 2-arm trial / two arms
+    r"(two|2)[ -]arm(ed)?(\s+(rct|trial|study|design))?|"
+    r"two\s+arms)\b",
     re.IGNORECASE,
 )
 _DESCRIPTIVE_HINTS = re.compile(
@@ -104,6 +117,46 @@ _PROPORTION_OUTCOME = re.compile(
 _MEAN_OUTCOME = re.compile(
     r"\b(mean|average|score|level|concentration|pressure|height|weight|"
     r"bmi|hba1c|cholesterol|reduction\s+in|change\s+in)\b",
+    re.IGNORECASE,
+)
+# Longitudinal / repeated-measures: multiple timepoints per subject.
+_LONGITUDINAL_HINTS = re.compile(
+    r"\b(longitudinal|repeated[ -]?measures?|over\s+time|across\s+time|"
+    r"multiple\s+timepoints?|repeated\s+visits?|follow[ -]?up\s+(at|over)|"
+    r"timepoints?|trajector(y|ies)|"
+    # "across N (monthly|weekly|...) visits/measurements/assessments/follow-ups"
+    r"(across|over|at)\s+\d+\s+(daily|weekly|monthly|quarterly|annual|yearly|"
+    r"baseline|consecutive)?\s*"
+    r"(visits?|measurements?|assessments?|time[ -]?points?|follow[ -]?ups?|months?|weeks?|years?))\b",
+    re.IGNORECASE,
+)
+# Linear / multiple regression context.
+_REGRESSION_HINTS = re.compile(
+    r"\b(linear\s+regression|multiple\s+regression|multivariable\s+regression|"
+    r"regression\s+(model|analysis)|associat(ion|ed)\s+between|"
+    r"predictors?\s+of(?!\s+(survival|outcome\s+in\s+a\s+prediction))|"
+    r"explain\s+variance|r[ -]?squared|r²)\b",
+    re.IGNORECASE,
+)
+# Clinical-prediction / diagnostic-prediction model.
+_PREDICTION_HINTS = re.compile(
+    r"\b(prediction\s+model|predictive\s+model|risk\s+(score|model|prediction)|"
+    r"prognostic\s+model|clinical\s+prediction\s+rule|nomogram|"
+    r"events?\s+per\s+variable|epv)\b",
+    re.IGNORECASE,
+)
+# Inter-/intra-rater agreement (kappa).
+_AGREEMENT_HINTS = re.compile(
+    r"\b(inter[ -]?rater|intra[ -]?rater|inter[ -]?observer|intra[ -]?observer|"
+    r"kappa|cohen'?s\s+k|agreement\s+between|concordance|reliability\s+of\s+"
+    r"(rat(ing|er)s?|observer|measurement))\b",
+    re.IGNORECASE,
+)
+# Diagnostic test accuracy / ROC / AUC.
+_ROC_HINTS = re.compile(
+    r"\b(roc(\s+curve)?|auc|c[ -]?statistic|diagnostic\s+(test|accuracy)|"
+    r"sensitivity\s+and\s+specificity|discrimination\s+of\s+(a|the)\s+test|"
+    r"area\s+under\s+the\s+curve)\b",
     re.IGNORECASE,
 )
 
@@ -148,7 +201,85 @@ def heuristic_analyze(objective: str) -> ObjectiveAnalysis:
     is_descriptive = bool(_DESCRIPTIVE_HINTS.search(text)) and not _TWO_GROUP_HINTS.search(text)
     is_two_group = bool(_TWO_GROUP_HINTS.search(text))
     is_anova_hint = bool(_THREE_PLUS_HINTS.search(text))
+    is_longitudinal = bool(_LONGITUDINAL_HINTS.search(text))
+    is_regression = bool(_REGRESSION_HINTS.search(text))
+    is_prediction = bool(_PREDICTION_HINTS.search(text))
+    is_agreement = bool(_AGREEMENT_HINTS.search(text))
+    is_roc = bool(_ROC_HINTS.search(text))
     outcome = _detect_outcome(text)
+
+    # Specialised designs win over generic comparison/descriptive paths.
+    # Order matters: prediction & ROC mention "predictors"/"diagnostic"
+    # which can also trigger regression/two-group, so we check them first.
+    if is_roc:
+        return ObjectiveAnalysis(
+            objective=text,
+            detected_groups=1,
+            outcome_type="proportion",
+            study_design="diagnostic",
+            suggested_formula="roc_auc",
+            confidence="high",
+            rationale="Detected diagnostic-test / ROC / AUC wording.",
+            source="heuristic",
+            warnings=warnings,
+        )
+    if is_prediction:
+        return ObjectiveAnalysis(
+            objective=text,
+            detected_groups=1,
+            outcome_type="proportion",
+            study_design="prediction",
+            suggested_formula="prediction_model",
+            confidence="high",
+            rationale="Detected clinical-prediction / risk-model wording.",
+            source="heuristic",
+            warnings=warnings,
+        )
+    if is_agreement:
+        return ObjectiveAnalysis(
+            objective=text,
+            detected_groups=1,
+            outcome_type="proportion",
+            study_design="agreement",
+            suggested_formula="kappa_agreement",
+            confidence="high",
+            rationale="Detected inter-rater agreement / κ wording.",
+            source="heuristic",
+            warnings=warnings,
+        )
+    # Longitudinal repeated_measures is a 2-GROUP design — only route here
+    # when the objective gives explicit evidence of two groups. Single-cohort
+    # longitudinal studies fall through to single_mean / single_proportion.
+    if is_longitudinal and (is_two_group or explicit_count == 2):
+        groups = explicit_count if explicit_count == 2 else 2
+        if outcome == "proportion":
+            warnings.append(
+                "Longitudinal calculator currently supports continuous "
+                "outcomes (means). Confirm a mean-based outcome or override."
+            )
+        return ObjectiveAnalysis(
+            objective=text,
+            detected_groups=groups,
+            outcome_type="mean",
+            study_design="longitudinal",
+            suggested_formula="repeated_measures",
+            confidence="high" if not warnings else "medium",
+            rationale="Detected longitudinal / repeated-measures design across timepoints.",
+            source="heuristic",
+            warnings=warnings,
+        )
+    if is_regression and not is_two_group and not is_anova_hint:
+        return ObjectiveAnalysis(
+            objective=text,
+            detected_groups=1,
+            outcome_type="mean",
+            study_design="regression",
+            suggested_formula="linear_regression",
+            confidence="high",
+            rationale="Detected regression / multivariable-association wording.",
+            source="heuristic",
+            warnings=warnings,
+        )
 
     # Resolve the design / group count.
     if is_paired:
@@ -263,12 +394,17 @@ _LLM_INSTRUCTIONS = """\
 Return a JSON object with exactly these keys:
 
 - detected_groups: integer number of comparison groups in the study
-  (1 for single-sample/prevalence/paired, 2 for two-arm, ≥3 for ANOVA)
+  (1 for single-sample/prevalence/paired/regression/prediction/agreement/
+  diagnostic, 2 for two-arm or two-group longitudinal, ≥3 for ANOVA)
 - outcome_type: one of "proportion", "mean", "unknown"
-- study_design: one of "descriptive", "comparative", "paired", "anova", "unknown"
+- study_design: one of "descriptive", "comparative", "paired", "anova",
+  "longitudinal", "regression", "prediction", "agreement", "diagnostic",
+  "unknown"
 - suggested_formula: one of:
     "single_proportion", "single_mean", "two_proportions",
-    "two_means", "paired_means", "anova_means"
+    "two_means", "paired_means", "anova_means",
+    "repeated_measures", "linear_regression", "prediction_model",
+    "kappa_agreement", "roc_auc"
 - confidence: "high" | "medium" | "low"
 - rationale: one short sentence explaining the choice.
 
@@ -279,6 +415,16 @@ Decision guidance:
 - "Compare two means/scores between A and B" → two_means
 - "Pre vs post / before vs after / matched pairs" → paired_means
 - "Compare 3 or more groups" → anova_means
+- "Two groups followed over time / multiple timepoints / longitudinal /
+   trajectory" → repeated_measures
+- "Multiple/multivariable linear regression / association of several
+   predictors with a continuous outcome / R²" → linear_regression
+- "Develop / validate a clinical prediction model / risk score / EPV /
+   prognostic model" → prediction_model
+- "Inter-rater / intra-rater agreement / Cohen's κ / concordance between
+   raters" → kappa_agreement
+- "Diagnostic test accuracy / sensitivity & specificity / AUC / ROC /
+   c-statistic" → roc_auc
 
 Output JSON only. No markdown. No commentary.
 """

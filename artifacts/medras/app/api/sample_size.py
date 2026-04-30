@@ -56,6 +56,11 @@ class CalculateRequest(BaseModel):
         "two_means",
         "paired_means",
         "anova_means",
+        "repeated_measures",
+        "linear_regression",
+        "prediction_model",
+        "kappa_agreement",
+        "roc_auc",
     ]
     parameters: Dict[str, Any]
     expected_sample_size: Optional[int] = Field(
@@ -105,6 +110,11 @@ class ReverseRequest(BaseModel):
         "two_means",
         "paired_means",
         "anova_means",
+        "repeated_measures",
+        "linear_regression",
+        "prediction_model",
+        "kappa_agreement",
+        "roc_auc",
     ]
     parameters: Dict[str, Any]
 

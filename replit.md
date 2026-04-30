@@ -45,29 +45,54 @@ Each new module gets its own router file under `app/api/<module>.py` and is moun
 
 - **Module 02 — Sample Size Calculator** (`/sample-size.html`)
   - Three-step UI: enter objective → choose/confirm formula and parameters → view result.
-  - Backend endpoints: `POST /api/sample-size/analyze`, `POST /api/sample-size/calculate`.
-  - Supported formulas: single proportion, single mean, two independent proportions,
-    two independent means, paired means (before–after), one-way ANOVA (≥3 groups,
-    normal-approx).
+  - Backend endpoints: `POST /api/sample-size/analyze`, `POST /api/sample-size/calculate`, `POST /api/sample-size/reverse`.
+  - **11 supported formulas** (forward + reverse for each):
+      - Descriptive: `single_proportion`, `single_mean`
+      - Comparative: `two_proportions`, `two_means`, `paired_means`,
+        `anova_means` (one-way, ≥3 groups, normal-approx)
+      - Longitudinal: `repeated_measures` (two groups across m timepoints,
+        Diggle variance factor (1+(m−1)ρ)/m)
+      - Modelling: `linear_regression` (Cohen R²/f² formula),
+        `prediction_model` (events-per-variable rule, Peduzzi 1996;
+        does NOT use α or β)
+      - Agreement / diagnostic: `kappa_agreement` (Cohen's κ precision),
+        `roc_auc` (Hanley & McNeil 1982 AUC variance, solved as a
+        quadratic in n_cases)
   - Objective analyzer uses OpenAI when `OPENAI_API_KEY` is set; otherwise a
-    rule-based heuristic classifies group count, outcome type, and study design.
+    rule-based heuristic classifies group count, outcome type, and study
+    design. Specialised regex hints route to longitudinal / regression /
+    prediction / agreement / diagnostic before falling back to the generic
+    descriptive vs comparative paths.
   - Z-scores derived from Acklam's inverse-normal algorithm (no SciPy dependency).
   - Result panel always shows: per-group n, statistically-required total, dropout-
     adjusted total, full input list, all derived constants (Z(α/2), Z(β), p̄, …),
     and an optional comparison against the researcher's expected sample size.
-  - **Reverse mode (all 6 formulas):** when the researcher knows what they
-    can recruit but doesn't have a pre-specified effect size, a checkbox on
-    step 2 swaps the form into back-calculation mode and solves the chosen
-    formula for the smallest effect the available n can detect:
+  - **Mode dropdown on step 2** ("What information do you have for this
+    study?") replaces the older reverse-mode checkbox. Two options:
+      - *forward* — the researcher has the statistical inputs (effect
+        size, precision, α, β, …) and wants the required sample size.
+      - *reverse* — the researcher only has an expected sample size and
+        wants the formula solved for the smallest detectable effect /
+        precision / max-predictors / etc.
+    The dropdown's helper text is rewritten per-formula to describe what
+    "back-calculate" means for that specific test.
+  - **Reverse-mode targets** per formula:
       - single_proportion / single_mean → smallest precision (margin of error)
       - two_proportions → smallest detectable p₂ in each direction (bisection)
       - two_means → smallest detectable Δ (plus equivalent Cohen's d)
       - paired_means → smallest detectable within-pair Δ (plus dz)
-      - anova_means → smallest detectable Cohen's f (plus qualitative label)
-    Single endpoint: `POST /api/sample-size/reverse` with body
-    `{formula, parameters}`. The response carries a uniform `headline[]`
-    array of `{label, value, sublabel?}` so the frontend renders any
-    formula's reverse result through one generic component.
+      - anova_means → smallest detectable Cohen's f
+      - repeated_measures → smallest detectable Δ across m timepoints
+      - linear_regression → smallest detectable R² (and Cohen's f²)
+      - prediction_model → maximum candidate predictors at the EPV target
+      - kappa_agreement → tightest achievable CI half-width around κ
+      - roc_auc → tightest achievable CI half-width around the AUC
+    All reverse responses share the same shape:
+    `{formula, mode, formula_label, formula_expression, inputs, constants,
+      headline[], detectable, notes, warnings}`.
+  - JS spec flags `usesAlpha` and `usesPower` per formula gate which
+    statistical-assumption fields are sent and shown — `prediction_model`
+    sets both to `false` because the EPV rule is rule-of-thumb based.
 - Other five modules: scaffolded on the landing page, not yet implemented.
 
 ## Environment Variables

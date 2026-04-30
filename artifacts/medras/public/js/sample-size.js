@@ -134,6 +134,132 @@
         },
       ],
     },
+    repeated_measures: {
+      label: "Two-group longitudinal (repeated measures)",
+      expression: "n/group = 2·σ²·(Z(α/2) + Z(β))²·(1 + (m−1)·ρ) / (m·Δ²)",
+      usesPower: true,
+      fields: [
+        {
+          key: "mean1",
+          label: "Mean in group 1 (μ₁)",
+          help: "Expected mean across the m timepoints in group 1.",
+          type: "number", step: 0.1, placeholder: "e.g., 130",
+        },
+        {
+          key: "mean2",
+          label: "Mean in group 2 (μ₂)",
+          help: "Expected mean across the m timepoints in group 2.",
+          type: "number", step: 0.1, placeholder: "e.g., 122",
+        },
+        {
+          key: "sigma",
+          label: "Standard deviation (σ)",
+          help: "Outcome SD at any single timepoint (assumed equal across timepoints and groups).",
+          type: "number", min: 0.0001, step: 0.1, placeholder: "e.g., 15",
+        },
+        {
+          key: "rho",
+          label: "Within-subject correlation (ρ)",
+          help: "Correlation between repeated measurements on the same subject (0 = independent, 1 = perfect).",
+          type: "number", min: 0, max: 0.999, step: 0.05, placeholder: "e.g., 0.50",
+        },
+        {
+          key: "m_timepoints",
+          label: "Number of timepoints (m)",
+          help: "How many times each subject is measured. Must be ≥ 2.",
+          type: "number", min: 2, max: 50, step: 1, placeholder: "e.g., 4",
+        },
+      ],
+    },
+    linear_regression: {
+      label: "Multiple linear regression (R²)",
+      expression: "n = (Z(α/2) + Z(β))²·(1−R²)/R² + p + 1",
+      usesPower: true,
+      fields: [
+        {
+          key: "r_squared",
+          label: "Expected R² (proportion of variance explained)",
+          help: "Cohen's f² conventions: small = 0.02 (R²≈0.02), medium = 0.15 (R²≈0.13), large = 0.35 (R²≈0.26).",
+          type: "number", min: 0.001, max: 0.999, step: 0.01, placeholder: "e.g., 0.13",
+        },
+        {
+          key: "predictors",
+          label: "Number of predictors (p)",
+          help: "Number of independent variables in the model.",
+          type: "number", min: 1, max: 100, step: 1, placeholder: "e.g., 4",
+        },
+      ],
+    },
+    prediction_model: {
+      label: "Clinical prediction model (events per variable)",
+      expression: "n = ceil(EPV × predictors / event_rate)",
+      usesPower: false,
+      usesAlpha: false,
+      fields: [
+        {
+          key: "predictors",
+          label: "Number of candidate predictors",
+          help: "How many variables you intend to consider for the model.",
+          type: "number", min: 1, max: 100, step: 1, placeholder: "e.g., 8",
+        },
+        {
+          key: "event_rate",
+          label: "Expected event rate",
+          help: "Proportion of participants expected to have the outcome (e.g., 0.20 for 20%).",
+          type: "number", min: 0.001, max: 0.999, step: 0.01, placeholder: "e.g., 0.20",
+        },
+        {
+          key: "epv_target",
+          label: "Events per variable (EPV target)",
+          help: "Conservatism: 5 = liberal, 10 = standard (Peduzzi et al. 1996), 20 = strict.",
+          type: "number", min: 1, max: 100, step: 1, placeholder: "e.g., 10",
+        },
+      ],
+    },
+    kappa_agreement: {
+      label: "Cohen's κ (inter-rater agreement)",
+      expression: "n = Z(α/2)² · κ(1−κ) / d²",
+      usesPower: false,
+      fields: [
+        {
+          key: "expected_kappa",
+          label: "Expected κ",
+          help: "Anticipated agreement level (0–1). Landis & Koch: 0.41–0.6 moderate, 0.61–0.8 substantial.",
+          type: "number", min: 0.001, max: 0.999, step: 0.01, placeholder: "e.g., 0.70",
+        },
+        {
+          key: "precision",
+          label: "Absolute precision / CI half-width (d)",
+          help: "Acceptable distance from the true κ, e.g., 0.10 for ±0.10.",
+          type: "number", min: 0.001, max: 0.499, step: 0.01, placeholder: "e.g., 0.10",
+        },
+      ],
+    },
+    roc_auc: {
+      label: "Diagnostic test ROC / AUC",
+      expression: "n_cases solves d² = Z(α/2)²·Var(AUC) [Hanley & McNeil 1982]",
+      usesPower: false,
+      fields: [
+        {
+          key: "auc",
+          label: "Expected AUC",
+          help: "Anticipated area under the ROC curve (between 0.5 and 1).",
+          type: "number", min: 0.51, max: 0.999, step: 0.01, placeholder: "e.g., 0.80",
+        },
+        {
+          key: "case_ratio",
+          label: "Controls per case (k)",
+          help: "How many non-diseased subjects per diseased subject (1 = balanced).",
+          type: "number", min: 0.1, max: 20, step: 0.1, placeholder: "e.g., 1",
+        },
+        {
+          key: "precision",
+          label: "Absolute precision / CI half-width for AUC (d)",
+          help: "How tight a confidence interval you want around the AUC, e.g., 0.05 for ±0.05.",
+          type: "number", min: 0.005, max: 0.499, step: 0.005, placeholder: "e.g., 0.05",
+        },
+      ],
+    },
   };
 
   // -----------------------------------------------------------------------
@@ -174,15 +300,13 @@
 
   function bindStep2() {
     document.getElementById("formula-select").addEventListener("change", function (event) {
-      // Switching formulas resets reverse mode so each formula starts at its
-      // own forward-calc default.
-      state.reverseMode = false;
-      var toggle = document.getElementById("reverse-toggle");
-      if (toggle) toggle.checked = false;
+      // Switching formulas keeps the chosen mode (forward / reverse) so that
+      // a researcher who picked "I only have a sample size" doesn't have to
+      // re-select it after browsing the formula list.
       renderFormulaFields(event.target.value);
     });
-    document.getElementById("reverse-toggle").addEventListener("change", function (event) {
-      state.reverseMode = !!event.target.checked;
+    document.getElementById("mode-select").addEventListener("change", function (event) {
+      state.reverseMode = event.target.value === "reverse";
       renderFormulaFields(state.selectedFormula);
     });
     document.getElementById("calculate-btn").addEventListener("click", onCalculate);
@@ -217,10 +341,8 @@
     document.getElementById("alpha").value = "0.05";
     document.getElementById("power").value = "0.80";
     document.getElementById("dropout").value = "0";
-    var toggle = document.getElementById("reverse-toggle");
-    if (toggle) toggle.checked = false;
-    // Toggle wrapper itself stays in the DOM but is irrelevant on step 1;
-    // it'll be unhidden again when renderFormulaFields runs on step 2.
+    var modeSel = document.getElementById("mode-select");
+    if (modeSel) modeSel.value = "forward";
     var panel = document.getElementById("analysis-panel");
     if (panel) panel.hidden = true;
     var err = document.getElementById("parameters-error");
@@ -347,6 +469,58 @@
       solvesFor: "the smallest detectable Cohen's f",
       detail: "Back-calculate the smallest between-group spread my sample can detect.",
     },
+    repeated_measures: {
+      removeFields: ["mean1", "mean2"],
+      nField: nField(
+        "n_per_group",
+        "Available sample size per group",
+        "How many subjects in each of the two longitudinal arms."
+      ),
+      solvesFor: "the smallest detectable mean difference (Δ) across timepoints",
+      detail: "Back-calculate the smallest Δ my longitudinal sample can detect.",
+    },
+    linear_regression: {
+      removeFields: ["r_squared"],
+      nField: nField(
+        "n",
+        "Available sample size",
+        "How many participants you can recruit for the regression model."
+      ),
+      solvesFor: "the smallest detectable R² (and Cohen's f²)",
+      detail: "Back-calculate the smallest R² my sample can detect with this number of predictors.",
+    },
+    prediction_model: {
+      removeFields: ["predictors"],
+      nField: nField(
+        "n_total",
+        "Available total sample size",
+        "Total number of participants for model development."
+      ),
+      solvesFor: "the maximum number of candidate predictors my sample can support",
+      detail: "Back-calculate the maximum predictors the EPV rule allows for my sample.",
+    },
+    kappa_agreement: {
+      removeFields: ["precision"],
+      nField: nField(
+        "n",
+        "Available number of subjects",
+        "How many items / subjects two raters will independently rate.",
+        10
+      ),
+      solvesFor: "the achievable precision (CI half-width) around κ",
+      detail: "Back-calculate the tightest CI around κ my sample size can support.",
+    },
+    roc_auc: {
+      removeFields: ["precision"],
+      nField: nField(
+        "n_per_group",
+        "Available number of cases (diseased)",
+        "Controls will be added in proportion to the case-ratio you set above.",
+        5
+      ),
+      solvesFor: "the achievable precision (CI half-width) around the AUC",
+      detail: "Back-calculate the tightest CI around the AUC my case sample can support.",
+    },
   };
 
   function nField(key, label, help, minN) {
@@ -368,14 +542,23 @@
     var revSpec = REVERSE_SPECS[formulaKey];
     document.getElementById("formula-select").value = formulaKey;
 
-    // Every formula now has a reverse mode, so the toggle is always visible.
-    var toggleWrap = document.getElementById("reverse-toggle-wrap");
-    if (toggleWrap) toggleWrap.hidden = false;
+    // Keep the mode dropdown in sync with state and visible for every formula.
+    var modeWrap = document.getElementById("mode-select-wrap");
+    if (modeWrap) modeWrap.hidden = false;
+    var modeSelect = document.getElementById("mode-select");
+    if (modeSelect) {
+      modeSelect.value = state.reverseMode ? "reverse" : "forward";
+    }
 
-    // Update the toggle's secondary text so it accurately describes what
+    // Update the dropdown's helper text so it accurately describes what
     // back-calculation means for THIS specific formula.
-    var detail = document.getElementById("reverse-toggle-detail");
-    if (detail && revSpec) detail.textContent = revSpec.detail;
+    var detail = document.getElementById("mode-select-detail");
+    if (detail && revSpec) {
+      detail.textContent =
+        "If you choose the second option, this calculator will " +
+        revSpec.detail.charAt(0).toLowerCase() +
+        revSpec.detail.slice(1);
+    }
 
     // Build the per-formula fields. In reverse mode swap the "unknown
     // effect" input(s) for the available-n field.
@@ -404,6 +587,14 @@
     var powerField = document.querySelector("[data-power-field]");
     if (powerField) {
       powerField.style.display = spec.usesPower ? "" : "none";
+    }
+
+    // A handful of formulas (prediction_model) don't use α at all because
+    // they're rule-of-thumb based rather than hypothesis-test based.
+    var usesAlpha = spec.usesAlpha !== false;
+    var alphaField = document.querySelector("[data-alpha-field]");
+    if (alphaField) {
+      alphaField.style.display = usesAlpha ? "" : "none";
     }
 
     // The "expected sample size" target is meaningless in reverse mode —
@@ -477,17 +668,27 @@
         missing.push(field.label);
         return;
       }
-      // Sample-size fields must be whole numbers; the API rejects fractional n.
-      if (field.key === "n" || field.key === "n_per_group" || field.key === "k") {
+      // Sample-size and other discrete-count fields must be whole numbers;
+      // the API rejects fractional n / predictors / timepoints.
+      if (
+        field.key === "n" ||
+        field.key === "n_per_group" ||
+        field.key === "n_total" ||
+        field.key === "k" ||
+        field.key === "predictors" ||
+        field.key === "m_timepoints" ||
+        field.key === "epv_target"
+      ) {
         num = Math.floor(num);
       }
       params[field.key] = num;
     });
 
-    var alpha = Number(document.getElementById("alpha").value);
     var dropout = Number(document.getElementById("dropout").value);
-    params.alpha = alpha;
     params.dropout = dropout;
+    if (spec.usesAlpha !== false) {
+      params.alpha = Number(document.getElementById("alpha").value);
+    }
     if (spec.usesPower) {
       params.power = Number(document.getElementById("power").value);
     }
@@ -722,6 +923,23 @@
     n_per_group_analyzable: "Analysable n per group (after dropout)",
     n_recruited: "Available n (recruited)",
     n_analyzable: "Analysable n (after dropout)",
+    // Repeated measures
+    within_subject_correlation: "Within-subject correlation (ρ)",
+    number_of_timepoints: "Number of timepoints (m)",
+    // Linear regression
+    expected_r_squared: "Expected R² (variance explained)",
+    number_of_predictors: "Number of predictors (p)",
+    // Prediction model
+    event_rate: "Expected event rate",
+    epv_target: "Events per variable (EPV target)",
+    // Kappa
+    expected_kappa: "Expected κ",
+    // ROC / AUC
+    expected_auc: "Expected AUC",
+    controls_per_case_ratio: "Controls per case (k)",
+    n_cases_recruited: "Available cases (recruited)",
+    n_cases_analyzable: "Analysable cases (after dropout)",
+    n_controls_analyzable: "Analysable controls (after dropout)",
   };
 
   var CONSTANT_LABELS = {
@@ -732,6 +950,19 @@
     effect_size_diff: "Effect size (absolute difference)",
     cohens_d: "Cohen's d",
     effect_size_dz: "Cohen's d_z (paired)",
+    // Repeated measures
+    variance_factor: "Variance factor (1 + (m−1)ρ) / m",
+    // Linear regression
+    cohens_f_squared: "Cohen's f²",
+    // Prediction model
+    events_available: "Expected events (n × event_rate)",
+    events_per_variable: "Events per variable (target)",
+    // Kappa
+    kappa_variance_factor: "κ × (1 − κ)",
+    // ROC / AUC
+    Q1_hanley: "Q₁ (Hanley-McNeil)",
+    Q2_hanley: "Q₂ (Hanley-McNeil)",
+    auc_variance: "Var(AUC)",
   };
 
   function fillTable(testid, obj, labels) {

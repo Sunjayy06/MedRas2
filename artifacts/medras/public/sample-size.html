@@ -122,37 +122,52 @@
             <div class="field">
               <label class="field-label" for="formula-select">Formula</label>
               <select id="formula-select" class="field-input" data-testid="select-formula">
-                <option value="single_proportion">Single proportion (one-sample prevalence)</option>
-                <option value="single_mean">Single mean (one-sample, continuous)</option>
-                <option value="two_proportions">Two independent proportions</option>
-                <option value="two_means">Two independent means</option>
-                <option value="paired_means">Paired means (before–after / matched)</option>
-                <option value="anova_means">One-way ANOVA (≥3 groups)</option>
+                <optgroup label="Descriptive (one sample)">
+                  <option value="single_proportion">Single proportion (one-sample prevalence)</option>
+                  <option value="single_mean">Single mean (one-sample, continuous)</option>
+                </optgroup>
+                <optgroup label="Comparative">
+                  <option value="two_proportions">Two independent proportions</option>
+                  <option value="two_means">Two independent means</option>
+                  <option value="paired_means">Paired means (before–after / matched)</option>
+                  <option value="anova_means">One-way ANOVA (≥3 groups)</option>
+                </optgroup>
+                <optgroup label="Longitudinal / repeated measures">
+                  <option value="repeated_measures">Two groups across multiple timepoints</option>
+                </optgroup>
+                <optgroup label="Modelling">
+                  <option value="linear_regression">Multiple linear regression (R²)</option>
+                  <option value="prediction_model">Clinical prediction model (events per variable)</option>
+                </optgroup>
+                <optgroup label="Agreement / diagnostic">
+                  <option value="kappa_agreement">Cohen's κ (inter-rater agreement)</option>
+                  <option value="roc_auc">Diagnostic test ROC / AUC</option>
+                </optgroup>
               </select>
             </div>
           </div>
 
           <div
-            class="reverse-toggle"
-            id="reverse-toggle-wrap"
-            data-testid="panel-reverse-toggle"
+            class="mode-select"
+            id="mode-select-wrap"
+            data-testid="panel-mode-select"
           >
-            <label class="reverse-toggle-label">
-              <input
-                type="checkbox"
-                id="reverse-toggle"
-                data-testid="checkbox-reverse"
-              />
-              <span>
-                <strong id="reverse-toggle-headline">
-                  I do not know the effect size yet.
-                </strong>
-                <span id="reverse-toggle-detail">
-                  Back-calculate the smallest effect my available sample
-                  size can detect.
-                </span>
-              </span>
+            <label class="field-label" for="mode-select">
+              <strong>What information do you have for this study?</strong>
             </label>
+            <select id="mode-select" class="field-input" data-testid="select-mode">
+              <option value="forward" selected>
+                I have the statistical inputs (effect size, precision, α, β, …) — calculate required sample size
+              </option>
+              <option value="reverse">
+                I only have an expected sample size — back-calculate the smallest detectable effect
+              </option>
+            </select>
+            <p class="field-help" id="mode-select-detail">
+              Pick the second option if you know how many participants you can recruit
+              but do not yet have a pre-specified effect size, precision, or other
+              parameter the formula needs.
+            </p>
           </div>
 
           <div id="formula-fields" data-testid="fields-formula"></div>
@@ -160,7 +175,7 @@
           <fieldset class="field-group">
             <legend>Statistical assumptions</legend>
             <div class="field-row">
-              <div class="field">
+              <div class="field" data-alpha-field>
                 <label class="field-label" for="alpha">Alpha (α — Type I error)</label>
                 <select id="alpha" class="field-input" data-testid="select-alpha">
                   <option value="0.05" selected>0.05 (95% confidence)</option>
