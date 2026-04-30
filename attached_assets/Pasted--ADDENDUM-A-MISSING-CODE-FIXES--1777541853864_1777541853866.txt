@@ -1,0 +1,883 @@
+════════════════════════════════════════════════════════
+ADDENDUM A — MISSING CODE FIXES
+════════════════════════════════════════════════════════
+
+CORRECTED INSTALL COMMAND (replace previous one):
+
+pip install pandas numpy openpyxl xlrd scipy statsmodels 
+scikit-learn lifelines pingouin matplotlib seaborn 
+python-docx reportlab jinja2 missingno scikit-posthocs 
+--break-system-packages
+
+REMOVED: fancyimpute (conflicts with sklearn)
+ADDED:   missingno (missing data heatmap visualisation)
+ADDED:   scikit-posthocs (Dunn's test for post-hoc)
+
+Use ONLY sklearn.impute.IterativeImputer for MICE.
+Do NOT use fancyimpute anywhere in the codebase.
+
+════════════════════════════════════════════════════════
+ADDENDUM B — MISSING API ENDPOINTS
+════════════════════════════════════════════════════════
+
+Add these endpoints alongside the existing ones:
+
+POST /api/stats/convert-format
+  Input:  Excel file + format declaration (wide/long)
+          + patient ID column name
+          + timepoint column names (list)
+          + variable columns to melt (list)
+  Output: Converted long-format Excel file for download
+          + preview of first 10 rows
+  Logic:  pandas.melt() for wide-to-long
+          Validate: same patient appears correctly per row
+
+POST /api/stats/generate-dummy
+  Input:  study_type (anaemia/diabetes/hypertension/custom)
+          n_patients (integer)
+          n_groups (1/2/3)
+          custom_variables (list, only if custom)
+          missing_pct (default 5%)
+  Output: Generated Excel file for download
+          + dataset summary (n rows, columns, distributions)
+  Logic:  numpy random with realistic medical distributions
+          Log-normal for lab values (always positive)
+          Normal for age, weight, height
+          Binomial for categorical variables
+
+POST /api/stats/power-check
+  Input:  n_collected (integer)
+          study_type (string)
+          alpha (default 0.05)
+          effect_size (detected from data or user input)
+          n_groups (integer)
+  Output: achieved_power (%)
+          verdict: "Adequate (≥80%)" / 
+                   "Borderline (60-79%)" / 
+                   "Underpowered (<60%)"
+          recommendation: continue / stop / add patients
+  Logic:  statsmodels.stats.power for power calculation
+          pingouin.power_ttest / power_anova / power_chi2
+
+POST /api/stats/merge-datasets
+  Input:  List of Excel files (from multiple users/doctors)
+          merge_key: column name to match on 
+                     (Patient_ID / Phone / Aadhaar / Family_ID)
+          conflict_resolution: keep_first / keep_latest / flag
+  Output: Merged Excel dataset
+          Conflict report: rows that could not be matched
+          Duplicate report: exact duplicates removed
+  Logic:
+    Step 1: Load all files into separate DataFrames
+    Step 2: Attempt merge on primary key (Patient_ID)
+    Step 3: If no match, try secondary keys 
+            (Phone, then Aadhaar, then Family_ID)
+    Step 4: For duplicates with different values:
+              If conflict_resolution = keep_latest:
+                Use row with most recent date/timestamp
+              If conflict_resolution = flag:
+                Keep all, add "CONFLICT" column = True
+    Step 5: Report: n merged, n conflicts, n duplicates removed
+
+GET /api/stats/progress/{job_id}
+  Returns: current phase name, % complete, 
+           estimated time remaining
+  Use Server-Sent Events (SSE) for real-time updates
+  
+  Progress states:
+    10% — Reading Excel file
+    20% — Classifying variables
+    30% — Checking data quality
+    40% — Running normality tests
+    50% — Executing statistical tests
+    65% — Generating graphs
+    80% — Writing interpretation
+    90% — Compiling report
+    100% — Complete — download ready
+
+════════════════════════════════════════════════════════
+ADDENDUM C — SAMPLE SIZE INTEGRATION
+════════════════════════════════════════════════════════
+
+After Phase 1 (Excel upload), before Phase 5 
+(variable assignment), add this integration step:
+
+STEP: SAMPLE SIZE VALIDATION
+
+  C1: ASK USER
+    "Do you know the required sample size for your study?"
+    Options:
+      A) Yes — enter it: [number input]
+      B) Calculate it now (link to sample size module)
+      C) Skip (analyse with available data)
+
+  C2: IF SAMPLE SIZE KNOWN OR CALCULATED
+    Compare: n_required vs n_collected
+    
+    If n_collected >= n_required:
+      Show GREEN banner:
+      "Your dataset has [n] patients. 
+       Required sample size: [n_required]. 
+       Your study is adequately powered."
+    
+    If n_collected is 80-99% of n_required:
+      Show AMBER banner:
+      "Your dataset has [n] patients. 
+       Required sample size: [n_required]. 
+       You are [X] patients short. 
+       Study may be slightly underpowered. 
+       Proceed with caution."
+    
+    If n_collected < 80% of n_required:
+      Show RED banner:
+      "WARNING: Your dataset has [n] patients 
+       but [n_required] are required. 
+       This study is underpowered — results 
+       may miss real effects (Type II error risk). 
+       Options:
+       [Collect more data] [Proceed anyway with disclaimer]"
+    
+    If user proceeds with underpowered data:
+      Add automatic disclaimer to report:
+      "LIMITATION: The sample size in this study 
+      ([n] participants) is below the calculated 
+      requirement ([n_required]). Results should 
+      be interpreted with caution. The study may 
+      be underpowered to detect the anticipated 
+      effect size, and findings should be validated 
+      in a larger cohort."
+
+  C3: POST-HOC POWER CALCULATION
+    After running any comparison test, 
+    automatically calculate and display:
+    
+    "Achieved statistical power: [X]%"
+    
+    For t-test:
+      statsmodels.stats.power.TTestIndPower
+      solve_power(effect_size=cohen_d, 
+                  nobs1=n_group1, alpha=0.05, 
+                  ratio=n_group2/n_group1)
+    
+    For ANOVA:
+      statsmodels.stats.power.FTestAnovaPower
+    
+    For Chi-square:
+      statsmodels.stats.power.GofChisquarePower
+    
+    Show in results panel:
+    "Power of this test: [X]%
+     [Interpretation: adequate ≥80% / 
+                      borderline 60-79% / 
+                      underpowered <60%]"
+    
+    Include in report footnote for each table.
+
+════════════════════════════════════════════════════════
+ADDENDUM D — MULTI-USER AND FAMILY DATA HANDLING
+════════════════════════════════════════════════════════
+
+  D1: MULTI-USER DATA MERGING UI
+    Add new entry option on the upload screen:
+    
+    "Merging data from multiple collectors?"
+    Toggle: Single file / Multiple files
+    
+    If Multiple files:
+      File upload zone that accepts multiple Excel files
+      "Upload all files from all data collectors"
+      
+      Ask: "Which column identifies each patient?"
+      Options:
+        Patient ID
+        Phone number
+        Aadhaar number
+        Custom column name
+      
+      Run POST /api/stats/merge-datasets
+      Show merge report before proceeding:
+        "[n] patients merged successfully"
+        "[n] conflicts found (same ID, different values)"
+        "[n] duplicates removed"
+        "[n] patients could not be matched"
+      
+      For conflicts: show conflict resolution table
+        | Patient | Column | Value in File 1 | Value in File 2 | Keep |
+        User resolves each conflict or applies bulk rule
+
+  D2: FAMILY-LINKED DATA STRUCTURE
+    Detect if dataset has Family_ID column
+    
+    If Family_ID detected:
+      Ask: "Is this a family-based study?"
+      Options:
+        Yes — show family grouping
+        No — treat Family_ID as standard variable
+      
+      If Yes:
+        Build family tree structure:
+          Head of family: first member per Family_ID
+          Members: all others with same Family_ID
+        
+        Analysis options for family data:
+          Cluster by family (GEE — Generalised Estimating Equations)
+          Mixed model with family as random effect
+          Standard analysis ignoring clustering 
+          (with warning: "Clustering ignored — may inflate significance")
+        
+        Recommend: GEE or mixed model for correlated family data
+        statsmodels.genmod.generalized_estimating_equations.GEE
+        
+        Show: "Family-linked data detected.
+               [n] families, [n] members total.
+               Average family size: [X] members.
+               We recommend using GEE to account 
+               for within-family correlation."
+
+  D3: UNCERTAIN MATCH FLAGGING
+    When merging by secondary keys (Phone/Aadhaar):
+      Flag matches as CONFIDENT or UNCERTAIN
+      
+      CONFIDENT: exact match on primary key (Patient_ID)
+      UNCERTAIN: match only on secondary key
+      
+      Show uncertain matches in yellow:
+      "These patients were matched by [Phone/Aadhaar] 
+       only — please verify:"
+      | File 1 Name | File 2 Name | Phone | Match? |
+      User confirms or rejects each uncertain match
+
+════════════════════════════════════════════════════════
+ADDENDUM E — AUTO-WRITTEN RESULTS SECTION
+════════════════════════════════════════════════════════
+
+In addition to per-table interpretation, 
+auto-write the complete Results section narrative 
+that a researcher can paste directly into their paper.
+
+This is DIFFERENT from per-table interpretation:
+  Per-table interpretation = paragraph per result
+  Results section = full narrative, all findings together, 
+  written as a cohesive academic section
+
+RESULTS SECTION TEMPLATE:
+
+"Results
+
+A total of [n] participants were included in the 
+final analysis. [If any excluded: [n] participants 
+were excluded due to [reason].] 
+[If missing data: Missing data in [variables] were 
+handled using [method].]
+
+Baseline Characteristics
+The mean age of participants was [value] ± [SD] years 
+(range: [min]-[max]). [Gender: n (%) were male/female.] 
+[Describe key demographic variables from Table 1.]
+
+[IF COMPARISON STUDY]:
+Primary Analysis
+[Variable] was significantly [higher/lower] in the 
+[Group A] group compared to [Group B] 
+([test], [statistic], p=[value]; 
+Table [n], Figure [n]).
+
+[IF MULTIPLE COMPARISONS]:
+Secondary Analyses
+Correlation analysis revealed [describe key 
+correlations above r=0.30].
+
+[IF REGRESSION]:
+On multivariate [logistic/linear] regression analysis, 
+[list significant independent predictors] were 
+independently associated with [outcome variable] 
+(Table [n]).
+
+[IF SURVIVAL]:
+Survival Analysis
+The median follow-up duration was [X] months 
+(range: [min]-[max] months). The overall 
+[event rate/mortality/recurrence rate] was [X]% 
+during the study period. [Group A] demonstrated 
+[significantly better/worse] [outcome] compared 
+to [Group B] (log-rank p=[value]; Figure [n]).
+
+[IF DIAGNOSTIC]:
+Diagnostic Performance
+[Test/tool] demonstrated [good/excellent] 
+discriminatory ability with an AUC of [value] 
+(95% CI: [L]-[U]). At the optimal cutoff of [value], 
+sensitivity was [X]% and specificity was [Y]% 
+(Table [n], Figure [n])."
+
+Mark this section with label:
+"AUTO-WRITTEN RESULTS SECTION — 
+Review and edit before submitting. 
+Paste into your paper's Results section."
+
+════════════════════════════════════════════════════════
+ADDENDUM F — RISK FACTOR IDENTIFICATION ENGINE
+════════════════════════════════════════════════════════
+
+After regression analysis (logistic or Cox), 
+automatically identify and classify variables as:
+
+RISK FACTORS:
+  Logistic: Adjusted OR > 1.0 AND p < 0.05
+  Cox: Adjusted HR > 1.0 AND p < 0.05
+  Label: "Independent risk factor"
+
+PROTECTIVE FACTORS:
+  Logistic: Adjusted OR < 1.0 AND p < 0.05
+  Cox: Adjusted HR < 1.0 AND p < 0.05
+  Label: "Independent protective factor"
+
+NOT SIGNIFICANT:
+  p >= 0.05
+  Label: "Not independently associated"
+
+Show Risk Factor Summary Box:
+┌─────────────────────────────────────┐
+│ RISK FACTOR SUMMARY                 │
+│ Independent risk factors:           │
+│   Age (OR=2.3, p=0.001)            │
+│   Smoking (OR=3.1, p=0.002)        │
+│ Protective factors:                 │
+│   Treatment A (OR=0.4, p=0.010)    │
+│ Not significant:                    │
+│   Gender (OR=1.2, p=0.340)         │
+└─────────────────────────────────────┘
+
+Include this box in the report after regression table.
+
+Auto-generate sentence:
+"On multivariate analysis, [risk factors] 
+were identified as independent risk factors 
+for [outcome], while [protective factors] 
+were found to be protective."
+
+════════════════════════════════════════════════════════
+ADDENDUM G — CROSS-VARIABLE CLASSIFICATION
+════════════════════════════════════════════════════════
+
+Handle variables that behave differently by context:
+
+RULE 1 — Age context detection:
+  If objective contains "age group" / "age category":
+    Treat Age as ORDINAL (grouped)
+    Auto-create groups: <30, 30-45, 46-60, >60
+  If objective contains "age" as predictor in regression:
+    Treat Age as SCALE (continuous)
+  Default: treat as SCALE, offer grouping option
+
+RULE 2 — Score variables:
+  Columns named: score, index, scale, VAS, NRS, GCS, MMSE
+  Default to ORDINAL
+  BUT if used as outcome in regression: treat as SCALE
+  Show: "Pain score treated as ordinal for descriptives
+         and as continuous in regression. Correct?"
+
+RULE 3 — Binary variables in regression:
+  0/1 binary in descriptives: NOMINAL (frequency + %)
+  Same 0/1 as DV in regression: binary outcome → logistic
+  Same 0/1 as IV in regression: dummy variable → linear
+  System handles this automatically, no user action needed
+
+RULE 4 — Percentage variables:
+  Values between 0-100 that are proportions (SpO2, EF):
+    Treat as SCALE for descriptives
+    Check: if used as DV and binary outcome possible,
+    offer to dichotomise (e.g. EF < 40% vs ≥ 40%)
+
+RULE 5 — Likert scale variables (1-5 or 1-7):
+  Default: ORDINAL
+  If 5+ items from same questionnaire detected:
+    Offer to compute composite score:
+    "We detected [n] Likert-scale items that 
+     may form a composite score. 
+     Compute total/average score?" Yes/No
+  If Yes: treat composite as SCALE
+
+════════════════════════════════════════════════════════
+ADDENDUM H — COMPLETE INTERFACE SPECIFICATION
+════════════════════════════════════════════════════════
+
+Build the full HTML/CSS/JS frontend for the 
+Statistical Analysis module. 
+Match existing MedRAS design system exactly.
+
+══════════════════════
+H1 — OVERALL LAYOUT
+══════════════════════
+
+The page has THREE panels side by side on desktop:
+
+LEFT PANEL (280px fixed width):
+  Navigation sidebar
+  Shows which phase the user is in
+  Step tracker with checkmarks
+  
+CENTRE PANEL (flexible, fills remaining width):
+  Main working area
+  Changes completely at each phase
+  
+RIGHT PANEL (320px fixed width, 
+collapsible on mobile):
+  Live preview / context panel
+  Shows: data preview, variable list, 
+  running results summary
+
+On mobile (< 768px):
+  Stack all panels vertically
+  Hide right panel by default
+  Show right panel via "View Data" button
+
+══════════════════════
+H2 — LEFT SIDEBAR (step tracker)
+══════════════════════
+
+Fixed sidebar showing all phases:
+
+  [●] Step 1: Upload Data
+  [●] Step 2: Classify Variables  
+  [●] Step 3: Clean Data
+  [○] Step 4: Assign Variables
+  [○] Step 5: Run Analysis
+  [○] Step 6: View Results
+  [○] Step 7: Export Report
+
+Completed steps: filled circle, green
+Current step: filled circle, blue, bold
+Future steps: empty circle, grey
+
+Each step clickable to go back (if completed)
+Cannot skip forward — must complete in order
+
+Below steps, show:
+  Dataset: [filename] 
+  Patients: [n]
+  Variables: [k]
+  Status: [Ready / Running / Complete]
+
+Reset button at bottom:
+  "Start over" (clears all data, returns to Step 1)
+
+══════════════════════
+H3 — STEP 1: UPLOAD SCREEN
+══════════════════════
+
+Centre panel shows 3 large cards:
+
+┌──────────────────────┐
+│  CARD 1              │
+│  Upload my Excel     │
+│  I have data ready   │
+│  [Upload icon]       │
+│  .xlsx .xls .csv     │
+└──────────────────────┘
+
+┌──────────────────────┐
+│  CARD 2              │
+│  Generate dummy data │
+│  Practice / pilot    │
+│  [Data icon]         │
+│  Choose a template   │
+└──────────────────────┘
+
+┌──────────────────────┐
+│  CARD 3              │
+│  Merge datasets      │
+│  Multiple collectors │
+│  [Merge icon]        │
+│  Combine files       │
+└──────────────────────┘
+
+Below cards:
+  Drag-and-drop zone (large, dashed border):
+  "Drag your Excel file here"
+  Or "Browse files"
+
+After upload:
+  Show file info: name, size, sheet count
+  Show preview table (first 5 rows, first 8 columns)
+  Scrollable if more columns
+  Show: "Found [n] rows and [k] columns"
+  Button: "Continue to classify variables →"
+
+══════════════════════
+H4 — STEP 2: VARIABLE CLASSIFICATION SCREEN
+══════════════════════
+
+Centre panel:
+  Title: "Review and confirm variable types"
+  Subtitle: "We classified your variables automatically. 
+             Change any type using the dropdown."
+
+Show classification table:
+┌──────────────────┬──────────┬───────────┬──────────────┬────────┐
+│ Column Name      │ Detected │ Unique    │ Sample       │ Change │
+│                  │ Type     │ Values    │ Values       │        │
+├──────────────────┼──────────┼───────────┼──────────────┼────────┤
+│ Patient_ID       │ ID       │ 150       │ 1,2,3...     │ [v]    │
+│ Age              │ Scale    │ 47        │ 34,56,23...  │ [v]    │
+│ Gender           │ Nominal  │ 2         │ Male,Female  │ [v]    │
+│ Hb               │ Scale    │ 89        │ 8.2,11.3...  │ [v]    │
+│ Treatment        │ Nominal  │ 3         │ A,B,Control  │ [v]    │
+│ Pain_score       │ Ordinal  │ 7         │ 1,2,3,4...   │ [v]    │
+└──────────────────┴──────────┴───────────┴──────────────┴────────┘
+
+Each row in the Change column: 
+  Dropdown: Scale / Ordinal / Nominal / Date / ID / Exclude
+
+Below table:
+  Coding summary box:
+  "Auto-coding applied:
+   Gender: Male=1, Female=2
+   Treatment: A=1, B=2, Control=3"
+
+  Recoding options panel:
+  "Would you like to group any continuous 
+   variables into categories?"
+  Checkboxes for: Age grouping / BMI grouping / Hb grouping
+  Custom cutoff option for each
+
+Button: "Confirm and clean data →"
+
+══════════════════════
+H5 — STEP 3: DATA CLEANING SCREEN
+══════════════════════
+
+Centre panel shows THREE collapsible sections:
+
+SECTION A — MISSING DATA
+  Summary card (always visible):
+  ┌────────────────────────────────────────┐
+  │ Missing Data Summary                   │
+  │ Age: 0 missing (0%)    [●●●●●] OK     │
+  │ Hb:  12 missing (8%)   [●●●●○] AMBER │
+  │ Ferritin: 45 missing (30%) [●○○○○] RED│
+  └────────────────────────────────────────┘
+  
+  Missing data heatmap (missingno visualisation)
+  "Darker cells = missing values"
+  
+  Imputation method selector:
+  Radio buttons:
+  ○ Complete case (delete rows with missing) — RECOMMENDED <5%
+  ○ Mean imputation — for continuous, <10% missing
+  ○ Median imputation — for skewed continuous
+  ○ Mode imputation — for categorical
+  ● MICE (Multiple Imputation) — RECOMMENDED >5%
+  ○ KNN Imputation (k=5)
+  ○ Per-variable decision (advanced)
+  
+  Apply per-variable toggle (if per-variable selected):
+  Shows each variable with its own method dropdown
+
+SECTION B — OUTLIERS
+  Outlier table:
+  | Variable | Patient | Value | Method | Action |
+  | Hb | Row 23 | 0.4 | Impossible | [Keep|Remove|Cap] |
+  | Age | Row 67 | 156 | Impossible | [Keep|Remove|Cap] |
+  
+  Default action: Keep (with note in report)
+  Bulk action: "Apply 'Keep' to all outliers"
+
+SECTION C — DUPLICATES
+  "Found [n] exact duplicate rows"
+  [Remove duplicates] button
+  Shows list of removed rows
+
+Bottom: "Data quality score: [X]/100"
+  Breakdown: completeness + consistency + outliers
+
+Button: "Apply cleaning and continue →"
+
+══════════════════════
+H6 — STEP 4: VARIABLE ASSIGNMENT SCREEN
+══════════════════════
+
+Centre panel — TWO-COLUMN LAYOUT:
+
+LEFT COLUMN (variable picker):
+  Title: "Available Variables"
+  Search box: "Search variables..."
+  
+  List of all variables with type badges:
+  [Scale] Age
+  [Nominal] Gender
+  [Scale] Haemoglobin
+  [Nominal] Treatment_group
+  [Scale] Ferritin
+  [Ordinal] Severity
+  
+  Each variable is a draggable chip
+
+RIGHT COLUMN (assignment slots):
+  
+  ┌─────────────────────────────────┐
+  │ OUTCOME VARIABLE (Required)     │
+  │ "What are you measuring?"       │
+  │ [Drop variable here]            │
+  │                                 │
+  │ Currently: Haemoglobin [×]      │
+  └─────────────────────────────────┘
+  
+  ┌─────────────────────────────────┐
+  │ GROUPING / PREDICTOR (Required) │
+  │ "What groups or predictors?"    │
+  │ [Drop variable here]            │
+  │                                 │
+  │ Currently: Treatment_group [×]  │
+  │            + Age [×] (optional) │
+  └─────────────────────────────────┘
+  
+  ┌─────────────────────────────────┐
+  │ TIME VARIABLE (Optional)        │
+  │ "Only for survival analysis"    │
+  │ [Drop variable here]            │
+  └─────────────────────────────────┘
+  
+  ┌─────────────────────────────────┐
+  │ EVENT VARIABLE (Optional)       │
+  │ "0=censored, 1=event occurred"  │
+  │ [Drop variable here]            │
+  └─────────────────────────────────┘
+  
+  ┌─────────────────────────────────┐
+  │ STRATIFICATION (Optional)       │
+  │ "Control for these variables"   │
+  │ [Drop variable here]            │
+  └─────────────────────────────────┘
+
+BELOW the columns:
+  Research objective textarea:
+  "Optionally, paste your research objective 
+   and we will auto-assign variables:"
+  [Large textarea]
+  [Parse objective] button
+  → Auto-fills the slots above
+
+  Detected study type chip row:
+  [2 groups] [Continuous DV] [Independent]
+  → "Suggested test: Independent samples t-test"
+  → [Change test ▾] dropdown
+
+  Analysis scope selector:
+  ○ Basic (descriptives + primary test only)
+  ● Standard (+ correlation)  
+  ○ Comprehensive (+ regression + subgroups)
+  ○ Custom (choose each test)
+
+Button: "Run Analysis →"
+
+══════════════════════
+H7 — STEP 5: ANALYSIS RUNNING SCREEN
+══════════════════════
+
+Full-screen progress display:
+
+  Large progress bar (animated, fills left to right)
+  [████████████░░░░░░░░] 65%
+  
+  Current phase label (large, centred):
+  "Running normality tests..."
+  
+  Sub-steps list (visible, completed ones checkmarked):
+  ✓ Reading data (0.3s)
+  ✓ Classifying variables
+  ✓ Checking data quality
+  ✓ Running normality tests
+  → Executing t-test...
+  ○ Generating graphs
+  ○ Writing interpretation
+  ○ Compiling report
+  
+  Estimated time remaining:
+  "About 12 seconds remaining"
+  
+  Live preview (bottom half of screen):
+  As each result completes, it appears here:
+  "Normality — Hb: NORMAL (p=0.234) ✓"
+  "Normality — Ferritin: NON-NORMAL (p=0.003) → 
+   Mann-Whitney will be used ✓"
+  "t-test result: p=0.023 ✓"
+  
+  Cancel button (top right): "Stop analysis"
+
+══════════════════════
+H8 — STEP 6: RESULTS SCREEN
+══════════════════════
+
+This is the most important screen.
+Layout: TABBED INTERFACE
+
+Tab bar across top:
+[Table 1] [Normality] [Comparisons] [Correlation] 
+[Regression] [Survival] [Diagnostic] [Reliability]
+[Graphs] [Methods] [Results Section]
+
+Only show tabs for analyses that were actually run.
+Inactive tabs: greyed out.
+
+Each tab contains:
+
+┌─────────────────────────────────────────────────────┐
+│ TAB CONTENT AREA                                    │
+│                                                     │
+│ [Result table — APA format, no vertical lines]      │
+│                                                     │
+│ [Copy table button]                                 │
+│                                                     │
+│ [Interpretation paragraph]                          │
+│ [Copy text button]                                  │
+│                                                     │
+│ [Related graph — inline]                            │
+│ [Download graph] [PNG] [SVG]                        │
+│                                                     │
+│ [Assumptions checked:]                              │
+│ ✓ Normality — confirmed                             │
+│ ✓ Equal variance — Levene p=0.34                   │
+│ ⚠ Sample size borderline (power=72%)               │
+└─────────────────────────────────────────────────────┘
+
+TABLE 1 TAB (always first, always shown):
+  Baseline characteristics table
+  Columns: Variable | Overall | Group A | Group B | p-value
+  Footnote row at bottom
+
+NORMALITY TAB:
+  Table: Variable | Test | Statistic | p-value | Decision
+  QQ plots as small thumbnails (click to enlarge)
+
+COMPARISONS TAB:
+  Main result table
+  Post-hoc table (if applicable)
+  Box plots / bar charts
+
+GRAPHS TAB:
+  Gallery view of all graphs generated
+  Click to enlarge any graph
+  Download options: PNG (300 DPI) / SVG / PDF
+
+METHODS TAB:
+  Complete auto-written Methods section
+  Formatted as it would appear in a paper
+  [Copy all] button at top
+  Character count shown
+
+RESULTS SECTION TAB:
+  Complete auto-written Results section
+  [Copy all] button at top
+
+RISK FACTOR SUMMARY BOX
+(always shown at top of Regression tab):
+  Green pills: protective factors
+  Red pills: risk factors
+  Grey pills: not significant
+
+══════════════════════
+H9 — STEP 7: REPORT EXPORT SCREEN
+══════════════════════
+
+Centre panel:
+
+  Title: "Your analysis is complete"
+  Subtitle: "Download your report in any format"
+
+  Three export cards side by side:
+  
+  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐
+  │ Word Doc    │  │    PDF      │  │   Excel     │
+  │ .docx       │  │   .pdf      │  │   .xlsx     │
+  │ Editable    │  │ Print-ready │  │ Raw numbers │
+  │ [Download]  │  │ [Download]  │  │ [Download]  │
+  └─────────────┘  └─────────────┘  └─────────────┘
+
+  Or: [Download All Three] button
+
+  Verification checklist:
+  ┌─────────────────────────────────────────────────┐
+  │ Before submitting this analysis:                │
+  │ □ Have a qualified statistician review results  │
+  │ □ Verify p-values against your primary outcome  │
+  │ □ Apply multiple testing correction if needed   │
+  │ □ Confirm sample size adequacy (power=[X]%)    │
+  │ □ Check all assumptions are met                 │
+  └─────────────────────────────────────────────────┘
+
+  Below: Share / re-run options
+  "Run another analysis on the same dataset"
+  "Upload a new dataset"
+
+══════════════════════
+H10 — PROGRESS INDICATOR (all screens)
+══════════════════════
+
+Fixed top bar (always visible, 48px height):
+  Left: MedRAS logo + "Statistical Analysis"
+  Centre: Step indicator pills:
+    [1 Upload] → [2 Classify] → [3 Clean] → 
+    [4 Assign] → [5 Run] → [6 Results] → [7 Export]
+  Right: [Save progress] [Help] [Reset]
+
+Each pill: completed=filled teal, 
+           current=filled blue, 
+           future=outline grey
+
+════════════════════════════════════════════════════════
+ADDENDUM I — COMPLETE IMPLEMENTATION ORDER
+════════════════════════════════════════════════════════
+
+Add these phases after the original Phase 10:
+
+PHASE 11 — Build HTML interface (H1-H10 above)
+  Test: navigate through all 7 steps without data
+  Expected: all screens render, navigation works,
+  step tracker updates correctly
+
+PHASE 12 — Wire frontend to backend APIs
+  Test: upload sample Excel through UI (not API directly)
+  Expected: preview table appears in right panel,
+  step 1 marks complete, step 2 activates
+
+PHASE 13 — Real-time progress (SSE)
+  Test: run analysis on 150-row dataset
+  Expected: progress bar moves, phase labels update,
+  live results appear as each test completes
+
+PHASE 14 — Sample size integration
+  Test: enter required n=200, upload dataset with n=100
+  Expected: RED warning banner, disclaimer added to report
+
+PHASE 15 — Multi-user merge
+  Test: upload two Excel files with overlapping Patient IDs
+  Expected: merged dataset, conflict report shown
+
+PHASE 16 — Full lazy user end-to-end through UI
+  Test: Upload → type objective → click Run → Download
+  Expected: complete report in under 90 seconds,
+  zero additional inputs required from user
+
+════════════════════════════════════════════════════════
+CORRECTED FULL INSTALL COMMAND (final version)
+════════════════════════════════════════════════════════
+
+pip install \
+  pandas \
+  numpy \
+  openpyxl \
+  xlrd \
+  scipy \
+  statsmodels \
+  scikit-learn \
+  lifelines \
+  pingouin \
+  matplotlib \
+  seaborn \
+  python-docx \
+  reportlab \
+  jinja2 \
+  missingno \
+  scikit-posthocs \
+  --break-system-packages
