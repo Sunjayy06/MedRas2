@@ -289,6 +289,251 @@
 
 /* ---- Results ----------------------------------------------------------- */
 
+/* REDESIGN — bigger, calmer result card and clean spacing between sections. */
+.calc-card-result {
+  padding: 32px 32px 28px;
+}
+.calc-card-result > * + * { margin-top: 22px; }
+
+/* HERO PAIR — Expected vs Significant sample size, side by side, bold. */
+.result-hero {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  margin: 8px 0 4px;
+}
+.hero-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 24px 26px;
+  border-radius: 14px;
+  border: 1px solid var(--color-border);
+  background: #ffffff;
+  min-width: 0;
+}
+.hero-stat-label {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-text-muted);
+}
+.hero-stat-value {
+  font-size: 56px;
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  color: var(--color-navy-900);
+  font-variant-numeric: tabular-nums;
+}
+.hero-stat-sublabel {
+  font-size: 13px;
+  color: var(--color-text-muted);
+  margin-top: 4px;
+}
+.hero-stat-significant {
+  background: linear-gradient(180deg, rgba(47, 111, 237, 0.08) 0%, rgba(47, 111, 237, 0.02) 100%);
+  border-color: rgba(47, 111, 237, 0.35);
+}
+.hero-stat-significant .hero-stat-value { color: var(--color-accent); }
+/* Friendly empty-state when no expected n was provided. */
+.hero-stat-expected.hero-stat-empty .hero-stat-value {
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  letter-spacing: 0;
+}
+@media (max-width: 640px) {
+  .calc-card-result { padding: 24px 20px; }
+  .result-hero { grid-template-columns: 1fr; }
+  .hero-stat { padding: 20px 22px; }
+  .hero-stat-value { font-size: 44px; }
+}
+
+/* Slim verdict banner — used to be a big card, now a single-line strip. */
+.verdict-card-slim {
+  padding: 12px 16px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  margin: 0;
+}
+.verdict-card-slim .verdict-numbers { display: none; }
+.verdict-card-slim .verdict-badge {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+.verdict-card-slim .verdict-message {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.4;
+}
+
+/* FORMULA BREAKDOWN — single neat card. */
+.formula-breakdown {
+  background: #ffffff;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  padding: 22px 24px;
+}
+.formula-breakdown-title {
+  margin: 0 0 14px;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-navy-900);
+  letter-spacing: -0.005em;
+}
+.formula-breakdown-block + .formula-breakdown-block {
+  margin-top: 18px;
+}
+.formula-breakdown-sublabel {
+  margin: 0 0 8px;
+  font-size: 11.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-text-muted);
+}
+.formula-breakdown-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 22px;
+  margin-top: 18px;
+}
+.formula-breakdown .formula-expression {
+  margin: 0;
+}
+@media (max-width: 760px) {
+  .formula-breakdown-grid { grid-template-columns: 1fr; gap: 18px; }
+  .formula-breakdown { padding: 20px; }
+}
+
+/* Advanced details (collapsed by default). */
+.result-advanced {
+  border: 1px dashed var(--color-border);
+  border-radius: 12px;
+  background: #fbfcfe;
+  padding: 0 18px;
+}
+.result-advanced[open] { padding: 0 18px 18px; }
+.result-advanced > summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 14px 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  letter-spacing: 0.02em;
+  user-select: none;
+}
+.result-advanced > summary::-webkit-details-marker { display: none; }
+.result-advanced > summary::before {
+  content: "▸";
+  display: inline-block;
+  margin-right: 8px;
+  transition: transform 0.18s ease;
+  color: var(--color-text-muted);
+}
+.result-advanced[open] > summary::before { transform: rotate(90deg); }
+.result-advanced > summary:hover { color: var(--color-accent); }
+
+.result-advanced > * + * { margin-top: 16px; }
+
+/* Action bar — Home (left), tertiary text actions (centre),
+   download icon button (right). */
+.result-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding-top: 8px;
+  border-top: 1px solid var(--color-border);
+  margin-top: 28px;
+  padding-block-start: 22px;
+}
+.result-action-home {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text);
+  text-decoration: none;
+  padding: 8px 12px;
+  border-radius: 8px;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.result-action-home:hover {
+  background: var(--color-bg-muted);
+  color: var(--color-accent);
+}
+.result-action-home .action-arrow {
+  font-size: 16px;
+  line-height: 1;
+}
+.result-action-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--color-text-muted);
+  flex-wrap: wrap;
+}
+.result-action-secondary .btn-link {
+  padding: 4px 6px;
+  font-size: 13px;
+}
+.result-action-secondary .action-divider { color: var(--color-border); }
+
+.result-action-download {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: var(--color-accent);
+  color: #ffffff;
+  border: 1px solid var(--color-accent);
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
+  box-shadow: 0 2px 6px rgba(47, 111, 237, 0.18);
+  margin-left: auto;
+}
+.result-action-download:hover {
+  background: var(--color-accent-dark);
+  border-color: var(--color-accent-dark);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 14px rgba(47, 111, 237, 0.28);
+}
+.result-action-download:focus-visible {
+  outline: 3px solid var(--color-accent);
+  outline-offset: 2px;
+}
+.result-action-download svg { flex-shrink: 0; }
+
+@media (max-width: 640px) {
+  .result-actions {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+  .result-action-home,
+  .result-action-secondary,
+  .result-action-download {
+    justify-content: center;
+    margin-left: 0;
+    text-align: center;
+  }
+  .result-action-secondary { justify-content: center; }
+}
+
 .result-headline {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -572,16 +817,11 @@
   font-style: italic;
 }
 
-/* ----- Step 3 "Download full report" button ----- */
-#download-report-btn {
-  background: #1f7a3a;
-  color: #fff;
-  border: 1px solid #1f7a3a;
-}
-#download-report-btn:hover {
-  background: #185f2d;
-  border-color: #185f2d;
-}
+/* ----- Step 3 "Download full report" button -----
+   Legacy ID-scoped rule kept disabled. The new redesign styles the
+   download action via .result-action-download (defined earlier in this
+   stylesheet). Leaving the rule empty avoids overriding the redesign
+   while preserving the historical anchor for any external references. */
 
 /* ====================================================================
  * MASTER UPGRADE — Step 0 entry chooser, wizard, complexity, verdict,

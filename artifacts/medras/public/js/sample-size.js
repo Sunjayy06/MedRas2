@@ -2185,7 +2185,14 @@
       data.notes = (data.notes || []).concat(info.notes || []);
     }
     if (expected != null && !Number.isNaN(expected)) {
+      // Stamp the user-provided expected n onto the result so the new
+      // hero card always reflects what the researcher entered, even when
+      // the server response doesn't echo it back.
+      data.expected_sample_size = expected;
       data._verdict = computeVerdict(expected, data.adjusted_n || data.total_n);
+    } else {
+      // Explicit null so the hero card can show the empty-state hint.
+      data.expected_sample_size = null;
     }
     state.lastResult = data;
     return data;
@@ -2238,11 +2245,11 @@
   // -----------------------------------------------------------------------
 
   function renderResult(data) {
-    // Forward-mode layout: hide reverse panel, show the standard headline.
+    // Forward-mode layout: hide reverse panel, show the new hero pair.
     var reversePanel = document.getElementById("result-reverse");
     if (reversePanel) reversePanel.hidden = true;
-    var fwdHeadline = document.getElementById("result-forward-headline");
-    if (fwdHeadline) fwdHeadline.style.display = "";
+    var hero = document.getElementById("result-hero");
+    if (hero) hero.hidden = false;
     var heading = document.getElementById("result-heading");
     if (heading) heading.textContent = "3. Required sample size";
 
@@ -2254,6 +2261,25 @@
     setText("text-total-n", String(data.total_n));
     setText("text-adjusted-n", String(data.adjusted_n));
     setText("text-formula-expression", data.formula_expression);
+
+    // NEW HERO — populate the "Expected sample size" card. When the
+    // researcher didn't supply an expected n, render a friendly "Not
+    // provided" plus a small hint instead of a bare em-dash, so the card
+    // tells users what to do to get a comparison.
+    var expectedEl = document.querySelector('[data-testid="text-expected-n"]');
+    var expectedSubEl = document.querySelector('[data-testid="text-expected-sublabel"]');
+    var expectedCard = expectedEl ? expectedEl.closest(".hero-stat-expected") : null;
+    if (data.expected_sample_size != null) {
+      if (expectedEl) expectedEl.textContent = String(data.expected_sample_size);
+      if (expectedSubEl) expectedSubEl.textContent = "your target recruitment";
+      if (expectedCard) expectedCard.classList.remove("hero-stat-empty");
+    } else {
+      if (expectedEl) expectedEl.textContent = "Not provided";
+      if (expectedSubEl) {
+        expectedSubEl.textContent = "Add an expected n in step 2 to see how it compares";
+      }
+      if (expectedCard) expectedCard.classList.add("hero-stat-empty");
+    }
 
     fillTable("table-inputs", data.inputs, INPUT_LABELS);
     fillTable("table-constants", data.constants, CONSTANT_LABELS);
@@ -2424,7 +2450,8 @@
     );
 
     // Hide forward-only sections, show the reverse panel.
-    document.getElementById("result-forward-headline").style.display = "none";
+    var heroPanel = document.getElementById("result-hero");
+    if (heroPanel) heroPanel.hidden = true;
     document.getElementById("result-comparison").hidden = true;
     document.getElementById("result-reverse").hidden = false;
 

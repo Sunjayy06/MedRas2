@@ -9,8 +9,8 @@
       content="Formula-driven sample size calculator for medical research. Detect study type from your objective, set alpha and power explicitly, and see every value used in the calculation."
     />
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%232f6fed'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-family='Inter,sans-serif' font-size='18' font-weight='700' fill='white'%3EM%3C/text%3E%3C/svg%3E" />
-    <link rel="stylesheet" href="/css/style.css" />
-    <link rel="stylesheet" href="/css/sample-size.css" />
+    <link rel="stylesheet" href="/css/style.css?v=2026043003" />
+    <link rel="stylesheet" href="/css/sample-size.css?v=2026043003" />
   </head>
   <body>
     <header class="site-header">
@@ -553,68 +553,15 @@
         </section>
 
         <!-- ============================================================= -->
-        <!-- Step 3 — Result                                                -->
+        <!-- Step 3 — Result (REDESIGNED: clean hero pair + breakdown)      -->
         <!-- ============================================================= -->
-        <section class="calc-card" data-step="3" hidden data-testid="section-step-3">
+        <section class="calc-card calc-card-result" data-step="3" hidden data-testid="section-step-3">
           <header class="calc-card-header">
             <h2 id="result-heading">3. Required sample size</h2>
             <p id="result-formula" class="calc-formula-summary" data-testid="text-result-formula"></p>
           </header>
 
-          <!-- CHANGE 3 — Traffic-light verdict card. Shown at the top of
-               every result. GREEN/AMBER/RED when the researcher provided
-               an expected n; BLUE info card otherwise. -->
-          <section class="verdict-card verdict-blue" id="verdict-card" data-testid="panel-verdict">
-            <div class="verdict-numbers" id="verdict-numbers" hidden>
-              <div class="verdict-num"><span class="verdict-num-label">Your sample</span><span class="verdict-num-value" data-testid="text-verdict-yours">—</span></div>
-              <div class="verdict-num"><span class="verdict-num-label">Required</span><span class="verdict-num-value" data-testid="text-verdict-required">—</span></div>
-            </div>
-            <div class="verdict-badge" id="verdict-badge" data-testid="text-verdict-badge">—</div>
-            <p class="verdict-message" id="verdict-message" data-testid="text-verdict-message">—</p>
-          </section>
-
-          <!-- CHANGE 2 — "Detected" chip row (only when objective parser ran) -->
-          <section class="detected-row" id="detected-row" hidden data-testid="panel-detected">
-            <p class="detected-label">Detected from your objective:</p>
-            <div class="chips" id="detected-chips" data-testid="list-detected-chips"></div>
-            <p class="detected-pick" id="detected-pick" data-testid="text-detected-pick"></p>
-          </section>
-
-          <!-- CHANGE 4 — Layer-by-layer breakdown table (complex trial mode) -->
-          <section class="result-section" id="layer-breakdown-section" hidden data-testid="panel-layer-breakdown">
-            <h3>Layered sample-size breakdown</h3>
-            <table class="kv-table layer-table" data-testid="table-layers">
-              <thead>
-                <tr><th>Layer</th><th>Adjustment applied</th><th>n per arm</th><th>Total n</th></tr>
-              </thead>
-              <tbody></tbody>
-            </table>
-            <p class="layer-sensitivity" id="layer-sensitivity" data-testid="text-layer-sensitivity"></p>
-          </section>
-
-          <!-- "Ideal formula for your study" callout -->
-          <section
-            class="result-recommended"
-            data-testid="panel-ideal-formula"
-          >
-            <h3 class="result-recommended-title">
-              Recommended statistical formula
-            </h3>
-            <p class="result-recommended-name" data-testid="text-ideal-formula-name"></p>
-            <p class="result-recommended-ideal" data-testid="text-ideal-formula-use"></p>
-            <p
-              class="result-recommended-rationale"
-              id="result-recommended-rationale"
-              data-testid="text-ideal-formula-rationale"
-              hidden
-            ></p>
-            <p class="result-recommended-assumptions" data-testid="text-ideal-formula-assumptions"></p>
-          </section>
-
-          <!-- Reverse-calculation summary (only shown in reverse mode).
-               The headline cards inside [data-testid="list-reverse-headline"]
-               are rendered dynamically from the API response so this panel
-               works for every formula's back-calculation. -->
+          <!-- Reverse-calculation summary (only shown in reverse mode). -->
           <div
             class="result-reverse"
             id="result-reverse"
@@ -633,91 +580,168 @@
             ></ul>
           </div>
 
-          <div class="result-headline" id="result-forward-headline">
-            <div class="result-stat">
-              <span class="result-stat-label">Per group</span>
-              <span class="result-stat-value" data-testid="text-n-per-group">—</span>
+          <!-- HERO PAIR — the two numbers the researcher cares about, side by
+               side and bold. Forward mode only. -->
+          <div class="result-hero" id="result-hero" data-testid="panel-result-hero">
+            <div class="hero-stat hero-stat-expected">
+              <span class="hero-stat-label">Expected sample size</span>
+              <span class="hero-stat-value" data-testid="text-expected-n">—</span>
+              <span class="hero-stat-sublabel" data-testid="text-expected-sublabel">your target recruitment</span>
             </div>
-            <div class="result-stat">
-              <span class="result-stat-label">Total (statistically required)</span>
-              <span class="result-stat-value result-stat-emphasis" data-testid="text-total-n">—</span>
-            </div>
-            <div class="result-stat">
-              <span class="result-stat-label">Adjusted for dropout</span>
-              <span class="result-stat-value" data-testid="text-adjusted-n">—</span>
+            <div class="hero-stat hero-stat-significant">
+              <span class="hero-stat-label">Significant sample size</span>
+              <span class="hero-stat-value" data-testid="text-total-n">—</span>
+              <span class="hero-stat-sublabel">
+                <span data-testid="text-n-per-group">—</span> per group
+                · adjusted for dropout: <span data-testid="text-adjusted-n">—</span>
+              </span>
             </div>
           </div>
 
-          <div class="result-comparison" id="result-comparison" hidden data-testid="panel-comparison">
-            <h3>Comparison with your target</h3>
-            <p class="result-comparison-verdict" data-testid="text-comparison-verdict"></p>
-            <dl class="analysis-grid">
-              <div><dt>Your expected sample size</dt><dd data-testid="text-comp-expected">—</dd></div>
-              <div><dt>Statistically required (total)</dt><dd data-testid="text-comp-required">—</dd></div>
-              <div><dt>After dropout adjustment</dt><dd data-testid="text-comp-adjusted">—</dd></div>
-              <div><dt>Shortfall</dt><dd data-testid="text-comp-shortfall">—</dd></div>
-            </dl>
-          </div>
-
-          <section class="result-section">
-            <h3>Formula used</h3>
-            <code class="formula-expression" data-testid="text-formula-expression"></code>
+          <!-- Compact verdict banner (was a large card; now a slim pill+message). -->
+          <section class="verdict-card verdict-blue verdict-card-slim" id="verdict-card" data-testid="panel-verdict">
+            <div class="verdict-numbers" id="verdict-numbers" hidden>
+              <div class="verdict-num"><span class="verdict-num-label">Your sample</span><span class="verdict-num-value" data-testid="text-verdict-yours">—</span></div>
+              <div class="verdict-num"><span class="verdict-num-label">Required</span><span class="verdict-num-value" data-testid="text-verdict-required">—</span></div>
+            </div>
+            <div class="verdict-badge" id="verdict-badge" data-testid="text-verdict-badge">—</div>
+            <p class="verdict-message" id="verdict-message" data-testid="text-verdict-message">—</p>
           </section>
 
-          <section class="result-section">
-            <h3>Inputs you provided</h3>
-            <table class="kv-table" data-testid="table-inputs">
-              <tbody></tbody>
-            </table>
-          </section>
-
-          <section class="result-section">
-            <h3>Constants used in the calculation</h3>
-            <table class="kv-table" data-testid="table-constants">
-              <tbody></tbody>
-            </table>
-          </section>
-
-          <!-- CHANGE 3 — Auto-filled defaults table -->
-          <section class="result-section" id="autofilled-section" hidden data-testid="panel-autofilled">
-            <h3>Auto-filled defaults</h3>
-            <table class="kv-table" data-testid="table-autofilled">
+          <!-- Layer-by-layer breakdown (complex trial mode) — kept, only shown when relevant. -->
+          <section class="result-section" id="layer-breakdown-section" hidden data-testid="panel-layer-breakdown">
+            <h3>Layered sample-size breakdown</h3>
+            <table class="kv-table layer-table" data-testid="table-layers">
               <thead>
-                <tr><th>Parameter</th><th>Default used</th><th>Why this default</th></tr>
+                <tr><th>Layer</th><th>Adjustment applied</th><th>n per arm</th><th>Total n</th></tr>
               </thead>
               <tbody></tbody>
             </table>
+            <p class="layer-sensitivity" id="layer-sensitivity" data-testid="text-layer-sensitivity"></p>
           </section>
 
-          <section class="result-section" id="result-notes-section" hidden>
-            <h3>Notes</h3>
-            <ul class="analysis-warnings" data-testid="list-result-notes"></ul>
+          <!-- FORMULA BREAKDOWN — single neat card with formula + inputs + constants. -->
+          <section class="formula-breakdown" data-testid="panel-formula-breakdown">
+            <h3 class="formula-breakdown-title">Formula breakdown</h3>
+
+            <div class="formula-breakdown-block">
+              <p class="formula-breakdown-sublabel">Formula used</p>
+              <code class="formula-expression" data-testid="text-formula-expression"></code>
+            </div>
+
+            <div class="formula-breakdown-grid">
+              <div class="formula-breakdown-block">
+                <p class="formula-breakdown-sublabel">Inputs you provided</p>
+                <table class="kv-table" data-testid="table-inputs">
+                  <tbody></tbody>
+                </table>
+              </div>
+              <div class="formula-breakdown-block">
+                <p class="formula-breakdown-sublabel">Constants used</p>
+                <table class="kv-table" data-testid="table-constants">
+                  <tbody></tbody>
+                </table>
+              </div>
+            </div>
           </section>
 
-          <!-- CHANGE 5 — Genetic study standard checklist (always shown for genetic results) -->
-          <section class="result-section genetic-checklist" id="genetic-checklist" hidden data-testid="panel-genetic-checklist">
-            <h3>Genetic study requirements</h3>
-            <ul>
-              <li>✓ Verify Hardy-Weinberg Equilibrium</li>
-              <li>✓ Control for population stratification (PCA)</li>
-              <li>✓ Apply appropriate multiple testing correction</li>
-              <li>✓ Validate with: Quanto / genpwr R / Genetic Power Calculator</li>
-            </ul>
-          </section>
+          <!-- Advanced details — collapsed by default to keep the page clean. -->
+          <details class="result-advanced" id="result-advanced" data-testid="details-advanced">
+            <summary>Show full statistical details</summary>
 
-          <div class="calc-card-actions">
-            <button type="button" class="btn btn-primary" id="download-report-btn" data-testid="button-download-report">
-              Download full report
-            </button>
-            <button type="button" class="btn btn-secondary" id="back-to-step-2" data-testid="button-back-2">
-              ← Adjust parameters
-            </button>
-            <button type="button" class="btn btn-secondary" id="restart-btn" data-testid="button-restart">
-              ↻ Start a new calculation
-            </button>
-            <a href="/" class="btn btn-link" id="home-from-step-3" data-testid="button-home-3">
-              ⌂ Back to MedRAS home
+            <!-- "Detected" chip row (only when objective parser ran) -->
+            <section class="detected-row" id="detected-row" hidden data-testid="panel-detected">
+              <p class="detected-label">Detected from your objective:</p>
+              <div class="chips" id="detected-chips" data-testid="list-detected-chips"></div>
+              <p class="detected-pick" id="detected-pick" data-testid="text-detected-pick"></p>
+            </section>
+
+            <!-- Recommended formula callout -->
+            <section class="result-recommended" data-testid="panel-ideal-formula">
+              <h3 class="result-recommended-title">Recommended statistical formula</h3>
+              <p class="result-recommended-name" data-testid="text-ideal-formula-name"></p>
+              <p class="result-recommended-ideal" data-testid="text-ideal-formula-use"></p>
+              <p class="result-recommended-rationale" id="result-recommended-rationale" data-testid="text-ideal-formula-rationale" hidden></p>
+              <p class="result-recommended-assumptions" data-testid="text-ideal-formula-assumptions"></p>
+            </section>
+
+            <!-- Comparison with target -->
+            <div class="result-comparison" id="result-comparison" hidden data-testid="panel-comparison">
+              <h3>Comparison with your target</h3>
+              <p class="result-comparison-verdict" data-testid="text-comparison-verdict"></p>
+              <dl class="analysis-grid">
+                <div><dt>Your expected sample size</dt><dd data-testid="text-comp-expected">—</dd></div>
+                <div><dt>Statistically required (total)</dt><dd data-testid="text-comp-required">—</dd></div>
+                <div><dt>After dropout adjustment</dt><dd data-testid="text-comp-adjusted">—</dd></div>
+                <div><dt>Shortfall</dt><dd data-testid="text-comp-shortfall">—</dd></div>
+              </dl>
+            </div>
+
+            <!-- Auto-filled defaults table -->
+            <section class="result-section" id="autofilled-section" hidden data-testid="panel-autofilled">
+              <h3>Auto-filled defaults</h3>
+              <table class="kv-table" data-testid="table-autofilled">
+                <thead>
+                  <tr><th>Parameter</th><th>Default used</th><th>Why this default</th></tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </section>
+
+            <!-- Notes -->
+            <section class="result-section" id="result-notes-section" hidden>
+              <h3>Notes</h3>
+              <ul class="analysis-warnings" data-testid="list-result-notes"></ul>
+            </section>
+
+            <!-- Genetic study standard checklist -->
+            <section class="result-section genetic-checklist" id="genetic-checklist" hidden data-testid="panel-genetic-checklist">
+              <h3>Genetic study requirements</h3>
+              <ul>
+                <li>✓ Verify Hardy-Weinberg Equilibrium</li>
+                <li>✓ Control for population stratification (PCA)</li>
+                <li>✓ Apply appropriate multiple testing correction</li>
+                <li>✓ Validate with: Quanto / genpwr R / Genetic Power Calculator</li>
+              </ul>
+            </section>
+
+            <!-- Hidden stub kept for legacy JS that toggles its display in
+                 reverse mode. The canonical testids now live in the hero. -->
+            <div id="result-forward-headline" hidden aria-hidden="true"></div>
+          </details>
+
+          <!-- Clean action bar: home on the left, download icon on the right,
+               smaller tertiary links in between. -->
+          <div class="result-actions">
+            <a href="/" class="result-action-home" id="home-from-step-3" data-testid="button-home-3">
+              <span class="action-arrow" aria-hidden="true">←</span>
+              Back to MedRAS home
             </a>
+
+            <div class="result-action-secondary">
+              <button type="button" class="btn btn-link" id="back-to-step-2" data-testid="button-back-2">
+                Adjust parameters
+              </button>
+              <span class="action-divider" aria-hidden="true">·</span>
+              <button type="button" class="btn btn-link" id="restart-btn" data-testid="button-restart">
+                Start a new calculation
+              </button>
+            </div>
+
+            <button
+              type="button"
+              class="result-action-download"
+              id="download-report-btn"
+              data-testid="button-download-report"
+              title="Download full report"
+            >
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+              <span>Download report</span>
+            </button>
           </div>
         </section>
       </section>
