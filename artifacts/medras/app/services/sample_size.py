@@ -1828,6 +1828,552 @@ def reverse_roc_auc(
 
 
 # ---------------------------------------------------------------------------
+# Correlation (Fisher's z)
+# ---------------------------------------------------------------------------
+
+
+def _fisher_z(r: float) -> float:
+    return 0.5 * math.log((1 + r) / (1 - r))
+
+
+def correlation(
+    expected_r: float,
+    alpha: float = 0.05,
+    power: float = 0.80,
+    dropout: float = 0.0,
+) -> SampleSizeResult:
+    """Fisher's z-transform sample size for a single Pearson correlation.
+
+        n = ((Z(α/2) + Z(β)) / arctanh(r))² + 3
+    """
+    _check_alpha(alpha)
+    _check_power(power)
+    if not -1 < expected_r < 1 or expected_r == 0:
+        raise ValueError("expected_r must be in (-1, 1) and non-zero.")
+
+    z_a = z_two_tailed(alpha)
+    z_b = z_power(power)
+    zr = _fisher_z(abs(expected_r))
+    n_total = _ceil(((z_a + z_b) / zr) ** 2 + 3)
+    return SampleSizeResult(
+        formula="correlation",
+        formula_label="Pearson correlation (Fisher's z)",
+        formula_expression="n = ((Z(α/2) + Z(β)) / arctanh(r))² + 3",
+        n_per_group=n_total,
+        number_of_groups=1,
+        total_n=n_total,
+        adjusted_n=_apply_dropout(n_total, dropout),
+        inputs={
+            "expected_r": expected_r,
+            "alpha": alpha,
+            "power": power,
+            "dropout_rate": dropout,
+        },
+        constants=_round_constants(
+            {"Z_alpha_over_2": z_a, "Z_beta": z_b, "fisher_z_r": zr}
+        ),
+        notes=[
+            "Tests H₀: ρ = 0 vs H₁: ρ = expected_r using Fisher's z-transform.",
+            "Add 3 because the variance of z is 1/(n-3).",
+        ],
+    )
+
+
+def reverse_correlation(
+    n: int,
+    alpha: float = 0.05,
+    power: float = 0.80,
+    dropout: float = 0.0,
+) -> Dict[str, Any]:
+    """Solve Fisher's z for the smallest detectable |r|."""
+    _check_alpha(alpha)
+    _check_power(power)
+    n_recruited = _coerce_n(n, "n", minimum=10)
+    n_keep = _analyzable(n_recruited, dropout)
+    if n_keep <= 3:
+        raise ValueError("Need > 3 analysable subjects for Fisher's z.")
+
+    z_a = z_two_tailed(alpha)
+    z_b = z_power(power)
+    zr = (z_a + z_b) / math.sqrt(n_keep - 3)
+    r = math.tanh(zr)
+
+    notes = [
+        f"Inverted Fisher's z given n={n_keep}; the smallest |r| your sample "
+        "can distinguish from zero at the chosen α and power.",
+    ]
+    drop = _dropout_note(n_recruited, n_keep, dropout)
+    if drop:
+        notes.append(drop)
+
+    return {
+        "formula": "correlation",
+        "mode": "reverse",
+        "formula_label": "Pearson correlation — back-calculated minimum |r|",
+        "formula_expression": "solve for r:  r = tanh((Z(α/2) + Z(β)) / √(n−3))",
+        "inputs": {
+            "n_recruited": n_recruited,
+            "n_analyzable": n_keep,
+            "alpha": alpha,
+            "power": power,
+            "dropout_rate": dropout,
+        },
+        "constants": _round_constants(
+            {"Z_alpha_over_2": z_a, "Z_beta": z_b, "fisher_z_r": zr}
+        ),
+        "headline": [
+            {
+                "label": "Minimum detectable |r|",
+                "value": f"{r:.3f}",
+                "sublabel": (
+                    "small r ≈ 0.10  ·  medium ≈ 0.30  ·  large ≈ 0.50  (Cohen 1988)"
+                ),
+            }
+        ],
+        "detectable": {"min_detectable_r": round(r, 4)},
+        "notes": notes,
+        "warnings": [],
+    }
+
+
+# ---------------------------------------------------------------------------
+# Repeated-measures ANOVA (k groups × m within-subject timepoints)
+# ---------------------------------------------------------------------------
+
+
+def repeated_measures_anova(
+    k_groups: int,
+    m_timepoints: int,
+    rho: float,
+    effect_size_f: float,
+    alpha: float = 0.05,
+    power: float = 0.80,
+    dropout: float = 0.0,
+) -> SampleSizeResult:
+    """Within-between repeated-measures ANOVA, time × group interaction.
+
+    Simplified normal-approximation form (Cohen 1988) with a Bonferroni
+    adjustment for the (k − 1) between-group contrasts of the F-test:
+
+        α* = α / (k − 1)
+        n_per_group ≈ (Z(α*/2) + Z(β))² · (1 − ρ) / (m · f²) + 1
+
+    The (1 − ρ) factor reflects the variance reduction from repeated
+    measurements on the same subject; m is the number of timepoints; f
+    is Cohen's f for the between-group factor. The Bonferroni step makes
+    k_groups influence the required n in a defensible, conservative way:
+    for k = 2 the adjustment is a no-op (α* = α); for k > 2 it widens the
+    required separation between groups, which inflates n.
+    """
+    _check_alpha(alpha)
+    _check_power(power)
+    if isinstance(k_groups, float) and not k_groups.is_integer():
+        raise ValueError("k_groups must be a whole number.")
+    k = int(k_groups)
+    if k < 2:
+        raise ValueError("k_groups must be ≥ 2.")
+    if isinstance(m_timepoints, float) and not m_timepoints.is_integer():
+        raise ValueError("m_timepoints must be a whole number.")
+    m = int(m_timepoints)
+    if m < 2:
+        raise ValueError("m_timepoints must be ≥ 2 (use anova_means for m=1).")
+    if not 0 <= rho < 1:
+        raise ValueError("rho must be in [0, 1).")
+    if effect_size_f <= 0:
+        raise ValueError("effect_size_f must be positive.")
+
+    alpha_adj = alpha / max(1, k - 1)
+    z_a = z_two_tailed(alpha_adj)
+    z_b = z_power(power)
+    n_each = _ceil(((z_a + z_b) ** 2) * (1 - rho) / (m * effect_size_f ** 2) + 1)
+    total = n_each * k
+    return SampleSizeResult(
+        formula="repeated_measures_anova",
+        formula_label=(
+            f"Repeated-measures ANOVA ({k} groups × {m} timepoints)"
+        ),
+        formula_expression=(
+            "n/group = (Z(α*/2) + Z(β))² · (1 − ρ) / (m · f²) + 1"
+            "   where α* = α / (k − 1)"
+        ),
+        n_per_group=n_each,
+        number_of_groups=k,
+        total_n=total,
+        adjusted_n=_apply_dropout(total, dropout),
+        inputs={
+            "k_groups": k,
+            "m_timepoints": m,
+            "within_subject_correlation": rho,
+            "effect_size_f": effect_size_f,
+            "alpha": alpha,
+            "power": power,
+            "dropout_rate": dropout,
+        },
+        constants=_round_constants(
+            {
+                "alpha_bonferroni": alpha_adj,
+                "Z_alpha_over_2": z_a,
+                "Z_beta": z_b,
+                "variance_reduction": 1 - rho,
+            }
+        ),
+        notes=[
+            "Cohen's f conventions: small = 0.10, medium = 0.25, large = 0.40.",
+            "Higher within-subject correlation (ρ) reduces n needed.",
+            (
+                "α is Bonferroni-adjusted across (k − 1) between-group "
+                "contrasts; for k = 2 this is a no-op."
+            ),
+        ],
+    )
+
+
+def reverse_repeated_measures_anova(
+    k_groups: int,
+    m_timepoints: int,
+    rho: float,
+    n_per_group: int,
+    alpha: float = 0.05,
+    power: float = 0.80,
+    dropout: float = 0.0,
+) -> Dict[str, Any]:
+    """Solve RM-ANOVA for the smallest detectable Cohen's f."""
+    _check_alpha(alpha)
+    _check_power(power)
+    if isinstance(k_groups, float) and not k_groups.is_integer():
+        raise ValueError("k_groups must be a whole number.")
+    k = int(k_groups)
+    if k < 2:
+        raise ValueError("k_groups must be ≥ 2.")
+    if isinstance(m_timepoints, float) and not m_timepoints.is_integer():
+        raise ValueError("m_timepoints must be a whole number.")
+    m = int(m_timepoints)
+    if m < 2:
+        raise ValueError("m_timepoints must be ≥ 2.")
+    if not 0 <= rho < 1:
+        raise ValueError("rho must be in [0, 1).")
+    n_recruited = _coerce_n(n_per_group, "n_per_group", minimum=4)
+    n_keep = _analyzable(n_recruited, dropout)
+    if n_keep < 4:
+        raise ValueError("Need ≥ 4 analysable subjects per group.")
+
+    alpha_adj = alpha / max(1, k - 1)
+    z_a = z_two_tailed(alpha_adj)
+    z_b = z_power(power)
+    f_val = math.sqrt(((z_a + z_b) ** 2) * (1 - rho) / (m * (n_keep - 1)))
+
+    notes = [
+        f"Inverted RM-ANOVA for f given k={k}, m={m}, ρ={rho:g}, n={n_keep}/group.",
+        (
+            "α was Bonferroni-adjusted across (k − 1) between-group "
+            "contrasts; for k = 2 this is a no-op."
+        ),
+    ]
+    drop = _dropout_note(n_recruited, n_keep, dropout)
+    if drop:
+        notes.append(drop)
+
+    return {
+        "formula": "repeated_measures_anova",
+        "mode": "reverse",
+        "formula_label": (
+            f"Repeated-measures ANOVA ({k}×{m}) — back-calculated f"
+        ),
+        "formula_expression": "solve for f:  f = √((Z(α/2) + Z(β))²·(1−ρ) / (m·(n−1)))",
+        "inputs": {
+            "k_groups": k,
+            "m_timepoints": m,
+            "within_subject_correlation": rho,
+            "n_per_group_recruited": n_recruited,
+            "n_per_group_analyzable": n_keep,
+            "alpha": alpha,
+            "power": power,
+            "dropout_rate": dropout,
+        },
+        "constants": _round_constants(
+            {"Z_alpha_over_2": z_a, "Z_beta": z_b, "variance_reduction": 1 - rho}
+        ),
+        "headline": [
+            {
+                "label": "Minimum detectable Cohen's f",
+                "value": f"{f_val:.3f}",
+                "sublabel": _cohens_f_label(f_val),
+            }
+        ],
+        "detectable": {
+            "min_detectable_cohens_f": round(f_val, 4),
+            "qualitative_label": _cohens_f_label(f_val),
+        },
+        "notes": notes,
+        "warnings": [],
+    }
+
+
+# ---------------------------------------------------------------------------
+# Survival analysis (log-rank, Schoenfeld 1983)
+# ---------------------------------------------------------------------------
+
+
+def survival_logrank(
+    hazard_ratio: float,
+    overall_event_rate: float,
+    allocation_ratio: float = 1.0,
+    alpha: float = 0.05,
+    power: float = 0.80,
+    dropout: float = 0.0,
+) -> SampleSizeResult:
+    """Schoenfeld (1983) sample size for the two-group log-rank test.
+
+        events = (Z(α/2) + Z(β))² / (p_a · p_b · (ln HR)²)
+        n      = events / overall_event_rate
+
+    ``allocation_ratio`` is k = n_b / n_a.
+    """
+    _check_alpha(alpha)
+    _check_power(power)
+    if hazard_ratio <= 0 or hazard_ratio == 1:
+        raise ValueError("hazard_ratio must be positive and ≠ 1.")
+    if not 0 < overall_event_rate <= 1:
+        raise ValueError("overall_event_rate must be in (0, 1].")
+    if allocation_ratio <= 0:
+        raise ValueError("allocation_ratio must be positive.")
+
+    z_a = z_two_tailed(alpha)
+    z_b = z_power(power)
+    p_a = 1 / (1 + allocation_ratio)
+    p_b = allocation_ratio / (1 + allocation_ratio)
+    ln_hr = math.log(hazard_ratio)
+    n_events = _ceil(((z_a + z_b) ** 2) / (p_a * p_b * ln_hr ** 2))
+    n_total = _ceil(n_events / overall_event_rate)
+    n_a = _ceil(n_total * p_a)
+    n_b = _ceil(n_total * p_b)
+    return SampleSizeResult(
+        formula="survival_logrank",
+        formula_label="Survival analysis — two-group log-rank (Schoenfeld 1983)",
+        formula_expression=(
+            "events = (Z(α/2)+Z(β))² / (p_a·p_b·(ln HR)²);  n = events / event_rate"
+        ),
+        n_per_group=min(n_a, n_b),
+        number_of_groups=2,
+        total_n=n_a + n_b,
+        adjusted_n=_apply_dropout(n_a + n_b, dropout),
+        inputs={
+            "hazard_ratio": hazard_ratio,
+            "overall_event_rate": overall_event_rate,
+            "allocation_ratio": allocation_ratio,
+            "alpha": alpha,
+            "power": power,
+            "dropout_rate": dropout,
+        },
+        constants=_round_constants(
+            {
+                "Z_alpha_over_2": z_a,
+                "Z_beta": z_b,
+                "ln_hazard_ratio": ln_hr,
+                "required_events": float(n_events),
+                "n_group_a": float(n_a),
+                "n_group_b": float(n_b),
+            }
+        ),
+        notes=[
+            f"Total events required: {n_events}.",
+            f"Allocation: group A = {n_a}, group B = {n_b}.",
+            "Censoring assumed non-informative; HR assumed proportional over time.",
+        ],
+    )
+
+
+def reverse_survival_logrank(
+    overall_event_rate: float,
+    n_total: int,
+    allocation_ratio: float = 1.0,
+    alpha: float = 0.05,
+    power: float = 0.80,
+    dropout: float = 0.0,
+) -> Dict[str, Any]:
+    """Solve Schoenfeld for the smallest detectable HR away from 1."""
+    _check_alpha(alpha)
+    _check_power(power)
+    if not 0 < overall_event_rate <= 1:
+        raise ValueError("overall_event_rate must be in (0, 1].")
+    if allocation_ratio <= 0:
+        raise ValueError("allocation_ratio must be positive.")
+    n_recruited = _coerce_n(n_total, "n_total", minimum=10)
+    n_keep = _analyzable(n_recruited, dropout)
+    n_events = max(1, math.floor(n_keep * overall_event_rate))
+
+    z_a = z_two_tailed(alpha)
+    z_b = z_power(power)
+    p_a = 1 / (1 + allocation_ratio)
+    p_b = allocation_ratio / (1 + allocation_ratio)
+    if n_events < 4:
+        raise ValueError(
+            "Too few expected events (<4). Increase n or the event rate."
+        )
+
+    ln_hr_abs = math.sqrt(((z_a + z_b) ** 2) / (n_events * p_a * p_b))
+    hr_low = math.exp(-ln_hr_abs)
+    hr_high = math.exp(ln_hr_abs)
+
+    notes = [
+        f"With {n_keep} analysable subjects and an overall event rate of "
+        f"{overall_event_rate:g}, you expect ≈ {n_events} events.",
+        "These are the closest hazard ratios to 1 your study can separate "
+        f"at α={alpha:g} and power={power:g}.",
+    ]
+    drop = _dropout_note(n_recruited, n_keep, dropout)
+    if drop:
+        notes.append(drop)
+
+    return {
+        "formula": "survival_logrank",
+        "mode": "reverse",
+        "formula_label": "Log-rank survival — back-calculated detectable HR",
+        "formula_expression": "solve for HR:  |ln HR| = √((Z(α/2)+Z(β))² / (events·p_a·p_b))",
+        "inputs": {
+            "overall_event_rate": overall_event_rate,
+            "allocation_ratio": allocation_ratio,
+            "n_recruited": n_recruited,
+            "n_analyzable": n_keep,
+            "alpha": alpha,
+            "power": power,
+            "dropout_rate": dropout,
+        },
+        "constants": _round_constants(
+            {
+                "Z_alpha_over_2": z_a,
+                "Z_beta": z_b,
+                "expected_events": float(n_events),
+            }
+        ),
+        "headline": [
+            {
+                "label": "Smallest detectable HR < 1 (protective)",
+                "value": f"{hr_low:.3f}",
+                "sublabel": f"HR ≤ {hr_low:.3f}  ⇒  detectable benefit",
+            },
+            {
+                "label": "Smallest detectable HR > 1 (harmful)",
+                "value": f"{hr_high:.3f}",
+                "sublabel": f"HR ≥ {hr_high:.3f}  ⇒  detectable harm",
+            },
+        ],
+        "detectable": {
+            "min_detectable_hr_low": round(hr_low, 4),
+            "min_detectable_hr_high": round(hr_high, 4),
+            "expected_events": int(n_events),
+        },
+        "notes": notes,
+        "warnings": [],
+    }
+
+
+# ---------------------------------------------------------------------------
+# Built-in recommendations for non-formulaic study types
+# ---------------------------------------------------------------------------
+
+
+STUDY_TYPE_RECOMMENDATIONS: Dict[str, Dict[str, Any]] = {
+    "qualitative": {
+        "label": "Qualitative interview study",
+        "recommended_n": 12,
+        "range": "12–15 in-depth interviews",
+        "rationale": (
+            "Information saturation in homogeneous samples is typically "
+            "reached by 12 interviews (Guest, Bunce & Johnson 2006). Plan "
+            "for 12 minimum and recruit until no new themes emerge."
+        ),
+        "guidance": [
+            "Sample size in qualitative work is judged by saturation, not statistics.",
+            "Stop recruiting when 2–3 consecutive interviews add no new codes.",
+            "Heterogeneous samples (multiple sub-populations) may need 20+ interviews.",
+        ],
+    },
+    "focus_group": {
+        "label": "Focus-group discussion (FGD)",
+        "recommended_n": 24,
+        "range": "3–5 groups of 6–10 participants each (≈ 24 total)",
+        "rationale": (
+            "Krueger & Casey (2015): 3–5 groups per population strata "
+            "are usually enough to reach thematic saturation."
+        ),
+        "guidance": [
+            "Each group: 6–10 participants; 60–90 min duration.",
+            "Plan ≥ 1 group per stratum (e.g., gender, age band).",
+            "Recruit a 20% backup roster — no-shows are common.",
+        ],
+    },
+    "pilot": {
+        "label": "Pilot / feasibility study",
+        "recommended_n": 25,
+        "range": "20–30 participants total (≈ 25)",
+        "rationale": (
+            "Pilots target feasibility, recruitment rate, and SD estimation "
+            "— not effect-size testing. ~25 is sufficient to estimate a "
+            "continuous SD with a usable CI (Whitehead et al. 2016)."
+        ),
+        "guidance": [
+            "Do not power a pilot to detect the main study's effect.",
+            "Report CIs for recruitment rate and outcome SD, not p-values.",
+            "Pre-specify go/no-go criteria before starting.",
+        ],
+    },
+    "questionnaire": {
+        "label": "Cross-sectional questionnaire / KAP survey",
+        "recommended_n": 384,
+        "range": "≈ 384 respondents (Cochran formula at p=0.5, d=0.05)",
+        "rationale": (
+            "Standard Cochran (1977) sample for a large/unknown population: "
+            "n = Z²·p(1−p)/d² = 1.96²·0.25/0.05² ≈ 384, the worst-case n "
+            "to estimate any prevalence to within ±5% at 95% confidence."
+        ),
+        "guidance": [
+            "If you know an expected prevalence, single_proportion gives a smaller n.",
+            "If your population is finite (<10 000), apply the finite-population correction.",
+            "Inflate by your expected non-response rate (often 15–25%).",
+        ],
+    },
+    "in_vitro": {
+        "label": "In-vitro experiment",
+        "recommended_n": None,  # routes to a normal formula
+        "range": "Typically 3–6 biological replicates per condition",
+        "rationale": (
+            "In-vitro work follows the resource-equation approach (Mead 1988) "
+            "or formal ANOVA when a hypothesis test is planned. For hypothesis "
+            "testing, use anova_means / two_means with pilot SD estimates."
+        ),
+        "guidance": [
+            "Distinguish biological replicates (independent samples) from technical replicates.",
+            "Report replicate type and number explicitly.",
+            "If formal hypothesis testing is the aim, switch to anova_means or two_means below.",
+        ],
+        "fallback_formula": "two_means",
+    },
+    "in_vivo": {
+        "label": "In-vivo animal study",
+        "recommended_n": None,  # routes to a normal formula
+        "range": "Power-based n with the 3Rs principle (Reduction)",
+        "rationale": (
+            "ARRIVE 2.0 / NC3Rs guidance: justify each animal with a power "
+            "calculation. Use anova_means / two_means with pilot or "
+            "literature-derived SD; round UP to whole animals per cage."
+        ),
+        "guidance": [
+            "Apply the 3Rs: replacement, reduction, refinement.",
+            "Justify allocation method and blinding in your protocol.",
+            "Account for expected attrition (mortality, surgical loss).",
+        ],
+        "fallback_formula": "two_means",
+    },
+}
+
+
+def get_study_type_recommendation(study_type: str) -> Optional[Dict[str, Any]]:
+    """Return the recommendation dict for a special study type, or None."""
+    return STUDY_TYPE_RECOMMENDATIONS.get(study_type)
+
+
+# ---------------------------------------------------------------------------
 # Dispatch
 # ---------------------------------------------------------------------------
 
@@ -1844,6 +2390,9 @@ FORMULAS = {
     "prediction_model": prediction_model,
     "kappa_agreement": kappa_agreement,
     "roc_auc": roc_auc,
+    "correlation": correlation,
+    "repeated_measures_anova": repeated_measures_anova,
+    "survival_logrank": survival_logrank,
 }
 
 
@@ -1859,6 +2408,9 @@ REVERSE_FORMULAS = {
     "prediction_model": reverse_prediction_model,
     "kappa_agreement": reverse_kappa_agreement,
     "roc_auc": reverse_roc_auc,
+    "correlation": reverse_correlation,
+    "repeated_measures_anova": reverse_repeated_measures_anova,
+    "survival_logrank": reverse_survival_logrank,
 }
 
 

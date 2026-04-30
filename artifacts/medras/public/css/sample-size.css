@@ -453,3 +453,78 @@
   font-size: 0.85rem;
   color: #6b7c93;
 }
+
+/* ----- Study-type recommendation panel (qualitative / FGD / pilot / …) ----- */
+.study-type-recommendation {
+  margin: 1.25rem 0 1rem;
+  padding: 1rem 1.25rem;
+  background: #f1f6fc;
+  border: 1px solid #c9dcef;
+  border-left: 4px solid #2c6cb6;
+  border-radius: 6px;
+}
+.study-type-recommendation h4 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+  color: #1f3d6b;
+}
+.rec-recommended-n {
+  margin: 0.25rem 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #1f3d6b;
+}
+.rec-rationale {
+  margin: 0.5rem 0;
+  font-size: 0.9rem;
+  color: #2d3a52;
+}
+.rec-guidance {
+  margin: 0.5rem 0 0 1.25rem;
+  padding: 0;
+  font-size: 0.88rem;
+  color: #2d3a52;
+}
+.rec-guidance li { margin-bottom: 0.2rem; }
+.rec-fallback-hint {
+  margin: 0.75rem 0 0;
+  padding-top: 0.5rem;
+  border-top: 1px dashed #c9dcef;
+  font-size: 0.85rem;
+  color: #4a5b7a;
+}
+
+/* ----- Reverse-mode "defaults used" disclosure ----- */
+.reverse-defaults {
+  margin: 0.75rem 0 0.25rem;
+  padding: 0.5rem 0.75rem;
+  background: #fafbfd;
+  border: 1px dashed #cdd5e1;
+  border-radius: 4px;
+  font-size: 0.88rem;
+  color: #4a5b7a;
+}
+.reverse-defaults summary {
+  cursor: pointer;
+  font-weight: 500;
+  color: #2c6cb6;
+}
+.reverse-defaults-list {
+  margin: 0.5rem 0 0.25rem 1.25rem;
+  padding: 0;
+}
+.reverse-defaults-list li { margin-bottom: 0.15rem; }
+.reverse-defaults-hint {
+  margin: 0.4rem 0 0;
+  font-size: 0.8rem;
+  color: #6b7c93;
+  font-style: italic;
+}
+
+/* ----- Inline helper text inside a label ----- */
+.field-help-inline {
+  font-weight: 400;
+  font-size: 0.85rem;
+  color: #6b7c93;
+  margin-left: 0.35rem;
+}

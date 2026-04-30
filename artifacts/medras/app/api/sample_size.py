@@ -20,7 +20,11 @@ from pydantic import BaseModel, Field, field_validator
 from app.core.limiter import limiter
 from app.core.logging import get_logger
 from app.services import sample_size as ss_engine
-from app.services.objective_analyzer import VALID_FORMULAS, analyze_objective
+from app.services.objective_analyzer import (
+    VALID_FORMULAS,
+    VALID_STUDY_TYPES,
+    analyze_objective,
+)
 
 log = get_logger(__name__)
 
@@ -32,8 +36,49 @@ router = APIRouter(prefix="/sample-size", tags=["sample-size"])
 # ---------------------------------------------------------------------------
 
 
+FormulaName = Literal[
+    "single_proportion",
+    "single_mean",
+    "two_proportions",
+    "two_means",
+    "paired_means",
+    "anova_means",
+    "repeated_measures",
+    "linear_regression",
+    "prediction_model",
+    "kappa_agreement",
+    "roc_auc",
+    "correlation",
+    "repeated_measures_anova",
+    "survival_logrank",
+]
+
+
 class AnalyzeRequest(BaseModel):
     objective: str = Field(..., min_length=10, max_length=4000)
+    # Optional explicit override from the Step 1 study-type dropdown.
+    # "auto" or omitted = let the analyser decide.
+    study_type: Optional[str] = Field(default=None, max_length=32)
+
+    @field_validator("study_type")
+    @classmethod
+    def _check_study_type(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        if value not in VALID_STUDY_TYPES:
+            raise ValueError(f"Invalid study_type: {value}")
+        return value
+
+
+class StudyTypeRecommendation(BaseModel):
+    """Built-in non-formulaic recommendation (qualitative/FGD/pilot/etc)."""
+
+    label: str
+    recommended_n: Optional[int] = None
+    range: str
+    rationale: str
+    guidance: List[str]
+    fallback_formula: Optional[str] = None
 
 
 class AnalyzeResponse(BaseModel):
@@ -45,23 +90,14 @@ class AnalyzeResponse(BaseModel):
     confidence: str
     rationale: str
     source: str
+    study_type: str = "quantitative"
+    suggested_dropout: float = 0.0
+    study_type_recommendation: Optional[StudyTypeRecommendation] = None
     warnings: List[str]
 
 
 class CalculateRequest(BaseModel):
-    formula: Literal[
-        "single_proportion",
-        "single_mean",
-        "two_proportions",
-        "two_means",
-        "paired_means",
-        "anova_means",
-        "repeated_measures",
-        "linear_regression",
-        "prediction_model",
-        "kappa_agreement",
-        "roc_auc",
-    ]
+    formula: FormulaName
     parameters: Dict[str, Any]
     expected_sample_size: Optional[int] = Field(
         default=None,
@@ -103,19 +139,7 @@ class CalculateResponse(BaseModel):
 
 
 class ReverseRequest(BaseModel):
-    formula: Literal[
-        "single_proportion",
-        "single_mean",
-        "two_proportions",
-        "two_means",
-        "paired_means",
-        "anova_means",
-        "repeated_measures",
-        "linear_regression",
-        "prediction_model",
-        "kappa_agreement",
-        "roc_auc",
-    ]
+    formula: FormulaName
     parameters: Dict[str, Any]
 
     @field_validator("parameters")
@@ -157,6 +181,73 @@ class ReverseResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+def _apply_study_type_override(
+    result, override: Optional[str]
+):
+    """If the user picked a non-auto study_type on Step 1, force-route accordingly."""
+    if not override or override == "auto":
+        return result
+    if override == result.study_type:
+        return result
+
+    result.study_type = override
+    if override == "qualitative":
+        result.study_design = "qualitative"
+        result.suggested_formula = ""
+        result.suggested_dropout = 0.0
+        result.rationale = (
+            "Researcher selected a qualitative study — sample size is judged "
+            "by thematic saturation; no power calculation required."
+        )
+    elif override == "focus_group":
+        result.study_design = "qualitative"
+        result.suggested_formula = ""
+        result.suggested_dropout = 0.0
+        result.rationale = "Researcher selected focus-group discussions."
+    elif override == "pilot":
+        result.study_design = "descriptive"
+        result.suggested_formula = ""
+        result.suggested_dropout = 0.0
+        result.rationale = (
+            "Researcher selected a pilot / feasibility study — "
+            "recommend ~25 participants for SD estimation."
+        )
+    elif override == "questionnaire":
+        # Questionnaire / KAP route — recommendation panel only (no formula).
+        result.study_design = "descriptive"
+        result.suggested_formula = ""
+        result.outcome_type = "proportion"
+        result.suggested_dropout = 0.0
+        result.rationale = (
+            "Researcher selected a questionnaire survey — recommend "
+            "n ≈ 384 (Cochran, p=0.5, d=±5%, 95% CI). Use "
+            "single_proportion manually if you have a known prevalence."
+        )
+    elif override == "in_vitro":
+        # Keep whatever formula was inferred (or fall back to two_means).
+        if not result.suggested_formula:
+            result.suggested_formula = "two_means"
+        result.suggested_dropout = 0.0
+    elif override == "in_vivo":
+        if not result.suggested_formula:
+            result.suggested_formula = "two_means"
+        result.suggested_dropout = max(result.suggested_dropout, 0.10)
+    elif override == "quantitative":
+        # Researcher overrode a special detection back to quantitative —
+        # normalise any leftover qualitative/special metadata so the
+        # response is internally consistent.
+        if result.study_design in {"qualitative", "unknown"}:
+            result.study_design = "descriptive"
+        if not result.suggested_formula:
+            result.suggested_formula = "two_means"
+            result.outcome_type = "mean"
+        result.rationale = (
+            "Researcher overrode the auto-detection back to a quantitative "
+            f"study — using {result.suggested_formula}."
+        )
+    return result
+
+
 @router.post("/analyze", response_model=AnalyzeResponse)
 @limiter.limit("30/minute")
 async def analyze_endpoint(payload: AnalyzeRequest, request: Request) -> AnalyzeResponse:
@@ -166,6 +257,17 @@ async def analyze_endpoint(payload: AnalyzeRequest, request: Request) -> Analyze
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
+    result = _apply_study_type_override(result, payload.study_type)
+
+    # Attach the built-in recommendation block for non-formulaic types so
+    # the frontend can render it without a second round-trip.
+    rec_dict: Optional[Dict[str, Any]] = ss_engine.get_study_type_recommendation(
+        result.study_type
+    )
+    rec_model: Optional[StudyTypeRecommendation] = (
+        StudyTypeRecommendation(**rec_dict) if rec_dict else None
+    )
+
     log.info(
         "sample_size.analyze",
         extra={
@@ -173,9 +275,30 @@ async def analyze_endpoint(payload: AnalyzeRequest, request: Request) -> Analyze
             "suggested_formula": result.suggested_formula,
             "source": result.source,
             "confidence": result.confidence,
+            "study_type": result.study_type,
+            "study_type_override": payload.study_type or "auto",
         },
     )
-    return AnalyzeResponse(**result.to_dict())
+    response_dict = result.to_dict()
+    response_dict["study_type_recommendation"] = (
+        rec_model.model_dump() if rec_model else None
+    )
+    return AnalyzeResponse(**response_dict)
+
+
+@router.get(
+    "/study-type-recommendation/{study_type}",
+    response_model=StudyTypeRecommendation,
+)
+async def study_type_recommendation_endpoint(study_type: str) -> StudyTypeRecommendation:
+    """Return the built-in recommendation block for a non-formulaic study type."""
+    rec = ss_engine.get_study_type_recommendation(study_type)
+    if rec is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No built-in recommendation for study_type={study_type!r}",
+        )
+    return StudyTypeRecommendation(**rec)
 
 
 @router.post("/calculate", response_model=CalculateResponse)

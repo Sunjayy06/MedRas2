@@ -77,6 +77,25 @@
             placeholder="Example: Compare the cure rate of antibiotic A versus antibiotic B in adult patients with community-acquired pneumonia."
           ></textarea>
 
+          <div class="field-row">
+            <div class="field">
+              <label class="field-label" for="study-type">
+                Study type
+                <span class="field-help-inline">— pick one or leave on auto-detect</span>
+              </label>
+              <select id="study-type" class="field-input" data-testid="select-study-type">
+                <option value="auto" selected>Auto-detect from my objective</option>
+                <option value="quantitative">Quantitative (use a formula)</option>
+                <option value="qualitative">Qualitative interviews (saturation-based)</option>
+                <option value="focus_group">Focus-group discussion (FGD)</option>
+                <option value="pilot">Pilot / feasibility study</option>
+                <option value="questionnaire">Questionnaire / KAP survey</option>
+                <option value="in_vitro">In-vitro experiment</option>
+                <option value="in_vivo">In-vivo (animal) study</option>
+              </select>
+            </div>
+          </div>
+
           <div class="calc-card-actions">
             <button type="button" class="btn btn-primary" id="analyze-btn" data-testid="button-analyze">
               Analyse objective
@@ -89,15 +108,39 @@
           <div class="calc-analysis" id="analysis-panel" hidden data-testid="panel-analysis">
             <h3>Analysis</h3>
             <dl class="analysis-grid">
+              <div><dt>Study type</dt><dd data-testid="text-study-type">—</dd></div>
               <div><dt>Detected groups</dt><dd data-testid="text-detected-groups">—</dd></div>
               <div><dt>Outcome type</dt><dd data-testid="text-outcome-type">—</dd></div>
               <div><dt>Study design</dt><dd data-testid="text-study-design">—</dd></div>
               <div><dt>Suggested formula</dt><dd data-testid="text-suggested-formula">—</dd></div>
+              <div><dt>Suggested dropout</dt><dd data-testid="text-suggested-dropout">—</dd></div>
               <div><dt>Confidence</dt><dd data-testid="text-confidence">—</dd></div>
               <div><dt>Source</dt><dd data-testid="text-source">—</dd></div>
             </dl>
             <p class="analysis-rationale" data-testid="text-rationale"></p>
             <ul class="analysis-warnings" data-testid="list-warnings"></ul>
+
+            <!-- Non-formulaic study-type recommendation
+                 (qualitative / FGD / pilot / questionnaire / in-vitro / in-vivo). -->
+            <div
+              class="study-type-recommendation"
+              id="study-type-recommendation"
+              hidden
+              data-testid="panel-study-type-recommendation"
+            >
+              <h4 data-testid="text-rec-label">—</h4>
+              <p class="rec-recommended-n" data-testid="text-rec-recommended-n"></p>
+              <p class="rec-range" data-testid="text-rec-range"></p>
+              <p class="rec-rationale" data-testid="text-rec-rationale"></p>
+              <ul class="rec-guidance" data-testid="list-rec-guidance"></ul>
+              <p
+                class="rec-fallback-hint"
+                id="rec-fallback-hint"
+                hidden
+                data-testid="text-rec-fallback"
+              ></p>
+            </div>
+
             <div class="calc-card-actions">
               <button type="button" class="btn btn-primary" id="accept-btn" data-testid="button-accept">
                 Use this formula
@@ -134,14 +177,19 @@
                 </optgroup>
                 <optgroup label="Longitudinal / repeated measures">
                   <option value="repeated_measures">Two groups across multiple timepoints</option>
+                  <option value="repeated_measures_anova">Repeated-measures ANOVA (k groups × m timepoints)</option>
                 </optgroup>
                 <optgroup label="Modelling">
                   <option value="linear_regression">Multiple linear regression (R²)</option>
                   <option value="prediction_model">Clinical prediction model (events per variable)</option>
+                  <option value="correlation">Pearson correlation (Fisher's z)</option>
                 </optgroup>
                 <optgroup label="Agreement / diagnostic">
                   <option value="kappa_agreement">Cohen's κ (inter-rater agreement)</option>
                   <option value="roc_auc">Diagnostic test ROC / AUC</option>
+                </optgroup>
+                <optgroup label="Time-to-event">
+                  <option value="survival_logrank">Survival — two-group log-rank (Schoenfeld)</option>
                 </optgroup>
               </select>
             </div>

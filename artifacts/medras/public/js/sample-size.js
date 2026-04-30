@@ -260,6 +260,130 @@
         },
       ],
     },
+    correlation: {
+      label: "Pearson correlation (Fisher's z)",
+      expression: "n = ((Z(α/2) + Z(β)) / arctanh(r))² + 3",
+      usesPower: true,
+      fields: [
+        {
+          key: "expected_r",
+          label: "Expected correlation (r)",
+          help: "Cohen 1988: small ≈ 0.10, medium ≈ 0.30, large ≈ 0.50. Sign is ignored.",
+          type: "number", min: -0.99, max: 0.99, step: 0.05, placeholder: "e.g., 0.30",
+        },
+      ],
+    },
+    repeated_measures_anova: {
+      label: "Repeated-measures ANOVA (k groups × m timepoints)",
+      expression: "n/group = (Z(α/2) + Z(β))² · (1 − ρ) / (m · f²) + 1",
+      usesPower: true,
+      fields: [
+        {
+          key: "k_groups",
+          label: "Number of groups (k)",
+          help: "How many independent treatment arms.",
+          type: "number", min: 2, max: 20, step: 1, placeholder: "e.g., 2",
+        },
+        {
+          key: "m_timepoints",
+          label: "Number of timepoints (m)",
+          help: "How many times each subject is measured (≥ 2).",
+          type: "number", min: 2, max: 50, step: 1, placeholder: "e.g., 3",
+        },
+        {
+          key: "rho",
+          label: "Within-subject correlation (ρ)",
+          help: "Correlation across repeated measurements (0 = independent, 1 = perfect). Typical: 0.5.",
+          type: "number", min: 0, max: 0.999, step: 0.05, placeholder: "e.g., 0.50",
+        },
+        {
+          key: "effect_size_f",
+          label: "Cohen's f (between-group effect)",
+          help: "Conventions: small = 0.10, medium = 0.25, large = 0.40.",
+          type: "number", min: 0.01, max: 2, step: 0.01, placeholder: "e.g., 0.25",
+        },
+      ],
+    },
+    survival_logrank: {
+      label: "Survival — two-group log-rank (Schoenfeld 1983)",
+      expression:
+        "events = (Z(α/2)+Z(β))² / (p_a·p_b·(ln HR)²);  n = events / event_rate",
+      usesPower: true,
+      fields: [
+        {
+          key: "hazard_ratio",
+          label: "Expected hazard ratio (HR)",
+          help: "HR < 1 = treatment protective; HR > 1 = harmful. Must be ≠ 1.",
+          type: "number", min: 0.05, max: 20, step: 0.05, placeholder: "e.g., 0.70",
+        },
+        {
+          key: "overall_event_rate",
+          label: "Expected overall event rate",
+          help: "Proportion of all enrolled subjects expected to have the event during follow-up.",
+          type: "number", min: 0.01, max: 1, step: 0.05, placeholder: "e.g., 0.40",
+        },
+        {
+          key: "allocation_ratio",
+          label: "Allocation ratio (k = n_b / n_a)",
+          help: "1 = balanced randomisation; 2 = twice as many in arm B.",
+          type: "number", min: 0.1, max: 10, step: 0.1, placeholder: "e.g., 1",
+        },
+      ],
+    },
+  };
+
+  // -----------------------------------------------------------------------
+  // DEFAULTS — sensible reference values used to:
+  //   (1) auto-fill blank inputs in FORWARD mode on submit
+  //   (2) silently fill non-structural reference params in REVERSE n-only mode
+  // Keys must match the FORMULAS[*].fields[*].key.
+  // -----------------------------------------------------------------------
+
+  var DEFAULTS = {
+    single_proportion: { p: 0.5, precision: 0.05 },
+    single_mean: { sigma: 1, precision: 0.1 },
+    two_proportions: { p1: 0.5, p2: 0.65 },
+    two_means: { mean1: 0, mean2: 0.5, sigma: 1 },
+    paired_means: { mean_diff: 0.5, sigma_diff: 1 },
+    anova_means: { k: 3, effect_size_f: 0.25 },
+    repeated_measures: { mean1: 0, mean2: 0.5, sigma: 1, rho: 0.5, m_timepoints: 3 },
+    linear_regression: { r_squared: 0.13, predictors: 4 },
+    prediction_model: { predictors: 8, event_rate: 0.20, epv_target: 10 },
+    kappa_agreement: { expected_kappa: 0.7, precision: 0.1 },
+    roc_auc: { auc: 0.75, case_ratio: 1, precision: 0.05 },
+    correlation: { expected_r: 0.3 },
+    repeated_measures_anova: {
+      k_groups: 2, m_timepoints: 3, rho: 0.5, effect_size_f: 0.25,
+    },
+    survival_logrank: {
+      hazard_ratio: 0.7, overall_event_rate: 0.4, allocation_ratio: 1,
+    },
+  };
+
+  // Human-readable labels for reference params shown in the "defaults used"
+  // panel during n-only reverse mode.
+  var DEFAULT_LABELS = {
+    p: "Expected proportion (p)",
+    p1: "Proportion in group 1 (p₁)",
+    p2: "Proportion in group 2 (p₂)",
+    sigma: "Standard deviation (σ)",
+    sigma_diff: "SD of differences (σ_d)",
+    mean1: "Mean in group 1 (μ₁)",
+    mean2: "Mean in group 2 (μ₂)",
+    mean_diff: "Expected mean difference (Δ)",
+    rho: "Within-subject correlation (ρ)",
+    expected_r: "Expected correlation (r)",
+    expected_kappa: "Expected κ",
+    auc: "Expected AUC",
+    case_ratio: "Controls per case (k)",
+    r_squared: "Expected R²",
+    event_rate: "Expected event rate",
+    epv_target: "Events per variable (EPV)",
+    overall_event_rate: "Expected overall event rate",
+    hazard_ratio: "Hazard ratio (HR)",
+    allocation_ratio: "Allocation ratio",
+    effect_size_f: "Cohen's f",
+    precision: "Precision (d)",
   };
 
   // -----------------------------------------------------------------------
@@ -290,11 +414,26 @@
       goToStep(2, "two_means");
     });
     document.getElementById("accept-btn").addEventListener("click", function () {
-      var formula = state.lastAnalysis ? state.lastAnalysis.suggested_formula : "two_means";
+      // If the analyzer routed to a non-formulaic study type (qualitative,
+      // FGD, pilot, …) we have no formula to open. The recommendation panel
+      // already shows the recommended n in-page; the accept button is hidden
+      // in that case (see renderAnalysis), so this guard is belt-and-braces.
+      if (state.lastAnalysis && !state.lastAnalysis.suggested_formula) return;
+      var formula = state.lastAnalysis
+        ? state.lastAnalysis.suggested_formula
+        : "two_means";
       goToStep(2, formula);
     });
     document.getElementById("override-btn").addEventListener("click", function () {
-      goToStep(2, state.lastAnalysis ? state.lastAnalysis.suggested_formula : "two_means");
+      var fallback =
+        state.lastAnalysis &&
+        state.lastAnalysis.study_type_recommendation &&
+        state.lastAnalysis.study_type_recommendation.fallback_formula;
+      var formula =
+        (state.lastAnalysis && state.lastAnalysis.suggested_formula) ||
+        fallback ||
+        "two_means";
+      goToStep(2, formula);
     });
   }
 
@@ -343,12 +482,32 @@
     document.getElementById("dropout").value = "0";
     var modeSel = document.getElementById("mode-select");
     if (modeSel) modeSel.value = "forward";
+    var studyType = document.getElementById("study-type");
+    if (studyType) studyType.value = "auto";
     var panel = document.getElementById("analysis-panel");
     if (panel) panel.hidden = true;
+    var recPanel = document.getElementById("study-type-recommendation");
+    if (recPanel) recPanel.hidden = true;
     var err = document.getElementById("parameters-error");
     if (err) err.hidden = true;
     var formulaFields = document.getElementById("formula-fields");
     if (formulaFields) formulaFields.innerHTML = "";
+  }
+
+  // Snap an arbitrary suggested dropout fraction (0–0.20) to the nearest
+  // value present in the dropout <select> so the option actually exists.
+  function snapDropoutToOption(fraction) {
+    var allowed = [0, 0.05, 0.10, 0.15, 0.20];
+    var best = allowed[0];
+    var bestDist = Math.abs(fraction - best);
+    allowed.forEach(function (v) {
+      var d = Math.abs(fraction - v);
+      if (d < bestDist) {
+        best = v;
+        bestDist = d;
+      }
+    });
+    return best === 0 ? "0" : String(best);
   }
 
   // -----------------------------------------------------------------------
@@ -366,10 +525,20 @@
     btn.disabled = true;
     btn.textContent = "Analysing…";
 
+    // Honour an explicit Study Type pick from Step 1 — the API will route
+    // straight to the recommendation table for non-formulaic types.
+    var studyTypeEl = document.getElementById("study-type");
+    var studyTypeOverride =
+      studyTypeEl && studyTypeEl.value && studyTypeEl.value !== "auto"
+        ? studyTypeEl.value
+        : null;
+    var body = { objective: objective };
+    if (studyTypeOverride) body.study_type = studyTypeOverride;
+
     fetch("/api/sample-size/analyze", {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify({ objective: objective }),
+      body: JSON.stringify(body),
     })
       .then(function (resp) {
         return resp.json().then(function (body) {
@@ -393,10 +562,21 @@
   function renderAnalysis(data) {
     var panel = document.getElementById("analysis-panel");
     panel.hidden = false;
+    setText("text-study-type", titleCase(data.study_type || "quantitative"));
     setText("text-detected-groups", String(data.detected_groups));
     setText("text-outcome-type", titleCase(data.outcome_type));
     setText("text-study-design", titleCase(data.study_design));
-    setText("text-suggested-formula", FORMULAS[data.suggested_formula].label);
+    var formulaLabel =
+      data.suggested_formula && FORMULAS[data.suggested_formula]
+        ? FORMULAS[data.suggested_formula].label
+        : "—  (no formula needed for this study type)";
+    setText("text-suggested-formula", formulaLabel);
+    setText(
+      "text-suggested-dropout",
+      data.suggested_dropout && data.suggested_dropout > 0
+        ? Math.round(data.suggested_dropout * 100) + "%"
+        : "0% (none expected)"
+    );
     setText("text-confidence", titleCase(data.confidence));
     setText("text-source", sourceLabel(data.source));
     setText("text-rationale", data.rationale || "");
@@ -408,6 +588,71 @@
       li.textContent = w;
       warningsEl.appendChild(li);
     });
+
+    renderStudyTypeRecommendation(data);
+
+    // When the analyzer routes to a non-formulaic type the "Use this formula"
+    // CTA is meaningless; hide it (keep "override" so users can drop into the
+    // calculator manually). Otherwise show both buttons normally.
+    var hasFormula = !!(data.suggested_formula && FORMULAS[data.suggested_formula]);
+    var acceptBtn = document.getElementById("accept-btn");
+    if (acceptBtn) acceptBtn.style.display = hasFormula ? "" : "none";
+    var overrideBtn = document.getElementById("override-btn");
+    if (overrideBtn) {
+      overrideBtn.textContent = hasFormula
+        ? "Choose a different formula"
+        : "Open the calculator manually";
+    }
+  }
+
+  function renderStudyTypeRecommendation(data) {
+    var recPanel = document.getElementById("study-type-recommendation");
+    if (!recPanel) return;
+    var rec = data.study_type_recommendation;
+    if (!rec) {
+      recPanel.hidden = true;
+      return;
+    }
+    recPanel.hidden = false;
+    setText("text-rec-label", rec.label || titleCase(data.study_type));
+    // For non-formulaic types with a fixed n (qualitative=12, FGD=24,
+    // pilot=25, questionnaire=384) show the integer; for in-vitro/in-vivo
+    // there is no single number (it depends on the design) so show the
+    // recommended range only.
+    var hasNumber =
+      typeof rec.recommended_n === "number" && isFinite(rec.recommended_n);
+    var recommendedLine = hasNumber
+      ? "Recommended sample size: " +
+        rec.recommended_n +
+        (rec.range ? "  (" + rec.range + ")" : "")
+      : "Recommended sample size: " + (rec.range || "see guidance below");
+    setText("text-rec-recommended-n", recommendedLine);
+    setText("text-rec-range", "");
+    setText("text-rec-rationale", rec.rationale || "");
+    var ul = document.querySelector('[data-testid="list-rec-guidance"]');
+    if (ul) {
+      ul.innerHTML = "";
+      (rec.guidance || []).forEach(function (g) {
+        var li = document.createElement("li");
+        li.textContent = g;
+        ul.appendChild(li);
+      });
+    }
+    var fb = document.getElementById("rec-fallback-hint");
+    if (fb) {
+      if (rec.fallback_formula) {
+        fb.hidden = false;
+        fb.textContent =
+          "If you need a power calculation instead, the closest matching " +
+          'formula is "' +
+          (FORMULAS[rec.fallback_formula]
+            ? FORMULAS[rec.fallback_formula].label
+            : rec.fallback_formula) +
+          '" — click "Open the calculator manually" below.';
+      } else {
+        fb.hidden = true;
+      }
+    }
   }
 
   function sourceLabel(source) {
@@ -432,45 +677,60 @@
   //   detail        — human description for the toggle text
   // -----------------------------------------------------------------------
 
+  // For each formula in reverse mode:
+  //   removeFields  — keys the back-calculation SOLVES FOR (omitted entirely)
+  //   keepFields    — design-structural keys we still ASK the user (e.g.
+  //                   k = #groups, m = #timepoints, p = #predictors). All
+  //                   other reference parameters are silently filled from
+  //                   DEFAULTS so that "n-only reverse" really means n-only
+  //                   from the researcher's perspective.
+  //   nField        — the available-n input to render.
   var REVERSE_SPECS = {
     single_proportion: {
       removeFields: ["precision"],
+      keepFields: [],
       nField: nField("n", "Available sample size", "How many participants you can recruit."),
       solvesFor: "the smallest precision (margin of error) it can achieve",
       detail: "Back-calculate the tightest confidence interval my available sample size can support.",
     },
     single_mean: {
       removeFields: ["precision"],
+      keepFields: [],
       nField: nField("n", "Available sample size", "How many participants you can recruit."),
       solvesFor: "the smallest precision (margin of error) it can achieve",
       detail: "Back-calculate the tightest confidence interval my available sample size can support.",
     },
     two_proportions: {
       removeFields: ["p2"],
+      keepFields: [],
       nField: nField("n_per_group", "Available sample size per group", "How many participants in each arm."),
       solvesFor: "the smallest detectable second proportion (p₂)",
       detail: "Back-calculate the smallest p₂ — both above and below p₁ — my sample can detect.",
     },
     two_means: {
       removeFields: ["mean1", "mean2"],
+      keepFields: [],
       nField: nField("n_per_group", "Available sample size per group", "How many participants in each arm."),
-      solvesFor: "the smallest detectable mean difference (Δ)",
-      detail: "Back-calculate the smallest difference between the two group means my sample can detect.",
+      solvesFor: "the smallest detectable standardised mean difference (Cohen's d)",
+      detail: "Back-calculate the smallest standardised difference (Cohen's d) my sample can detect.",
     },
     paired_means: {
       removeFields: ["mean_diff"],
+      keepFields: [],
       nField: nField("n", "Available sample size (number of pairs)", "How many matched pairs / before-after subjects."),
-      solvesFor: "the smallest detectable within-pair change (Δ)",
-      detail: "Back-calculate the smallest before-vs-after change my paired sample can detect.",
+      solvesFor: "the smallest detectable within-pair change (Cohen's d_z)",
+      detail: "Back-calculate the smallest before-vs-after standardised change my paired sample can detect.",
     },
     anova_means: {
       removeFields: ["effect_size_f"],
+      keepFields: ["k"],
       nField: nField("n_per_group", "Available sample size per group", "How many participants in each of the k groups.", 5),
       solvesFor: "the smallest detectable Cohen's f",
       detail: "Back-calculate the smallest between-group spread my sample can detect.",
     },
     repeated_measures: {
       removeFields: ["mean1", "mean2"],
+      keepFields: ["m_timepoints"],
       nField: nField(
         "n_per_group",
         "Available sample size per group",
@@ -481,6 +741,7 @@
     },
     linear_regression: {
       removeFields: ["r_squared"],
+      keepFields: ["predictors"],
       nField: nField(
         "n",
         "Available sample size",
@@ -491,6 +752,7 @@
     },
     prediction_model: {
       removeFields: ["predictors"],
+      keepFields: [],
       nField: nField(
         "n_total",
         "Available total sample size",
@@ -501,6 +763,7 @@
     },
     kappa_agreement: {
       removeFields: ["precision"],
+      keepFields: [],
       nField: nField(
         "n",
         "Available number of subjects",
@@ -512,14 +775,51 @@
     },
     roc_auc: {
       removeFields: ["precision"],
+      keepFields: [],
       nField: nField(
         "n_per_group",
         "Available number of cases (diseased)",
-        "Controls will be added in proportion to the case-ratio you set above.",
+        "Controls will be added in proportion to the case-ratio default (1:1).",
         5
       ),
       solvesFor: "the achievable precision (CI half-width) around the AUC",
       detail: "Back-calculate the tightest CI around the AUC my case sample can support.",
+    },
+    correlation: {
+      removeFields: ["expected_r"],
+      keepFields: [],
+      nField: nField(
+        "n",
+        "Available sample size",
+        "How many subjects you can measure on both variables.",
+        10
+      ),
+      solvesFor: "the smallest detectable |r|",
+      detail: "Back-calculate the smallest correlation magnitude my sample can detect.",
+    },
+    repeated_measures_anova: {
+      removeFields: ["effect_size_f"],
+      keepFields: ["k_groups", "m_timepoints"],
+      nField: nField(
+        "n_per_group",
+        "Available sample size per group",
+        "How many subjects in each of the k groups.",
+        4
+      ),
+      solvesFor: "the smallest detectable Cohen's f",
+      detail: "Back-calculate the smallest between-group effect my sample can detect.",
+    },
+    survival_logrank: {
+      removeFields: ["hazard_ratio"],
+      keepFields: [],
+      nField: nField(
+        "n_total",
+        "Available total sample size",
+        "Both arms combined; allocation defaults to 1:1.",
+        10
+      ),
+      solvesFor: "the smallest hazard ratio (above and below 1) the study can detect",
+      detail: "Back-calculate the smallest detectable HR my study can separate from 1.",
     },
   };
 
@@ -540,6 +840,7 @@
     state.selectedFormula = formulaKey;
     var spec = FORMULAS[formulaKey];
     var revSpec = REVERSE_SPECS[formulaKey];
+    var defaults = DEFAULTS[formulaKey] || {};
     document.getElementById("formula-select").value = formulaKey;
 
     // Keep the mode dropdown in sync with state and visible for every formula.
@@ -560,13 +861,29 @@
         revSpec.detail.slice(1);
     }
 
-    // Build the per-formula fields. In reverse mode swap the "unknown
-    // effect" input(s) for the available-n field.
-    var fieldsToRender = spec.fields;
+    // Build the per-formula fields.
+    //   FORWARD mode → render all spec.fields; placeholders show defaults so
+    //                  the researcher can submit even with blanks (we'll
+    //                  auto-fill on submit).
+    //   REVERSE mode → render ONLY structural keepFields + the available-n
+    //                  field. All other reference parameters are silently
+    //                  filled from DEFAULTS so the researcher truly only
+    //                  has to type their available sample size.
+    var fieldsToRender;
+    var hiddenDefaultedFields = []; // shown in the "defaults used" panel
     if (state.reverseMode && revSpec) {
+      var keepSet = {};
+      (revSpec.keepFields || []).forEach(function (k) { keepSet[k] = true; });
+      var removeSet = {};
+      (revSpec.removeFields || []).forEach(function (k) { removeSet[k] = true; });
       fieldsToRender = spec.fields
-        .filter(function (f) { return revSpec.removeFields.indexOf(f.key) === -1; })
+        .filter(function (f) { return keepSet[f.key]; })
         .concat([revSpec.nField]);
+      hiddenDefaultedFields = spec.fields.filter(function (f) {
+        return !keepSet[f.key] && !removeSet[f.key];
+      });
+    } else {
+      fieldsToRender = spec.fields;
     }
 
     document.getElementById("formula-summary").textContent =
@@ -579,9 +896,63 @@
     var row = document.createElement("div");
     row.className = "field-row";
     fieldsToRender.forEach(function (field) {
-      row.appendChild(buildFieldEl(field));
+      // Pre-fill default into the placeholder so the user sees a hint.
+      var fieldWithDefault = field;
+      if (defaults.hasOwnProperty(field.key)) {
+        fieldWithDefault = Object.assign({}, field, {
+          placeholder:
+            (field.placeholder ? field.placeholder + "  " : "") +
+            "(default " + defaults[field.key] + ")",
+        });
+      }
+      row.appendChild(buildFieldEl(fieldWithDefault));
     });
     container.appendChild(row);
+
+    // Reverse-mode transparency disclosure — always shown so the researcher
+    // knows what (if anything) the back-calculation auto-filled on their
+    // behalf. When there are hidden defaults (most formulas), list them;
+    // when there aren't (e.g. correlation), say so explicitly.
+    if (state.reverseMode && revSpec) {
+      var details = document.createElement("details");
+      details.className = "reverse-defaults";
+      details.open = false;
+      var summary = document.createElement("summary");
+      var ul = document.createElement("ul");
+      ul.className = "reverse-defaults-list";
+      var hint = document.createElement("p");
+      hint.className = "reverse-defaults-hint";
+
+      if (hiddenDefaultedFields.length) {
+        summary.textContent =
+          "Defaults used (" + hiddenDefaultedFields.length + " parameter" +
+          (hiddenDefaultedFields.length === 1 ? "" : "s") +
+          ") — click to view";
+        hiddenDefaultedFields.forEach(function (f) {
+          var v = defaults[f.key];
+          if (v === undefined) return;
+          var li = document.createElement("li");
+          li.textContent = (DEFAULT_LABELS[f.key] || f.label) + " = " + v;
+          ul.appendChild(li);
+        });
+        hint.textContent =
+          "Switch to forward mode if you want to set these yourself.";
+      } else {
+        summary.textContent =
+          "Defaults used — only the available sample size is needed";
+        var li2 = document.createElement("li");
+        li2.textContent =
+          "No reference parameters were auto-filled — n is the only input " +
+          "this back-calculation requires.";
+        ul.appendChild(li2);
+        hint.textContent = "";
+      }
+
+      details.appendChild(summary);
+      details.appendChild(ul);
+      if (hint.textContent) details.appendChild(hint);
+      container.appendChild(details);
+    }
 
     // Power field is irrelevant for descriptive (single-sample) formulas.
     var powerField = document.querySelector("[data-power-field]");
@@ -643,45 +1014,76 @@
     return wrap;
   }
 
+  // Discrete-count keys must be whole numbers; API rejects fractions.
+  var DISCRETE_KEYS = {
+    n: 1, n_per_group: 1, n_total: 1,
+    k: 1, k_groups: 1, predictors: 1, m_timepoints: 1, epv_target: 1,
+  };
+
   function onCalculate() {
     var spec = FORMULAS[state.selectedFormula];
     var revSpec = REVERSE_SPECS[state.selectedFormula];
+    var defaults = DEFAULTS[state.selectedFormula] || {};
     var isReverse = !!state.reverseMode && !!revSpec;
 
-    // Determine which fields the user must have filled.
-    var fieldsToRead = isReverse
-      ? spec.fields
-          .filter(function (f) { return revSpec.removeFields.indexOf(f.key) === -1; })
-          .concat([revSpec.nField])
-      : spec.fields;
+    // What the form actually rendered:
+    //   reverse → keepFields + n
+    //   forward → all spec.fields
+    var visibleFields;
+    var hiddenDefaultedFields = [];
+    if (isReverse) {
+      var keepSet = {};
+      (revSpec.keepFields || []).forEach(function (k) { keepSet[k] = true; });
+      var removeSet = {};
+      (revSpec.removeFields || []).forEach(function (k) { removeSet[k] = true; });
+      visibleFields = spec.fields
+        .filter(function (f) { return keepSet[f.key]; })
+        .concat([revSpec.nField]);
+      hiddenDefaultedFields = spec.fields.filter(function (f) {
+        return !keepSet[f.key] && !removeSet[f.key];
+      });
+    } else {
+      visibleFields = spec.fields;
+    }
 
     var params = {};
     var missing = [];
-    fieldsToRead.forEach(function (field) {
-      var raw = document.getElementById("param-" + field.key).value;
+
+    // Read visible inputs. Blank cells fall back to DEFAULTS (forward mode)
+    // or, for the n field specifically, are flagged as missing — n is the
+    // ONE thing the researcher must always tell us in reverse mode.
+    visibleFields.forEach(function (field) {
+      var el = document.getElementById("param-" + field.key);
+      var raw = el ? el.value : "";
+      var num;
       if (raw === "" || raw === null) {
-        missing.push(field.label);
-        return;
+        if (defaults.hasOwnProperty(field.key)) {
+          num = defaults[field.key];
+        } else {
+          // No default available — must ask. Most commonly this is the
+          // available-n field in reverse mode, or a structural keepField.
+          missing.push(field.label);
+          return;
+        }
+      } else {
+        num = Number(raw);
+        if (Number.isNaN(num)) {
+          missing.push(field.label);
+          return;
+        }
       }
-      var num = Number(raw);
-      if (Number.isNaN(num)) {
-        missing.push(field.label);
-        return;
-      }
-      // Sample-size and other discrete-count fields must be whole numbers;
-      // the API rejects fractional n / predictors / timepoints.
-      if (
-        field.key === "n" ||
-        field.key === "n_per_group" ||
-        field.key === "n_total" ||
-        field.key === "k" ||
-        field.key === "predictors" ||
-        field.key === "m_timepoints" ||
-        field.key === "epv_target"
-      ) {
+      if (DISCRETE_KEYS[field.key]) {
         num = Math.floor(num);
       }
       params[field.key] = num;
+    });
+
+    // Inject hidden reference-parameter defaults (reverse mode only).
+    hiddenDefaultedFields.forEach(function (f) {
+      if (defaults.hasOwnProperty(f.key) && !params.hasOwnProperty(f.key)) {
+        var v = defaults[f.key];
+        params[f.key] = DISCRETE_KEYS[f.key] ? Math.floor(v) : v;
+      }
     });
 
     var dropout = Number(document.getElementById("dropout").value);
@@ -940,6 +1342,12 @@
     n_cases_recruited: "Available cases (recruited)",
     n_cases_analyzable: "Analysable cases (after dropout)",
     n_controls_analyzable: "Analysable controls (after dropout)",
+    // Correlation / RM-ANOVA / Survival
+    expected_r: "Expected correlation (r)",
+    k_groups: "Number of groups (k)",
+    hazard_ratio: "Expected hazard ratio (HR)",
+    overall_event_rate: "Expected overall event rate",
+    allocation_ratio: "Allocation ratio (n_b / n_a)",
   };
 
   var CONSTANT_LABELS = {
@@ -963,6 +1371,14 @@
     Q1_hanley: "Q₁ (Hanley-McNeil)",
     Q2_hanley: "Q₂ (Hanley-McNeil)",
     auc_variance: "Var(AUC)",
+    // Correlation / RM-ANOVA / Survival
+    fisher_z_r: "Fisher's z(r) = arctanh(r)",
+    variance_reduction: "Variance reduction factor (1 − ρ)",
+    ln_hazard_ratio: "ln(HR)",
+    required_events: "Required events",
+    expected_events: "Expected events (n × event_rate)",
+    n_group_a: "Allocated to group A",
+    n_group_b: "Allocated to group B",
   };
 
   function fillTable(testid, obj, labels) {
@@ -1013,6 +1429,16 @@
     if (step === 2) {
       renderFormulaFields(formulaKey || state.selectedFormula || "two_means");
       document.getElementById("parameters-error").hidden = true;
+      // Pre-select the dropout dropdown to the analyzer's smart suggestion
+      // (longitudinal/cohort → 10%, RCT → 15%, cross-sectional → 0%).
+      // Only auto-apply on first entry; if the user has already changed it
+      // (i.e. it's anything other than "0") we leave their pick alone.
+      if (state.lastAnalysis && typeof state.lastAnalysis.suggested_dropout === "number") {
+        var dropEl = document.getElementById("dropout");
+        if (dropEl && dropEl.value === "0") {
+          dropEl.value = snapDropoutToOption(state.lastAnalysis.suggested_dropout);
+        }
+      }
     }
     window.scrollTo({ top: document.querySelector(".calc-shell").offsetTop - 24, behavior: "smooth" });
   }
