@@ -1223,6 +1223,11 @@
       if (prev === 3 && WIZ.answers.compare === "no") prev = 2;
       showWizQ(prev);
     });
+    var restartBtn = document.getElementById("wiz-restart");
+    if (restartBtn) restartBtn.addEventListener("click", function () {
+      wizardReset();
+      goToStep(0);
+    });
   }
   function wizardFinish() {
     var a = WIZ.answers;
