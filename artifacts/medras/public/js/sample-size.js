@@ -2378,8 +2378,8 @@
   }
 
   function formatN(nPerGroup, numGroups) {
-    if (numGroups <= 1) return String(nPerGroup);
-    return nPerGroup + "  (×" + numGroups + " groups)";
+    if (numGroups <= 1) return nPerGroup + " per group";
+    return nPerGroup + " per group (× " + numGroups + " groups)";
   }
 
   // -----------------------------------------------------------------------
