@@ -10,7 +10,7 @@
     />
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%232f6fed'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-family='Inter,sans-serif' font-size='18' font-weight='700' fill='white'%3EM%3C/text%3E%3C/svg%3E" />
     <link rel="stylesheet" href="/css/style.css" />
-    <link rel="stylesheet" href="/css/analysis.css?v=2026050111" />
+    <link rel="stylesheet" href="/css/analysis.css?v=2026050112" />
   </head>
   <body>
     <header class="site-header" data-testid="site-header">
@@ -96,39 +96,61 @@
       <section class="se-screen is-hidden" id="screen-intake" data-testid="screen-intake">
         <header class="se-screen-head">
           <h2>Let me quickly ask a few questions</h2>
-          <p>These help me tailor the analysis to your study. Type in plain English &mdash; I'll work it out. Skip anything you don't know and I'll make sensible assumptions.</p>
+          <p>One question at a time &mdash; type in plain English, or just hit <em>Next</em> to skip. Swipe (on mobile) or use the arrow buttons below.</p>
         </header>
 
-        <div class="se-form-stack">
-          <label class="se-field">
-            <span>What do you have ready?</span>
-            <select id="intake-have" data-testid="select-intake-have">
-              <option value="proposal">A study proposal</option>
-              <option value="objective">An objective and sample size</option>
-            </select>
-          </label>
+        <div class="se-intake-progress" data-testid="intake-progress">
+          <span class="se-intake-dot" data-dot="0"></span>
+          <span class="se-intake-dot" data-dot="1"></span>
+          <span class="se-intake-dot" data-dot="2"></span>
+          <span class="se-intake-dot" data-dot="3"></span>
+        </div>
 
-          <label class="se-field">
-            <span>What outcome variable(s) are you looking at? <small>(optional &mdash; leave blank if unsure)</small></span>
-            <textarea id="intake-outcomes" rows="3" placeholder="e.g. haemoglobin level at 12 weeks; 30-day mortality; pain score change" data-testid="input-intake-outcomes"></textarea>
-          </label>
+        <div class="se-intake-stage" id="intake-stage" data-testid="intake-stage">
+          <div class="se-intake-step is-active" data-step="0" data-testid="intake-step-0">
+            <div class="se-intake-counter">Question 1 of 4</div>
+            <label class="se-field">
+              <span class="se-intake-q">What do you have ready?</span>
+              <select id="intake-have" data-testid="select-intake-have">
+                <option value="proposal">A study proposal</option>
+                <option value="objective">An objective and sample size</option>
+              </select>
+            </label>
+          </div>
 
-          <label class="se-field">
-            <span>What independent variable(s) (predictors / exposures)? <small>(optional)</small></span>
-            <textarea id="intake-independents" rows="3" placeholder="e.g. treatment arm; age; sex; baseline severity" data-testid="input-intake-independents"></textarea>
-          </label>
+          <div class="se-intake-step" data-step="1" data-testid="intake-step-1">
+            <div class="se-intake-counter">Question 2 of 4</div>
+            <label class="se-field">
+              <span class="se-intake-q">What outcome variable(s) are you looking at?</span>
+              <small class="se-intake-hint">Optional &mdash; leave blank if unsure.</small>
+              <textarea id="intake-outcomes" rows="4" placeholder="e.g. haemoglobin level at 12 weeks; 30-day mortality; pain score change" data-testid="input-intake-outcomes"></textarea>
+            </label>
+          </div>
 
-          <label class="se-field">
-            <span>Any specific instructions for the analysis? <small>(optional)</small></span>
-            <textarea id="intake-instructions" rows="3" placeholder="e.g. please use non-parametric tests if data is skewed; analyse males and females separately; report 95% CI" data-testid="input-intake-instructions"></textarea>
-          </label>
+          <div class="se-intake-step" data-step="2" data-testid="intake-step-2">
+            <div class="se-intake-counter">Question 3 of 4</div>
+            <label class="se-field">
+              <span class="se-intake-q">What independent variable(s) (predictors / exposures)?</span>
+              <small class="se-intake-hint">Optional.</small>
+              <textarea id="intake-independents" rows="4" placeholder="e.g. treatment arm; age; sex; baseline severity" data-testid="input-intake-independents"></textarea>
+            </label>
+          </div>
+
+          <div class="se-intake-step" data-step="3" data-testid="intake-step-3">
+            <div class="se-intake-counter">Question 4 of 4</div>
+            <label class="se-field">
+              <span class="se-intake-q">Any specific instructions for the analysis?</span>
+              <small class="se-intake-hint">Optional.</small>
+              <textarea id="intake-instructions" rows="4" placeholder="e.g. please use non-parametric tests if data is skewed; analyse males and females separately; report 95% CI" data-testid="input-intake-instructions"></textarea>
+            </label>
+          </div>
         </div>
 
         <div id="intake-status" class="se-status" role="status" aria-live="polite" data-testid="status-intake"></div>
 
         <div class="se-actions">
-          <button type="button" class="btn btn-secondary" data-action="back-to-1" data-testid="button-back-intake">&larr; Back</button>
-          <button type="button" class="btn btn-primary" data-action="continue-intake" data-testid="button-continue-intake">Continue &rarr;</button>
+          <button type="button" class="btn btn-secondary" data-action="intake-prev" data-testid="button-intake-prev">&larr; Back</button>
+          <button type="button" class="btn btn-primary" data-action="intake-next" data-testid="button-intake-next">Next &rarr;</button>
         </div>
       </section>
 
@@ -396,6 +418,6 @@
       </div>
     </footer>
 
-    <script src="/js/analysis.js?v=2026050111" defer></script>
+    <script src="/js/analysis.js?v=2026050112" defer></script>
   </body>
 </html>

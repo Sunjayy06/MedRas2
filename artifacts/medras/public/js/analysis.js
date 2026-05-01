@@ -28,6 +28,7 @@ const state = {
   practiceTemplate: "anaemia",
   entryChoice: null,   // "upload" | "practice"
   intake: null,        // {what_you_have, outcomes, independents, instructions}
+  intakeStep: 0,       // current question index in intake wizard (0..3)
 };
 
 /* ------------------------------------------------------------------ */
@@ -128,6 +129,8 @@ function bindScreen1() {
         $("#intake-independents").value = state.intake.independents || "";
         $("#intake-instructions").value = state.intake.instructions || "";
       }
+      // Reset the wizard to question 1 every time we enter the intake screen.
+      if (typeof bindIntake._reset === "function") bindIntake._reset();
       showScreen("intake");
     });
   });
@@ -138,13 +141,49 @@ function bindScreen1() {
 /* ------------------------------------------------------------------ */
 
 function bindIntake() {
-  $('[data-action="continue-intake"]').addEventListener("click", () => {
+  const stage = $("#intake-stage");
+  const steps = $$(".se-intake-step", stage);
+  const dots = $$(".se-intake-dot", $(".se-intake-progress"));
+  const prevBtn = $('[data-action="intake-prev"]');
+  const nextBtn = $('[data-action="intake-next"]');
+  const total = steps.length;
+
+  function showStep(idx) {
+    state.intakeStep = idx;
+    steps.forEach((el, i) => {
+      el.classList.toggle("is-active", i === idx);
+    });
+    dots.forEach((d, i) => {
+      d.classList.toggle("is-active", i === idx);
+      d.classList.toggle("is-done", i < idx);
+    });
+    // Update labels: on first step, Back returns to Screen 1.
+    prevBtn.textContent = idx === 0 ? "← Back" : "← Previous";
+    nextBtn.textContent = idx === total - 1 ? "Continue →" : "Next →";
+    // Auto-focus the input on the visible step (skip on first because select
+    // grabbing focus on touch can scroll the page jarringly).
+    if (idx > 0) {
+      const input = steps[idx].querySelector("textarea, input, select");
+      if (input) setTimeout(() => input.focus(), 50);
+    }
+  }
+
+  function commitIntake() {
     state.intake = {
       what_you_have: $("#intake-have").value,
       outcomes: $("#intake-outcomes").value.trim(),
       independents: $("#intake-independents").value.trim(),
       instructions: $("#intake-instructions").value.trim(),
     };
+  }
+
+  function goNext() {
+    if (state.intakeStep < total - 1) {
+      showStep(state.intakeStep + 1);
+      return;
+    }
+    // Last step → commit and continue to upload/practice.
+    commitIntake();
     setStatus($("#intake-status"), "");
     if (state.entryChoice === "upload") {
       showScreen("2a");
@@ -152,7 +191,56 @@ function bindIntake() {
       showScreen("2c");
       renderPracticeTemplates();
     }
+  }
+
+  function goPrev() {
+    if (state.intakeStep > 0) {
+      showStep(state.intakeStep - 1);
+    } else {
+      showScreen("1");
+    }
+  }
+
+  nextBtn.addEventListener("click", goNext);
+  prevBtn.addEventListener("click", goPrev);
+
+  // Keyboard: Enter advances on the select; on textareas use Ctrl/Cmd+Enter.
+  stage.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter") return;
+    const tag = (e.target.tagName || "").toLowerCase();
+    if (tag === "select") {
+      e.preventDefault();
+      goNext();
+    } else if (tag === "textarea" && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      goNext();
+    }
   });
+
+  // Touch swipe: left = next, right = prev.
+  let touchStartX = null;
+  let touchStartY = null;
+  stage.addEventListener("touchstart", (e) => {
+    if (e.touches.length !== 1) return;
+    touchStartX = e.touches[0].clientX;
+    touchStartY = e.touches[0].clientY;
+  }, { passive: true });
+  stage.addEventListener("touchend", (e) => {
+    if (touchStartX === null) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - touchStartX;
+    const dy = t.clientY - touchStartY;
+    touchStartX = touchStartY = null;
+    // Horizontal swipe of >50px and dominantly horizontal triggers nav.
+    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+      if (dx < 0) goNext(); else goPrev();
+    }
+  }, { passive: true });
+
+  // Reset to first question whenever the screen is freshly shown.
+  // showScreen() doesn't fire an event, so we expose a reset hook.
+  bindIntake._reset = () => showStep(0);
+  showStep(0);
 }
 
 /* ------------------------------------------------------------------ */
@@ -742,12 +830,25 @@ async function runSelfTest() {
     await wait(100);
   }
   log(`screen-intake visible: ${!document.getElementById("screen-intake").classList.contains("is-hidden")}`);
-  // Fill intake fields and continue
+  // Q1 – select dropdown, then Next
   $("#intake-have").value = "objective";
+  log(`intake step: ${state.intakeStep}`);
+  click('[data-testid="button-intake-next"]');
+  await wait(150);
+  // Q2 – outcomes, then Next
   $("#intake-outcomes").value = "haemoglobin at 12 weeks";
+  log(`intake step: ${state.intakeStep}`);
+  click('[data-testid="button-intake-next"]');
+  await wait(150);
+  // Q3 – independents, then Next
   $("#intake-independents").value = "treatment arm; sex";
+  log(`intake step: ${state.intakeStep}`);
+  click('[data-testid="button-intake-next"]');
+  await wait(150);
+  // Q4 – instructions, then Continue (final Next)
   $("#intake-instructions").value = "use non-parametric tests if skewed";
-  click('[data-testid="button-continue-intake"]');
+  log(`intake step: ${state.intakeStep}, button label: ${$('[data-testid="button-intake-next"]').textContent.trim()}`);
+  click('[data-testid="button-intake-next"]');
   await wait(300);
   // Screen 2C: pick rct, click generate
   await loadTemplates();
