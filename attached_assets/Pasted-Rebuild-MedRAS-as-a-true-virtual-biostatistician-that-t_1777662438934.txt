@@ -1,0 +1,146 @@
+Rebuild MedRAS as a true virtual biostatistician that thinks, reasons, and acts like an experienced statistical expert handling raw research data for publication-ready analysis.
+
+CORE IDENTITY:
+MedRAS is not a spreadsheet tool.
+It is a virtual statistician.
+
+Its responsibility is to receive raw data, understand the theoretical meaning of each variable, classify correctly, guide preprocessing, choose the right analyses, and generate submission-ready outputs.
+
+The system must replicate the professional reasoning process of a real statistician.
+
+--------------------------------------------------
+MASTER STATISTICAL THINKING FRAMEWORK
+--------------------------------------------------
+
+When a dataset is uploaded, the system must not make simplistic assumptions such as:
+- numeric = continuous
+- score = scale
+- coded values = categorical only
+
+Instead, it must reason through variable identity in context.
+
+For every variable, MedRAS must determine:
+
+1. Storage Type
+- numeric
+- text
+- date
+- boolean
+
+2. Statistical Nature
+- continuous
+- discrete
+- ordinal
+- nominal
+- binary
+- time-to-event
+- repeated measure
+
+3. Theoretical Interpretation
+- Is it a direct measurement?
+- Is it a count?
+- Is it a validated score?
+- Is it a grading/ranking system?
+- Is it a derived/composite metric?
+
+4. Analytical Flexibility
+- Can it be treated as continuous?
+- Should it remain ordinal?
+- Does it support both approaches depending on assumptions?
+
+--------------------------------------------------
+KEY EXPERT RULES
+--------------------------------------------------
+
+A. Clinical / Functional Scores
+Examples:
+Harris Hip Score, Radiological Union Score, Likert Scales, QoL scales
+
+Rule:
+Do not force into one category.
+
+Classify as:
+“Score-based variable with ordinal foundation and potential continuous-style analysis depending on range, distribution, and research objective.”
+
+Allow:
+- mean / SD if assumptions support
+- median / IQR if skewed
+- frequency categories if clinically interpreted in bands
+
+B. Counts
+Examples:
+number of admissions, pregnancies, complications
+
+Classify as discrete numeric.
+
+C. Measurements
+Examples:
+age, BMI, blood pressure
+
+Classify as continuous unless clearly grouped.
+
+D. Recoded Variables
+If transformed into ranges/groups:
+retain original variable
+create derived variable
+update statistical type accordingly
+
+Example:
+Age (continuous) → Age Group (categorical)
+
+--------------------------------------------------
+STATISTICIAN WORKFLOW PIPELINE
+--------------------------------------------------
+
+Step 1: Data Audit
+- inspect structure
+- detect missingness
+- identify anomalies
+- validate coding consistency
+
+Step 2: Variable Intelligence Layer
+- classify each variable with theory-aware reasoning
+- explain classification briefly
+
+Step 3: Preprocessing Recommendations
+- suggest cleaning
+- transformations
+- recoding only if meaningful
+
+Step 4: Statistical Plan Builder
+- choose descriptive methods
+- test assumptions
+- recommend inferential analyses
+- justify test selection
+
+Step 5: Analysis Execution
+- compute results using validated libraries
+- never fabricate numerical outputs
+
+Step 6: Reporting Engine
+- produce tables, graphs, interpretations
+- generate journal-ready statistical summaries
+
+--------------------------------------------------
+USER EXPERIENCE PRINCIPLE
+--------------------------------------------------
+
+Frontend must remain simple.
+
+Hide complexity.
+
+The app should ask only necessary questions and make expert decisions in the background.
+
+Where ambiguity exists, request clarification instead of assuming.
+
+--------------------------------------------------
+GOAL
+--------------------------------------------------
+
+Create a system that behaves like a trained biostatistician who understands both statistical theory and practical research expectations.
+
+It must bridge theory and applied analysis.
+
+It should not merely process data—it should reason about data.
+
+The final outcome should be publication-ready, statistically rigorous, and trusted by researchers as if reviewed by a real expert.

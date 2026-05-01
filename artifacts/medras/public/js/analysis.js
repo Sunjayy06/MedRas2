@@ -985,6 +985,49 @@ function typeBadge(t) {
   return `<span class="se-type-badge t-${safe}">${TYPE_LABELS[safe]}</span>`;
 }
 
+// MedRAS Variable Intelligence Layer — display labels for the four
+// theory-aware axes returned by the backend classifier alongside the
+// legacy `detected_type`. See artifacts/medras/app/services/variable_classifier.py.
+const INTERPRETATION_LABELS = {
+  measurement:      "Measurement",
+  count:            "Count",
+  validated_score:  "Validated score",
+  grading:          "Grading / stage",
+  binary_indicator: "Binary indicator",
+  category:         "Category",
+  identifier:       "Identifier",
+  date:             "Date / time",
+  free_text:        "Free text",
+  empty:            "Empty",
+};
+const FLEX_LABELS = {
+  continuous:                "Continuous",
+  ordinal:                   "Ordinal",
+  categorical:               "Categorical",
+  categorical_after_binning: "Banded",
+  binary:                    "Binary",
+  time_index:                "Time index",
+  exclude:                   "—",
+};
+function renderIntelligence(c) {
+  // Backwards-compat: older payloads (or manual edits via the dropdown)
+  // may not carry the new fields. Render nothing in that case so the
+  // legacy badge keeps standing on its own.
+  const interp = c.interpretation;
+  if (!interp || !INTERPRETATION_LABELS[interp]) return "";
+  const flex = Array.isArray(c.analytical_flexibility) ? c.analytical_flexibility : [];
+  const flexHtml = flex
+    .filter((f) => FLEX_LABELS[f] && FLEX_LABELS[f] !== "—")
+    .map((f) => `<span class="se-vars-flex-chip" data-flex="${escapeHtml(f)}">${escapeHtml(FLEX_LABELS[f])}</span>`)
+    .join("");
+  const reasoning = c.reasoning ? escapeHtml(c.reasoning) : "";
+  const titleAttr = reasoning ? ` title="${reasoning}"` : "";
+  return `
+    <div class="se-vars-interp"${titleAttr} data-interpretation="${escapeHtml(interp)}">${escapeHtml(INTERPRETATION_LABELS[interp])}</div>
+    ${flexHtml ? `<div class="se-vars-flex">${flexHtml}</div>` : ""}
+  `;
+}
+
 /* ------------------------------------------------------------------ */
 /*  Step 3 · 5-zone layout (A summary / B table / C recoding /         */
 /*  D auto-coding plan / E variable assistant)                         */
@@ -1320,7 +1363,12 @@ function renderClassifyTable() {
         <div class="se-vars-col-name">${escapeHtml(c.column)}</div>
         ${issueHtml}
       </td>
-      <td>${typeBadge(c.detected_type)}</td>
+      <td>
+        <div class="se-vars-type-stack">
+          ${typeBadge(c.detected_type)}
+          ${renderIntelligence(c)}
+        </div>
+      </td>
       <td>${samples}</td>
       <td>${missing}</td>
       <td class="se-vars-table-action">
@@ -1336,10 +1384,25 @@ function renderClassifyTable() {
       if (!c) return;
       c.detected_type = sel.value;
       c.reason = `Manually set to ${sel.value}.`;
+      // Manual override invalidates the Variable Intelligence Layer
+      // axes — they were derived from the auto-classified detected_type
+      // and we don't have the raw series client-side to recompute them.
+      // Clear them so the UI doesn't show contradictory information;
+      // the next /classify round-trip will repopulate them via the
+      // backend reenrich_after_override hook.
+      c.interpretation = null;
+      c.statistical_nature = null;
+      c.analytical_flexibility = null;
+      c.reasoning = null;
       const row = sel.closest("tr");
       if (row) {
-        const badge = row.querySelector(".se-type-badge");
-        if (badge) badge.outerHTML = typeBadge(sel.value);
+        const stack = row.querySelector(".se-vars-type-stack");
+        if (stack) {
+          stack.innerHTML = typeBadge(sel.value) + renderIntelligence(c);
+        } else {
+          const badge = row.querySelector(".se-type-badge");
+          if (badge) badge.outerHTML = typeBadge(sel.value);
+        }
       }
       validateConfirm();
     });

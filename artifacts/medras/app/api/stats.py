@@ -464,9 +464,16 @@ async def classify(payload: ClassifyRequest) -> Dict[str, Any]:
         for c in fresh:
             prev = next((p for p in stored if p["column"] == c["column"]), None)
             if prev and prev.get("reason", "").startswith(("Manually set", "Set by assistant")):
-                # User/assistant override wins over re-detection.
+                # User/assistant override wins over re-detection. Re-run
+                # the Variable Intelligence Layer so the four theory-aware
+                # axes match the overridden detected_type instead of the
+                # one the auto-classifier just produced.
                 c["detected_type"] = prev["detected_type"]
                 c["reason"] = prev["reason"]
+                if c["column"] in entry.df.columns:
+                    variable_classifier.reenrich_after_override(
+                        c, entry.df[c["column"]], c["column"],
+                    )
             classifications.append(c)
         # Append columns that exist only in stored (shouldn't normally happen).
         for prev in stored:
@@ -480,6 +487,10 @@ async def classify(payload: ClassifyRequest) -> Dict[str, Any]:
                 if c["column"] in ov:
                     c["detected_type"] = ov[c["column"]]
                     c["reason"] = f"Manually set to {ov[c['column']]}."
+                    if c["column"] in entry.df.columns:
+                        variable_classifier.reenrich_after_override(
+                            c, entry.df[c["column"]], c["column"],
+                        )
     entry.meta["classifications"] = classifications
 
     issues = variable_issues.detect_issues(entry.df, classifications)
@@ -579,6 +590,10 @@ async def variable_assistant_endpoint(
         if prev and prev.get("reason", "").startswith(("Manually set", "Set by assistant")):
             c["detected_type"] = prev["detected_type"]
             c["reason"] = prev["reason"]
+            if c["column"] in entry.df.columns:
+                variable_classifier.reenrich_after_override(
+                    c, entry.df[c["column"]], c["column"],
+                )
 
     # Apply this action's type change.
     if target_col and type_after:
@@ -586,6 +601,10 @@ async def variable_assistant_endpoint(
             if c["column"] == target_col:
                 c["detected_type"] = type_after
                 c["reason"] = f"Set by assistant to {type_after}."
+                if c["column"] in entry.df.columns:
+                    variable_classifier.reenrich_after_override(
+                        c, entry.df[c["column"]], c["column"],
+                    )
                 break
 
     entry.meta["classifications"] = classifications

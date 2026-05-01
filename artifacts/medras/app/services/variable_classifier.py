@@ -1,6 +1,34 @@
 """Auto-classify dataset columns into MedRAS variable types.
 
-MedRAS variable types (matching SPSS conventions used by clinical researchers):
+Each classification record carries two layers:
+
+1. The **legacy verdict** (``detected_type``, ``reason``) used everywhere
+   downstream — Step 3 dropdowns, Step 4 quality checks, the analysis
+   engine, and recoding presets.
+
+2. The **MedRAS Variable Intelligence Layer** — a four-axis description
+   of the variable that mirrors how a real biostatistician thinks about
+   raw data before touching a single test. The four axes are:
+
+     * ``storage_type`` — how the value physically lives in the dataset
+       (``numeric`` / ``text`` / ``date`` / ``boolean``).
+     * ``statistical_nature`` — its measurement-theory class
+       (``continuous`` / ``discrete`` / ``ordinal`` / ``nominal`` /
+       ``binary`` / ``datetime`` / ``identifier`` / ``free_text`` /
+       ``empty``).
+     * ``interpretation`` — what the variable IS clinically
+       (``measurement`` / ``count`` / ``validated_score`` / ``grading`` /
+       ``binary_indicator`` / ``category`` / ``identifier`` / ``date`` /
+       ``free_text`` / ``empty``).
+     * ``analytical_flexibility`` — the test families it can legitimately
+       feed (e.g. ``["continuous", "ordinal", "categorical"]`` for a
+       clinical score).
+
+   A short ``reasoning`` string puts the verdict into plain language so
+   the UI can show users *why* the classifier decided what it decided.
+
+Legacy ``detected_type`` values (matching SPSS conventions used by
+clinical researchers):
 
 * ``id``       — Identifier column (Patient_ID, MRN). Excluded from analysis.
 * ``date``     — Date / datetime column. Used for survival or time-series only.
@@ -25,9 +53,6 @@ Classification rules — applied in order, first match wins:
 5. Object / string dtype:
      * unique ≤ 20 → ``nominal``
      * else → ``exclude`` (likely free-text)
-
-The classifier returns a list of dicts, one per column, that can be sent
-directly to the front-end for the Step 2 review table.
 """
 
 from __future__ import annotations
@@ -93,6 +118,60 @@ _CONTINUOUS_NAME_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Validated clinical scores / instruments. When a column name matches one
+# of these the classifier marks the variable's interpretation as
+# ``validated_score`` and applies the spec rule:
+#   "Score-based variable with ordinal foundation and potential
+#   continuous-style analysis depending on range, distribution, and
+#   research objective."
+# Generic terms ``score|index|scale`` are intentionally included — if the
+# researcher named the column "score", treat it as a score for
+# interpretation purposes (analytical flexibility still depends on the
+# storage shape).
+_VALIDATED_SCORE_NAME_RE = re.compile(
+    r"(?:^|[\W_])("
+    r"score|index|scale|"
+    r"harris|hhs|hip[_ ]?score|"
+    r"sf[_ -]?(?:36|12|8)|"
+    r"qol|quality[_ ]?of[_ ]?life|"
+    r"womac|oxford|kss|"
+    r"barthel|adl|iadl|"
+    r"hads|phq|gad|moca|mmse|"
+    r"edss|asia|tlics|frankel|ais|"
+    r"vas|nrs|likert|"
+    r"odi|ndi|"
+    r"radiological[_ ]?union|rus|rasanen|"
+    r"charlson|apache|sofa|gcs|"
+    r"disability|function|outcome"
+    r")(?:$|[\W_])",
+    re.IGNORECASE,
+)
+
+# Grading / stage / severity / class — ordered categories that are *not*
+# validated scores (no continuous-style analysis offered, only ordinal /
+# categorical).
+_GRADING_NAME_RE = re.compile(
+    r"(?:^|[\W_])(grade|stage|severity|class|tier)(?:$|[\W_])",
+    re.IGNORECASE,
+)
+# A standalone literal "grade" token. Used to distinguish unambiguous
+# grading columns ("Pain_score_grade", "Tumor_grade") from broader
+# grading keywords (severity/stage/class/tier) that often co-occur with
+# score/instrument names ("Severity_score") and should defer to the
+# score interpretation in those mixed cases.
+_LITERAL_GRADE_RE = re.compile(
+    r"(?:^|[\W_])grade(?:$|[\W_])",
+    re.IGNORECASE,
+)
+
+# Sex / gender / yes-no style binary names — used to mark the
+# interpretation as ``binary_indicator`` even when ``unique_count`` could
+# theoretically allow a different reading.
+_BINARY_NAME_RE = re.compile(
+    r"(?:^|[\W_])(sex|gender|alive|dead|deceased|smoker|diabetic|hypertensive|pregnant)(?:$|[\W_])",
+    re.IGNORECASE,
+)
+
 
 def _safe_unique_count(series: pd.Series) -> int:
     try:
@@ -115,7 +194,20 @@ def _looks_like_date(series: pd.Series) -> bool:
 
 
 def classify_column(series: pd.Series, name: str) -> Dict[str, Any]:
-    """Return a classification record for one column."""
+    """Return a classification record for one column.
+
+    The record contains both the legacy ``detected_type`` field and the
+    four-axis Variable Intelligence Layer (storage_type,
+    statistical_nature, interpretation, analytical_flexibility,
+    reasoning). The latter is added by ``_enrich`` so every entry point
+    (``classify_column``, ``classify_dataframe``) gets the richer view.
+    """
+    record = _classify_core(series, name)
+    return _enrich(record, series, name)
+
+
+def _classify_core(series: pd.Series, name: str) -> Dict[str, Any]:
+    """Legacy classifier — produces ``detected_type`` + ``reason``."""
     n_total = len(series)
     n_missing = int(series.isna().sum())
     n_present = n_total - n_missing
@@ -244,6 +336,233 @@ def _record(
         "missing": n_missing,
         "missing_pct": round(100.0 * n_missing / n_total, 1) if n_total else 0.0,
     }
+
+
+# ---------------------------------------------------------------------------
+# Variable Intelligence Layer — adds the four theory-aware axes onto the
+# legacy classification record. Centralised here so the verdict and the
+# reasoning can never drift apart.
+# ---------------------------------------------------------------------------
+
+def _enrich(record: Dict[str, Any], series: pd.Series, name: str) -> Dict[str, Any]:
+    """Add ``storage_type``, ``statistical_nature``, ``interpretation``,
+    ``analytical_flexibility`` and a plain-English ``reasoning`` string
+    to a classification record produced by ``_classify_core``."""
+    detected = record.get("detected_type", "exclude")
+    unique = int(record.get("unique_count") or 0)
+
+    # --- Storage type: how the value physically lives in the dataset.
+    if pd.api.types.is_datetime64_any_dtype(series):
+        storage = "date"
+    elif pd.api.types.is_bool_dtype(series):
+        storage = "boolean"
+    elif pd.api.types.is_numeric_dtype(series):
+        storage = "numeric"
+    elif _looks_like_date(series):
+        storage = "date"
+    else:
+        storage = "text"
+
+    # Integer-ness signal: used for the "count vs continuous" reasoning.
+    all_int = False
+    if storage == "numeric":
+        try:
+            vals = series.dropna()
+            if len(vals):
+                all_int = bool(np.all(np.equal(np.mod(vals, 1), 0)))
+        except Exception:
+            all_int = False
+
+    # --- Theoretical interpretation: what the variable IS clinically.
+    interp = _interpret(name, detected, storage, unique, all_int)
+
+    # --- Statistical nature: measurement-theory class.
+    nature = _statistical_nature(detected, storage, unique, interp)
+
+    # --- Analytical flexibility: which test families it can feed.
+    flex = _analytical_flexibility(interp, nature, unique)
+
+    # --- Reasoning: short prose, written in statistician voice.
+    reasoning = _reasoning_text(interp, nature, unique, all_int, record.get("reason", ""))
+
+    record["storage_type"] = storage
+    record["statistical_nature"] = nature
+    record["interpretation"] = interp
+    record["analytical_flexibility"] = flex
+    record["reasoning"] = reasoning
+    return record
+
+
+def _interpret(name: str, detected: VarType, storage: str, unique: int, all_int: bool) -> str:
+    """Return one of: measurement, count, validated_score, grading,
+    binary_indicator, category, identifier, date, free_text, empty."""
+    if detected == "id":
+        return "identifier"
+    if detected == "date" or storage == "date":
+        return "date"
+    if detected == "exclude":
+        # Distinguish empty/single-value from free-text rejection.
+        if storage == "text" and unique > 20:
+            return "free_text"
+        return "empty"
+    # Mixed grading + score names need careful precedence. Rules:
+    #   1. A literal "grade" token (suffix or standalone) is the most
+    #      specific clinical signal — it always wins, even over "score"
+    #      (e.g. "Pain_score_grade", "Tumor_grade", "Severity_grade").
+    #   2. Other grading keywords (stage / severity / class / tier) are
+    #      generic descriptors — they defer to a score/instrument token
+    #      when both are present (e.g. "Severity_score" stays a
+    #      validated score, "Severity_class" becomes grading).
+    has_grade_word = bool(_LITERAL_GRADE_RE.search(name))
+    has_score_token = bool(_VALIDATED_SCORE_NAME_RE.search(name))
+    has_other_grading = bool(_GRADING_NAME_RE.search(name)) and not has_grade_word
+    if detected == "ordinal":
+        if has_grade_word:
+            return "grading"
+        if has_score_token:
+            return "validated_score"
+        if has_other_grading:
+            return "grading"
+    elif detected in ("scale", "discrete") and has_score_token:
+        return "validated_score"
+    # Sex / yes-no / alive-dead → binary indicator regardless of detected.
+    if _BINARY_NAME_RE.search(name) and unique <= 2 and detected in ("nominal",):
+        return "binary_indicator"
+    if detected == "discrete":
+        return "count"
+    if detected == "scale":
+        # Named count column that the core classifier let through as scale
+        # (e.g. cardinality > 30) is still conceptually a count.
+        if _COUNT_NAME_RE.search(name) and all_int:
+            return "count"
+        return "measurement"
+    if detected == "ordinal":
+        # Numeric-coded ordinal that isn't a known instrument is a grading.
+        return "grading"
+    if detected == "nominal":
+        if unique <= 2:
+            return "binary_indicator"
+        return "category"
+    return "category"
+
+
+def _statistical_nature(detected: VarType, storage: str, unique: int, interp: str) -> str:
+    """Return the measurement-theory class. Stays in lock-step with the
+    interpretation axis — an ``interpretation == "empty"`` column always
+    has ``statistical_nature == "empty"`` even if its raw dtype is text."""
+    if interp == "empty":
+        return "empty"
+    if interp == "free_text":
+        return "free_text"
+    if detected == "id":
+        return "identifier"
+    if detected == "date" or storage == "date":
+        return "datetime"
+    if detected == "exclude":
+        return "free_text" if storage == "text" else "empty"
+    if detected == "scale":
+        return "continuous"
+    if detected == "discrete":
+        return "discrete"
+    if detected == "ordinal":
+        return "ordinal"
+    if detected == "nominal":
+        return "binary" if unique <= 2 else "nominal"
+    return "nominal"
+
+
+def _analytical_flexibility(interp: str, nature: str, unique: int) -> List[str]:
+    """Return the test families the variable can legitimately feed."""
+    if interp == "validated_score":
+        # Spec rule: scores admit continuous-style, ordinal-style, OR
+        # clinically-banded categorical analysis depending on range,
+        # distribution and research objective.
+        return ["continuous", "ordinal", "categorical"]
+    if interp == "grading":
+        return ["ordinal", "categorical"]
+    if interp == "measurement":
+        return ["continuous", "categorical_after_binning"]
+    if interp == "count":
+        # Counts can be analysed as continuous when sufficiently spread,
+        # ordinal when low-cardinality, or grouped categorically.
+        return ["continuous", "ordinal", "categorical"]
+    if interp == "binary_indicator":
+        return ["binary", "categorical"]
+    if interp == "category":
+        return ["categorical"]
+    if interp == "date":
+        return ["time_index"]
+    if interp == "identifier":
+        return ["exclude"]
+    return ["exclude"]
+
+
+def _reasoning_text(
+    interp: str, nature: str, unique: int, all_int: bool, fallback: str
+) -> str:
+    """Plain-English reasoning a researcher can act on."""
+    if interp == "validated_score":
+        return (
+            "Score-based variable with ordinal foundation and potential "
+            "continuous-style analysis depending on range, distribution, "
+            "and research objective."
+        )
+    if interp == "grading":
+        return (
+            f"Ordered grading / stage variable ({unique} levels). Best "
+            "summarised by counts and percentages and tested with rank-based "
+            "or chi-square methods."
+        )
+    if interp == "measurement":
+        return (
+            "Direct clinical or demographic measurement — analyse as a "
+            "continuous variable, with optional clinical banding for "
+            "descriptive grouping."
+        )
+    if interp == "count":
+        shape = "approximately symmetric" if all_int else "non-integer"
+        return (
+            f"Integer count variable ({unique} distinct values). Reported as "
+            f"median (IQR) when skewed, mean (SD) when {shape} and roughly "
+            "symmetric; can also be grouped into clinically meaningful bands."
+        )
+    if interp == "binary_indicator":
+        return (
+            "Two-level indicator — analyse as a binary categorical variable "
+            "(chi-square / Fisher's exact, proportion comparisons, odds "
+            "ratios)."
+        )
+    if interp == "category":
+        return (
+            f"Unordered categorical variable with {unique} levels — analyse "
+            "with frequency counts and chi-square / Fisher's exact tests."
+        )
+    if interp == "identifier":
+        return "Per-record identifier — excluded from statistical analysis."
+    if interp == "date":
+        return (
+            "Date / time field — used as a time index for survival or "
+            "longitudinal analyses, not as a primary outcome on its own."
+        )
+    if interp == "free_text":
+        return (
+            f"Free-text field ({unique} unique values) — excluded from "
+            "quantitative analysis; recode into categories first if needed."
+        )
+    if interp == "empty":
+        return "Empty or constant column — excluded from analysis."
+    return fallback or ""
+
+
+def reenrich_after_override(record: Dict[str, Any], series: pd.Series, name: str) -> Dict[str, Any]:
+    """Public wrapper around ``_enrich`` for callers that mutate the
+    legacy ``detected_type`` field after classification (manual dropdown
+    override or variable-assistant action). Without this, the four
+    theory-aware axes (``storage_type`` / ``statistical_nature`` /
+    ``interpretation`` / ``analytical_flexibility`` / ``reasoning``)
+    would drift out of sync with the new verdict and the UI would show
+    contradictory information."""
+    return _enrich(record, series, name)
 
 
 def classify_dataframe(df: pd.DataFrame) -> List[Dict[str, Any]]:
