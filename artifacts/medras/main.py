@@ -56,6 +56,24 @@ app.add_middleware(
 app.include_router(api_router, prefix="/api")
 
 
+# In development the Replit preview iframe aggressively caches HTML/CSS/JS,
+# which makes it look like our fixes aren't landing even after a hard reload.
+# When MEDRAS_RELOAD=true (i.e. uvicorn --reload mode), force every response
+# to bypass the cache. This middleware is intentionally a no-op in production.
+_DEV_NO_CACHE = os.environ.get("MEDRAS_RELOAD", "false").lower() == "true"
+if _DEV_NO_CACHE:
+
+    @app.middleware("http")
+    async def _no_cache_in_dev(request, call_next):
+        response = await call_next(request)
+        # Don't touch API responses (they're already fine) — only static UI.
+        if not request.url.path.startswith("/api"):
+            response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+            response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
+        return response
+
+
 @app.get("/", include_in_schema=False)
 async def root() -> FileResponse:
     """Serve the landing page."""
