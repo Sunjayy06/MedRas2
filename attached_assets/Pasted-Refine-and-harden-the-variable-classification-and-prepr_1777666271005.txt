@@ -1,0 +1,145 @@
+Refine and harden the variable-classification and preprocessing engine so it behaves like an expert biostatistician handling raw clinical datasets.
+
+CORE PRINCIPLE:
+Classify variables based on statistical meaning and actual data structure — never by superficial naming patterns.
+
+==================================================
+1. VARIABLE TYPE LOGIC
+==================================================
+
+A. SCALE VARIABLES
+Default to scale if values are numeric or numeric-like and arithmetic is meaningful.
+
+Includes:
+- continuous measurements
+- discrete counts
+- time/duration values
+- scores recorded as raw numbers
+- lab values
+- dimensions
+
+Examples:
+Age, Weight, Operating Time, Blood Loss, Duration of Surgery, Hospital Stay, Tumor Size, Harris Hip Score (raw), Radiological Union Score (raw)
+
+Rule:
+If raw values are numeric—even if stored as text with unit suffixes—treat as scale unless explicitly categorized.
+
+Allowed summaries:
+- mean
+- SD
+- median
+- IQR
+- min/max
+
+---
+
+B. ORDINAL VARIABLES
+Only classify as ordinal if values represent ranked categories with unequal intervals.
+
+Examples:
+Likert responses, severity grades, satisfaction levels, grouped score bands
+
+Rule:
+Ordinal applies only when data is already categorical/ranked OR after user recoding.
+
+Allowed summaries:
+- median
+- IQR
+- frequencies
+- non-parametric tests
+
+---
+
+C. NOMINAL VARIABLES
+Unordered categories.
+
+Examples:
+Gender, Diagnosis, Blood Group
+
+==================================================
+2. NUMERIC-LIKE STRING CLEANING
+==================================================
+
+Detect and normalize numeric values stored with attached text.
+
+Examples:
+"2mm" → 2
+"3 grade" → 3
+"4hours" → 4
+"12 kg" → 12
+"7.5cm" → 7.5
+"Score 85" → 85
+
+Rule:
+If a value begins with or contains a valid numeric component and trailing/leading text is only unit/label metadata, extract the numeric part.
+
+Then:
+- strip units/labels
+- convert to numeric
+- classify as scale
+
+This applies to:
+mm, cm, kg, hrs, mins, grade, score, %, ml, mg, days, weeks, months, years, etc.
+
+Do NOT leave such columns as text.
+
+---
+
+If mixed formatting exists:
+Example:
+"2mm", "3 mm", "4mm"
+
+Normalize all consistently.
+
+---
+
+If majority of values are numeric-like with removable suffixes:
+auto-clean entire column.
+
+---
+
+If text contains true category labels plus numbers:
+Example:
+"Grade 1", "Grade 2", "Grade 3"
+
+Interpret as:
+- numeric extraction first
+- if used as severity classes → ordinal
+- if user wants raw numeric analysis → scale
+
+Prompt user only if ambiguity affects analysis.
+
+==================================================
+3. HARD RULES
+==================================================
+
+- Never classify numeric-like variables as ordinal just because they contain “grade” or “score”.
+- Never use variable name alone for classification.
+- Always inspect actual values.
+- If numeric extraction succeeds, default to scale.
+- Only move to ordinal if the variable is explicitly categorical/ranked in usage.
+- Time-based variables must default to scale.
+- Counts remain scale unless intentionally grouped.
+
+==================================================
+4. INTELLIGENT FALLBACK
+==================================================
+
+If unsure:
+Prefer scale over ordinal.
+
+Reason:
+A raw statistician first preserves measurement precision before grouping.
+
+==================================================
+5. GOAL
+==================================================
+
+Make the system think like a professional statistician receiving messy raw data:
+
+1. clean formatting
+2. recover numeric meaning
+3. preserve analytical power
+4. only categorize when statistically justified
+
+The app must function as a virtual biostatistician that transforms raw data into analysis-ready structure with minimal user intervention and maximum statistical correctness.
