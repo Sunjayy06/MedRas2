@@ -31,7 +31,13 @@ from typing import Any, Dict, List, Optional, Tuple
 import pandas as pd
 
 
-_VALID_TYPES = {"scale", "ordinal", "nominal", "discrete", "date", "id", "exclude"}
+_VALID_TYPES = {
+    "scale", "ordinal", "nominal", "discrete", "date", "id", "exclude",
+    # Per spec Rule 5: pseudo-types that mean "leave the variable as
+    # scale, just flip the descriptive sub-type". The API layer turns
+    # these into a `scale_subtype` mutation rather than a full retype.
+    "scale_discrete", "scale_continuous",
+}
 _LEADING_PREFIX_RE = re.compile(r"^\s*([A-Za-z]+)\s+")
 _TRAILING_NUM_RE = re.compile(r"(-?\d+(?:\.\d+)?)\s*$")
 _ROMAN_RE = re.compile(r"^\s*([A-Za-z]+)\s+([IVXLCDM]+)\s*$", re.IGNORECASE)
@@ -126,9 +132,33 @@ def parse_intent(message: str, columns: List[str]) -> Dict[str, Any]:
         if column:
             return {"action": "exclude_column", "column": column, "params": {}}
 
+    # treat_as_discrete / treat_as_continuous — Per spec Rule 5 these do
+    # NOT change the variable type (it stays scale). They only flip the
+    # info-only sub-type so summaries report integer counts vs floats.
+    # Must run BEFORE the generic change_type branch so that "treat Age
+    # as discrete" doesn't get captured as a full reclassification to
+    # the legacy `discrete` (count) type.
+    m = re.search(
+        r"(?:treat|set|change|mark|make)\s+(.+?)\s+(?:as|to)\s+(discrete|continuous)\b",
+        msg, re.IGNORECASE,
+    )
+    if m:
+        target_col = next(
+            (c for c in columns if c.lower() == m.group(1).strip().lower()),
+            column,
+        )
+        which = m.group(2).lower()
+        pseudo = "scale_discrete" if which == "discrete" else "scale_continuous"
+        if target_col:
+            return {
+                "action": "change_type",
+                "column": target_col,
+                "params": {"new_type": pseudo},
+            }
+
     # change_type — "treat X as scale" / "set X to nominal"
     m = re.search(
-        r"(?:treat|set|change|mark|make)\s+(.+?)\s+(?:as|to)\s+(scale|ordinal|nominal|discrete|date|id|exclude)",
+        r"(?:treat|set|change|mark|make)\s+(.+?)\s+(?:as|to)\s+(scale|ordinal|nominal|date|id|exclude)",
         msg, re.IGNORECASE,
     )
     if m:
@@ -141,9 +171,15 @@ def parse_intent(message: str, columns: List[str]) -> Dict[str, Any]:
                 "params": {"new_type": new_type},
             }
 
-    # add_numeric_column — "I want both mean and frequency", "add a numeric
-    # version", "give me a numeric column"
-    if re.search(r"\b(both|mean and frequency|numeric (?:column|version)|add a number|number column)\b", msg_low):
+    # add_numeric_column — "I want both mean and frequency", "mean and
+    # frequency for X", "add a numeric version", "give me a numeric column".
+    # Per spec Rule 5 we accept the bare phrasing "mean and frequency for
+    # [variable]" so users don't have to say "both".
+    if re.search(
+        r"\b(both|mean and frequency|frequency and mean|mean.*frequency|"
+        r"numeric (?:column|version)|add a number|number column)\b",
+        msg_low,
+    ):
         if column:
             return {"action": "add_numeric_column", "column": column, "params": {}}
 

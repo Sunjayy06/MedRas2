@@ -132,6 +132,35 @@ _CONTINUOUS_NAME_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Per-spec Rule 1: clinical scoring systems / quantitative measurements
+# named with these words are SCALE by definition, regardless of how few
+# unique values the dataset happens to contain. This rule fires BEFORE
+# the small-integer-set ordinal heuristic so a Harris Hip Score with
+# 6 observed values in a tiny pilot dataset does not collapse to ordinal.
+#
+# Pattern matches whole-word substrings (case-insensitive) anywhere in
+# the column name. We deliberately include short tokens like "vas", "nrs"
+# and "hhs" because biomedical column names abbreviate aggressively.
+_SCORE_NAME_RE = re.compile(
+    r"(?:^|[\W_])("
+    r"score|index|scale|"
+    r"vas|nrs|nps|"
+    r"hhs|harris|"
+    r"union|"
+    r"time|times|duration|"
+    r"days?|weeks?|months?|minutes?|hours?|seconds?|"
+    r"length|distance|volume|dose|dosage|"
+    r"rate|level|count|counts|"
+    r"pressure|"
+    r"oswestry|odi|womac|kss|sf[_ ]?36|sf[_ ]?12|"
+    r"gcs|apache|sofa|charlson|"
+    r"asa|"
+    r"hba1c|"
+    r"recovery"
+    r")(?:$|[\W_])",
+    re.IGNORECASE,
+)
+
 # Sex / gender / yes-no style binary names — used to mark the
 # interpretation as ``binary_indicator`` even when ``unique_count`` could
 # theoretically allow a different reading.
@@ -289,6 +318,19 @@ def _classify_core(series: pd.Series, name: str) -> Dict[str, Any]:
                 unique_count, sample_values, n_missing, n_total,
             )
 
+        # 4a-bis) Per spec Rule 1: clinical scoring systems and other
+        # quantitative names (Harris Hip Score, VAS, NRS, time-to-union,
+        # operating time, length, dose, etc.) are SCALE regardless of
+        # how few unique values are observed. Without this an HHS column
+        # showing 6 distinct integer scores in a small dataset would be
+        # collapsed to ordinal by the small-integer-set heuristic below.
+        if _SCORE_NAME_RE.search(name):
+            return _record(
+                name, "scale",
+                "Quantitative score / measurement (by name) — treated as scale.",
+                unique_count, sample_values, n_missing, n_total,
+            )
+
         # 4b) Named count column (Hospital_visits, parity, days_admitted).
         # Per spec these are SCALE — counts remain scale unless intentionally
         # grouped. The "count" semantics are preserved on the interpretation
@@ -429,6 +471,15 @@ def _enrich(record: Dict[str, Any], series: pd.Series, name: str) -> Dict[str, A
 
     # --- Reasoning: short prose, written in statistician voice.
     reasoning = _reasoning_text(interp, nature, unique, all_int, record.get("reason", ""))
+
+    # Per spec Rule 3: surface "continuous" vs "discrete" as an
+    # info-only sub-type so the user sees how their scale variable is
+    # being summarised. This NEVER changes which tests run — both
+    # subtypes feed the same parametric / non-parametric machinery.
+    if detected == "scale":
+        record["scale_subtype"] = "discrete" if all_int else "continuous"
+    else:
+        record["scale_subtype"] = None
 
     record["storage_type"] = storage
     record["statistical_nature"] = nature

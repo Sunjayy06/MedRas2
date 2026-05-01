@@ -29,12 +29,19 @@ from app.services import (
     dataset_store,
     dummy_data,
     excel_loader,
+    export as export_service,
+    normality as normality_service,
+    plan as plan_service,
     proposal_store,
+    results as results_service,
     stats_tests,
     variable_assistant,
     variable_classifier,
     variable_issues,
 )
+from fastapi.responses import Response
+
+import pandas as pd
 
 
 # Allowed extensions for the intake proposal upload (lowercase, with dot).
@@ -458,6 +465,18 @@ async def classify(payload: ClassifyRequest) -> Dict[str, Any]:
     # dataset entry so subsequent reclassifies can still surface them.
     cleaned_df, fresh_cleanup_notes = variable_classifier.clean_numeric_like_columns(entry.df)
     if fresh_cleanup_notes:
+        # Snapshot the original (pre-cleanup) values so the user can
+        # undo the auto-strip from Step 3 if our heuristic was wrong
+        # (e.g. a column genuinely meant to stay as labels). We store
+        # only the columns that actually changed to keep memory bounded.
+        backups = dict(entry.meta.get("cleanup_backups") or {})
+        for col in fresh_cleanup_notes:
+            if col in entry.df.columns and col not in backups:
+                # Convert the original Series to a list so the backup
+                # survives DataFrame mutations and JSON-serialises
+                # cleanly through dataset_store's pickle round-trip.
+                backups[col] = entry.df[col].tolist()
+        entry.meta["cleanup_backups"] = backups
         dataset_store.replace_df(payload.job_id, cleaned_df)
         existing_notes = dict(entry.meta.get("cleanup_notes") or {})
         existing_notes.update(fresh_cleanup_notes)
@@ -630,14 +649,33 @@ async def variable_assistant_endpoint(
     # Apply this action's type change.
     if target_col and type_after:
         for c in classifications:
-            if c["column"] == target_col:
+            if c["column"] != target_col:
+                continue
+            # Per spec Rule 5: "treat as discrete" / "treat as continuous"
+            # do NOT change the variable type. They only flip the
+            # info-only scale_subtype so descriptive summaries report
+            # integers vs floats. The variable still routes through the
+            # exact same scale-test machinery.
+            if type_after in ("scale_discrete", "scale_continuous"):
+                subtype = "discrete" if type_after == "scale_discrete" else "continuous"
+                c["detected_type"] = "scale"
+                c["scale_subtype"] = subtype
+                c["reason"] = f"Set by assistant to scale ({subtype})."
+                if c["column"] in entry.df.columns:
+                    variable_classifier.reenrich_after_override(
+                        c, entry.df[c["column"]], c["column"],
+                    )
+                # reenrich resets scale_subtype based on dtype — restore
+                # the user's explicit choice so it doesn't get clobbered.
+                c["scale_subtype"] = subtype
+            else:
                 c["detected_type"] = type_after
                 c["reason"] = f"Set by assistant to {type_after}."
                 if c["column"] in entry.df.columns:
                     variable_classifier.reenrich_after_override(
                         c, entry.df[c["column"]], c["column"],
                     )
-                break
+            break
 
     entry.meta["classifications"] = classifications
     issues = variable_issues.detect_issues(entry.df, classifications)
@@ -656,6 +694,227 @@ async def variable_assistant_endpoint(
         "auto_coding_plan": coding,
         "blocking_issues": variable_issues.has_blocking_issues(issues),
     }
+
+
+# ---------------------------------------------------------------------------
+# Cleanup undo (Step 3) — restores the original text values for a column
+# whose entries were auto-stripped to numeric by clean_numeric_like_columns.
+# Per spec Rule 2: the auto-strip notice must be undoable so users always
+# have a way out if our heuristic mis-fires on a labelled categorical
+# column that happened to embed numbers.
+# ---------------------------------------------------------------------------
+
+
+class CleanupUndoRequest(BaseModel):
+    job_id: str = Field(..., min_length=1, max_length=64)
+    column: str = Field(..., min_length=1, max_length=200)
+
+
+@router.post("/cleanup-undo")
+async def cleanup_undo(payload: CleanupUndoRequest) -> Dict[str, Any]:
+    entry = dataset_store.get(payload.job_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Dataset expired or not found.")
+    backups = entry.meta.get("cleanup_backups") or {}
+    if payload.column not in backups:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No cleanup backup found for column '{payload.column}'.",
+        )
+    if payload.column not in entry.df.columns:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Column '{payload.column}' is no longer present in the dataset.",
+        )
+    new_df = entry.df.copy()
+    new_df[payload.column] = pd.Series(
+        backups[payload.column], index=new_df.index, dtype="object"
+    )
+    dataset_store.replace_df(payload.job_id, new_df)
+    # Drop the cleanup note + backup so the undo is permanent and the
+    # next /classify call doesn't re-strip the same column.
+    notes = dict(entry.meta.get("cleanup_notes") or {})
+    notes.pop(payload.column, None)
+    entry.meta["cleanup_notes"] = notes
+    new_backups = dict(backups)
+    new_backups.pop(payload.column, None)
+    entry.meta["cleanup_backups"] = new_backups
+    # Force a fresh classify so the type badge updates from Scale →
+    # whatever the original text values warrant (usually nominal).
+    entry.meta.pop("classifications", None)
+    return {"status": "restored", "column": payload.column}
+
+
+# ---------------------------------------------------------------------------
+# Step 4 — Variable assignment (outcome / group / covariates)
+# ---------------------------------------------------------------------------
+
+
+class AssignRequest(BaseModel):
+    job_id: str = Field(..., min_length=1, max_length=64)
+    outcome: Optional[str] = Field(default=None, max_length=200)
+    group: Optional[str] = Field(default=None, max_length=200)
+    covariates: List[str] = Field(default_factory=list, max_length=20)
+
+
+def _invalidate_downstream(entry, *, keep_normality: bool = False) -> None:
+    """Drop cached plan/results (and optionally normality) when an upstream
+    decision changes, so we never run on stale assumptions."""
+    for k in ("plan", "results"):
+        entry.meta.pop(k, None)
+    if not keep_normality:
+        entry.meta.pop("normality", None)
+
+
+@router.post("/assign")
+async def save_assignment(payload: AssignRequest) -> Dict[str, Any]:
+    entry = dataset_store.get(payload.job_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Dataset expired or not found.")
+    cols = set(entry.df.columns)
+    if payload.outcome and payload.outcome not in cols:
+        raise HTTPException(status_code=400, detail=f"Outcome '{payload.outcome}' not in dataset.")
+    if payload.group and payload.group not in cols:
+        raise HTTPException(status_code=400, detail=f"Group '{payload.group}' not in dataset.")
+    bad = [c for c in payload.covariates if c not in cols]
+    if bad:
+        raise HTTPException(status_code=400, detail=f"Unknown covariate(s): {', '.join(bad)}")
+    new_assignment = {
+        "outcome": payload.outcome,
+        "group": payload.group,
+        "covariates": list(payload.covariates),
+    }
+    if entry.meta.get("assignment") != new_assignment:
+        # Assignment changed — plan & results are stale. Normality (per-column)
+        # is still valid since the column data hasn't changed.
+        _invalidate_downstream(entry, keep_normality=True)
+    entry.meta["assignment"] = new_assignment
+    return {"status": "saved", "assignment": entry.meta["assignment"]}
+
+
+# ---------------------------------------------------------------------------
+# Step 5 — Normality
+# ---------------------------------------------------------------------------
+
+
+@router.get("/normality/{job_id}")
+async def get_normality(job_id: str) -> Dict[str, Any]:
+    entry = dataset_store.get(job_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Dataset expired or not found.")
+    classifications = entry.meta.get("classifications") or variable_classifier.classify_dataframe(entry.df)
+    entry.meta["classifications"] = classifications
+    out = normality_service.normality_for_dataset(entry.df, classifications, include_qq=True)
+    entry.meta["normality"] = out
+    return {"job_id": job_id, **out}
+
+
+class NormalityOverrideRequest(BaseModel):
+    job_id: str = Field(..., min_length=1, max_length=64)
+    column: str = Field(..., min_length=1, max_length=200)
+    decision: Literal["normal", "non_normal"]
+
+
+@router.post("/normality/override")
+async def override_normality(payload: NormalityOverrideRequest) -> Dict[str, Any]:
+    entry = dataset_store.get(payload.job_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Dataset expired or not found.")
+    norm = entry.meta.get("normality") or {"columns": []}
+    found = False
+    for row in norm.get("columns") or []:
+        if row.get("column") == payload.column:
+            row["decision"] = payload.decision
+            row["overridden"] = True
+            row["note"] = (row.get("note") or "") + " (Manually overridden by user.)"
+            found = True
+            break
+    if not found:
+        raise HTTPException(status_code=404, detail=f"Column '{payload.column}' not in normality results.")
+    entry.meta["normality"] = norm
+    # Plan & results depend on per-column normality verdicts → invalidate them.
+    entry.meta.pop("plan", None)
+    entry.meta.pop("results", None)
+    return {"status": "overridden", "column": payload.column, "decision": payload.decision}
+
+
+# ---------------------------------------------------------------------------
+# Step 6 — Plan and Run
+# ---------------------------------------------------------------------------
+
+
+@router.get("/generate-plan/{job_id}")
+async def generate_plan(job_id: str) -> Dict[str, Any]:
+    entry = dataset_store.get(job_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Dataset expired or not found.")
+    classifications = entry.meta.get("classifications") or variable_classifier.classify_dataframe(entry.df)
+    entry.meta["classifications"] = classifications
+    assignment = entry.meta.get("assignment") or {}
+    normality_data = entry.meta.get("normality")
+    if not normality_data:
+        normality_data = normality_service.normality_for_dataset(
+            entry.df, classifications, include_qq=False
+        )
+        entry.meta["normality"] = normality_data
+    plan_dict = plan_service.generate_plan(entry.df, classifications, assignment, normality_data)
+    entry.meta["plan"] = plan_dict
+    return {"job_id": job_id, "assignment": assignment, "plan": plan_dict}
+
+
+class RunAnalysisRequest(BaseModel):
+    job_id: str = Field(..., min_length=1, max_length=64)
+    confirmed_test_ids: List[str] = Field(default_factory=list, max_length=50)
+    confirmed_graph_ids: List[str] = Field(default_factory=list, max_length=50)
+
+
+@router.post("/run-analysis")
+async def run_analysis(payload: RunAnalysisRequest) -> Dict[str, Any]:
+    entry = dataset_store.get(payload.job_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Dataset expired or not found.")
+    classifications = entry.meta.get("classifications") or variable_classifier.classify_dataframe(entry.df)
+    assignment = entry.meta.get("assignment") or {}
+    plan_dict = entry.meta.get("plan")
+    if not plan_dict:
+        normality_data = entry.meta.get("normality") or normality_service.normality_for_dataset(
+            entry.df, classifications, include_qq=False
+        )
+        plan_dict = plan_service.generate_plan(entry.df, classifications, assignment, normality_data)
+        entry.meta["plan"] = plan_dict
+    res = results_service.run_plan(
+        entry.df, classifications, assignment, plan_dict,
+        confirmed_test_ids=payload.confirmed_test_ids or None,
+        confirmed_graph_ids=payload.confirmed_graph_ids or None,
+    )
+    entry.meta["results"] = res
+    return {"job_id": payload.job_id, "results": res}
+
+
+# ---------------------------------------------------------------------------
+# Step 8 — Export
+# ---------------------------------------------------------------------------
+
+
+@router.get("/export/{job_id}/{fmt}")
+async def export(job_id: str, fmt: str) -> Response:
+    entry = dataset_store.get(job_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Dataset expired or not found.")
+    exporter = export_service.EXPORTERS.get(fmt.lower())
+    if not exporter:
+        raise HTTPException(status_code=400, detail=f"Unsupported format: {fmt}. Use word/pdf/excel.")
+    res = entry.meta.get("results")
+    if not res:
+        raise HTTPException(status_code=400, detail="No results available — run the analysis on Step 7 first.")
+    fn, mime, ext = exporter
+    payload_bytes = fn(res, entry.meta.get("assignment") or {})
+    filename = f"medras_results_{job_id[:8]}.{ext}"
+    return Response(
+        content=payload_bytes,
+        media_type=mime,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.post("/analyze")

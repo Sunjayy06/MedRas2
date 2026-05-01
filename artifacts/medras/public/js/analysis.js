@@ -41,6 +41,14 @@ const state = {
   autoCoding: [],        // [{column, kind, mapping, note, columns?}]
   assistantThread: [],   // [{role: "system"|"user"|"action"|"clarify", text}]
   recodingChoices: {},   // { age?: {bins:[...]}, bmi?: {...}, hb?: {...} }
+
+  // --- Steps 4-8 additions ---
+  assignment: null,        // {outcome, group, covariates}
+  normality: null,         // {columns: [...]}
+  plan: null,              // {tests, graphs, outputs, summary}
+  confirmedTests: null,    // Set<string>
+  confirmedGraphs: null,   // Set<string>
+  results: null,           // results-payload from /run-analysis
 };
 
 /* ------------------------------------------------------------------ */
@@ -238,10 +246,19 @@ function renderResumeBanner(saved) {
 /*  Screen routing                                                     */
 /* ------------------------------------------------------------------ */
 
-const SCREENS = ["1", "intake", "2a", "2c", "preview", "3", "4", "soon"];
+const SCREENS = [
+  "1", "intake", "2a", "2c", "preview",
+  "3", "4",
+  "assign", "normality", "plan", "results", "export",
+];
 // Map a logical screen id to which step number is "active" in the tracker.
+// New 8-step model: 1 Start, 2 Data input, 3 Review data (vars+quality),
+// 4 Assign, 5 Normality, 6 Plan and Run, 7 Results, 8 Export.
 const SCREEN_TO_STEP = {
-  "1": 1, "intake": 1, "2a": 2, "2c": 2, "preview": 2, "3": 3, "4": 4, "soon": 5,
+  "1": 1, "intake": 1,
+  "2a": 2, "2c": 2, "preview": 2,
+  "3": 3, "4": 3,
+  "assign": 4, "normality": 5, "plan": 6, "results": 7, "export": 8,
 };
 
 function showScreen(id) {
@@ -285,7 +302,10 @@ function showScreen(id) {
 // (the cursor and colour both signal it) — wire each to its corresponding
 // screen so users can jump back without burrowing through the wizard.
 function bindStepNavBack() {
-  const STEP_TO_SCREEN = { 1: "1", 2: "preview", 3: "3", 4: "4" };
+  const STEP_TO_SCREEN = {
+    1: "1", 2: "preview", 3: "4",
+    4: "assign", 5: "normality", 6: "plan", 7: "results", 8: "export",
+  };
   $$(".se-step").forEach((node) => {
     node.addEventListener("click", () => {
       if (!node.classList.contains("is-done")) return;
@@ -721,6 +741,13 @@ function ingestDataset(data) {
     state.autoCoding = [];
     state.assistantThread = [];
     state.recodingChoices = {};
+    // Also clear all Step 4–8 state so a new dataset starts clean.
+    state.assignment = null;
+    state.normality = null;
+    state.plan = null;
+    state.confirmedTests = null;
+    state.confirmedGraphs = null;
+    state.results = null;
   }
   state.jobId = data.job_id;
   state.summary = data.summary;
@@ -1152,9 +1179,16 @@ const TYPE_LABELS = {
 };
 const TYPE_OPTIONS = ["scale", "ordinal", "nominal", "discrete", "date", "id", "exclude"];
 
-function typeBadge(t) {
+function typeBadge(t, scaleSubtype) {
   const safe = TYPE_LABELS[t] ? t : "exclude";
-  return `<span class="se-type-badge t-${safe}">${TYPE_LABELS[safe]}</span>`;
+  // Per spec Rule 3: surface "Scale (continuous)" or "Scale (discrete)"
+  // as an info-only suffix so users see how their numeric variable is
+  // being summarised. Sub-type never affects which tests run.
+  let label = TYPE_LABELS[safe];
+  if (safe === "scale" && (scaleSubtype === "continuous" || scaleSubtype === "discrete")) {
+    label = `Scale (${scaleSubtype})`;
+  }
+  return `<span class="se-type-badge t-${safe}">${escapeHtml(label)}</span>`;
 }
 
 // MedRAS Variable Intelligence Layer — display labels for the four
@@ -1534,14 +1568,28 @@ function renderClassifyTable() {
       return `<div class="se-issue-sub${cls}" data-testid="issue-${escapeHtml(c.column)}-${i.type}">${escapeHtml(i.message)}</div>`;
     }).join("");
 
+    // Per spec Rule 2: surface the auto-strip notice directly on the
+    // affected row so users see exactly which column was rewritten and
+    // can undo it without hunting through a dataset-level banner.
+    const cleanupHtml = c.cleanup_note
+      ? `<div class="se-cleanup-note" data-testid="cleanup-${escapeHtml(c.column)}">
+           <span class="se-cleanup-icon">✓</span>
+           <span class="se-cleanup-text">We stripped text from this column and kept the numbers (e.g. ${escapeHtml((c.sample_values || [])[0] || "Grade 4")} → number). Now treated as a numeric scale variable.</span>
+           <button type="button" class="se-cleanup-undo"
+                   data-cleanup-undo="${escapeHtml(c.column)}"
+                   data-testid="button-cleanup-undo-${escapeHtml(c.column)}">Undo</button>
+         </div>`
+      : "";
+
     return `<tr data-row="${idx}" data-testid="classify-row-${escapeHtml(c.column)}">
       <td>
         <div class="se-vars-col-name">${escapeHtml(c.column)}</div>
+        ${cleanupHtml}
         ${issueHtml}
       </td>
       <td>
         <div class="se-vars-type-stack">
-          ${typeBadge(c.detected_type)}
+          ${typeBadge(c.detected_type, c.scale_subtype)}
           ${renderIntelligence(c)}
         </div>
       </td>
@@ -1552,6 +1600,32 @@ function renderClassifyTable() {
       </td>
     </tr>`;
   }).join("");
+
+  // Per spec Rule 2: wire the inline "Undo" button on each cleanup
+  // notice. POSTs to /api/stats/cleanup-undo, then re-classifies so the
+  // restored column shows up with its original text values + a fresh
+  // type badge (usually Nominal once the strings are back).
+  $$("[data-cleanup-undo]", tbody).forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const col = btn.dataset.cleanupUndo;
+      btn.disabled = true;
+      btn.textContent = "Undoing…";
+      try {
+        const res = await fetch("/api/stats/cleanup-undo", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ job_id: state.jobId, column: col }),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        // Re-classify to refresh the row with the restored text values.
+        await fetchAndRenderClassifications();
+      } catch (err) {
+        btn.disabled = false;
+        btn.textContent = "Undo";
+        alert(`Couldn't undo: ${err.message}`);
+      }
+    });
+  });
 
   $$("select.se-type-select", tbody).forEach((sel) => {
     sel.addEventListener("change", () => {
@@ -1574,7 +1648,7 @@ function renderClassifyTable() {
       if (row) {
         const stack = row.querySelector(".se-vars-type-stack");
         if (stack) {
-          stack.innerHTML = typeBadge(sel.value) + renderIntelligence(c);
+          stack.innerHTML = typeBadge(sel.value, c.scale_subtype) + renderIntelligence(c);
         } else {
           const badge = row.querySelector(".se-type-badge");
           if (badge) badge.outerHTML = typeBadge(sel.value);
@@ -2074,7 +2148,8 @@ async function _applyQualityHandler() {
       `Done. Removed ${log.removed_rows || 0} rows, capped ${log.capped_values || 0} values.`,
       "success"
     );
-    showScreen("soon");
+    showScreen("assign");
+    renderAssignScreen();
   } catch (err) {
     setStatus(status, `Could not apply: ${err.message}`, "error");
   }
@@ -2132,9 +2207,469 @@ function bindScreen4() {
 /* ------------------------------------------------------------------ */
 
 function bindSoon() {
-  $('[data-action="restart"]', $("#screen-soon")).addEventListener("click", restart);
-  const back = $('[data-action="back-to-quality"]', $("#screen-soon"));
+  // Legacy "soon" screen has been replaced by Step 4–8 screens. Keep the
+  // function so initApp() continues to compile; wire restart only if the
+  // node still exists in the DOM (older cached HTML).
+  const node = document.getElementById("screen-soon");
+  if (!node) return;
+  const restartBtn = node.querySelector('[data-action="restart"]');
+  if (restartBtn) restartBtn.addEventListener("click", restart);
+  const back = node.querySelector('[data-action="back-to-quality"]');
   if (back) back.addEventListener("click", () => showScreen("4"));
+}
+
+/* ------------------------------------------------------------------ */
+/*  Step 4 — Assign                                                    */
+/* ------------------------------------------------------------------ */
+
+function renderAssignScreen() {
+  const outcomeSel = document.getElementById("assign-outcome");
+  const groupSel = document.getElementById("assign-group");
+  const covWrap = document.getElementById("assign-covariates");
+  if (!outcomeSel || !groupSel || !covWrap) return;
+
+  const cls = state.classifications || [];
+  const outcomeCols = cls.filter((c) => ["scale", "ordinal", "nominal"].includes(c.detected_type));
+  const groupCols = cls.filter((c) => ["nominal", "ordinal"].includes(c.detected_type));
+  const covCols = cls.filter((c) => !["id", "exclude", "date"].includes(c.detected_type));
+
+  const prior = state.assignment || {};
+
+  outcomeSel.innerHTML = "";
+  outcomeCols.forEach((c) => {
+    const opt = document.createElement("option");
+    opt.value = c.column;
+    opt.textContent = `${c.column} (${c.detected_type})`;
+    if (prior.outcome === c.column) opt.selected = true;
+    outcomeSel.appendChild(opt);
+  });
+  if (!prior.outcome && outcomeCols[0]) {
+    outcomeSel.value = outcomeCols[0].column;
+  }
+
+  // Reset group select except the first "no grouping" placeholder.
+  while (groupSel.options.length > 1) groupSel.remove(1);
+  groupCols.forEach((c) => {
+    const opt = document.createElement("option");
+    opt.value = c.column;
+    opt.textContent = `${c.column} (${c.detected_type})`;
+    if (prior.group === c.column) opt.selected = true;
+    groupSel.appendChild(opt);
+  });
+
+  covWrap.innerHTML = "";
+  covCols.forEach((c) => {
+    const id = `cov-${c.column.replace(/[^a-zA-Z0-9]/g, "_")}`;
+    const wrap = document.createElement("label");
+    wrap.className = "se-cov-item";
+    wrap.innerHTML = `<input type="checkbox" id="${id}" value="${c.column}" data-testid="cov-${c.column}"> ${c.column} <span class="se-cov-type">${c.detected_type}</span>`;
+    if ((prior.covariates || []).includes(c.column)) {
+      wrap.querySelector("input").checked = true;
+    }
+    covWrap.appendChild(wrap);
+  });
+  updateAssignPreview();
+}
+
+function updateAssignPreview() {
+  const outcome = (document.getElementById("assign-outcome") || {}).value || "";
+  const group = (document.getElementById("assign-group") || {}).value || "";
+  const covs = Array.from(document.querySelectorAll("#assign-covariates input:checked"))
+    .map((i) => i.value);
+  const wrap = document.getElementById("assign-preview");
+  if (!wrap) return;
+  if (!outcome) {
+    wrap.innerHTML = `<em>Pick an outcome to see the planned analysis line.</em>`;
+    return;
+  }
+  let line = `We will analyse <strong>${outcome}</strong>`;
+  if (group) line += ` split by <strong>${group}</strong>`;
+  else line += ` (descriptive only — no grouping)`;
+  if (covs.length) line += `, adjusted for <strong>${covs.join(", ")}</strong>`;
+  wrap.innerHTML = line + ".";
+}
+
+function bindAssign() {
+  const screen = document.getElementById("screen-assign");
+  if (!screen) return;
+  ["assign-outcome", "assign-group"].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener("change", updateAssignPreview);
+  });
+  screen.querySelectorAll("#assign-covariates").forEach((wrap) => {
+    wrap.addEventListener("change", updateAssignPreview);
+  });
+  const back = screen.querySelector('[data-action="back-to-quality"]');
+  if (back) back.addEventListener("click", () => showScreen("4"));
+  const cont = screen.querySelector('[data-action="save-assign"]');
+  if (cont) cont.addEventListener("click", saveAssignmentAndContinue);
+}
+
+async function saveAssignmentAndContinue() {
+  const status = document.getElementById("assign-status");
+  const outcome = document.getElementById("assign-outcome").value || null;
+  const group = document.getElementById("assign-group").value || null;
+  const covariates = Array.from(document.querySelectorAll("#assign-covariates input:checked"))
+    .map((i) => i.value);
+  if (!outcome) {
+    setStatus(status, "Please pick an outcome variable first.", "error");
+    return;
+  }
+  setStatus(status, "Saving assignment…", "loading");
+  try {
+    await api("/assign", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ job_id: state.jobId, outcome, group, covariates }),
+    });
+    state.assignment = { outcome, group, covariates };
+    setStatus(status, "Saved.", "success");
+    showScreen("normality");
+    loadNormality();
+  } catch (err) {
+    setStatus(status, `Could not save: ${err.message}`, "error");
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Step 5 — Normality                                                 */
+/* ------------------------------------------------------------------ */
+
+async function loadNormality() {
+  const status = document.getElementById("normality-status");
+  setStatus(status, "Running normality tests…", "loading");
+  try {
+    const data = await api(`/normality/${state.jobId}`);
+    state.normality = data;
+    renderNormality();
+    setStatus(status, `Tested ${data.columns.length} scale variable(s).`, "success");
+  } catch (err) {
+    setStatus(status, `Could not load: ${err.message}`, "error");
+  }
+}
+
+function renderNormality() {
+  const tbody = document.querySelector("#normality-table tbody");
+  if (!tbody) return;
+  tbody.innerHTML = "";
+  const rows = (state.normality && state.normality.columns) || [];
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="9"><em>No scale variables to test. Move to the next step.</em></td></tr>`;
+    return;
+  }
+  rows.forEach((r) => {
+    const chip = r.decision === "normal"
+      ? `<span class="se-chip se-chip-good" data-testid="chip-${r.column}">Normal</span>`
+      : r.decision === "non_normal"
+        ? `<span class="se-chip se-chip-warn" data-testid="chip-${r.column}">Non-normal</span>`
+        : `<span class="se-chip se-chip-muted" data-testid="chip-${r.column}">Insufficient</span>`;
+    const overrideBtn = r.decision === "insufficient" ? "" : `
+      <button type="button" class="btn btn-tertiary se-norm-override"
+        data-col="${r.column}" data-flip="${r.decision === 'normal' ? 'non_normal' : 'normal'}"
+        data-testid="override-${r.column}">
+        Mark as ${r.decision === 'normal' ? 'non-normal' : 'normal'}
+      </button>`;
+    const qq = r.qq_png
+      ? `<img class="se-qq-thumb" src="${r.qq_png}" alt="QQ plot for ${r.column}" loading="lazy">`
+      : `<span class="se-cov-type">—</span>`;
+    const note = r.note ? `<div class="se-norm-note">${r.note}</div>` : "";
+    const tr = document.createElement("tr");
+    tr.dataset.col = r.column;
+    tr.innerHTML = `
+      <td><strong>${r.column}</strong>${note}</td>
+      <td>${r.n}</td>
+      <td>${r.test || '—'}</td>
+      <td>${r.p_value === null || r.p_value === undefined ? '—' : (r.p_value < 0.001 ? '&lt;0.001' : r.p_value.toFixed(3))}</td>
+      <td>${r.skewness === null || r.skewness === undefined ? '—' : r.skewness.toFixed(2)}</td>
+      <td>${r.kurtosis === null || r.kurtosis === undefined ? '—' : r.kurtosis.toFixed(2)}</td>
+      <td>${chip}</td>
+      <td>${qq}</td>
+      <td>${overrideBtn}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+  tbody.querySelectorAll(".se-norm-override").forEach((btn) => {
+    btn.addEventListener("click", () => overrideNormality(btn.dataset.col, btn.dataset.flip));
+  });
+}
+
+async function overrideNormality(column, decision) {
+  try {
+    await api("/normality/override", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ job_id: state.jobId, column, decision }),
+    });
+    const row = (state.normality.columns || []).find((c) => c.column === column);
+    if (row) {
+      row.decision = decision;
+      row.overridden = true;
+      row.note = (row.note || "") + " (Manually overridden by user.)";
+    }
+    renderNormality();
+  } catch (err) {
+    const status = document.getElementById("normality-status");
+    setStatus(status, `Override failed: ${err.message}`, "error");
+  }
+}
+
+function bindNormality() {
+  const screen = document.getElementById("screen-normality");
+  if (!screen) return;
+  const back = screen.querySelector('[data-action="back-to-assign"]');
+  if (back) back.addEventListener("click", () => showScreen("assign"));
+  const cont = screen.querySelector('[data-action="continue-to-plan"]');
+  if (cont) cont.addEventListener("click", () => { showScreen("plan"); loadPlan(); });
+}
+
+/* ------------------------------------------------------------------ */
+/*  Step 6 — Plan and Run                                              */
+/* ------------------------------------------------------------------ */
+
+async function loadPlan() {
+  const status = document.getElementById("plan-status");
+  setStatus(status, "Building your plan…", "loading");
+  document.getElementById("plan-summary").textContent = "Building your plan…";
+  try {
+    const data = await api(`/generate-plan/${state.jobId}`);
+    state.plan = data.plan;
+    state.confirmedTests = new Set((data.plan.tests || []).map((t) => t.id));
+    state.confirmedGraphs = new Set((data.plan.graphs || []).map((g) => g.id));
+    renderPlan();
+    setStatus(status, "", "");
+  } catch (err) {
+    setStatus(status, `Could not build plan: ${err.message}`, "error");
+  }
+}
+
+function renderPlan() {
+  const summary = document.getElementById("plan-summary");
+  const tests = document.getElementById("plan-tests");
+  const graphs = document.getElementById("plan-graphs");
+  const outputs = document.getElementById("plan-outputs");
+  if (!summary || !tests || !graphs || !outputs) return;
+  const p = state.plan || { tests: [], graphs: [], outputs: [], summary: "" };
+  summary.textContent = p.summary || "";
+  tests.innerHTML = (p.tests || []).map((t) => planCard(t, "tests")).join("");
+  graphs.innerHTML = (p.graphs || []).map((g) => planCard(g, "graphs")).join("");
+  outputs.innerHTML = (p.outputs || []).map((o) =>
+    `<li><strong>${o.title}</strong> — ${o.what}</li>`
+  ).join("");
+
+  document.querySelectorAll('[data-plan-toggle]').forEach((cb) => {
+    cb.addEventListener("change", () => {
+      const set = cb.dataset.kind === "tests" ? state.confirmedTests : state.confirmedGraphs;
+      const card = cb.closest(".se-plan-card");
+      if (cb.checked) set.add(cb.value); else set.delete(cb.value);
+      if (card) card.classList.toggle("is-removed", !cb.checked);
+    });
+  });
+
+  // Reset the 3 confirmation boxes whenever the plan re-renders so the
+  // user re-affirms after any change.
+  document.querySelectorAll('[data-confirm]').forEach((cb) => {
+    cb.checked = false;
+    cb.addEventListener("change", updateRunButton);
+  });
+  updateRunButton();
+}
+
+function planCard(card, kind) {
+  const id = card.id;
+  const checked = (kind === "tests" ? state.confirmedTests : state.confirmedGraphs).has(id);
+  return `<article class="se-plan-card ${checked ? '' : 'is-removed'}" data-id="${id}" data-testid="card-${kind}-${id}">
+    <label class="se-plan-card-toggle">
+      <input type="checkbox" data-plan-toggle data-kind="${kind}" value="${id}" ${checked ? 'checked' : ''} data-testid="toggle-${id}">
+      <span class="se-plan-card-title">${card.title}</span>
+    </label>
+    <p class="se-plan-card-why">${card.why || ''}</p>
+  </article>`;
+}
+
+function updateRunButton() {
+  const allChecked = Array.from(document.querySelectorAll('[data-confirm]')).every((cb) => cb.checked);
+  const btn = document.querySelector('#screen-plan [data-action="run-analysis"]');
+  if (btn) btn.disabled = !allChecked;
+}
+
+function bindPlan() {
+  const screen = document.getElementById("screen-plan");
+  if (!screen) return;
+  const back = screen.querySelector('[data-action="back-to-normality"]');
+  if (back) back.addEventListener("click", () => showScreen("normality"));
+  const run = screen.querySelector('[data-action="run-analysis"]');
+  if (run) run.addEventListener("click", runAnalysis);
+}
+
+/* ------------------------------------------------------------------ */
+/*  Step 7 — Results                                                   */
+/* ------------------------------------------------------------------ */
+
+async function runAnalysis() {
+  const status = document.getElementById("plan-status");
+  setStatus(status, "Running analysis — this may take a few seconds…", "loading");
+  try {
+    const data = await api("/run-analysis", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        job_id: state.jobId,
+        confirmed_test_ids: Array.from(state.confirmedTests || []),
+        confirmed_graph_ids: Array.from(state.confirmedGraphs || []),
+      }),
+    });
+    state.results = data.results;
+    setStatus(status, "Done.", "success");
+    showScreen("results");
+    renderResults();
+  } catch (err) {
+    setStatus(status, `Run failed: ${err.message}`, "error");
+  }
+}
+
+function renderResults() {
+  const tabs = document.getElementById("results-tabs");
+  const pane = document.getElementById("results-pane");
+  if (!tabs || !pane) return;
+  const r = state.results;
+  if (!r) {
+    pane.innerHTML = "<p>No results yet — run the analysis on Step 6.</p>";
+    return;
+  }
+  const tabDefs = [
+    { id: "tab-table-one", label: "Table 1" },
+    ...(r.tests || []).map((t) => ({ id: `tab-${t.id}`, label: t.title, payload: t })),
+    ...((r.graphs && r.graphs.length) ? [{ id: "tab-graphs", label: "Graphs" }] : []),
+    ...(r.forest_plot ? [{ id: "tab-forest", label: "Forest plot" }] : []),
+    { id: "tab-narrative", label: "Methods + Results" },
+  ];
+  tabs.innerHTML = tabDefs.map((t, i) =>
+    `<button type="button" role="tab" class="se-results-tab ${i === 0 ? 'is-active' : ''}" data-tab="${t.id}" data-testid="${t.id}">${t.label}</button>`
+  ).join("");
+  tabs.querySelectorAll(".se-results-tab").forEach((b) => {
+    b.addEventListener("click", () => {
+      tabs.querySelectorAll(".se-results-tab").forEach((x) => x.classList.toggle("is-active", x === b));
+      renderResultsPane(b.dataset.tab);
+    });
+  });
+  renderResultsPane(tabDefs[0].id);
+}
+
+function renderResultsPane(tabId) {
+  const pane = document.getElementById("results-pane");
+  if (!pane) return;
+  const r = state.results;
+  if (tabId === "tab-table-one") {
+    const t1 = r.table_one || { headers: [], rows: [] };
+    pane.innerHTML = `<h3>Table 1 — Baseline characteristics</h3>
+      ${tableHtml(t1.headers, t1.rows.map((row) => [row.variable, row.type, ...(row.cells || [])]))}
+      <button type="button" class="btn btn-tertiary" data-action="copy-table" data-testid="button-copy-table-one">Copy table</button>`;
+    bindCopyTable();
+    return;
+  }
+  if (tabId === "tab-graphs") {
+    pane.innerHTML = (r.graphs || []).map((g) =>
+      `<figure class="se-result-figure"><figcaption>${g.title}</figcaption><img src="${g.png_data_uri}" alt="${g.title}"></figure>`
+    ).join("") || "<p>No graphs generated.</p>";
+    return;
+  }
+  if (tabId === "tab-forest") {
+    pane.innerHTML = r.forest_plot
+      ? `<figure class="se-result-figure"><figcaption>Forest plot — effect sizes</figcaption><img src="${r.forest_plot}" alt="Forest plot"></figure>`
+      : "<p>No effect sizes available.</p>";
+    return;
+  }
+  if (tabId === "tab-narrative") {
+    pane.innerHTML = `<h3>Methods</h3><p>${escapeHtml(r.methods_md || '')}</p>
+      <h3>Results</h3><p>${escapeHtml(r.results_md || '').replace(/\n\n/g, '</p><p>')}</p>
+      <button type="button" class="btn btn-tertiary" data-action="copy-narrative" data-testid="button-copy-narrative">Copy narrative</button>`;
+    const btn = pane.querySelector('[data-action="copy-narrative"]');
+    if (btn) btn.addEventListener("click", () => {
+      navigator.clipboard.writeText(`Methods\n\n${r.methods_md}\n\nResults\n\n${r.results_md}`);
+      btn.textContent = "Copied ✓";
+    });
+    return;
+  }
+  // Per-test tab.
+  const test = (r.tests || []).find((t) => `tab-${t.id}` === tabId);
+  if (!test) { pane.innerHTML = ""; return; }
+  pane.innerHTML = `<h3>${test.title}</h3>
+    ${tableHtml(["Statistic", "Value"], (test.rows || []).map((row) => [row.label, row.value]))}
+    <p>${escapeHtml(test.narrative || '')}</p>
+    <button type="button" class="btn btn-tertiary" data-action="copy-table" data-testid="button-copy-${test.id}">Copy table</button>`;
+  bindCopyTable();
+}
+
+function tableHtml(headers, rows) {
+  return `<div class="se-table-wrap"><table class="se-table">
+    <thead><tr>${headers.map((h) => `<th>${escapeHtml(String(h))}</th>`).join("")}</tr></thead>
+    <tbody>${rows.map((row) => `<tr>${row.map((c) => `<td>${escapeHtml(String(c == null ? '' : c))}</td>`).join("")}</tr>`).join("")}</tbody>
+  </table></div>`;
+}
+
+function bindCopyTable() {
+  document.querySelectorAll('[data-action="copy-table"]').forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const table = btn.previousElementSibling && btn.previousElementSibling.querySelector
+        ? btn.previousElementSibling.querySelector("table")
+        : null;
+      if (!table) return;
+      const tsv = Array.from(table.querySelectorAll("tr")).map((tr) =>
+        Array.from(tr.querySelectorAll("th,td")).map((c) => c.textContent.trim()).join("\t")
+      ).join("\n");
+      navigator.clipboard.writeText(tsv);
+      btn.textContent = "Copied ✓";
+    });
+  });
+}
+
+function bindResults() {
+  const screen = document.getElementById("screen-results");
+  if (!screen) return;
+  const back = screen.querySelector('[data-action="back-to-plan"]');
+  if (back) back.addEventListener("click", () => showScreen("plan"));
+  const cont = screen.querySelector('[data-action="continue-to-export"]');
+  if (cont) cont.addEventListener("click", () => showScreen("export"));
+}
+
+/* ------------------------------------------------------------------ */
+/*  Step 8 — Export                                                    */
+/* ------------------------------------------------------------------ */
+
+function bindExport() {
+  const screen = document.getElementById("screen-export");
+  if (!screen) return;
+  screen.querySelectorAll('[data-action="download"]').forEach((btn) => {
+    btn.addEventListener("click", () => downloadExport(btn.dataset.format));
+  });
+  const back = screen.querySelector('[data-action="back-to-results"]');
+  if (back) back.addEventListener("click", () => showScreen("results"));
+  const restartBtn = screen.querySelector('[data-action="restart"]');
+  if (restartBtn) restartBtn.addEventListener("click", restart);
+}
+
+async function downloadExport(format) {
+  const status = document.getElementById("export-status");
+  setStatus(status, `Building ${format.toUpperCase()} file…`, "loading");
+  try {
+    const url = `${API_BASE}/export/${state.jobId}/${format}`;
+    const res = await fetch(url);
+    if (!res.ok) {
+      const txt = await res.text();
+      throw new Error(txt || `HTTP ${res.status}`);
+    }
+    const blob = await res.blob();
+    const ext = format === "word" ? "docx" : (format === "excel" ? "xlsx" : "pdf");
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `medras_results.${ext}`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setStatus(status, `${format.toUpperCase()} downloaded.`, "success");
+  } catch (err) {
+    setStatus(status, `Download failed: ${err.message}`, "error");
+  }
 }
 
 function restart() {
@@ -2154,6 +2689,12 @@ function restart() {
   state.autoCoding = [];
   state.assistantThread = [];
   state.recodingChoices = {};
+  state.assignment = null;
+  state.normality = null;
+  state.plan = null;
+  state.confirmedTests = null;
+  state.confirmedGraphs = null;
+  state.results = null;
   setStatus($("#upload-status"), "");
   setStatus($("#practice-status"), "");
   setStatus($("#quality-status"), "");
@@ -2199,6 +2740,11 @@ function initApp() {
     bindScreen3();
     bindScreen4();
     bindSoon();
+    bindAssign();
+    bindNormality();
+    bindPlan();
+    bindResults();
+    bindExport();
     bindPassBadgeTooltip();
     bindStepNavBack();
     showScreen("1");

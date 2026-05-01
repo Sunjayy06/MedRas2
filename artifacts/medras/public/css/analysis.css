@@ -50,7 +50,7 @@
   vertical-align: middle;
 }
 
-/* ---------- 12-step tracker — circle + label connected by a line ---------- */
+/* ---------- 8-step tracker — circle + label connected by a line ---------- */
 
 .se-steps {
   display: flex;
@@ -1777,4 +1777,257 @@ html[data-medras-init="ok"] .se-actions-fallback { display: none; }
   opacity: 0.55;
   cursor: not-allowed;
   pointer-events: none;
+}
+
+/* ---------- Step 3 inline cleanup notice (Rule 2: auto-strip undo) ---------- */
+.se-cleanup-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 6px;
+  padding: 8px 10px;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  border-left: 3px solid #10b981;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #065f46;
+}
+.se-cleanup-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #10b981;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.se-cleanup-text { flex: 1; }
+.se-cleanup-undo {
+  flex-shrink: 0;
+  background: transparent;
+  border: 1px solid #10b981;
+  color: #047857;
+  padding: 3px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 120ms;
+}
+.se-cleanup-undo:hover { background: #d1fae5; }
+.se-cleanup-undo:disabled { opacity: 0.6; cursor: wait; }
+
+/* ============================================================== */
+/*  Steps 4-8 — Assign / Normality / Plan / Results / Export       */
+/* ============================================================== */
+
+.se-assign-grid {
+  display: grid;
+  gap: 18px;
+  margin: 18px 0 8px;
+}
+.se-assign-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 16px;
+  border: 1px solid #d6e0ee;
+  border-radius: 10px;
+  background: #f7faff;
+}
+.se-assign-label {
+  font-weight: 600;
+  color: #103a6e;
+}
+.se-assign-hint {
+  color: #5f6c80;
+  font-size: 13px;
+}
+.se-cov-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 6px 16px;
+  margin: 6px 0;
+}
+.se-cov-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  cursor: pointer;
+}
+.se-cov-type {
+  color: #5f6c80;
+  font-size: 12px;
+}
+.se-assign-preview {
+  margin: 14px 0;
+  padding: 12px 16px;
+  background: #eaf2ff;
+  border-radius: 8px;
+  border-left: 4px solid #2f6fed;
+  color: #103a6e;
+}
+
+/* Normality */
+.se-chip {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.se-chip-good { background: #d1fae5; color: #065f46; }
+.se-chip-warn { background: #fde7ce; color: #92400e; }
+.se-chip-muted { background: #e6e9ee; color: #5f6c80; }
+.se-qq-thumb {
+  width: 80px;
+  height: 80px;
+  border-radius: 6px;
+  border: 1px solid #d6e0ee;
+  object-fit: contain;
+  background: #fff;
+}
+.se-norm-note {
+  font-size: 12px;
+  color: #5f6c80;
+  margin-top: 4px;
+}
+.se-norm-override {
+  font-size: 12px;
+  padding: 4px 10px;
+}
+
+/* Plan */
+.se-plan-section {
+  margin: 18px 0;
+}
+.se-plan-section h3 {
+  margin: 0 0 10px;
+  color: #103a6e;
+}
+.se-plan-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+.se-plan-card {
+  border: 1px solid #d6e0ee;
+  border-radius: 10px;
+  padding: 12px 14px;
+  background: #fff;
+  transition: opacity 120ms, background 120ms;
+}
+.se-plan-card.is-removed {
+  opacity: 0.55;
+  background: #f1f3f7;
+}
+.se-plan-card-toggle {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-weight: 600;
+  color: #103a6e;
+  cursor: pointer;
+}
+.se-plan-card-why {
+  margin: 6px 0 0 22px;
+  color: #5f6c80;
+  font-size: 13px;
+}
+.se-plan-outputs {
+  margin: 0;
+  padding-left: 22px;
+  color: #2c3e57;
+}
+.se-plan-confirm {
+  margin: 18px 0;
+  padding: 14px 18px;
+  border: 1px solid #f0c879;
+  border-radius: 10px;
+  background: #fff7e3;
+}
+.se-plan-confirm legend {
+  font-weight: 600;
+  color: #5f4514;
+  padding: 0 6px;
+}
+.se-plan-confirm label {
+  display: block;
+  margin: 6px 0;
+  cursor: pointer;
+}
+
+/* Results */
+.se-results-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  border-bottom: 2px solid #d6e0ee;
+  margin: 12px 0 18px;
+}
+.se-results-tab {
+  padding: 8px 14px;
+  border: none;
+  background: transparent;
+  color: #5f6c80;
+  cursor: pointer;
+  border-bottom: 3px solid transparent;
+  font-weight: 500;
+}
+.se-results-tab:hover { color: #103a6e; }
+.se-results-tab.is-active {
+  color: #103a6e;
+  border-bottom-color: #2f6fed;
+}
+.se-results-pane {
+  padding: 8px 0;
+}
+.se-result-figure {
+  margin: 14px 0;
+  text-align: center;
+}
+.se-result-figure img {
+  max-width: 100%;
+  border: 1px solid #d6e0ee;
+  border-radius: 8px;
+}
+.se-result-figure figcaption {
+  font-weight: 600;
+  color: #103a6e;
+  margin-bottom: 6px;
+}
+
+/* Export */
+.se-export-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+  margin: 18px 0;
+}
+.se-export-card {
+  padding: 16px;
+  border: 1px solid #d6e0ee;
+  border-radius: 10px;
+  background: #f7faff;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.se-export-card h3 {
+  margin: 0;
+  color: #103a6e;
+}
+.se-export-card p {
+  flex: 1;
+  margin: 0;
+  color: #5f6c80;
+  font-size: 14px;
 }

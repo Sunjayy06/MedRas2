@@ -1,0 +1,604 @@
+I am building MedRAS, a medical research 
+analysis platform. I have already built 
+steps 1 to 4 of my analysis flow. 
+Do not touch or rebuild steps 1 to 4.
+
+This prompt does three things:
+  Part 1 — Fix variable classification 
+           logic that is still wrong
+  Part 2 — Build steps 5, 6, 7, 8
+  Part 3 — Restructure the step bar 
+           from 12 steps to 8 steps
+
+Read all three parts before starting.
+Build in order: Part 1 first, 
+then Part 2, then Part 3.
+
+════════════════════════════════════
+PART 1 — FIX VARIABLE CLASSIFICATION
+(apply this to the existing Step 3 code)
+════════════════════════════════════
+
+The variable classification logic has 
+recurring errors. Fix them permanently 
+using the rules below. These rules must 
+apply every time a column is classified, 
+including after the variable assistant 
+makes a change.
+
+─────────────────────────────────
+RULE 1 — SCALE vs ORDINAL
+─────────────────────────────────
+
+A variable is SCALE (continuous or discrete) 
+if it measures a quantity with real numeric 
+meaning — regardless of how many unique 
+values it has.
+
+Examples that MUST be classified as SCALE:
+  Age, Weight, Height, BMI
+  Haemoglobin, Blood pressure, Temperature
+  Creatinine, eGFR, HbA1c
+  Time to union (weeks or days)
+  Operating time (minutes)
+  Duration of surgery
+  Harris Hip Score (0 to 100)
+  Radiological Union Score (numeric)
+  Any score that produces a number 
+  on a continuous or count scale
+
+A variable is ORDINAL only when:
+  The values have a natural rank order
+  AND the gap between values is not 
+  equal or not meaningful
+  Examples: NYHA class (I, II, III, IV),
+  Pain grade (mild, moderate, severe),
+  Education level (primary, secondary, 
+  tertiary), Tumour stage (1, 2, 3, 4)
+
+Harris Hip Score, Radiological Union Score, 
+VAS Score, and similar clinical scoring 
+systems are SCALE by default, not ordinal.
+They produce a number. Mean and SD apply.
+Do not classify them as ordinal just because 
+they have a limited number of unique values.
+
+The rule for ordinal is NOT based on 
+how many unique values a column has.
+It is based on what the variable measures.
+
+Remove any logic that says 
+"if unique values < 10 then ordinal".
+Replace with column name pattern matching:
+  If column name contains: score, index, 
+  scale, VAS, NRS, HHS, Harris, Union, 
+  time, duration, age, weight, height, 
+  BMI, pressure, rate, level, count, days,
+  weeks, months, minutes, hours, length, 
+  distance, volume, dose — classify as SCALE.
+
+─────────────────────────────────
+RULE 2 — STRING MIXED VARIABLES
+─────────────────────────────────
+
+When a column contains values that are 
+numbers mixed with units or text labels
+such as:
+  "2 mm", "3 Grade", "Grade 4", "Level 3",
+  "Score 7", "4 cm", "12 weeks", "5 days"
+
+Do the following automatically:
+  Strip all non-numeric characters 
+  (remove mm, cm, Grade, Level, Score, 
+  weeks, days, months, and any similar 
+  unit or label text)
+  Extract only the numeric part
+  Convert the column to numeric (float or int)
+  Classify as SCALE
+
+Show the user a message:
+  "We detected text mixed with numbers 
+   in [column name]. We stripped the text 
+   and kept the numbers. 
+   Original: 'Grade 4' → Converted: 4
+   The column is now treated as a 
+   numeric scale variable."
+
+Give the user the option to undo this.
+
+─────────────────────────────────
+RULE 3 — DISCRETE vs CONTINUOUS
+─────────────────────────────────
+
+Both discrete and continuous variables 
+are treated as SCALE for all statistical 
+purposes in this app.
+
+Discrete = whole numbers only (count data)
+  Examples: number of children, number 
+  of hospital visits, number of fractures
+Continuous = can have decimals
+  Examples: weight, haemoglobin, BMI
+
+Both get mean and SD in descriptive stats.
+Both use the same parametric or 
+non-parametric tests.
+Do not treat them differently in analysis.
+In the classification table, show the 
+sub-type as "Scale (continuous)" or 
+"Scale (discrete)" as information only.
+It does not change which tests run.
+
+─────────────────────────────────
+RULE 4 — RECODING SIMPLIFICATION
+─────────────────────────────────
+
+The recoding interface for grouping 
+continuous variables must be simple.
+
+Remove the current three-field form 
+(lower bound, cutoffs, upper bound).
+Replace with a single text input:
+
+  Label: "Enter your groups"
+  Placeholder: "e.g.  <18,  18-30,  31-45,  >45"
+
+The user types their groups in any format:
+  <18 means below 18
+  18-30 means 18 to 30 inclusive
+  >45 means above 45
+  ≤30 also accepted
+  ≥18 also accepted
+
+Parse this input and create the groups.
+Show a preview line below the input:
+  "Will create: Under 18 / 18 to 30 / 
+   31 to 45 / Over 45"
+
+The preview updates as the user types.
+Only confirm when the user clicks Apply.
+
+─────────────────────────────────
+RULE 5 — VARIABLE ASSISTANT FIX
+─────────────────────────────────
+
+The variable assistant must recognise 
+these situations and handle them 
+without needing the user to explain:
+
+When user says "I want mean and frequency 
+for [variable]":
+  Create two columns:
+    [variable]_numeric — Scale type 
+    — for mean and SD
+    [variable]_category — Ordinal type 
+    — for frequency table
+  Both columns appear in results.
+
+When user says "strip the prefix from 
+[variable]" or the system auto-detects 
+a text prefix:
+  Strip the text, convert to numeric,
+  reclassify as Scale.
+  Keep original column with suffix _original.
+
+When user says "treat this as discrete":
+  Change subtype to Scale (discrete).
+  No change to which tests run.
+
+When user says "exclude [variable]":
+  Mark as Excluded.
+  Remove from all analysis.
+  Grey out the row in the table.
+
+The variable assistant does NOT need 
+an external AI API.
+Use rule-based pattern matching on the 
+user's message text.
+Match keywords: strip, prefix, mean, 
+frequency, exclude, discrete, continuous, 
+scale, ordinal, rename, merge, recode.
+Execute the matching action.
+If no keyword matches, show:
+  "I did not understand that. Try saying:
+   'strip prefix from [column]'
+   'exclude [column]'
+   'I want mean and frequency for [column]'"
+
+════════════════════════════════════
+PART 2 — BUILD STEPS 5, 6, 7, 8
+════════════════════════════════════
+
+Steps 1 to 4 already exist. Do not touch them.
+Build only steps 5, 6, 7, and 8 below.
+
+─────────────────────────────────
+STEP 5 — NORMALITY CHECK
+─────────────────────────────────
+
+For every variable classified as Scale, 
+run a normality test automatically.
+
+Which test to use:
+  n below 50 → Shapiro-Wilk
+  n 50 or more → Kolmogorov-Smirnov
+  n above 2000 → skip test, treat 
+  as non-normal automatically
+
+Also check:
+  Skewness: if absolute value above 2 
+  → non-normal
+  Kurtosis: if absolute value above 7 
+  → non-normal
+
+Decision rule:
+  Normal if: test p above 0.05 AND 
+  skewness below 2 AND kurtosis below 7
+  Non-normal if: any one of those fails
+  Borderline if: p between 0.01 and 0.05 
+  → run both parametric and non-parametric 
+  and show both results
+
+If non-normal: try log transformation.
+  If log transformation makes it normal,
+  use parametric tests on log-transformed 
+  data and note this in the report.
+  If transformation does not work, 
+  use non-parametric.
+
+Show results in a table:
+  Column | Test used | p-value | 
+  Skewness | Decision
+  Decision shown as coloured chip:
+    Green = Normal
+    Amber = Borderline
+    Red = Non-normal
+
+Show a small QQ plot thumbnail 
+per variable. Click to enlarge.
+
+Each row has an override toggle.
+Expert users can force parametric 
+despite non-normal, with a red warning 
+note added to the report.
+
+One button at the bottom:
+  "Confirm normality decisions and 
+   continue →"
+  
+Back button bottom left:
+  "← Back to Assign"
+
+─────────────────────────────────
+STEP 6 — PLAN AND RUN
+─────────────────────────────────
+
+This screen has two phases.
+Phase 1: the user reviews the full plan.
+Phase 2: the user confirms and runs.
+No analysis runs until the user 
+clicks the Run button.
+
+TOP OF SCREEN:
+  Small label: "Step 6 of 8 — Analysis Plan"
+  Heading: "Here is exactly what MedRAS 
+  will do. Confirm to run."
+  Description: "Review every test, graph, 
+  and output below. Remove anything you 
+  do not need. Once you click Run, 
+  the analysis begins."
+
+SUMMARY CARDS (four in a row):
+  Patients count
+  Variables count
+  Outcome variable name and type
+  Grouping variable name and type
+  All pulled automatically from 
+  previous steps.
+
+NORMALITY NOTICE:
+  If any variable is non-normal:
+    Show amber box:
+    "[Variable] is non-normally distributed 
+    (Shapiro-Wilk p = [value]).
+    Non-parametric tests will be used.
+    Override this decision →"
+    Clicking override goes back to Step 5.
+  If all normal:
+    Show green box:
+    "All variables are normally distributed.
+    Parametric tests will be used."
+
+TESTS SECTION:
+  Heading: "TESTS THAT WILL RUN"
+  
+  Call GET /api/stats/generate-plan 
+  with the session ID.
+  Show the returned tests as cards.
+  Do not hardcode any test names.
+  
+  Each test card shows:
+    Coloured icon on left
+    Test name in bold
+    Plain English reason why this test 
+    was chosen (one or two sentences)
+    Tag pills: Auto-selected, Primary test,
+    Non-parametric, Parametric, 
+    Always included
+    Tick circle on right — clicking removes 
+    the test from the plan (card goes grey)
+  
+  Descriptive statistics always appears 
+  first and cannot be removed.
+  Show a lock icon instead of a tick.
+  
+  Order: Descriptive → Comparison → 
+  Correlation → Categorical → Regression 
+  → Survival → Diagnostic → Reliability
+
+GRAPHS SECTION:
+  Heading: "GRAPHS THAT WILL BE GENERATED"
+  Three-column grid of graph cards.
+  Each card shows a small visual sketch 
+  of that chart type using CSS shapes only.
+  No real data in the thumbnails.
+  Graph name and variable names below.
+  Each graph card can be removed 
+  by clicking, except graphs tied 
+  to the locked descriptive statistics.
+
+OUTPUTS SECTION:
+  Heading: "WHAT WILL BE WRITTEN FOR YOU"
+  List of outputs with emoji and green tick.
+  Always show:
+    Table 1 — Baseline characteristics
+    Results section — publication-ready
+    Methods section — statistical methods
+    Limitations note
+  Show only if relevant test is included:
+    Comparison table
+    Regression table
+    Survival table
+
+CONFIRMATION BOX:
+  Purple border box at bottom.
+  Title: "Confirm your analysis plan"
+  Description: "Tick all three boxes. 
+  You can still go back and change 
+  anything before clicking Run."
+  
+  Three checkboxes (all start unticked):
+    1. I have reviewed the tests and they 
+       match my research objective
+    2. I have reviewed the graphs that 
+       will be generated
+    3. I understand why the tests were 
+       selected based on normality results
+  
+  Run button:
+    When any checkbox is unticked:
+      Grey, not clickable
+      Text: "Tick all boxes to run"
+    When all ticked:
+      Blue to purple gradient, clickable
+      Text: "Run analysis now →"
+  
+  Back button left of Run:
+    "← Go back" → goes to Step 5
+
+WHEN RUN IS CLICKED:
+  Confirmation box fades out.
+  Progress screen appears with:
+    Large progress bar at top
+    Phase checklist on left:
+      Each phase gets a green tick 
+      when complete
+      Phases: Reading data, Running 
+      normality, Running [test name], 
+      Generating graphs, Writing 
+      interpretation, Compiling report
+    Live result feed on right:
+      One line appears per completed test
+  When everything done:
+    Automatically move to Step 7.
+  
+  Send to backend:
+    POST /api/stats/run-analysis
+    with list of test IDs the user kept
+
+─────────────────────────────────
+STEP 7 — RESULTS
+─────────────────────────────────
+
+Tabbed interface at top.
+Only show tabs for tests that actually ran.
+Possible tabs:
+  Table 1 | Normality | Comparison | 
+  Correlation | Regression | Survival | 
+  Diagnostic | Reliability | Graphs | 
+  Methods | Results Section
+
+Each tab contains:
+  Result table in APA format:
+    No vertical lines
+    Horizontal lines only at top, 
+    below header, and bottom
+    p-values to 3 decimal places
+    Bold significant p-values
+    Footnote below explaining abbreviations
+  Copy table button
+  Interpretation paragraph in formal 
+  academic English
+  Copy interpretation button
+  Relevant graph shown inline below table
+  Download graph PNG and SVG buttons
+  Assumptions checked panel 
+  (collapsible, shows what passed and 
+  what was violated)
+
+TABLE 1 tab always appears first.
+Contains baseline characteristics of 
+all variables, grouped by main IV 
+if applicable.
+
+REGRESSION tab shows a forest plot 
+of Odds Ratios or Hazard Ratios.
+
+RISK FACTORS box in Regression tab:
+  Green pills for protective factors 
+  (OR below 1, p below 0.05)
+  Red pills for risk factors 
+  (OR above 1, p below 0.05)
+  Grey pills for not significant
+
+METHODS TAB contains the auto-written 
+statistical methods paragraph.
+Label above it: "Copy this into your 
+paper's Methods section"
+Copy button at top.
+
+RESULTS SECTION TAB contains the 
+auto-written full Results narrative.
+Copy button at top.
+
+Back button: "← Go back to Plan and Run"
+
+─────────────────────────────────
+STEP 8 — EXPORT
+─────────────────────────────────
+
+Title: "Your analysis is complete"
+
+Three download cards side by side:
+  Word document — for editing
+  PDF — for sharing with supervisor
+  Excel — for raw numbers
+
+Below the cards:
+  One button: "Download all three"
+
+Checklist the user reads before downloading:
+  I have verified the results make sense
+  I know which result is my primary outcome
+  I have noted any warnings about 
+  sample size or assumptions
+
+Two links below checklist:
+  "Run another analysis on this dataset" 
+  → goes back to Step 4 (Assign)
+  "Upload a new dataset" 
+  → goes back to Step 1
+
+Back button: "← Back to Results"
+
+════════════════════════════════════
+PART 3 — RESTRUCTURE THE STEP BAR
+════════════════════════════════════
+
+Change the step navigator from 12 steps 
+to 8 steps.
+
+The 8 steps and their labels:
+  1 — Start
+  2 — Data input
+  3 — Review data
+  4 — Assign
+  5 — Normality
+  6 — Plan and Run
+  7 — Results
+  8 — Export
+
+Note: Step 3 "Review data" already exists 
+as steps 3, 4, 5 in the current code.
+These three are now shown as one step 
+in the navigator with internal tabs.
+The navigator shows step 3 as one circle.
+Inside step 3, tabs A (Variables), 
+B (Quality), and C (Missing) are shown.
+Tab B unlocks after Tab A confirmed.
+Tab C unlocks after Tab B confirmed.
+
+Remove the old Objective step completely.
+The objective captured at the start 
+passes forward automatically.
+
+Visual rules for the step bar:
+  Completed step: green circle, white tick
+  Current step: blue circle, 
+  glow ring around it
+  Future step: grey circle, 
+  no cursor, cannot be clicked
+  Step 3 partially complete: 
+  half green half grey circle
+
+Remove the word "soon" from all labels.
+All labels are always visible below 
+their circles.
+
+Every step from Step 2 onwards has 
+a Back button at bottom left.
+Back button text says 
+"← Back to [previous step name]"
+Going back never resets any choices.
+Everything is preserved exactly as left.
+
+════════════════════════════════════
+WHAT TO TEST AFTER BUILDING
+════════════════════════════════════
+
+Test 1: Count step circles in the bar.
+  Must be exactly 8.
+  Labels: Start, Data input, Review data,
+  Assign, Normality, Plan and Run, 
+  Results, Export.
+
+Test 2: Upload a file with mixed text 
+and numbers like "Grade 4", "2 mm".
+  Expected: system strips text, 
+  converts to number, classifies as Scale.
+  Shows the user what was stripped.
+
+Test 3: Check Harris Hip Score column 
+or any score column classification.
+  Expected: classified as Scale, 
+  not Ordinal.
+
+Test 4: In recoding, type custom groups 
+like "<18, 18-30, 31-45, >45".
+  Expected: preview updates to show 
+  the groups. Apply creates new column.
+
+Test 5: Go to Step 6 with real data.
+  Test cards must show actual tests 
+  based on the data, not hardcoded.
+  Each card shows a plain English reason.
+
+Test 6: Remove a test by clicking its tick.
+  Card goes grey.
+  Graph linked to that test also goes grey.
+
+Test 7: Try clicking Run without 
+ticking all three checkboxes.
+  Button stays grey, does not respond.
+
+Test 8: Tick all three checkboxes.
+  Button turns blue-purple, becomes clickable.
+
+Test 9: Click Run.
+  Progress screen appears with live updates.
+  Only confirmed tests run.
+  Automatically moves to Step 7 when done.
+
+Test 10: On Step 7 results screen,
+  copy a table.
+  Expected: pastes cleanly into Word.
+
+Test 11: On Step 8, click Download Word.
+  Expected: downloads a properly 
+  formatted Word document with all 
+  tables, graphs, results, and 
+  methods section included.
+
+Test 12: Click Back on any step.
+  Expected: goes to correct previous step.
+  All previous choices preserved exactly.

@@ -6,11 +6,11 @@
     <title>Statistical Analysis Engine — MedRAS</title>
     <meta
       name="description"
-      content="Twelve guided steps from raw Excel data to a publication-ready statistical report."
+      content="Eight guided steps from raw Excel data to a publication-ready statistical report."
     />
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%232f6fed'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-family='Inter,sans-serif' font-size='18' font-weight='700' fill='white'%3EM%3C/text%3E%3C/svg%3E" />
     <link rel="stylesheet" href="/css/style.css" />
-    <link rel="stylesheet" href="/css/analysis.css?v=2026050201" />
+    <link rel="stylesheet" href="/css/analysis.css?v=2026050303" />
   </head>
   <body>
     <header class="site-header" data-testid="site-header">
@@ -32,7 +32,7 @@
         <p class="eyebrow" data-testid="text-eyebrow">Module 03</p>
         <h1 data-testid="text-page-title">Statistical Analysis Engine</h1>
         <p class="se-lede" data-testid="text-lede">
-          Twelve guided steps. Upload your data, confirm a few decisions, and
+          Eight guided steps. Upload your data, confirm a few decisions, and
           MedRAS does the analysis, the figures and the writing for you.
           <span class="beta-pill se-pass-badge" data-testid="badge-pass">
             Pass 1 of 2 — data preparation<button type="button" class="se-pass-help" aria-label="What does Pass 1 mean?" data-testid="badge-pass-help">?</button>
@@ -45,20 +45,16 @@
            session is found in localStorage). Sits above all screens. -->
       <div id="resume-banner" class="is-hidden" data-testid="resume-banner-host"></div>
 
-      <!-- 12-step progress tracker -->
-      <ol class="se-steps" aria-label="Twelve-step workflow" data-testid="step-tracker">
+      <!-- 8-step progress tracker -->
+      <ol class="se-steps" aria-label="Eight-step workflow" data-testid="step-tracker">
         <li class="se-step is-active" data-step="1" data-testid="dot-step-1"><span class="se-step-num">1</span><span class="se-step-label">Start</span></li>
         <li class="se-step" data-step="2" data-testid="dot-step-2"><span class="se-step-num">2</span><span class="se-step-label">Data input</span></li>
-        <li class="se-step" data-step="3" data-testid="dot-step-3"><span class="se-step-num">3</span><span class="se-step-label">Variables</span></li>
-        <li class="se-step" data-step="4" data-testid="dot-step-4"><span class="se-step-num">4</span><span class="se-step-label">Quality</span></li>
-        <li class="se-step" data-step="5" data-testid="dot-step-5"><span class="se-step-num">5</span><span class="se-step-label">Missing</span></li>
-        <li class="se-step" data-step="6" data-testid="dot-step-6"><span class="se-step-num">6</span><span class="se-step-label">Objective</span></li>
-        <li class="se-step" data-step="7" data-testid="dot-step-7"><span class="se-step-num">7</span><span class="se-step-label">Assign</span></li>
-        <li class="se-step" data-step="8" data-testid="dot-step-8"><span class="se-step-num">8</span><span class="se-step-label">Normality</span></li>
-        <li class="se-step" data-step="9" data-testid="dot-step-9"><span class="se-step-num">9</span><span class="se-step-label">Plan</span></li>
-        <li class="se-step" data-step="10" data-testid="dot-step-10"><span class="se-step-num">10</span><span class="se-step-label">Run</span></li>
-        <li class="se-step" data-step="11" data-testid="dot-step-11"><span class="se-step-num">11</span><span class="se-step-label">Results</span></li>
-        <li class="se-step" data-step="12" data-testid="dot-step-12"><span class="se-step-num">12</span><span class="se-step-label">Export</span></li>
+        <li class="se-step" data-step="3" data-testid="dot-step-3"><span class="se-step-num">3</span><span class="se-step-label">Review data</span></li>
+        <li class="se-step" data-step="4" data-testid="dot-step-4"><span class="se-step-num">4</span><span class="se-step-label">Assign</span></li>
+        <li class="se-step" data-step="5" data-testid="dot-step-5"><span class="se-step-num">5</span><span class="se-step-label">Normality</span></li>
+        <li class="se-step" data-step="6" data-testid="dot-step-6"><span class="se-step-num">6</span><span class="se-step-label">Plan and Run</span></li>
+        <li class="se-step" data-step="7" data-testid="dot-step-7"><span class="se-step-num">7</span><span class="se-step-label">Results</span></li>
+        <li class="se-step" data-step="8" data-testid="dot-step-8"><span class="se-step-num">8</span><span class="se-step-label">Export</span></li>
       </ol>
 
       <!-- ===========================================================
@@ -556,31 +552,169 @@
       </div>
 
       <!-- ===========================================================
-           SCREEN 5+ · Coming in next pass
+           SCREEN ASSIGN · Step 4 — Variable assignment
            =========================================================== -->
-      <section class="se-screen se-screen-narrow is-hidden" id="screen-soon" data-testid="screen-soon">
+      <section class="se-screen se-screen-narrow is-hidden" id="screen-assign" data-testid="screen-assign">
         <header class="se-screen-head">
-          <h2 data-testid="text-soon-title">Coming in the next pass</h2>
-          <p data-testid="text-soon-body">
-            This screen is part of Pass 2 (missing data, research objective,
-            variable assignment) or later. The data you cleaned in step 4 has
-            been saved and will flow straight into the next steps once they
-            ship.
-          </p>
+          <h2>Step 4 · Assign your variables</h2>
+          <p>Pick the outcome you want to study, the grouping variable that splits patients, and any covariates you want to adjust for.</p>
         </header>
 
-        <div class="se-soon-card" data-testid="soon-card">
-          <ul>
-            <li><strong>Pass 2:</strong> Missing data manager (heatmap, MICE, Little's MCAR), 16-option research-direction picker, variable assignment.</li>
-            <li><strong>Pass 3:</strong> Normality with thumb rules, full plan confirmation gate, expanded test library, tabbed results viewer.</li>
-            <li><strong>Pass 4:</strong> Form builder, Word/PDF/Excel export, auto-written Methods section.</li>
-          </ul>
+        <div class="se-assign-grid">
+          <label class="se-assign-field">
+            <span class="se-assign-label">Outcome (what you measure)</span>
+            <select id="assign-outcome" class="se-type-select" data-testid="select-outcome"></select>
+            <small class="se-assign-hint">Usually a scale or ordinal score, e.g. Harris Hip Score, VAS, Time-to-event.</small>
+          </label>
+          <label class="se-assign-field">
+            <span class="se-assign-label">Group (what splits patients) — optional</span>
+            <select id="assign-group" class="se-type-select" data-testid="select-group">
+              <option value="">— No grouping (descriptive only) —</option>
+            </select>
+            <small class="se-assign-hint">Usually a nominal variable with 2–3 levels, e.g. Treatment, Surgery type.</small>
+          </label>
+          <fieldset class="se-assign-field">
+            <legend class="se-assign-label">Covariates (adjust for) — optional</legend>
+            <div id="assign-covariates" class="se-cov-list" data-testid="covariate-list"></div>
+            <small class="se-assign-hint">Tick variables to control for (age, sex, baseline scores).</small>
+          </fieldset>
+        </div>
+
+        <div id="assign-preview" class="se-assign-preview" data-testid="assign-preview"></div>
+        <div id="assign-status" class="se-status" role="status" aria-live="polite" data-testid="status-assign"></div>
+
+        <div class="se-actions">
+          <button type="button" class="btn btn-secondary" data-action="back-to-quality" data-testid="button-assign-back">&larr; Back to Review data</button>
+          <button type="button" class="btn btn-primary" data-action="save-assign" data-testid="button-assign-continue">Continue to Normality &rarr;</button>
+        </div>
+      </section>
+
+      <!-- ===========================================================
+           SCREEN NORMALITY · Step 5
+           =========================================================== -->
+      <section class="se-screen se-screen-narrow is-hidden" id="screen-normality" data-testid="screen-normality">
+        <header class="se-screen-head">
+          <h2>Step 5 · Check normality</h2>
+          <p>For each scale variable we run Shapiro-Wilk (n &lt; 50) or Kolmogorov-Smirnov (50–2000). Above 2000 we use shape thumb-rules instead. Override the verdict if you have a strong reason.</p>
+        </header>
+
+        <div id="normality-status" class="se-status" role="status" aria-live="polite" data-testid="status-normality"></div>
+
+        <div class="se-table-wrap">
+          <table class="se-table" id="normality-table" data-testid="table-normality">
+            <thead>
+              <tr>
+                <th>Variable</th>
+                <th>n</th>
+                <th>Test</th>
+                <th>p-value</th>
+                <th>Skew</th>
+                <th>Kurt.</th>
+                <th>Verdict</th>
+                <th>QQ plot</th>
+                <th>Override</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
         </div>
 
         <div class="se-actions">
-          <button type="button" class="btn btn-secondary" data-action="back-to-quality" data-testid="button-back-quality">&larr; Back</button>
-          <button type="button" class="btn btn-tertiary" data-action="restart" data-testid="button-soon-restart">Start over with new data</button>
-          <a href="/" class="btn btn-tertiary" data-testid="link-soon-home">MedRAS home</a>
+          <button type="button" class="btn btn-secondary" data-action="back-to-assign" data-testid="button-normality-back">&larr; Back to Assign</button>
+          <button type="button" class="btn btn-primary" data-action="continue-to-plan" data-testid="button-normality-continue">Continue to Plan &rarr;</button>
+        </div>
+      </section>
+
+      <!-- ===========================================================
+           SCREEN PLAN · Step 6 — Plan and Run
+           =========================================================== -->
+      <section class="se-screen se-screen-narrow is-hidden" id="screen-plan" data-testid="screen-plan">
+        <header class="se-screen-head">
+          <h2>Step 6 · Plan and run</h2>
+          <p id="plan-summary" data-testid="plan-summary">Building your plan…</p>
+        </header>
+
+        <div class="se-plan-section" data-testid="plan-tests-section">
+          <h3>Tests we'll run</h3>
+          <div id="plan-tests" class="se-plan-cards"></div>
+        </div>
+
+        <div class="se-plan-section" data-testid="plan-graphs-section">
+          <h3>Graphs we'll draw</h3>
+          <div id="plan-graphs" class="se-plan-cards"></div>
+        </div>
+
+        <div class="se-plan-section" data-testid="plan-outputs-section">
+          <h3>Other outputs</h3>
+          <ul id="plan-outputs" class="se-plan-outputs"></ul>
+        </div>
+
+        <fieldset class="se-plan-confirm" data-testid="plan-confirm">
+          <legend>Before running, confirm</legend>
+          <label><input type="checkbox" data-confirm="data" data-testid="confirm-data"> The data shown in Steps 3–4 is what I want to analyse.</label>
+          <label><input type="checkbox" data-confirm="vars" data-testid="confirm-vars"> The outcome / group / covariates above are correctly assigned.</label>
+          <label><input type="checkbox" data-confirm="tests" data-testid="confirm-tests"> The tests, graphs and outputs above are what I want to run.</label>
+        </fieldset>
+
+        <div id="plan-status" class="se-status" role="status" aria-live="polite" data-testid="status-plan"></div>
+
+        <div class="se-actions">
+          <button type="button" class="btn btn-secondary" data-action="back-to-normality" data-testid="button-plan-back">&larr; Back to Normality</button>
+          <button type="button" class="btn btn-primary" data-action="run-analysis" disabled data-testid="button-run-analysis">Run analysis &rarr;</button>
+        </div>
+      </section>
+
+      <!-- ===========================================================
+           SCREEN RESULTS · Step 7
+           =========================================================== -->
+      <section class="se-screen is-hidden" id="screen-results" data-testid="screen-results">
+        <header class="se-screen-head">
+          <h2>Step 7 · Results</h2>
+          <p>Tabbed view of every test, graph, and the auto-written narrative.</p>
+        </header>
+
+        <div class="se-results-tabs" id="results-tabs" role="tablist" data-testid="results-tabs"></div>
+        <div class="se-results-pane" id="results-pane" data-testid="results-pane"></div>
+
+        <div class="se-actions">
+          <button type="button" class="btn btn-secondary" data-action="back-to-plan" data-testid="button-results-back">&larr; Back to Plan</button>
+          <button type="button" class="btn btn-primary" data-action="continue-to-export" data-testid="button-results-continue">Continue to Export &rarr;</button>
+        </div>
+      </section>
+
+      <!-- ===========================================================
+           SCREEN EXPORT · Step 8
+           =========================================================== -->
+      <section class="se-screen se-screen-narrow is-hidden" id="screen-export" data-testid="screen-export">
+        <header class="se-screen-head">
+          <h2>Step 8 · Export your report</h2>
+          <p>Download the full results as Word, PDF or Excel. Each file embeds Table 1, every test, every graph, methods and results paragraphs.</p>
+        </header>
+
+        <div class="se-export-grid">
+          <article class="se-export-card" data-format="word" data-testid="export-card-word">
+            <h3>Word (.docx)</h3>
+            <p>Editable report, ready to drop into your manuscript.</p>
+            <button type="button" class="btn btn-primary" data-action="download" data-format="word" data-testid="button-download-word">Download Word</button>
+          </article>
+          <article class="se-export-card" data-format="pdf" data-testid="export-card-pdf">
+            <h3>PDF</h3>
+            <p>Print-ready snapshot for sharing or supervisor review.</p>
+            <button type="button" class="btn btn-primary" data-action="download" data-format="pdf" data-testid="button-download-pdf">Download PDF</button>
+          </article>
+          <article class="se-export-card" data-format="excel" data-testid="export-card-excel">
+            <h3>Excel (.xlsx)</h3>
+            <p>One sheet per test plus Table 1 — useful for further work.</p>
+            <button type="button" class="btn btn-primary" data-action="download" data-format="excel" data-testid="button-download-excel">Download Excel</button>
+          </article>
+        </div>
+
+        <div id="export-status" class="se-status" role="status" aria-live="polite" data-testid="status-export"></div>
+
+        <div class="se-actions">
+          <button type="button" class="btn btn-secondary" data-action="back-to-results" data-testid="button-export-back">&larr; Back to Results</button>
+          <button type="button" class="btn btn-tertiary" data-action="restart" data-testid="button-export-restart">Start over with new data</button>
+          <a href="/" class="btn btn-tertiary" data-testid="link-export-home">MedRAS home</a>
         </div>
       </section>
     </main>
@@ -592,6 +726,6 @@
       </div>
     </footer>
 
-    <script src="/js/analysis.js?v=2026050201" defer></script>
+    <script src="/js/analysis.js?v=2026050303" defer></script>
   </body>
 </html>

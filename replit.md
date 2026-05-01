@@ -8,6 +8,16 @@ MedRAS is a structured Research Operating System designed to support medical, bi
 *   Ask before making major changes.
 *   Do not make changes to files outside the `artifacts/medras/` directory.
 *   Do not make changes to `.replit-artifact/artifact.toml`.
+
+## Recent Changes (May 2026)
+*   **8-step workflow** — restructured Step bar 12 → 8 steps: Start, Data input, Review data, Assign, Normality, Plan and Run, Results, Export.
+*   **Variable classifier — Rule 1** (`variable_classifier.py`): score-name regex (Harris, Union, VAS, HHS, etc.) forces Scale even when only 0–100 integers; Rule 3 emits `scale_subtype: continuous|discrete` info-only label.
+*   **Variable assistant** (`variable_assistant.py`): "treat X as discrete/continuous" hits subtype-flip via `scale_discrete`/`scale_continuous` pseudo-types BEFORE the generic `change_type` branch; "mean and frequency for X" recognised without "both".
+*   **Cleanup notes + undo** (`/api/stats/cleanup-undo`): mixed-text strip surfaces a row-level note with Undo button on Step 3.
+*   **Step 5 — Normality** (`app/services/normality.py` + `/api/stats/normality/{job_id}` + override): Shapiro-Wilk for n<50, Kolmogorov-Smirnov for 50–2000, skipped >2000 with skew/kurt thumb-rules (|skew|>2 or |kurt|>7 → non-normal). Log-transform fallback for strictly-positive data. QQ plots returned as base64 PNG thumbnails.
+*   **Step 6 — Plan and Run** (`app/services/plan.py` + `/api/stats/generate-plan/{job_id}`): emits removable test/graph/output cards based on outcome type, group levels, normality verdict and covariates. Supports t-test, Mann-Whitney, ANOVA, Kruskal-Wallis, chi-square, ANCOVA, linear regression, logistic regression. Three confirmation checkboxes gate the Run button.
+*   **Step 7 — Results** (`app/services/results.py` + `/api/stats/run-analysis`): tabbed UI with Table 1, per-test cards (statistic table + APA narrative + copy-table), graphs (boxplot, histogram, stacked bar, scatter), forest plot, and auto-written Methods + Results paragraphs.
+*   **Step 8 — Export** (`app/services/export.py` + `/api/stats/export/{job_id}/{fmt}`): real Word (`python-docx`), PDF (`reportlab`), and Excel (`openpyxl`) downloads embedding all results.
 *   Ensure all statistical computations are library-backed and never rely on LLMs for numerical results.
 *   Prioritize in-memory processing for all uploaded files; never write them to disk.
 *   Restrict logging to operational metadata only (route, status, duration, sizes, error types); never log document content.
