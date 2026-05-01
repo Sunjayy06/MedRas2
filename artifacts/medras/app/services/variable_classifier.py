@@ -67,6 +67,31 @@ _COUNT_NAME_RE = re.compile(
     r"hospitalizations)(?:$|[\W_])",
     re.IGNORECASE,
 )
+# Continuous clinical / demographic measurements. These are conceptually scale
+# variables even when a small dataset happens to contain only a handful of
+# distinct integer values (e.g. an Age column with 7 unique values like
+# 18,22,30,45,52,60,67). Without this list the cardinality-based heuristic
+# below would incorrectly call them "ordinal".
+_CONTINUOUS_NAME_RE = re.compile(
+    r"(?:^|[\W_])("
+    r"age|years?|yrs|"
+    r"weight|wt|kg|"
+    r"height|ht|cm|stature|"
+    r"bmi|"
+    r"sbp|dbp|systolic|diastolic|map|pulse|heart[_ ]?rate|hr|"
+    r"temp|temperature|"
+    r"haemoglobin|hemoglobin|hb|hgb|"
+    r"glucose|fbs|rbs|hba1c|"
+    r"cholesterol|ldl|hdl|tg|triglycerides?|"
+    r"creatinine|urea|bun|egfr|gfr|"
+    r"sodium|potassium|na|k|"
+    r"albumin|protein|bilirubin|"
+    r"wbc|rbc|platelets?|hct|haematocrit|hematocrit|"
+    r"duration|"
+    r"income|salary|cost|price|amount"
+    r")(?:$|[\W_])",
+    re.IGNORECASE,
+)
 
 
 def _safe_unique_count(series: pd.Series) -> int:
@@ -147,6 +172,16 @@ def classify_column(series: pd.Series, name: str) -> Dict[str, Any]:
             return _record(
                 name, "discrete",
                 "Integer count variable — treated as discrete.",
+                unique_count, sample_values, n_missing, n_total,
+            )
+        # Continuous clinical/demographic measurement by name (Age, BMI, Hb,
+        # SBP, Glucose, ...). These are conceptually scale even when the
+        # dataset happens to have few distinct integer values, so this rule
+        # has to beat the cardinality-based ordinal heuristic below.
+        if _CONTINUOUS_NAME_RE.search(name):
+            return _record(
+                name, "scale",
+                "Continuous clinical/demographic measurement — treated as scale.",
                 unique_count, sample_values, n_missing, n_total,
             )
         # Few unique integer values → ordinal coded category (e.g. 0/1/2).
