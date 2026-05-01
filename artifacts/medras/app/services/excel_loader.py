@@ -67,9 +67,38 @@ def parse_upload(
     # Drop fully empty columns and rows.
     df = df.dropna(axis=1, how="all").dropna(axis=0, how="all").reset_index(drop=True)
 
+    # Excel-only convenience: if the user (or /upload's automatic first-sheet
+    # default) landed on a blank tab but other sheets exist, slide forward to
+    # the first non-empty sheet. This avoids the surprising "no usable rows"
+    # error when sheet 1 is just an empty placeholder.
+    if df.empty and sheet_names and sheet_name is None:
+        for candidate in sheet_names[1:]:
+            try:
+                trial = pd.read_excel(xls, sheet_name=candidate)
+            except Exception:  # noqa: BLE001
+                continue
+            trial.columns = [str(c).strip() for c in trial.columns]
+            trial = trial.dropna(axis=1, how="all").dropna(axis=0, how="all").reset_index(drop=True)
+            if not trial.empty and trial.shape[1] >= 2:
+                df = trial
+                selected_sheet = candidate
+                break
+
     if df.empty:
+        # Mention the sheet name when we know it, so the user immediately
+        # understands which tab is blank and can pick a different one.
+        if selected_sheet:
+            raise UploadError(
+                f"Sheet '{selected_sheet}' looks blank — every row is empty after "
+                "we ignored stray spaces. Pick a different sheet from the dropdown."
+            )
         raise UploadError("File contains no usable rows after removing empty rows/columns.")
     if df.shape[1] < 2:
+        if selected_sheet:
+            raise UploadError(
+                f"Sheet '{selected_sheet}' has fewer than 2 columns of data — that's "
+                "not enough to analyse. Pick a different sheet."
+            )
         raise UploadError("Need at least 2 columns to run any meaningful analysis.")
 
     # Header sanity: if every cell in row 0 (now the column names) parses as a
@@ -136,8 +165,12 @@ def combine_sheets(
     # Read each sheet first, then pick a group-column name that doesn't collide
     # with ANY of the union of columns across all sheets. (Checking only the
     # first sheet would crash later if a later sheet already had "Group".)
+    # Blank sheets are skipped silently and reported back via meta so the UI
+    # can show "we ignored Sheet3 — it was blank" instead of failing the whole
+    # merge.
     raw_pieces: List[Tuple[str, pd.DataFrame]] = []
     union_cols: set = set()
+    skipped_blank: List[str] = []
     for sheet in sheet_names:
         try:
             piece = pd.read_excel(xls, sheet_name=sheet)
@@ -147,8 +180,23 @@ def combine_sheets(
         # Drop fully empty rows/cols *per sheet* before concat so blank trailing
         # rows in one sheet don't poison the union with NaN noise.
         piece = piece.dropna(axis=1, how="all").dropna(axis=0, how="all")
+        if piece.empty or piece.shape[1] == 0:
+            skipped_blank.append(sheet)
+            continue
         union_cols.update(piece.columns)
         raw_pieces.append((sheet, piece))
+
+    if not raw_pieces:
+        raise UploadError(
+            "All of the sheets you picked are blank — there's nothing to merge."
+        )
+    if len(raw_pieces) < 2:
+        kept = raw_pieces[0][0]
+        raise UploadError(
+            f"Only '{kept}' has data — the other sheet"
+            f"{'s were' if len(skipped_blank) > 1 else ' was'} blank, so there's "
+            "nothing to merge with. Switch to 'Use just one sheet' instead."
+        )
 
     safe_group_col = group_column_name
     if add_group_column:
@@ -173,7 +221,8 @@ def combine_sheets(
         raise UploadError("Merged sheets need at least 2 columns to analyse.")
 
     numeric_header = all(_looks_numeric(str(c)) for c in df.columns)
-    selected_label = " + ".join(sheet_names)
+    actually_merged = [name for name, _ in raw_pieces]
+    selected_label = " + ".join(actually_merged)
     meta: Dict[str, Any] = {
         "filename": filename,
         "size_bytes": len(raw),
@@ -181,7 +230,8 @@ def combine_sheets(
         "cols": int(df.shape[1]),
         "sheet_names": available,
         "selected_sheet": selected_label,
-        "merged_sheets": list(sheet_names),
+        "merged_sheets": actually_merged,
+        "skipped_blank_sheets": skipped_blank,
         "merge_group_column": safe_group_col if add_group_column else None,
         "raw_bytes": raw,
         "header_looks_numeric": numeric_header,

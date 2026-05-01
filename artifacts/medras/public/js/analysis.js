@@ -589,10 +589,14 @@ function renderSheetCard(summary) {
   radioMerge.onchange = () => { state.sheetMode = "merge"; };
 
   const hintEl = $("#sheet-card-hint");
+  const skipped = Array.isArray(summary.skipped_blank_sheets) ? summary.skipped_blank_sheets : [];
+  const skippedNote = skipped.length
+    ? ` We skipped ${skipped.length === 1 ? "blank sheet" : "blank sheets"} <strong>${escapeHtml(skipped.join(", "))}</strong>.`
+    : "";
   if (hint && !isMerged) {
     hintEl.innerHTML = "Your earlier notes mention combining sheets, so we’ve pre-selected <strong>Merge</strong>. Adjust if that’s not right.";
   } else if (isMerged) {
-    hintEl.innerHTML = `Currently merged: <strong>${escapeHtml(summary.merged_sheets.join(" + "))}</strong>${summary.merge_group_column ? ` (with a <strong>${escapeHtml(summary.merge_group_column)}</strong> column added)` : ""}. Switch back to a single sheet at any time.`;
+    hintEl.innerHTML = `Currently merged: <strong>${escapeHtml(summary.merged_sheets.join(" + "))}</strong>${summary.merge_group_column ? ` (with a <strong>${escapeHtml(summary.merge_group_column)}</strong> column added)` : ""}.${skippedNote} Switch back to a single sheet at any time.`;
   } else {
     hintEl.textContent = "Which one holds your research data — or do you need to merge several together?";
   }

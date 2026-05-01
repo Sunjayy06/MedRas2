@@ -1,0 +1,224 @@
+Redesign the Step 2 "Data input" screen in analysis.html.
+Keep all existing backend logic. Only change the frontend 
+layout and flow. Fix the three problems below.
+
+════════════════════════════════════
+PROBLEM 1 — SCREEN IS CRAMPED
+════════════════════════════════════
+
+Current: Too many elements competing for attention.
+All options, messages, and previews appear at once.
+
+Fix — break the screen into four clear zones 
+that appear one after another as the user 
+makes decisions:
+
+ZONE 1: File summary (always visible after upload)
+  Three metric cards in a row (no borders, 
+  light grey background):
+    Card 1: "Patients (rows)" — large number — 
+            "after removing blanks" below
+    Card 2: "Variables (columns)" — large number
+    Card 3: "Sheets found" — large number — 
+            sheet names listed below
+  Keep this compact. No text walls.
+
+ZONE 2: Sheet arrangement question 
+  (visible only after Zone 1)
+  Section label: "HOW IS YOUR DATA ARRANGED?"
+  Two cards side by side (equal width):
+    Card A: icon + "One sheet only" + 
+            "All my data is on a single sheet"
+    Card B: icon + "Combine sheets" + 
+            "My groups or follow-ups are split 
+             across sheets"
+  When user clicks a card it gets a blue border.
+  Only Card B reveals Zone 3.
+  Card A skips directly to Zone 4 (preview).
+
+ZONE 3: Merge configuration 
+  (visible only when Card B selected)
+  Blue-tinted box (not a modal — inline):
+    Title: "Select sheets to combine"
+    One row per sheet:
+      [✓ checkbox]  Sheet1  →  5 patients · 17 columns
+      [✓ checkbox]  Sheet2  →  5 patients · 17 columns
+    Below the rows — a toggle (ON by default):
+      "Add a Group column — labels each row with 
+       its sheet name. Recommended when sheets 
+       are separate study groups."
+    Button: [Merge selected sheets]
+    This button triggers the merge and then 
+    reveals Zone 4.
+
+ZONE 4: Preview (visible only AFTER merge 
+  decision or single-sheet selection)
+  Section label: "PREVIEW — MERGED DATASET 
+                  (FIRST 5 ROWS)"
+  Header bar above the table:
+    Left: "Sheet1 + Sheet2 combined · 10 patients 
+           · 17 columns"
+    Right: green badge "Analysis ready"
+  Scrollable table (horizontal scroll allowed):
+    Show actual merged data.
+    If Group column was added:
+      First column = Group
+      Colour the chips differently per sheet:
+        Sheet1 rows = blue chip
+        Sheet2 rows = amber chip
+    Table styling: no vertical lines, 
+    alternating row background, 
+    11px font, header in caps 10px muted text.
+  Below table: green banner
+    "Dataset is analysis-ready"
+    Subtitle: "[n] patients · [k] variables · 
+    [sheet names] merged · Group column added"
+  Two buttons:
+    [← Change file] (outline, left)
+    [Confirm and go to Variables →] (blue, right, full width)
+
+════════════════════════════════════
+PROBLEM 2 — MERGE DOES NOT SHOW 
+MERGED PREVIEW
+════════════════════════════════════
+
+Current: The preview table shows BEFORE 
+the merge is confirmed. The user sees 
+one sheet's data, not the merged result.
+
+Fix:
+  The preview table must only render AFTER 
+  the user has clicked [Merge selected sheets].
+  
+  Before clicking: show placeholder text 
+  inside the preview zone:
+    "Select your sheets above and click 
+     Merge to see the combined dataset."
+  
+  After clicking [Merge selected sheets]:
+    1. Show a brief spinner: "Merging..."
+    2. Call the existing merge backend endpoint.
+    3. When response arrives: replace the 
+       placeholder with the actual merged 
+       preview table showing the first 5 rows 
+       of the merged dataset.
+    4. If Group column toggle is ON:
+       The Group column appears first in the table.
+       Rows from different sheets get different 
+       coloured chips (blue for Sheet1, 
+       amber for Sheet2, teal for Sheet3, etc.)
+    5. Show the green "Analysis ready" banner.
+    6. Enable the [Confirm and go to Variables →] 
+       button (it must be disabled until 
+       merge is complete).
+
+  For single-sheet selection (Card A):
+    The preview renders immediately after 
+    Card A is clicked — no merge step needed.
+    Show first 5 rows of the single sheet.
+    Green banner: "Dataset is analysis-ready"
+    Enable the Confirm button.
+
+════════════════════════════════════
+PROBLEM 3 — "NO USABLE ROWS" ERROR 
+IS SHOWN TO USER RAW
+════════════════════════════════════
+
+Current: "Could not switch sheet: File contains 
+no usable rows after removing empty rows/columns"
+This raw error confuses users.
+
+Fix:
+  Catch this error in the frontend.
+  Never show the raw error string.
+  Instead show a friendly inline message 
+  inside Zone 3 (the merge config box):
+
+  Amber warning box:
+    "Sheet [name] appears to be empty 
+     or contains only blank rows. 
+     It has been unchecked automatically. 
+     If your data is on this sheet, check 
+     that row 1 contains column headers 
+     and at least one data row exists."
+
+  Automatically uncheck that sheet's checkbox.
+  Do not prevent the user from proceeding 
+  with the remaining non-empty sheets.
+
+════════════════════════════════════
+STEP NAVIGATION BAR — CLEAN UP
+════════════════════════════════════
+
+Current: Steps 5–12 show "soon" label 
+which looks unfinished.
+
+Fix:
+  Remove the word "soon" from all steps.
+  Steps not yet reached:
+    Circle: light grey background, 
+    grey number, grey label text.
+  Step in progress (Step 2):
+    Circle: blue fill, white number.
+    Label: blue, medium weight.
+  Completed steps (Step 1):
+    Circle: teal fill, white checkmark (✓).
+    Label: teal text.
+  Connect steps with a thin 1px line.
+  The line is teal between completed steps 
+  and grey for future steps.
+  Labels are 10px, all visible.
+  No "soon" text anywhere.
+
+════════════════════════════════════
+SPACING AND TYPOGRAPHY RULES
+════════════════════════════════════
+
+Apply these to the entire analysis.html page:
+  Section labels: 11px, uppercase, 
+  letter-spacing 0.05em, muted grey.
+  Section titles: 22px, weight 500.
+  Body text: 14px, line-height 1.6.
+  Card padding: 1rem 1.25rem.
+  Gap between zones: 1.5rem.
+  No content should feel cramped — 
+  each zone has breathing room above and below.
+  Max content width: 700px centred.
+  All tables: no vertical lines, 
+  only horizontal, alternating row bg.
+  Buttons: 44px minimum height, 
+  full-width primary on mobile.
+
+════════════════════════════════════
+DO NOT CHANGE
+════════════════════════════════════
+
+  The existing Python backend merge logic.
+  The existing API endpoints.
+  The 12-step navigation structure.
+  Steps 3 onwards — only Step 2 changes.
+  The MedRAS header and navigation bar.
+
+════════════════════════════════════
+TEST AFTER BUILDING
+════════════════════════════════════
+
+Test 1: Upload a single-sheet file.
+  Expected: Skip to Zone 4 immediately 
+  with Card A auto-selected.
+
+Test 2: Upload a multi-sheet file.
+  Expected: Zone 2 appears with both cards.
+  Click Card B → Zone 3 appears.
+  Click Merge → spinner → merged preview 
+  with Group chips appears.
+  Confirm button activates.
+
+Test 3: Upload a file where one sheet is empty.
+  Expected: Amber warning in Zone 3.
+  Empty sheet unchecked automatically.
+  User can still merge remaining sheets.
+
+Test 4: Confirm button clicked.
+  Expected: Moves to Step 3 (Variables) 
+  with the merged dataset passed through.

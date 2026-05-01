@@ -148,6 +148,7 @@ def _build_response(job_id: str, entry) -> Dict[str, Any]:
             "selected_sheet": entry.meta.get("selected_sheet"),
             "merged_sheets": entry.meta.get("merged_sheets") or [],
             "merge_group_column": entry.meta.get("merge_group_column"),
+            "skipped_blank_sheets": entry.meta.get("skipped_blank_sheets") or [],
             "header_looks_numeric": bool(entry.meta.get("header_looks_numeric", False)),
             "is_dummy": bool(entry.meta.get("is_dummy", False)),
             "template": entry.meta.get("template"),
@@ -314,6 +315,7 @@ async def select_sheet(payload: SelectSheetRequest) -> Dict[str, Any]:
         classifications=None,
         merged_sheets=[],
         merge_group_column=None,
+        skipped_blank_sheets=[],
     )
     entry = dataset_store.get(payload.job_id)
     return _build_response(payload.job_id, entry)
