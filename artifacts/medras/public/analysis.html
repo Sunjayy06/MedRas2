@@ -10,7 +10,7 @@
     />
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%232f6fed'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-family='Inter,sans-serif' font-size='18' font-weight='700' fill='white'%3EM%3C/text%3E%3C/svg%3E" />
     <link rel="stylesheet" href="/css/style.css" />
-    <link rel="stylesheet" href="/css/analysis.css?v=2026050119" />
+    <link rel="stylesheet" href="/css/analysis.css?v=2026050122" />
   </head>
   <body>
     <header class="site-header" data-testid="site-header">
@@ -44,14 +44,14 @@
         <li class="se-step" data-step="2" data-testid="dot-step-2"><span class="se-step-num">2</span><span class="se-step-label">Data input</span></li>
         <li class="se-step" data-step="3" data-testid="dot-step-3"><span class="se-step-num">3</span><span class="se-step-label">Variables</span></li>
         <li class="se-step" data-step="4" data-testid="dot-step-4"><span class="se-step-num">4</span><span class="se-step-label">Quality</span></li>
-        <li class="se-step is-todo" data-step="5" data-testid="dot-step-5"><span class="se-step-num">5</span><span class="se-step-label">Missing</span><span class="se-step-tag">soon</span></li>
-        <li class="se-step is-todo" data-step="6" data-testid="dot-step-6"><span class="se-step-num">6</span><span class="se-step-label">Objective</span><span class="se-step-tag">soon</span></li>
-        <li class="se-step is-todo" data-step="7" data-testid="dot-step-7"><span class="se-step-num">7</span><span class="se-step-label">Assign</span><span class="se-step-tag">soon</span></li>
-        <li class="se-step is-todo" data-step="8" data-testid="dot-step-8"><span class="se-step-num">8</span><span class="se-step-label">Normality</span><span class="se-step-tag">soon</span></li>
-        <li class="se-step is-todo" data-step="9" data-testid="dot-step-9"><span class="se-step-num">9</span><span class="se-step-label">Plan</span><span class="se-step-tag">soon</span></li>
-        <li class="se-step is-todo" data-step="10" data-testid="dot-step-10"><span class="se-step-num">10</span><span class="se-step-label">Run</span><span class="se-step-tag">soon</span></li>
-        <li class="se-step is-todo" data-step="11" data-testid="dot-step-11"><span class="se-step-num">11</span><span class="se-step-label">Results</span><span class="se-step-tag">soon</span></li>
-        <li class="se-step is-todo" data-step="12" data-testid="dot-step-12"><span class="se-step-num">12</span><span class="se-step-label">Export</span><span class="se-step-tag">soon</span></li>
+        <li class="se-step" data-step="5" data-testid="dot-step-5"><span class="se-step-num">5</span><span class="se-step-label">Missing</span></li>
+        <li class="se-step" data-step="6" data-testid="dot-step-6"><span class="se-step-num">6</span><span class="se-step-label">Objective</span></li>
+        <li class="se-step" data-step="7" data-testid="dot-step-7"><span class="se-step-num">7</span><span class="se-step-label">Assign</span></li>
+        <li class="se-step" data-step="8" data-testid="dot-step-8"><span class="se-step-num">8</span><span class="se-step-label">Normality</span></li>
+        <li class="se-step" data-step="9" data-testid="dot-step-9"><span class="se-step-num">9</span><span class="se-step-label">Plan</span></li>
+        <li class="se-step" data-step="10" data-testid="dot-step-10"><span class="se-step-num">10</span><span class="se-step-label">Run</span></li>
+        <li class="se-step" data-step="11" data-testid="dot-step-11"><span class="se-step-num">11</span><span class="se-step-label">Results</span></li>
+        <li class="se-step" data-step="12" data-testid="dot-step-12"><span class="se-step-num">12</span><span class="se-step-label">Export</span></li>
       </ol>
 
       <!-- ===========================================================
@@ -269,81 +269,123 @@
       <!-- ===========================================================
            SCREEN 2-PREVIEW · File check (between 2A and 3)
            =========================================================== -->
-      <section class="se-screen is-hidden" id="screen-preview" data-testid="screen-preview">
+      <section class="se-screen se-screen-narrow" id="screen-preview" data-testid="screen-preview">
         <header class="se-screen-head">
           <h2>Does this look correct?</h2>
-          <p data-testid="text-preview-summary">Confirm the preview below before we move on.</p>
+          <p data-testid="text-preview-summary">A quick check before we move on.</p>
         </header>
 
-        <div class="se-meta" id="preview-meta" data-testid="preview-meta"></div>
+        <!-- Hidden legacy container — keeps older selectors working but no longer rendered. -->
+        <div id="preview-meta" data-testid="preview-meta" hidden></div>
 
-        <div class="se-sheet-card is-hidden" id="sheet-picker" data-testid="sheet-picker">
-          <h3 class="se-sheet-card-title">Your file has multiple sheets</h3>
-          <p class="se-sheet-card-sub" id="sheet-card-hint">Which one holds your research data — or do you need to merge several together?</p>
+        <!-- ZONE 1 · File summary (always visible) -->
+        <div class="se-zone se-zone-metrics" data-zone="1">
+          <div class="se-metric-card" data-testid="metric-rows">
+            <span class="se-metric-label">Patients (rows)</span>
+            <span class="se-metric-value" data-testid="meta-rows">—</span>
+            <span class="se-metric-sub">after removing blanks</span>
+          </div>
+          <div class="se-metric-card" data-testid="metric-cols">
+            <span class="se-metric-label">Variables (columns)</span>
+            <span class="se-metric-value" data-testid="meta-cols">—</span>
+            <span class="se-metric-sub" data-testid="meta-file">—</span>
+          </div>
+          <div class="se-metric-card" data-testid="metric-sheets">
+            <span class="se-metric-label">Sheets found</span>
+            <span class="se-metric-value" id="metric-sheet-count">—</span>
+            <span class="se-metric-sub" id="metric-sheet-list" data-testid="meta-sheet">—</span>
+          </div>
+        </div>
 
-          <div class="se-sheet-options" role="radiogroup" aria-label="How should we use the sheets in this file?">
-            <label class="se-sheet-option" data-testid="sheet-option-single">
-              <input type="radio" name="sheet-mode" value="single" checked data-testid="radio-sheet-single" />
-              <span class="se-sheet-option-head">
-                <span class="se-sheet-option-icon" aria-hidden="true">📄</span>
-                <span class="se-sheet-option-title">Use just one sheet</span>
+        <!-- ZONE 2 · Sheet arrangement question (only when 2+ sheets) -->
+        <div class="se-zone is-hidden" id="sheet-picker" data-testid="sheet-picker" data-zone="2">
+          <p class="se-zone-label">How is your data arranged?</p>
+          <p class="se-zone-hint" id="sheet-card-hint">Pick one of the two options below to continue.</p>
+
+          <div class="se-arrange-grid" role="radiogroup" aria-label="How is your data arranged?">
+            <button type="button" class="se-arrange-card" data-arrange="single" data-testid="card-arrange-single">
+              <span class="se-arrange-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>
               </span>
-              <span class="se-sheet-option-sub">My research data is on a single sheet.</span>
-              <div class="se-sheet-option-body" data-show-when="single">
-                <label class="se-field">
-                  <span>Pick the sheet</span>
-                  <select id="sheet-select" data-testid="select-sheet"></select>
-                </label>
-              </div>
-            </label>
-
-            <label class="se-sheet-option" data-testid="sheet-option-merge">
-              <input type="radio" name="sheet-mode" value="merge" data-testid="radio-sheet-merge" />
-              <span class="se-sheet-option-head">
-                <span class="se-sheet-option-icon" aria-hidden="true">🔗</span>
-                <span class="se-sheet-option-title">Merge multiple sheets together</span>
+              <span class="se-arrange-title">One sheet only</span>
+              <span class="se-arrange-sub">All my data is on a single sheet</span>
+              <input type="radio" name="sheet-mode" value="single" data-testid="radio-sheet-single" hidden />
+            </button>
+            <button type="button" class="se-arrange-card" data-arrange="merge" data-testid="card-arrange-merge">
+              <span class="se-arrange-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6H5a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h4"/><path d="M15 18h4a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-4"/><path d="M9 12h6"/></svg>
               </span>
-              <span class="se-sheet-option-sub">My groups (or follow-ups) are split across separate sheets and need to be combined.</span>
-              <div class="se-sheet-option-body" data-show-when="merge">
-                <p class="se-sheet-merge-instructions">Tick the sheets that should be stacked together (one row per patient, end-to-end):</p>
-                <div class="se-sheet-checkboxes" id="sheet-merge-list" data-testid="sheet-merge-list"></div>
-                <label class="se-field se-sheet-group-toggle">
-                  <input type="checkbox" id="sheet-merge-add-group" checked data-testid="check-add-group" />
-                  <span>Add a <strong>Group</strong> column with the sheet name (so each row knows which sheet it came from). Recommended when each sheet is a separate group.</span>
-                </label>
-                <div class="se-actions se-sheet-merge-actions">
-                  <button type="button" class="btn btn-primary" data-action="run-merge" data-testid="button-run-merge">Merge selected sheets</button>
-                </div>
-                <div id="sheet-merge-status" class="se-status" role="status" aria-live="polite" data-testid="status-sheet-merge"></div>
+              <span class="se-arrange-title">Combine sheets</span>
+              <span class="se-arrange-sub">My groups or follow-ups are split across sheets</span>
+              <input type="radio" name="sheet-mode" value="merge" data-testid="radio-sheet-merge" hidden />
+            </button>
+          </div>
+
+          <!-- When the user picks "single" but there are still 2+ sheets,
+               offer a discreet way to switch which sheet is shown. -->
+          <div class="se-arrange-singlepick is-hidden" id="single-pick">
+            <span>Showing data from:</span>
+            <select id="sheet-select" data-testid="select-sheet"></select>
+          </div>
+        </div>
+
+        <!-- ZONE 3 · Merge configuration (visible only when "Combine sheets" chosen) -->
+        <div class="se-zone se-merge-config is-hidden" id="merge-config" data-zone="3">
+          <p class="se-zone-label">Select sheets to combine</p>
+          <div class="se-amber-box is-hidden" id="merge-empty-warning" data-testid="banner-merge-empty"></div>
+          <div class="se-merge-list" id="sheet-merge-list" data-testid="sheet-merge-list"></div>
+          <label class="se-merge-toggle">
+            <input type="checkbox" id="sheet-merge-add-group" checked data-testid="check-add-group" />
+            <span><strong>Add a Group column</strong> — labels each row with its sheet name. Recommended when sheets are separate study groups.</span>
+          </label>
+          <div class="se-merge-actions">
+            <button type="button" class="btn btn-primary" data-action="run-merge" data-testid="button-run-merge">Merge selected sheets</button>
+          </div>
+          <div id="sheet-merge-status" class="se-status" role="status" aria-live="polite" data-testid="status-sheet-merge"></div>
+        </div>
+
+        <!-- ZONE 4 · Preview (visible only after a decision) -->
+        <div class="se-zone se-preview-zone" id="preview-zone" data-zone="4">
+          <p class="se-zone-label" id="preview-zone-label">Preview — first 5 rows</p>
+
+          <div class="se-preview-placeholder" id="preview-placeholder">
+            Select your sheets above and click <strong>Merge</strong> to see the combined dataset.
+          </div>
+
+          <div class="se-preview-body is-hidden" id="preview-body">
+            <div class="se-preview-header">
+              <span class="se-preview-summary" id="preview-summary-line">—</span>
+              <span class="se-ready-badge">Analysis ready</span>
+            </div>
+
+            <div class="se-banner is-hidden" id="header-warning" data-testid="banner-header">
+              <strong>Heads up</strong> — the first row looks like numbers, not column names.
+              Please confirm your file actually has a header row.
+            </div>
+
+            <div class="se-banner is-amber is-hidden" id="repeat-id-banner" data-testid="banner-repeat-id">
+              <strong>Repeated patient IDs</strong> —
+              <span id="repeat-id-text"></span>
+              <div class="se-banner-actions">
+                <button type="button" class="btn btn-tertiary" data-action="set-followup" data-yn="yes" data-testid="button-followup-yes">Yes — follow-up data</button>
+                <button type="button" class="btn btn-tertiary" data-action="set-followup" data-yn="no" data-testid="button-followup-no">No — data entry error</button>
               </div>
-            </label>
+            </div>
+
+            <div class="se-table-wrap">
+              <table class="se-table se-preview-table" id="preview-table" data-testid="table-preview"><thead></thead><tbody></tbody></table>
+            </div>
+
+            <div class="se-ready-banner">
+              <strong>Dataset is analysis-ready</strong>
+              <span id="ready-banner-sub">—</span>
+            </div>
           </div>
         </div>
 
-        <div class="se-banner is-hidden" id="header-warning" data-testid="banner-header">
-          <strong>Heads up</strong> — the first row looks like numbers, not column names.
-          Please confirm your file actually has a header row.
-        </div>
-
-        <div class="se-banner is-amber is-hidden" id="repeat-id-banner" data-testid="banner-repeat-id">
-          <strong>Repeated patient IDs</strong> —
-          <span id="repeat-id-text"></span>
-          <div class="se-banner-actions">
-            <button type="button" class="btn btn-tertiary" data-action="set-followup" data-yn="yes" data-testid="button-followup-yes">Yes — follow-up data</button>
-            <button type="button" class="btn btn-tertiary" data-action="set-followup" data-yn="no" data-testid="button-followup-no">No — data entry error</button>
-          </div>
-        </div>
-
-        <details class="se-disclose" open>
-          <summary>Preview first 5 rows</summary>
-          <div class="se-table-wrap">
-            <table class="se-table" id="preview-table" data-testid="table-preview"><thead></thead><tbody></tbody></table>
-          </div>
-        </details>
-
-        <div class="se-actions">
-          <button type="button" class="btn btn-secondary" data-action="restart" data-testid="button-preview-restart">Upload a different file</button>
-          <button type="button" class="btn btn-primary" data-action="confirm-preview" data-testid="button-confirm-preview">Yes, continue &rarr;</button>
+        <div class="se-actions se-preview-actions">
+          <button type="button" class="btn btn-secondary" data-action="restart" data-testid="button-preview-restart">← Change file</button>
+          <button type="button" class="btn btn-primary" data-action="confirm-preview" data-testid="button-confirm-preview" disabled>Confirm and go to Variables →</button>
         </div>
 
         <div id="preview-status" class="se-status" role="status" aria-live="polite" data-testid="status-preview"></div>
@@ -495,6 +537,6 @@
       </div>
     </footer>
 
-    <script src="/js/analysis.js?v=2026050119" defer></script>
+    <script src="/js/analysis.js?v=2026050122" defer></script>
   </body>
 </html>

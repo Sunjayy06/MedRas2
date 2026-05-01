@@ -52,66 +52,101 @@
 
 /* ---------- 12-step tracker ---------- */
 
+/* ---------- Step tracker — circle + label, connected by a thin line ---------- */
+
 .se-steps {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  padding: 10px;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0;
+  padding: 18px 12px 14px;
   background: var(--color-bg-muted);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   margin-bottom: 24px;
   list-style: none;
+  position: relative;
 }
 .se-step {
-  display: inline-flex;
+  flex: 1 1 0;
+  min-width: 64px;
+  display: flex;
+  flex-direction: column;
   align-items: center;
   gap: 6px;
-  padding: 6px 10px;
-  background: #ffffff;
-  border: 1px solid var(--color-border);
-  border-radius: 999px;
-  font-size: 12px;
-  color: var(--color-text-muted);
-  white-space: nowrap;
+  position: relative;
+  padding: 0 4px;
+  font-size: 10px;
+  color: #94a3b8;
+  text-align: center;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  white-space: normal;
+  line-height: 1.2;
 }
+/* Thin connector line between steps. Drawn from the right edge of every step
+   except the last one, sitting behind the circle so the circle hides the
+   line passing through it. */
+.se-step::after {
+  content: "";
+  position: absolute;
+  top: 13px;          /* vertical centre of the 26px circle */
+  left: 50%;
+  width: 100%;
+  height: 1px;
+  background: #d8dee6;
+  z-index: 0;
+}
+.se-step:last-child::after { display: none; }
+/* When the *next* step is also done/active, paint the connector teal. We can't
+   easily look ahead in CSS so we colour the connector based on the current
+   step's status: a completed step paints a teal line forward. */
+.se-step.is-done::after { background: var(--color-success); }
 .se-step-num {
+  position: relative;
+  z-index: 1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
+  width: 26px;
+  height: 26px;
   border-radius: 999px;
-  background: var(--color-navy-100);
-  color: var(--color-navy-800);
-  font-weight: 700;
-  font-size: 11px;
+  background: #e7ebf2;
+  color: #94a3b8;
+  font-weight: 600;
+  font-size: 12px;
+  border: 1px solid #d8dee6;
 }
-.se-step.is-active {
-  border-color: var(--color-accent);
-  background: rgba(47, 111, 237, 0.08);
-  color: var(--color-text);
+.se-step-label {
+  font-size: 10px;
+  letter-spacing: 0.01em;
+  color: inherit;
 }
+.se-step.is-active { color: var(--color-accent); }
+.se-step.is-active .se-step-label { font-weight: 600; }
 .se-step.is-active .se-step-num {
   background: var(--color-accent);
   color: #ffffff;
+  border-color: var(--color-accent);
 }
-.se-step.is-done {
-  border-color: var(--color-success);
-}
+.se-step.is-done { color: var(--color-success); }
 .se-step.is-done .se-step-num {
   background: var(--color-success);
   color: #ffffff;
+  border-color: var(--color-success);
+  font-size: 0;            /* hide the digit, show only the checkmark */
 }
-.se-step.is-todo { opacity: 0.55; }
-.se-step-tag {
-  font-size: 9px;
-  background: var(--color-navy-100);
-  color: var(--color-navy-700);
-  padding: 1px 5px;
-  border-radius: 999px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+.se-step.is-done .se-step-num::before {
+  content: "✓";
+  font-size: 13px;
+  font-weight: 700;
+}
+@media (max-width: 720px) {
+  .se-steps { gap: 4px 0; padding: 12px 6px 10px; }
+  .se-step { min-width: 48px; }
+  .se-step-label { font-size: 9px; }
 }
 
 /* ---------- Screen panels ---------- */
@@ -258,100 +293,363 @@
   text-decoration: underline;
 }
 
-/* ---------- Sheet handling card (screen Preview) ---------- */
+/* ============================================================
+   Step-2 redesign · Zones for the file-preview screen
+   ZONE 1 metrics · ZONE 2 arrangement · ZONE 3 merge · ZONE 4 preview
+   ============================================================ */
 
-.se-sheet-card {
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  padding: 18px 20px;
-  background: var(--color-bg);
-  margin-bottom: 4px;
+/* Narrow column for the preview screen only — the spec wants ~700px centred */
+.se-screen-narrow {
+  max-width: 720px;
+  margin-left: auto;
+  margin-right: auto;
 }
-.se-sheet-card-title {
-  margin: 0 0 4px;
-  font-size: 16px;
+
+/* Vertical rhythm between zones */
+.se-zone {
+  margin-top: 1.5rem;
+}
+.se-zone:first-of-type { margin-top: 1rem; }
+.se-zone.is-hidden { display: none; }
+
+.se-zone-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+  margin: 0 0 10px;
   font-weight: 600;
 }
-.se-sheet-card-sub {
-  margin: 0 0 14px;
+.se-zone-hint {
+  margin: -4px 0 12px;
   color: var(--color-text-muted);
-  font-size: 14px;
+  font-size: 13px;
+  line-height: 1.5;
 }
-.se-sheet-options {
+
+/* ---------- ZONE 1 · Metric cards ---------- */
+.se-zone-metrics {
   display: grid;
+  grid-template-columns: repeat(3, 1fr);
   gap: 12px;
 }
-.se-sheet-option {
-  display: block;
-  border: 1.5px solid var(--color-border);
-  border-radius: var(--radius-md, 10px);
-  padding: 14px 16px;
-  cursor: pointer;
-  transition: border-color 0.15s ease, background 0.15s ease;
-  background: var(--color-bg);
+@media (max-width: 600px) {
+  .se-zone-metrics { grid-template-columns: 1fr; }
 }
-.se-sheet-option:hover { border-color: var(--color-accent); }
-.se-sheet-option:has(input[type="radio"]:checked) {
-  border-color: var(--color-accent);
-  background: rgba(47, 111, 237, 0.04);
-}
-.se-sheet-option input[type="radio"] { display: none; }
-.se-sheet-option-head {
+.se-metric-card {
+  background: var(--color-bg-muted);
+  border: 0;
+  border-radius: var(--radius-md);
+  padding: 1rem 1.25rem;
   display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 92px;
+}
+.se-metric-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+  font-weight: 600;
+}
+.se-metric-value {
+  font-size: 26px;
+  font-weight: 600;
+  color: var(--color-text);
+  line-height: 1.1;
+  margin-top: 2px;
+}
+.se-metric-sub {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  line-height: 1.4;
+  margin-top: auto;
+}
+
+/* ---------- ZONE 2 · Arrangement choice cards ---------- */
+.se-arrange-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+@media (max-width: 600px) {
+  .se-arrange-grid { grid-template-columns: 1fr; }
+}
+.se-arrange-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 1.25rem;
+  background: var(--color-bg);
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
+  min-height: 130px;
+}
+.se-arrange-card:hover {
+  border-color: var(--color-accent);
+  box-shadow: 0 2px 10px rgba(47, 111, 237, 0.1);
+}
+.se-arrange-card.is-selected {
+  border-color: var(--color-accent);
+  background: rgba(47, 111, 237, 0.05);
+  box-shadow: 0 0 0 2px rgba(47, 111, 237, 0.15);
+}
+.se-arrange-icon {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
   align-items: center;
-  gap: 10px;
+  justify-content: center;
+  color: var(--color-accent);
+}
+.se-arrange-icon svg { width: 24px; height: 24px; }
+.se-arrange-title {
+  font-size: 15px;
   font-weight: 600;
   color: var(--color-text);
 }
-.se-sheet-option-icon { font-size: 18px; }
-.se-sheet-option-sub {
-  display: block;
-  margin-top: 4px;
-  margin-left: 28px;
-  color: var(--color-text-muted);
+.se-arrange-sub {
   font-size: 13px;
+  color: var(--color-text-muted);
+  line-height: 1.5;
 }
-.se-sheet-option-body {
-  display: none;
-  margin-top: 14px;
-  margin-left: 28px;
-  padding-top: 12px;
-  border-top: 1px solid var(--color-border);
-}
-.se-sheet-option:has(input[type="radio"]:checked) .se-sheet-option-body {
-  display: block;
-}
-.se-sheet-checkboxes {
-  display: grid;
-  gap: 6px;
-  margin-bottom: 12px;
-}
-.se-sheet-checkboxes label {
+.se-arrange-singlepick {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
-  border-radius: 6px;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 10px 14px;
   background: var(--color-bg-muted);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+.se-arrange-singlepick.is-hidden { display: none; }
+.se-arrange-singlepick select {
+  flex: 1;
+  min-height: 36px;
+  padding: 6px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  font-size: 13px;
+  color: var(--color-text);
+}
+
+/* ---------- ZONE 3 · Merge config (blue-tinted box) ---------- */
+.se-merge-config {
+  background: rgba(47, 111, 237, 0.05);
+  border: 1px solid rgba(47, 111, 237, 0.2);
+  border-radius: var(--radius-md);
+  padding: 1rem 1.25rem;
+}
+.se-merge-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 14px;
+}
+.se-merge-list label {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: #fff;
+  border: 1px solid rgba(47, 111, 237, 0.15);
+  border-radius: var(--radius-sm);
   cursor: pointer;
   font-size: 14px;
+  min-height: 44px;
 }
-.se-sheet-checkboxes label:hover { background: rgba(47, 111, 237, 0.06); }
-.se-sheet-merge-instructions {
-  margin: 0 0 8px;
-  font-size: 13px;
+.se-merge-list label:hover { border-color: var(--color-accent); }
+.se-merge-list label.is-blank {
+  opacity: 0.55;
+  background: var(--color-bg-muted);
+}
+.se-merge-list input[type="checkbox"] { margin: 0; }
+.se-merge-list .se-merge-sheet-name {
+  font-weight: 500;
+  color: var(--color-text);
+}
+.se-merge-list .se-merge-sheet-meta {
   color: var(--color-text-muted);
+  font-size: 12px;
 }
-.se-sheet-group-toggle {
-  display: flex !important;
-  flex-direction: row !important;
+.se-merge-toggle {
+  display: flex;
   align-items: flex-start;
-  gap: 8px;
+  gap: 10px;
+  padding: 10px 12px;
+  background: #fff;
+  border: 1px dashed rgba(47, 111, 237, 0.3);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  color: var(--color-text);
+  line-height: 1.5;
+  cursor: pointer;
+}
+.se-merge-toggle input { margin-top: 3px; }
+.se-merge-actions {
+  margin-top: 14px;
+  display: flex;
+  justify-content: flex-end;
+}
+.se-merge-actions .btn {
+  min-height: 44px;
+  padding: 10px 22px;
+  font-weight: 500;
+}
+@media (max-width: 600px) {
+  .se-merge-actions { justify-content: stretch; }
+  .se-merge-actions .btn { width: 100%; }
+}
+
+/* Amber inline warning (e.g. blank sheet detected) */
+.se-amber-box {
+  background: #fff8e1;
+  border: 1px solid #f5c66b;
+  border-left: 3px solid #d99410;
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  font-size: 13px;
+  color: #6b4e09;
+  line-height: 1.5;
+  margin-bottom: 12px;
+}
+.se-amber-box.is-hidden { display: none; }
+
+/* ---------- ZONE 4 · Preview ---------- */
+.se-preview-zone {
+  /* No box; just label + content */
+}
+.se-preview-placeholder {
+  background: var(--color-bg-muted);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 28px 20px;
+  text-align: center;
   font-size: 13px;
   color: var(--color-text-muted);
+  line-height: 1.5;
 }
-.se-sheet-group-toggle input { margin-top: 2px; }
-.se-sheet-merge-actions { justify-content: flex-start !important; margin-top: 12px; }
+.se-preview-placeholder.is-hidden { display: none; }
+.se-preview-body.is-hidden { display: none; }
+
+.se-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+  font-size: 13px;
+  color: var(--color-text);
+  flex-wrap: wrap;
+}
+.se-preview-summary {
+  font-weight: 500;
+}
+.se-ready-badge {
+  background: rgba(31, 138, 76, 0.1);
+  color: var(--color-success);
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+/* Preview table — no vertical lines, alternating rows, 11px body */
+.se-preview-table {
+  font-size: 11px;
+}
+.se-preview-table th {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+  font-weight: 600;
+  border-bottom: 1px solid var(--color-border);
+  background: transparent;
+  padding: 8px 10px;
+  text-align: left;
+}
+.se-preview-table td {
+  border: 0;
+  border-bottom: 1px solid rgba(216, 222, 235, 0.4);
+  padding: 8px 10px;
+  white-space: nowrap;
+}
+.se-preview-table tbody tr:nth-child(odd) td { background: rgba(244, 246, 251, 0.6); }
+.se-preview-table tbody tr:nth-child(even) td { background: transparent; }
+
+/* Group-column chips (one colour per source sheet) */
+.se-group-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.se-group-chip[data-chip="0"] { background: rgba(47, 111, 237, 0.15); color: #1e54c8; }
+.se-group-chip[data-chip="1"] { background: rgba(217, 148, 16, 0.18); color: #8a5a00; }
+.se-group-chip[data-chip="2"] { background: rgba(20, 158, 157, 0.18); color: #0c6e6d; }
+.se-group-chip[data-chip="3"] { background: rgba(168, 85, 247, 0.18); color: #6b21a8; }
+.se-group-chip[data-chip="4"] { background: rgba(225, 87, 89, 0.18); color: #9b1c1f; }
+.se-group-chip[data-chip="5"] { background: rgba(72, 122, 75, 0.18); color: #2c5630; }
+
+/* Green analysis-ready banner under the table */
+.se-ready-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: rgba(31, 138, 76, 0.08);
+  border-left: 3px solid var(--color-success);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  margin-top: 12px;
+  font-size: 13px;
+  color: var(--color-text);
+}
+.se-ready-banner strong { color: var(--color-success); font-size: 13px; }
+.se-ready-banner span { color: var(--color-text-muted); font-size: 12px; }
+
+/* Action row at the bottom of the screen */
+.se-preview-actions {
+  margin-top: 1.5rem;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.se-preview-actions .btn { min-height: 44px; }
+.se-preview-actions .btn-secondary {
+  margin-right: auto;
+  flex: 0 0 auto;
+}
+.se-preview-actions .btn-primary {
+  flex: 1 1 auto;
+  font-weight: 500;
+}
+.se-preview-actions .btn-primary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+@media (max-width: 600px) {
+  .se-preview-actions { flex-direction: column-reverse; align-items: stretch; }
+  .se-preview-actions .btn-secondary { margin-right: 0; width: 100%; }
+  .se-preview-actions .btn-primary { width: 100%; }
+}
 
 /* ---------- Practice radio grid (screen 2C) ---------- */
 

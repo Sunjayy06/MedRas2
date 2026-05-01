@@ -30,6 +30,11 @@ const state = {
   intake: null,        // {what_you_have, outcomes, independents, instructions}
   intakeStep: 0,       // current question index in intake wizard (0..3)
   sheetMode: null,     // null | "single" | "merge" — set once the user picks a radio
+  previewReady: false, // true when Zone 4 should render an actual table (single-sheet
+                       // confirmed or merge complete). Stays false on a fresh multi-sheet
+                       // upload until the user picks an arrangement.
+  blankSheets: new Set(), // sheet names we've discovered are blank, so we can pre-uncheck
+                          // and grey them out on the next render of the merge list.
 };
 
 /* ------------------------------------------------------------------ */
@@ -527,8 +532,13 @@ async function handleGenerate() {
 function ingestDataset(data) {
   // A brand-new dataset (different job_id) means the user uploaded again or
   // generated fresh practice data — wipe the explicit sheet-mode choice so the
-  // intake hint can pre-select the merge radio on the next render.
-  if (data.job_id !== state.jobId) state.sheetMode = null;
+  // intake hint can pre-select the merge radio on the next render. Also reset
+  // the previewReady flag and forget any blank-sheet discoveries.
+  if (data.job_id !== state.jobId) {
+    state.sheetMode = null;
+    state.previewReady = false;
+    state.blankSheets = new Set();
+  }
   state.jobId = data.job_id;
   state.summary = data.summary;
   state.columns = data.columns;
@@ -538,6 +548,10 @@ function ingestDataset(data) {
   state.quality = null;
   state.qualityActions = [];
   state.followUp = null;
+  // Any sheets the backend told us were blank during the latest /combine-sheets
+  // get folded into our local set so we keep them unchecked next render.
+  const skipped = (data.summary && data.summary.skipped_blank_sheets) || [];
+  skipped.forEach((s) => state.blankSheets.add(s));
   // Sync canonical intake from server, so any later round-trip (e.g. /dataset/{id})
   // hydrates the form with what the backend actually stored.
   if (data.intake) state.intake = data.intake;
@@ -557,82 +571,197 @@ function intakeWantsMerge(intake) {
   return MERGE_HINT_RE.test(intake.instructions);
 }
 
-function renderSheetCard(summary) {
+/* ------------------------------------------------------------------ */
+/*  Zone 2 · "How is your data arranged?" choice cards                  */
+/* ------------------------------------------------------------------ */
+
+function renderArrangeCards(summary) {
   const card = $("#sheet-picker");
   const sheets = (summary && summary.sheet_names) || [];
   if (sheets.length < 2) {
+    // Single-sheet file → Zone 2 is irrelevant; treat as "single chosen".
     card.classList.add("is-hidden");
+    state.sheetMode = "single";
+    state.previewReady = true;
     return;
   }
   card.classList.remove("is-hidden");
 
   const isMerged = Array.isArray(summary.merged_sheets) && summary.merged_sheets.length >= 2;
   const hint = intakeWantsMerge(state.intake);
-  // Decide which radio to highlight by default. Priority:
-  //   1. If we are physically in a merged dataset right now, force "merge".
-  //   2. If the user has explicitly clicked a radio before, honour that choice.
-  //   3. Otherwise (first render of a multi-sheet upload), use the intake hint
-  //      to smart-default to merge when the researcher mentioned merging.
-  let preferMerge;
-  if (isMerged) preferMerge = true;
-  else if (state.sheetMode === "merge") preferMerge = true;
-  else if (state.sheetMode === "single") preferMerge = false;
-  else preferMerge = Boolean(hint);
 
-  const radioSingle = $('input[name="sheet-mode"][value="single"]');
-  const radioMerge = $('input[name="sheet-mode"][value="merge"]');
-  radioSingle.checked = !preferMerge;
-  radioMerge.checked = preferMerge;
-  // Record the user's explicit choice the next time they touch a radio so we
-  // don't keep overriding it from the intake hint on subsequent renders.
-  radioSingle.onchange = () => { state.sheetMode = "single"; };
-  radioMerge.onchange = () => { state.sheetMode = "merge"; };
+  // First-render default: if we're already on a merged dataset, lock to "merge".
+  // Else honour any explicit user click. Else use the intake hint.
+  if (state.sheetMode == null) {
+    if (isMerged) state.sheetMode = "merge";
+    else if (hint) state.sheetMode = "merge";
+  }
 
+  // Hint copy under the section label
   const hintEl = $("#sheet-card-hint");
   const skipped = Array.isArray(summary.skipped_blank_sheets) ? summary.skipped_blank_sheets : [];
   const skippedNote = skipped.length
     ? ` We skipped ${skipped.length === 1 ? "blank sheet" : "blank sheets"} <strong>${escapeHtml(skipped.join(", "))}</strong>.`
     : "";
-  if (hint && !isMerged) {
-    hintEl.innerHTML = "Your earlier notes mention combining sheets, so we’ve pre-selected <strong>Merge</strong>. Adjust if that’s not right.";
-  } else if (isMerged) {
-    hintEl.innerHTML = `Currently merged: <strong>${escapeHtml(summary.merged_sheets.join(" + "))}</strong>${summary.merge_group_column ? ` (with a <strong>${escapeHtml(summary.merge_group_column)}</strong> column added)` : ""}.${skippedNote} Switch back to a single sheet at any time.`;
+  if (isMerged) {
+    hintEl.innerHTML = `Currently merged: <strong>${escapeHtml(summary.merged_sheets.join(" + "))}</strong>${summary.merge_group_column ? ` (with a <strong>${escapeHtml(summary.merge_group_column)}</strong> column added)` : ""}.${skippedNote}`;
+  } else if (state.sheetMode === "merge" && hint) {
+    hintEl.innerHTML = "Your earlier notes mention combining sheets, so we've pre-selected <strong>Combine sheets</strong>. Switch to <strong>One sheet only</strong> if that's not right.";
   } else {
-    hintEl.textContent = "Which one holds your research data — or do you need to merge several together?";
+    hintEl.textContent = "Pick one of the two options below to continue.";
   }
 
-  // Single-sheet dropdown
-  const sel = $("#sheet-select");
-  const currentSingle = isMerged ? sheets[0] : (summary.selected_sheet || sheets[0]);
-  sel.innerHTML = sheets.map((n) =>
-    `<option value="${escapeHtml(n)}"${n === currentSingle ? " selected" : ""}>${escapeHtml(n)}</option>`
-  ).join("");
-  sel.onchange = async () => {
-    const status = $("#preview-status");
-    setStatus(status, "Reading sheet…", "loading");
-    try {
-      const data = await api("/select-sheet", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ job_id: state.jobId, sheet_name: sel.value }),
-      });
-      ingestDataset(data);
+  // Wire the two arrangement cards. Selecting one toggles state.sheetMode and
+  // re-renders so Zone 3/4 visibility updates.
+  $$('.se-arrange-card').forEach((btn) => {
+    const choice = btn.dataset.arrange;
+    const isActive = state.sheetMode === choice;
+    btn.classList.toggle("is-selected", isActive);
+    btn.setAttribute("aria-pressed", isActive ? "true" : "false");
+    btn.setAttribute("role", "radio");
+    btn.setAttribute("aria-checked", isActive ? "true" : "false");
+    // Keep the hidden helper radio in sync so any external test that pokes
+    // `radio-sheet-single`/`radio-sheet-merge` still reflects state.
+    const helperRadio = btn.querySelector('input[type="radio"]');
+    if (helperRadio) helperRadio.checked = isActive;
+    btn.onclick = async () => {
+      state.sheetMode = choice;
+      const status = $("#sheet-merge-status");
+      const previewStatus = $("#preview-status");
       setStatus(status, "");
+      $("#merge-empty-warning").classList.add("is-hidden");
+      if (choice === "single") {
+        if (isMerged) {
+          // We're currently looking at a merged dataset on the server. Switching
+          // to "One sheet only" must revert the server-side dataset, otherwise
+          // Confirm would persist the merged view. Round-trip via /select-sheet
+          // for the first of the merged sheets — note that summary.selected_sheet
+          // after a merge is the joined label ("A + B"), which is NOT a real
+          // workbook sheet, so we deliberately ignore it here.
+          const merged = Array.isArray(summary.merged_sheets) ? summary.merged_sheets : [];
+          const target = merged[0] || sheets[0];
+          state.previewReady = false;
+          renderPreview();
+          setStatus(previewStatus, `Loading sheet "${target}"…`, "loading");
+          try {
+            const data = await api("/select-sheet", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ job_id: state.jobId, sheet_name: target }),
+            });
+            ingestDataset(data);
+            state.sheetMode = "single";
+            state.previewReady = true;
+            setStatus(previewStatus, "");
+            renderPreview();
+          } catch (err) {
+            setStatus(previewStatus, `Could not switch back to a single sheet: ${err.message}`, "error");
+            // Roll back the visual choice so the UI matches the server state.
+            state.sheetMode = "merge";
+            state.previewReady = true;
+            renderPreview();
+          }
+          return;
+        }
+        // Plain single-sheet case: the currently-loaded sheet is what we'll
+        // preview. No backend round-trip needed unless the user explicitly
+        // switches sheets via the secondary dropdown.
+        state.previewReady = true;
+      } else {
+        // Merge path: hide preview until the user actually clicks Merge.
+        // (Unless we're already viewing a successfully-merged dataset.)
+        if (!isMerged) state.previewReady = false;
+      }
       renderPreview();
-    } catch (err) {
-      setStatus(status, `Could not switch sheet: ${err.message}`, "error");
-    }
-  };
+    };
+  });
 
-  // Merge checkboxes — pre-tick whatever was previously merged, otherwise all sheets.
+  // Secondary "switch which sheet" dropdown — only shown when single is picked
+  // AND the file has multiple sheets (so the user has a real choice to make).
+  const singlePick = $("#single-pick");
+  if (state.sheetMode === "single") {
+    singlePick.classList.remove("is-hidden");
+    const sel = $("#sheet-select");
+    const currentSingle = isMerged ? sheets[0] : (summary.selected_sheet || sheets[0]);
+    sel.innerHTML = sheets.map((n) =>
+      `<option value="${escapeHtml(n)}"${n === currentSingle ? " selected" : ""}>${escapeHtml(n)}</option>`
+    ).join("");
+    sel.onchange = async () => {
+      const status = $("#preview-status");
+      setStatus(status, "Reading sheet…", "loading");
+      try {
+        const data = await api("/select-sheet", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ job_id: state.jobId, sheet_name: sel.value }),
+        });
+        ingestDataset(data);
+        // After a successful single-sheet swap we're definitely "single ready".
+        state.sheetMode = "single";
+        state.previewReady = true;
+        setStatus(status, "");
+        renderPreview();
+      } catch (err) {
+        // The backend may return our friendly per-sheet message
+        // ("Sheet 'X' looks blank — pick a different sheet"). Show it inline
+        // and revert the dropdown to the previously-loaded sheet.
+        setStatus(status, err.message, "error");
+        const previous = isMerged ? sheets[0] : (summary.selected_sheet || sheets[0]);
+        sel.value = previous;
+      }
+    };
+  } else {
+    singlePick.classList.add("is-hidden");
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Zone 3 · Merge configuration                                        */
+/* ------------------------------------------------------------------ */
+
+function renderMergeConfig(summary) {
+  const zone = $("#merge-config");
+  if (state.sheetMode !== "merge") {
+    zone.classList.add("is-hidden");
+    return;
+  }
+  zone.classList.remove("is-hidden");
+
+  const sheets = (summary && summary.sheet_names) || [];
+  const isMerged = Array.isArray(summary.merged_sheets) && summary.merged_sheets.length >= 2;
+
+  // Pre-tick: previously-merged sheets if we're on a merged dataset, else all
+  // non-blank sheets.
+  const preTicked = new Set();
+  if (isMerged) {
+    summary.merged_sheets.forEach((n) => preTicked.add(n));
+  } else {
+    sheets.forEach((n) => { if (!state.blankSheets.has(n)) preTicked.add(n); });
+  }
+
   const list = $("#sheet-merge-list");
-  const preTicked = new Set(isMerged ? summary.merged_sheets : sheets);
-  list.innerHTML = sheets.map((n, i) => `
-    <label>
-      <input type="checkbox" value="${escapeHtml(n)}" data-testid="check-merge-sheet-${i}"${preTicked.has(n) ? " checked" : ""} />
-      <span>${escapeHtml(n)}</span>
-    </label>
-  `).join("");
+  list.innerHTML = sheets.map((n, i) => {
+    const blank = state.blankSheets.has(n);
+    const checked = preTicked.has(n) && !blank;
+    const meta = blank ? "blank — skipped" : "ready to merge";
+    return `
+      <label class="${blank ? "is-blank" : ""}">
+        <input type="checkbox" value="${escapeHtml(n)}" data-testid="check-merge-sheet-${i}"${checked ? " checked" : ""}${blank ? " disabled" : ""} />
+        <span class="se-merge-sheet-name">${escapeHtml(n)}</span>
+        <span class="se-merge-sheet-meta">${escapeHtml(meta)}</span>
+      </label>
+    `;
+  }).join("");
+
+  // Render the amber warning if we know about any blank sheets.
+  const warn = $("#merge-empty-warning");
+  if (state.blankSheets.size > 0) {
+    const names = Array.from(state.blankSheets).map((n) => `<strong>${escapeHtml(n)}</strong>`).join(", ");
+    warn.innerHTML = `Sheet ${names} appears to be empty or contains only blank rows. ${state.blankSheets.size === 1 ? "It has been" : "They have been"} unchecked automatically. If your data is on ${state.blankSheets.size === 1 ? "this sheet" : "one of these sheets"}, check that row 1 contains column headers and at least one data row exists.`;
+    warn.classList.remove("is-hidden");
+  } else {
+    warn.classList.add("is-hidden");
+  }
 
   const addGroup = $("#sheet-merge-add-group");
   addGroup.checked = isMerged ? Boolean(summary.merge_group_column) : true;
@@ -658,31 +787,74 @@ function renderSheetCard(summary) {
         }),
       });
       ingestDataset(data);
+      state.sheetMode = "merge";
+      state.previewReady = true;
       setStatus(status, "");
       renderPreview();
     } catch (err) {
-      setStatus(status, `Could not merge sheets: ${err.message}`, "error");
+      // Try to extract the offending sheet name(s) from the friendly backend
+      // error so we can pre-uncheck them and keep the user moving.
+      const msg = err.message || "";
+      // Pattern A: "Sheet 'X' looks blank …" or "Sheet 'X' has fewer than 2 columns …"
+      const single = msg.match(/Sheet '([^']+)'/);
+      // Pattern B: "Only 'X' has data — the other sheet was blank …"
+      const onlyOne = msg.match(/Only '([^']+)' has data/);
+      // Pattern C: "All of the sheets you picked are blank …" — every checked
+      // sheet is blank.
+      const allBlank = /All of the sheets you picked are blank/i.test(msg);
+      if (allBlank) {
+        checked.forEach((n) => state.blankSheets.add(n));
+      } else if (onlyOne) {
+        // Every other ticked sheet is blank → flag them all.
+        checked.filter((n) => n !== onlyOne[1]).forEach((n) => state.blankSheets.add(n));
+      } else if (single) {
+        state.blankSheets.add(single[1]);
+      }
+      setStatus(status, err.message, "error");
+      // Re-render so the amber warning + auto-uncheck takes effect.
+      renderMergeConfig(summary);
     }
   };
 }
 
-function renderPreview() {
-  const meta = $("#preview-meta");
-  const s = state.summary || {};
-  meta.innerHTML = `
-    <div><dt>File</dt><dd data-testid="meta-file">${escapeHtml(s.filename || "—")}</dd></div>
-    <div><dt>Rows (patients)</dt><dd data-testid="meta-rows">${s.rows ?? "—"}</dd></div>
-    <div><dt>Columns (variables)</dt><dd data-testid="meta-cols">${s.cols ?? "—"}</dd></div>
-    ${s.selected_sheet ? `<div><dt>Sheet</dt><dd data-testid="meta-sheet">${escapeHtml(s.selected_sheet)}</dd></div>` : ""}
-  `;
+/* ------------------------------------------------------------------ */
+/*  Zone 4 · Preview table                                              */
+/* ------------------------------------------------------------------ */
 
-  // Sheet handling card (only when the file has 2+ sheets)
-  renderSheetCard(s);
+function renderPreviewZone(summary) {
+  const placeholder = $("#preview-placeholder");
+  const body = $("#preview-body");
+  const confirmBtn = $('[data-action="confirm-preview"]');
 
-  // Header warning
-  $("#header-warning").classList.toggle("is-hidden", !s.header_looks_numeric);
+  // Disable Confirm whenever there's no preview to confirm.
+  confirmBtn.disabled = !state.previewReady;
 
-  // Repeat-id banner
+  if (!state.previewReady) {
+    body.classList.add("is-hidden");
+    placeholder.classList.remove("is-hidden");
+    // Helpful per-mode placeholder text.
+    if (state.sheetMode === "single") {
+      placeholder.innerHTML = `Loading preview…`;
+    } else if (state.sheetMode === "merge") {
+      placeholder.innerHTML = `Tick the sheets above and click <strong>Merge selected sheets</strong> to see the combined dataset.`;
+    } else {
+      placeholder.innerHTML = `Pick an option above to see your data.`;
+    }
+    return;
+  }
+
+  placeholder.classList.add("is-hidden");
+  body.classList.remove("is-hidden");
+
+  // Header line above the table
+  const isMerged = Array.isArray(summary.merged_sheets) && summary.merged_sheets.length >= 2;
+  const summaryLine = isMerged
+    ? `${escapeHtml(summary.merged_sheets.join(" + "))} combined · ${summary.rows} patients · ${summary.cols} columns`
+    : `${escapeHtml(summary.selected_sheet || summary.filename || "Dataset")} · ${summary.rows} patients · ${summary.cols} columns`;
+  $("#preview-summary-line").innerHTML = summaryLine;
+
+  // Optional banners (header looks numeric, repeated IDs)
+  $("#header-warning").classList.toggle("is-hidden", !summary.header_looks_numeric);
   const repBanner = $("#repeat-id-banner");
   if (state.repeated.any_repeats) {
     const sumText = state.repeated.columns
@@ -702,13 +874,58 @@ function renderPreview() {
     repBanner.classList.add("is-hidden");
   }
 
-  // Preview table
-  const table = $("#preview-table");
+  // The actual table. If a Group column was added during merge, render its cell
+  // as a coloured chip whose colour is mapped by the source sheet name.
+  const groupCol = summary.merge_group_column || null;
+  const sourceSheets = isMerged ? summary.merged_sheets : [];
+  const chipIndex = (sheetName) => {
+    const i = sourceSheets.indexOf(sheetName);
+    return i >= 0 ? (i % 6) : 0;
+  };
+  const renderCell = (col, val) => {
+    const text = val == null ? "" : String(val);
+    if (col === groupCol && text) {
+      return `<td><span class="se-group-chip" data-chip="${chipIndex(text)}">${escapeHtml(text)}</span></td>`;
+    }
+    return `<td>${escapeHtml(text)}</td>`;
+  };
   const cols = state.columns;
+  const table = $("#preview-table");
   table.querySelector("thead").innerHTML = `<tr>${cols.map((c) => `<th>${escapeHtml(c)}</th>`).join("")}</tr>`;
-  table.querySelector("tbody").innerHTML = state.preview.map((row) => `
-    <tr>${cols.map((c) => `<td>${escapeHtml(row[c] == null ? "" : row[c])}</td>`).join("")}</tr>
-  `).join("");
+  table.querySelector("tbody").innerHTML = state.preview.map((row) =>
+    `<tr>${cols.map((c) => renderCell(c, row[c])).join("")}</tr>`
+  ).join("");
+
+  // Green ready banner under the table
+  const sub = isMerged
+    ? `${summary.rows} patients · ${summary.cols} variables · ${summary.merged_sheets.join(", ")} merged${summary.merge_group_column ? ` · Group column added` : ""}`
+    : `${summary.rows} patients · ${summary.cols} variables · sheet "${summary.selected_sheet || ""}"`;
+  $("#ready-banner-sub").textContent = sub;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Top-level renderer for the preview screen (4 zones)                 */
+/* ------------------------------------------------------------------ */
+
+function renderPreview() {
+  const s = state.summary || {};
+  const sheets = s.sheet_names || [];
+
+  // ZONE 1 — file-summary metric cards
+  $('[data-testid="meta-rows"]').textContent = s.rows ?? "—";
+  $('[data-testid="meta-cols"]').textContent = s.cols ?? "—";
+  $('[data-testid="meta-file"]').textContent = s.filename || "—";
+  $("#metric-sheet-count").textContent = sheets.length || "—";
+  $("#metric-sheet-list").textContent = sheets.length ? sheets.join(", ") : (s.selected_sheet || "—");
+
+  // ZONE 2 — arrangement choice cards (also handles single-sheet auto-confirm)
+  renderArrangeCards(s);
+
+  // ZONE 3 — merge config (only when "Combine sheets" picked)
+  renderMergeConfig(s);
+
+  // ZONE 4 — preview table (only when previewReady)
+  renderPreviewZone(s);
 }
 
 function bindPreview() {
