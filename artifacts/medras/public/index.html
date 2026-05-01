@@ -9,8 +9,8 @@
       content="MedRAS is a structured research operating system for medical and academic research. Plan, calculate, analyse, write, and verify — end to end."
     />
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%237c3aed'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-family='Inter,sans-serif' font-size='18' font-weight='700' fill='white'%3EM%3C/text%3E%3C/svg%3E" />
-    <link rel="stylesheet" href="/css/style.css?v=2026050127" />
-    <link rel="stylesheet" href="/css/home.css?v=2026050127" />
+    <link rel="stylesheet" href="/css/style.css?v=2026050134" />
+    <link rel="stylesheet" href="/css/home.css?v=2026050134" />
   </head>
   <body class="home">
     <header class="site-header" data-testid="site-header">
@@ -123,6 +123,12 @@
 
           </div>
         </div>
+        <button type="button" class="slider-nav is-prev"
+                data-slider-prev aria-label="Previous slide"
+                data-testid="button-slider-prev">‹</button>
+        <button type="button" class="slider-nav is-next"
+                data-slider-next aria-label="Next slide"
+                data-testid="button-slider-next">›</button>
         <div class="slider-dots" aria-label="Slide indicators"></div>
       </section>
 
@@ -211,14 +217,24 @@
       <!-- ============================================================ -->
       <section id="modules" class="modules-section">
         <header class="modules-head">
-          <p class="home-eyebrow">Phase 1 — Six core modules</p>
-          <h2 class="home-section-title">The MedRAS workflow, end to end</h2>
-          <p class="home-section-sub">
-            Available modules are live; the rest are on the way.
-          </p>
+          <div>
+            <p class="home-eyebrow">Phase 1 — Six core modules</p>
+            <h2 class="home-section-title">The MedRAS workflow, end to end</h2>
+            <p class="home-section-sub">
+              Available modules are live; the rest are on the way.
+            </p>
+          </div>
+          <div class="carousel-arrows" aria-label="Modules carousel controls">
+            <button type="button" class="carousel-arrow"
+                    data-rail-prev="modules" aria-label="Previous modules"
+                    data-testid="button-modules-prev">‹</button>
+            <button type="button" class="carousel-arrow"
+                    data-rail-next="modules" aria-label="Next modules"
+                    data-testid="button-modules-next">›</button>
+          </div>
         </header>
 
-        <div class="modules-grid" data-testid="list-modules">
+        <div class="modules-rail" data-rail="modules" data-testid="list-modules">
           <a class="m-card is-disabled" href="#" aria-disabled="true" data-testid="card-module-1">
             <span class="m-card-num">01</span>
             <h3 class="m-card-title">Study Builder</h3>
@@ -294,6 +310,231 @@
       </section>
 
       <!-- ============================================================ -->
+      <!-- DASHBOARD PREVIEW SLIDER (sample mockups — replace later)     -->
+      <!-- ============================================================ -->
+      <section id="dashboard-preview" class="dash-section" data-testid="dash-section">
+        <header class="dash-head">
+          <div>
+            <p class="home-eyebrow">
+              Inside MedRAS
+              <span class="sample-pill" data-testid="badge-sample-dash">Sample preview</span>
+            </p>
+            <h2 class="home-section-title">A peek at the workspace</h2>
+            <p class="home-section-sub">
+              Preview the surfaces researchers work in day to day — analytics, proposal builder, AI assistant and journal finder.
+            </p>
+          </div>
+          <div class="carousel-arrows" aria-label="Dashboard preview controls">
+            <button type="button" class="carousel-arrow"
+                    data-rail-prev="dash" aria-label="Previous preview"
+                    data-testid="button-dash-prev">‹</button>
+            <button type="button" class="carousel-arrow"
+                    data-rail-next="dash" aria-label="Next preview"
+                    data-testid="button-dash-next">›</button>
+          </div>
+        </header>
+
+        <div class="dash-rail" data-rail="dash" data-testid="list-dash">
+          <article class="dash-card" data-testid="dash-card-1">
+            <div class="dash-mock">
+              <span class="dash-mock-title">Analytics</span>
+              <div class="dash-mock-bars">
+                <span style="height:40%"></span>
+                <span style="height:70%"></span>
+                <span style="height:55%"></span>
+                <span style="height:88%"></span>
+                <span style="height:62%"></span>
+                <span style="height:78%"></span>
+              </div>
+            </div>
+            <div class="dash-card-body">
+              <h3 class="dash-card-name">Analytics view</h3>
+              <p class="dash-card-desc">Sample chart of cohort distributions and statistical test outputs.</p>
+            </div>
+          </article>
+
+          <article class="dash-card" data-testid="dash-card-2">
+            <div class="dash-mock">
+              <span class="dash-mock-title">Proposal builder</span>
+              <div class="dash-mock-rows">
+                <span></span>
+                <span></span>
+                <span></span>
+                <span></span>
+              </div>
+            </div>
+            <div class="dash-card-body">
+              <h3 class="dash-card-name">Proposal builder</h3>
+              <p class="dash-card-desc">Sample outline of an ICMR-style proposal generated from your methodology.</p>
+            </div>
+          </article>
+
+          <article class="dash-card" data-testid="dash-card-3">
+            <div class="dash-mock">
+              <span class="dash-mock-title">AI assistant</span>
+              <span class="dash-mock-bubble is-user">Sample question to the assistant</span>
+              <span class="dash-mock-bubble">Sample reply with a structured methodology suggestion.</span>
+            </div>
+            <div class="dash-card-body">
+              <h3 class="dash-card-name">AI assistant</h3>
+              <p class="dash-card-desc">Sample conversation with the planning assistant. Numbers always come from validated libraries.</p>
+            </div>
+          </article>
+
+          <article class="dash-card" data-testid="dash-card-4">
+            <div class="dash-mock">
+              <span class="dash-mock-title">Journal finder</span>
+              <div class="dash-mock-search">🔎 Sample query: cardiology RCT, q1 2026</div>
+              <div>
+                <span class="dash-mock-tag">Sample journal A</span>
+                <span class="dash-mock-tag">Sample journal B</span>
+                <span class="dash-mock-tag">Sample journal C</span>
+              </div>
+            </div>
+            <div class="dash-card-body">
+              <h3 class="dash-card-name">Journal finder</h3>
+              <p class="dash-card-desc">Sample target-journal suggestions ranked by scope match and impact factor.</p>
+            </div>
+          </article>
+
+          <article class="dash-card" data-testid="dash-card-5">
+            <div class="dash-mock">
+              <span class="dash-mock-title">Trend report</span>
+              <div class="dash-mock-line"></div>
+            </div>
+            <div class="dash-card-body">
+              <h3 class="dash-card-name">Trend report</h3>
+              <p class="dash-card-desc">Sample longitudinal trend visualisation across study cohorts.</p>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- TESTIMONIALS MARQUEE (sample quotes — replace later)          -->
+      <!-- ============================================================ -->
+      <section id="testimonials" class="testimonials-section" data-testid="testimonials-section">
+        <header class="testimonials-head">
+          <p class="home-eyebrow">
+            What researchers say
+            <span class="sample-pill" data-testid="badge-sample-testimonials">Sample quotes</span>
+          </p>
+          <h2 class="home-section-title">Trusted by research teams</h2>
+          <p class="home-section-sub">
+            Placeholder testimonials, shown for layout. Real quotes from researchers will appear here.
+          </p>
+        </header>
+
+        <div class="testimonials-track-wrap">
+          <!-- Same set is rendered twice for the seamless infinite loop. -->
+          <div class="testimonials-track" data-testid="testimonials-track">
+            <article class="t-card" data-testid="t-card-1">
+              <p class="t-quote">Sample testimonial: MedRAS shaved weeks off our methodology section. The sample-size workflow alone saved hours of back-and-forth with our statistician.</p>
+              <div class="t-meta">
+                <span class="t-avatar">DA</span>
+                <div class="t-who">
+                  <span class="t-name">Dr. Sample Author</span>
+                  <span class="t-role">Sample role · Sample hospital</span>
+                </div>
+              </div>
+            </article>
+            <article class="t-card" data-testid="t-card-2">
+              <p class="t-quote">Sample testimonial: Finally, a tool that respects methodological rigour. The classifier picked up on our continuous variables out of the box.</p>
+              <div class="t-meta">
+                <span class="t-avatar">RP</span>
+                <div class="t-who">
+                  <span class="t-name">Sample Researcher P.</span>
+                  <span class="t-role">PhD candidate · Sample university</span>
+                </div>
+              </div>
+            </article>
+            <article class="t-card" data-testid="t-card-3">
+              <p class="t-quote">Sample testimonial: We replaced three different tools with MedRAS. The flow from objective to draft is the cleanest I’ve used.</p>
+              <div class="t-meta">
+                <span class="t-avatar">MK</span>
+                <div class="t-who">
+                  <span class="t-name">Prof. Sample K.</span>
+                  <span class="t-role">Department of Sample · Sample institute</span>
+                </div>
+              </div>
+            </article>
+            <article class="t-card" data-testid="t-card-4">
+              <p class="t-quote">Sample testimonial: The Results section was generated in APA format and was almost ready to paste into our manuscript. Huge time saver.</p>
+              <div class="t-meta">
+                <span class="t-avatar">SN</span>
+                <div class="t-who">
+                  <span class="t-name">Dr. Sample N.</span>
+                  <span class="t-role">Senior Resident · Sample medical college</span>
+                </div>
+              </div>
+            </article>
+            <article class="t-card" data-testid="t-card-5">
+              <p class="t-quote">Sample testimonial: I love that statistics are computed by validated libraries, not by an LLM. That’s the right call for clinical research.</p>
+              <div class="t-meta">
+                <span class="t-avatar">AV</span>
+                <div class="t-who">
+                  <span class="t-name">Sample Investigator V.</span>
+                  <span class="t-role">Clinical Research Associate</span>
+                </div>
+              </div>
+            </article>
+
+            <!-- Duplicate set (aria-hidden) for seamless marquee loop -->
+            <article class="t-card" aria-hidden="true" data-testid="t-card-clone-1">
+              <p class="t-quote">Sample testimonial: MedRAS shaved weeks off our methodology section. The sample-size workflow alone saved hours of back-and-forth with our statistician.</p>
+              <div class="t-meta">
+                <span class="t-avatar">DA</span>
+                <div class="t-who">
+                  <span class="t-name">Dr. Sample Author</span>
+                  <span class="t-role">Sample role · Sample hospital</span>
+                </div>
+              </div>
+            </article>
+            <article class="t-card" aria-hidden="true" data-testid="t-card-clone-2">
+              <p class="t-quote">Sample testimonial: Finally, a tool that respects methodological rigour. The classifier picked up on our continuous variables out of the box.</p>
+              <div class="t-meta">
+                <span class="t-avatar">RP</span>
+                <div class="t-who">
+                  <span class="t-name">Sample Researcher P.</span>
+                  <span class="t-role">PhD candidate · Sample university</span>
+                </div>
+              </div>
+            </article>
+            <article class="t-card" aria-hidden="true" data-testid="t-card-clone-3">
+              <p class="t-quote">Sample testimonial: We replaced three different tools with MedRAS. The flow from objective to draft is the cleanest I’ve used.</p>
+              <div class="t-meta">
+                <span class="t-avatar">MK</span>
+                <div class="t-who">
+                  <span class="t-name">Prof. Sample K.</span>
+                  <span class="t-role">Department of Sample · Sample institute</span>
+                </div>
+              </div>
+            </article>
+            <article class="t-card" aria-hidden="true" data-testid="t-card-clone-4">
+              <p class="t-quote">Sample testimonial: The Results section was generated in APA format and was almost ready to paste into our manuscript. Huge time saver.</p>
+              <div class="t-meta">
+                <span class="t-avatar">SN</span>
+                <div class="t-who">
+                  <span class="t-name">Dr. Sample N.</span>
+                  <span class="t-role">Senior Resident · Sample medical college</span>
+                </div>
+              </div>
+            </article>
+            <article class="t-card" aria-hidden="true" data-testid="t-card-clone-5">
+              <p class="t-quote">Sample testimonial: I love that statistics are computed by validated libraries, not by an LLM. That’s the right call for clinical research.</p>
+              <div class="t-meta">
+                <span class="t-avatar">AV</span>
+                <div class="t-who">
+                  <span class="t-name">Sample Investigator V.</span>
+                  <span class="t-role">Clinical Research Associate</span>
+                </div>
+              </div>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================================ -->
       <!-- ABOUT                                                         -->
       <!-- ============================================================ -->
       <section id="about" class="about-section">
@@ -320,7 +561,7 @@
       </div>
     </footer>
 
-    <script src="/js/app.js?v=2026050127" defer></script>
-    <script src="/js/home.js?v=2026050127" defer></script>
+    <script src="/js/app.js?v=2026050134" defer></script>
+    <script src="/js/home.js?v=2026050134" defer></script>
   </body>
 </html>
