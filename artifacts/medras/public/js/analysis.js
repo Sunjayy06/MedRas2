@@ -128,6 +128,8 @@ function bindScreen1() {
         if (choiceRadio) choiceRadio.checked = true;
         if ($("#intake-objective")) $("#intake-objective").value = state.intake.objective || "";
         if ($("#intake-sample-size")) $("#intake-sample-size").value = state.intake.sample_size || "";
+        if ($("#intake-outcomes")) $("#intake-outcomes").value = state.intake.outcomes || "";
+        if ($("#intake-independents")) $("#intake-independents").value = state.intake.independents || "";
         if ($("#intake-instructions")) $("#intake-instructions").value = state.intake.instructions || "";
       } else {
         // Fresh session: clear any prior selection so Next stays disabled until user picks.
@@ -150,14 +152,16 @@ function bindIntake() {
   const prevBtn = $('[data-action="intake-prev"]');
   const nextBtn = $('[data-action="intake-next"]');
 
-  // Dynamic step plan. Q1 (have) is always present; the middle question is
-  // chosen by what the user picked in Q1; Q3 (instructions) is always last.
+  // Dynamic step plan. Q1 (have) is always present; Q2 is branched by the
+  // user's Q1 choice; Q3 = outcomes; Q4 = independents; Q5 = instructions.
   function planSteps() {
     const choice = state.intake && state.intake.what_you_have;
     const middle = choice === "objective" ? "objective"
                  : choice === "proposal" ? "proposal"
                  : null;
-    return middle ? ["have", middle, "instructions"] : ["have"];
+    return middle
+      ? ["have", middle, "outcomes", "independents", "instructions"]
+      : ["have"];
   }
 
   function renderProgress(plan, idx) {
@@ -239,6 +243,8 @@ function bindIntake() {
       proposal_size_bytes: null,
       objective: "",
       sample_size: null,
+      outcomes: ($("#intake-outcomes").value || "").trim(),
+      independents: ($("#intake-independents").value || "").trim(),
       instructions: ($("#intake-instructions").value || "").trim(),
     };
     if (choice === "proposal") {
@@ -995,7 +1001,17 @@ async function runSelfTest() {
   log(`intake step: ${state.intakeStep}`);
   click('[data-testid="button-intake-next"]');
   await wait(280);
-  // Q3 — instructions + final Continue.
+  // Q3 — outcomes.
+  $("#intake-outcomes").value = "haemoglobin at 12 weeks";
+  log(`intake step: ${state.intakeStep}`);
+  click('[data-testid="button-intake-next"]');
+  await wait(280);
+  // Q4 — independents.
+  $("#intake-independents").value = "treatment arm; sex";
+  log(`intake step: ${state.intakeStep}`);
+  click('[data-testid="button-intake-next"]');
+  await wait(280);
+  // Q5 — instructions + final Continue.
   $("#intake-instructions").value = "use non-parametric tests if skewed";
   log(`intake step: ${state.intakeStep}, button label: ${$('[data-testid="button-intake-next"]').textContent.trim()}`);
   click('[data-testid="button-intake-next"]');

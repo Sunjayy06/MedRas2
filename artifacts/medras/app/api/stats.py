@@ -100,7 +100,12 @@ class IntakeContext(BaseModel):
     # Objective branch
     objective: str = Field(default="", max_length=8000)
     sample_size: Optional[int] = Field(default=None, ge=1, le=10_000_000)
-    # Always available
+    # Always available — short plain-English descriptions of the variables
+    # the researcher cares about. These are advisory hints; the actual
+    # column-by-column variable types are still set on the classification
+    # screen (Screen 3) once the worksheet is loaded.
+    outcomes: str = Field(default="", max_length=4000)
+    independents: str = Field(default="", max_length=4000)
     instructions: str = Field(default="", max_length=4000)
 
 

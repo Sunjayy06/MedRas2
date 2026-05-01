@@ -10,7 +10,7 @@
     />
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%232f6fed'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-family='Inter,sans-serif' font-size='18' font-weight='700' fill='white'%3EM%3C/text%3E%3C/svg%3E" />
     <link rel="stylesheet" href="/css/style.css" />
-    <link rel="stylesheet" href="/css/analysis.css?v=2026050115" />
+    <link rel="stylesheet" href="/css/analysis.css?v=2026050116" />
   </head>
   <body>
     <header class="site-header" data-testid="site-header">
@@ -153,7 +153,29 @@
             </label>
           </div>
 
-          <!-- Q3 — special instructions (always shown last) -->
+          <!-- Q3 — outcome variable(s) -->
+          <div class="se-intake-step" data-step="outcomes" data-testid="intake-step-outcomes">
+            <div class="se-intake-counter" data-testid="intake-counter">Question 3</div>
+            <p class="se-intake-q">What is the outcome variable?</p>
+            <small class="se-intake-hint">In plain English &mdash; the thing you're measuring (the dependent variable). You'll match it to the actual worksheet column on the classification screen later. Optional &mdash; leave blank if unsure.</small>
+            <label class="se-field">
+              <span class="se-visually-hidden">Outcome variable(s)</span>
+              <textarea id="intake-outcomes" rows="4" placeholder="e.g. haemoglobin level at 12 weeks; 30-day mortality; pain score change" data-testid="input-intake-outcomes"></textarea>
+            </label>
+          </div>
+
+          <!-- Q4 — independent variable(s) -->
+          <div class="se-intake-step" data-step="independents" data-testid="intake-step-independents">
+            <div class="se-intake-counter" data-testid="intake-counter">Question 4</div>
+            <p class="se-intake-q">What are the independent variables?</p>
+            <small class="se-intake-hint">Predictors / exposures / grouping variables. Again, plain English is fine &mdash; you'll match them to worksheet columns later. Optional.</small>
+            <label class="se-field">
+              <span class="se-visually-hidden">Independent variable(s)</span>
+              <textarea id="intake-independents" rows="4" placeholder="e.g. treatment arm; age; sex; baseline severity" data-testid="input-intake-independents"></textarea>
+            </label>
+          </div>
+
+          <!-- Q5 — special instructions (always shown last) -->
           <div class="se-intake-step" data-step="instructions" data-testid="intake-step-instructions">
             <div class="se-intake-counter" data-testid="intake-counter">Last question</div>
             <p class="se-intake-q">Any specific instructions for the analysis?</p>
@@ -437,6 +459,6 @@
       </div>
     </footer>
 
-    <script src="/js/analysis.js?v=2026050115" defer></script>
+    <script src="/js/analysis.js?v=2026050116" defer></script>
   </body>
 </html>
