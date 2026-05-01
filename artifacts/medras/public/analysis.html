@@ -10,7 +10,7 @@
     />
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%232f6fed'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-family='Inter,sans-serif' font-size='18' font-weight='700' fill='white'%3EM%3C/text%3E%3C/svg%3E" />
     <link rel="stylesheet" href="/css/style.css" />
-    <link rel="stylesheet" href="/css/analysis.css?v=2026050122" />
+    <link rel="stylesheet" href="/css/analysis.css?v=2026050124" />
   </head>
   <body>
     <header class="site-header" data-testid="site-header">
@@ -198,7 +198,7 @@
       <!-- ===========================================================
            SCREEN 2A · Upload Excel
            =========================================================== -->
-      <section class="se-screen is-hidden" id="screen-2a" data-testid="screen-2a">
+      <section class="se-screen se-screen-narrow is-hidden" id="screen-2a" data-testid="screen-2a">
         <header class="se-screen-head">
           <h2>Upload your dataset</h2>
           <p>Drag your Excel or CSV file in, or click anywhere in the box.</p>
@@ -227,7 +227,7 @@
       <!-- ===========================================================
            SCREEN 2C · Practice dataset
            =========================================================== -->
-      <section class="se-screen is-hidden" id="screen-2c" data-testid="screen-2c">
+      <section class="se-screen se-screen-narrow is-hidden" id="screen-2c" data-testid="screen-2c">
         <header class="se-screen-head">
           <h2>Step 2 · Generate a practice dataset</h2>
           <p>Pick a clinical scenario, choose how many patients, then click Generate.</p>
@@ -394,39 +394,71 @@
       <!-- ===========================================================
            SCREEN 3 · Variable Classification
            =========================================================== -->
-      <section class="se-screen is-hidden" id="screen-3" data-testid="screen-3">
+      <section class="se-screen se-screen-narrow is-hidden" id="screen-3" data-testid="screen-3">
         <header class="se-screen-head">
-          <h2>Step 3 · Review your variable types</h2>
-          <p>We classified each column automatically. Confirm or change any type. The variable type drives which test runs later.</p>
+          <h2>Step 3 · Variables</h2>
+          <p>We've classified every column. Review the table, fix anything that looks off, and use the assistant on the right if a column needs cleaning.</p>
         </header>
 
-        <div class="se-table-wrap">
-          <table class="se-table se-classify" id="classify-table" data-testid="table-classify">
+        <!-- Zone A · Summary metrics -->
+        <div class="se-section-label">SUMMARY</div>
+        <div class="se-vars-metrics" data-testid="vars-metrics">
+          <div class="se-vars-metric" data-testid="metric-detected">
+            <div class="se-vars-metric-value" data-testid="metric-detected-value">0</div>
+            <div class="se-vars-metric-label">Variables detected</div>
+          </div>
+          <div class="se-vars-metric is-amber-when-positive" id="metric-issues-card" data-testid="metric-issues">
+            <div class="se-vars-metric-value" data-testid="metric-issues-value">0</div>
+            <div class="se-vars-metric-label">Issues flagged</div>
+          </div>
+          <div class="se-vars-metric" data-testid="metric-autocoded">
+            <div class="se-vars-metric-value" data-testid="metric-autocoded-value">0</div>
+            <div class="se-vars-metric-label">Auto-coded</div>
+          </div>
+        </div>
+
+        <!-- Zone B · Classification table -->
+        <div class="se-section-label">VARIABLE CLASSIFICATION</div>
+        <div class="se-vars-table-wrap">
+          <table class="se-vars-table" id="classify-table" data-testid="table-classify">
             <thead>
               <tr>
                 <th>Column</th>
-                <th>Detected type</th>
+                <th>Type</th>
                 <th>Sample values</th>
-                <th>Unique</th>
                 <th>Missing</th>
-                <th>Change type</th>
+                <th class="se-vars-table-action">Change type</th>
               </tr>
             </thead>
             <tbody></tbody>
           </table>
         </div>
 
-        <div class="se-callout" id="autocode-summary" data-testid="autocode-summary"></div>
+        <!-- Zone C · Optional recoding (rendered dynamically) -->
+        <div id="recode-zone" data-testid="recode-zone"></div>
 
-        <details class="se-disclose">
-          <summary>Optional recoding (group continuous variables into categories)</summary>
-          <div class="se-recode" data-testid="recode-panel">
-            <label><input type="checkbox" data-recode="age" data-testid="check-recode-age"/> Group <strong>Age</strong> into 18–30 / 31–45 / 46–60 / &gt;60</label>
-            <label><input type="checkbox" data-recode="bmi" data-testid="check-recode-bmi"/> Group <strong>BMI</strong> into Underweight / Normal / Overweight / Obese</label>
-            <label><input type="checkbox" data-recode="hb" data-testid="check-recode-hb"/> Group <strong>Haemoglobin</strong> into Severe / Moderate / Mild / Normal</label>
-            <p class="se-hint">Recoding adds a new column alongside the original. Enabled in Pass 2.</p>
-          </div>
-        </details>
+        <!-- Zone D · Auto-coding plan -->
+        <div class="se-section-label" id="autocode-label" hidden>AUTO-CODING PLAN</div>
+        <div class="se-autocode-box" id="autocode-summary" data-testid="autocode-summary" hidden></div>
+
+        <!-- Zone E · Variable Assistant -->
+        <div class="se-section-label">VARIABLE ASSISTANT</div>
+        <div class="se-assistant-panel" data-testid="assistant-panel">
+          <div class="se-chat-thread" id="assistant-thread" data-testid="assistant-thread"></div>
+          <div class="se-chip-row" id="assistant-chips" data-testid="assistant-chips"></div>
+          <form class="se-chat-form" id="assistant-form" data-testid="assistant-form" autocomplete="off">
+            <input
+              type="text"
+              id="assistant-input"
+              data-testid="assistant-input"
+              placeholder="Ask: e.g. ‘strip Grade prefix from VAS Score’"
+              maxlength="500"
+            />
+            <button type="submit" class="btn btn-primary" data-testid="button-assistant-send">Send</button>
+          </form>
+        </div>
+
+        <div class="se-validation" id="confirm-validation" data-testid="confirm-validation" hidden></div>
 
         <div class="se-actions">
           <button type="button" class="btn btn-secondary" data-action="back-to-preview" data-testid="button-back-preview">&larr; Back</button>
@@ -439,7 +471,7 @@
       <!-- ===========================================================
            SCREEN 4 · Data quality
            =========================================================== -->
-      <section class="se-screen is-hidden" id="screen-4" data-testid="screen-4">
+      <section class="se-screen se-screen-narrow is-hidden" id="screen-4" data-testid="screen-4">
         <header class="se-screen-head">
           <h2>Step 4 · Data quality check</h2>
           <p>Impossible values, duplicates and logical errors. Choose what to do with each flagged row.</p>
@@ -504,7 +536,7 @@
       <!-- ===========================================================
            SCREEN 5+ · Coming in next pass
            =========================================================== -->
-      <section class="se-screen is-hidden" id="screen-soon" data-testid="screen-soon">
+      <section class="se-screen se-screen-narrow is-hidden" id="screen-soon" data-testid="screen-soon">
         <header class="se-screen-head">
           <h2 data-testid="text-soon-title">Coming in the next pass</h2>
           <p data-testid="text-soon-body">
@@ -524,8 +556,9 @@
         </div>
 
         <div class="se-actions">
-          <button type="button" class="btn btn-secondary" data-action="restart" data-testid="button-soon-restart">Start over with new data</button>
-          <a href="/" class="btn btn-tertiary" data-testid="link-soon-home">Back to MedRAS home</a>
+          <button type="button" class="btn btn-secondary" data-action="back-to-quality" data-testid="button-back-quality">&larr; Back</button>
+          <button type="button" class="btn btn-tertiary" data-action="restart" data-testid="button-soon-restart">Start over with new data</button>
+          <a href="/" class="btn btn-tertiary" data-testid="link-soon-home">MedRAS home</a>
         </div>
       </section>
     </main>
@@ -537,6 +570,6 @@
       </div>
     </footer>
 
-    <script src="/js/analysis.js?v=2026050122" defer></script>
+    <script src="/js/analysis.js?v=2026050124" defer></script>
   </body>
 </html>

@@ -1,0 +1,450 @@
+
+Keep all existing backend classification logic.
+Only change the frontend layout, add the assistant 
+chat panel, and add the Back button to all steps.
+
+════════════════════════════════════
+CHANGE 1 — STEP 3 VARIABLES SCREEN
+════════════════════════════════════
+
+Replace the current Step 3 layout with these 
+five zones, in this order, no other content:
+
+──────────────────────────────────
+ZONE A: Summary cards (always first)
+──────────────────────────────────
+
+Three metric cards in a row.
+No borders. Light grey background.
+Each card: small muted label above, 
+large number below, small grey sub-text.
+
+  Card 1: "Variables detected" — total column count
+           Sub: "across your dataset"
+
+  Card 2: "Issues flagged" — count of variables 
+           where the auto-detected type looks wrong
+           (ordinal with only 2 values, nominal with 
+           numbers, scale with text mixed in, etc.)
+           Number colour: amber if > 0, else default.
+           Sub: "need your attention"
+
+  Card 3: "Auto-coded" — count of variables 
+           where coding was applied automatically
+           (Male/Female → 1/2, Yes/No → 1/0)
+           Number colour: teal/green.
+           Sub: list the column names that were coded
+
+──────────────────────────────────
+ZONE B: Variable classification table
+──────────────────────────────────
+
+Section label above table: "VARIABLE CLASSIFICATION"
+
+Table columns:
+  Column | Detected type | Sample values | 
+  Unique | Missing | Change type
+
+Styling rules:
+  No vertical lines.
+  Alternating row background (every other row 
+  gets a very light grey, not white).
+  Horizontal lines only between rows.
+  13px body font. 10px uppercase muted headers.
+  Table wrapped in a border with border-radius.
+  Horizontal scroll allowed if many columns.
+
+"Detected type" column:
+  Show a coloured pill/badge, not plain text.
+  Scale → teal badge
+  Ordinal → blue badge
+  Nominal → amber badge
+  ID → grey badge
+  Date → purple badge
+
+"Sample values" column:
+  Show first 3 sample values as muted small text.
+
+"Missing" column:
+  If 0 missing: grey dash "—"
+  If any missing: amber text showing "n (X%)"
+  Add a small coloured dot before the value 
+  (green dot = none missing, amber dot = some missing)
+
+"Change type" column:
+  A small select/dropdown per row.
+  Options: Scale, Ordinal, Nominal, ID, Date, Exclude
+  When user changes a type: 
+    Instantly update the badge in the same row.
+    Log the change so it is sent to backend on confirm.
+
+Below each column name (not in a separate column):
+  If the system detects a likely issue 
+  (e.g. a column named "VAS Score" contains 
+  "Grade 4" style text), show a small amber 
+  sub-line below the column name:
+    "Contains text prefix — may need fixing"
+  or
+    "Classified as ordinal — verify this is correct"
+
+Do not show the auto-coding section here.
+Move it to Zone D.
+
+──────────────────────────────────
+ZONE C: Optional recoding
+──────────────────────────────────
+
+Section label: "OPTIONAL RECODING"
+Collapsible section (open by default).
+
+Show one row per recodable variable.
+Each row has:
+  [checkbox]  Group [Variable name] into 
+  [cutoff ranges]  [Edit cutoffs link]
+
+Default suggested recodings:
+  Age → 18–30 / 31–45 / 46–60 / >60
+  BMI → Underweight / Normal / Overweight / Obese
+  Haemoglobin → Severe / Moderate / Mild / Normal
+
+Only show a variable's row if:
+  a) the variable is classified as Scale, AND
+  b) it exists in the dataset.
+
+"Edit cutoffs" link opens an inline text input 
+on the same row where the user can type 
+custom cutoff values.
+
+Small note below the rows:
+  "Recoding adds a new column alongside the 
+   original. The original is kept unchanged."
+
+──────────────────────────────────
+ZONE D: Auto-coding summary
+──────────────────────────────────
+
+Section label: "AUTO-CODING APPLIED"
+
+Show this only if at least one variable 
+was auto-coded. Otherwise hide this zone.
+
+Display as a simple flat info box 
+(light blue background, no border, rounded):
+
+  Content example:
+    "• Gender coded: Male = 1, Female = 2"
+    "• Outcome coded: Good = 1, Poor = 0"
+    "• Excluded from analysis: Name (ID column)"
+
+Keep this concise. One bullet per coded variable.
+No heavy formatting. Just plain readable text.
+
+──────────────────────────────────
+ZONE E: Variable assistant (chat panel)
+──────────────────────────────────
+
+This is the new key feature of this screen.
+
+Section label row: 
+  "VARIABLE ASSISTANT" + a small purple badge 
+  labelled "AI powered" to the right of the label.
+
+Short description below the label:
+  "Tell the assistant about any column that looks 
+   wrong. It will fix coding, strip text prefixes, 
+   split columns, or handle any unusual variable."
+
+Show a bordered chat panel with three parts:
+
+PART 1 — Message thread (scrollable, max height 280px)
+  System messages: light blue background, 
+  left-aligned, max width 85%.
+  User messages: light grey background, 
+  right-aligned, max width 85%.
+  Action-taken messages: light green background, 
+  left-aligned, left border in green — 
+  used when the assistant confirms it did something.
+  
+  Initial system message (always shown):
+    "I have reviewed your [n] variables. 
+     [If issues detected: I noticed [Variable] 
+     contains [description of issue]. 
+     I can [action]. Want me to do that?]
+     [If no issues: Everything looks clean. 
+     Let me know if any column needs adjusting.]"
+
+PART 2 — Quick suggestion chips
+  Show 4–5 tappable chips below the messages:
+    "Fix a coding error"
+    "Change 1–10 scale"  
+    "Split one column into two"
+    "Rename a column"
+    "Merge two categories"
+  Clicking a chip pastes a template phrase 
+  into the text input.
+
+PART 3 — Text input + Send button
+  Full width text input: 
+    Placeholder: 'e.g. "VAS Score has Grade prefix, 
+    strip it and make it a number"'
+  Send button: blue, right of input.
+
+BACKEND WIRING FOR THE ASSISTANT:
+  On Send: POST the user message to 
+  /api/stats/variable-assistant with:
+    { message: string, 
+      columns: [current column list with types],
+      dataset_id: current session id }
+  
+  The backend should parse the user message 
+  and return an action object:
+    { action: "strip_prefix" | "recode_range" | 
+               "split_column" | "rename" | 
+               "merge_categories" | "change_type" |
+               "add_numeric_column" | "clarify",
+      column: string,
+      params: { ... action-specific params ... },
+      preview: string,
+      confirmation_message: string }
+  
+  Frontend shows the confirmation_message as 
+  a green action-taken message in the thread.
+  Apply the action to the in-memory dataset.
+  Update the variable classification table 
+  immediately to reflect the change.
+
+SPECIFIC SCENARIOS THE ASSISTANT MUST HANDLE:
+
+  Scenario A — Text prefix in a score variable:
+    User says: "VAS Score has 'Grade' in front, 
+    remove it and make it a number"
+    Backend: strip "Grade " prefix from all values, 
+    convert column to numeric, change type to Scale.
+    Show as action message: 
+    "Done. VAS Score is now numeric (Scale). 
+     Values: 4, 7, 2... I kept the original 
+     column as VAS_original."
+
+  Scenario B — User wants both mean and frequency:
+    User says: "I want both mean and frequency 
+    for VAS Score in my results"
+    Backend: create two columns:
+      VAS_numeric (Scale — for mean/SD)
+      VAS_category (Ordinal — for frequency table)
+    Show as action message:
+    "Done. Created VAS_numeric (Scale) for mean 
+     and VAS_category (Ordinal) for frequency. 
+     Both will appear in your results."
+
+  Scenario C — Coding range correction:
+    User says: "Pain score is coded 10–20 
+    but should be 0–10"
+    Backend: apply linear rescaling from 
+    10–20 range to 0–10 range.
+    Or if user means a labelling error, 
+    let them type what the correct values should be.
+    Confirm with preview before applying.
+
+  Scenario D — Fix a typo or inconsistent value:
+    User says: "AO Classification has 
+    'NECK FRACTURE' repeated three times, 
+    these are actually three different types"
+    Backend: show the unique values, let user 
+    map each one to a correct label via 
+    a simple table in the chat thread.
+
+  Scenario E — Split one column into two:
+    User says: "AO Classification and 
+    Diaphyseal Fractures are merged in one column"
+    Backend: attempt to split on a delimiter 
+    (comma, slash, or dash) — show preview, 
+    let user confirm the split.
+
+  Scenario F — Rename a column:
+    User says: "Rename 'TYPE' to 'Fracture Type'"
+    Backend: rename the column immediately.
+    Update the table header in the UI.
+
+  Scenario G — Exclude a column:
+    User says: "Surgical Procedure should be 
+    excluded from analysis"
+    Backend: mark column as Excluded (type = ID/Exclude).
+    Update the badge in the table to grey "Excluded".
+
+  If the assistant cannot interpret the request:
+    Show: "I am not sure what to do with that. 
+    Could you describe the problem differently? 
+    For example: what does the column currently 
+    contain, and what would you like it to look like?"
+
+════════════════════════════════════
+CHANGE 2 — BACK BUTTON ON ALL STEPS
+════════════════════════════════════
+
+Add a Back button to every step from 
+Step 2 onwards. It must be on every screen 
+without exception.
+
+Position: bottom left of the screen.
+  Left side: [← Back to [previous step name]]
+  Right side: [Confirm and continue →]
+
+Styling:
+  Back button: outline style, muted text, 
+  no fill background. Smaller than the 
+  Confirm button.
+  Confirm button: blue filled, full width 
+  on right side, primary weight.
+
+Back button behaviour per step:
+  Step 2 (Data input) → goes to Step 1 (Start)
+  Step 3 (Variables) → goes to Step 2 (Data input)
+  Step 4 (Quality) → goes to Step 3 (Variables)
+  Step 5 (Missing) → goes to Step 4 (Quality)
+  Step 6 (Objective) → goes to Step 5 (Missing)
+  Step 7 (Assign) → goes to Step 6 (Objective)
+  Step 8 (Normality) → goes to Step 7 (Assign)
+  Step 9 (Plan) → goes to Step 8 (Normality)
+  Step 10 (Run) → goes to Step 9 (Plan)
+
+When going back:
+  Preserve all data entered on the previous screen.
+  Do not reset any choices.
+  Show the previous screen exactly as the user 
+  left it — all selections remembered.
+
+════════════════════════════════════
+CHANGE 3 — GLOBAL SCREEN LAYOUT RULES
+(apply to every step, not just Step 3)
+════════════════════════════════════
+
+These rules fix the cramped feeling across 
+the whole app:
+
+  Max content width: 720px, centred.
+  Page padding: 1.5rem top, 1.5rem bottom.
+  Gap between zones: 1.5rem.
+  Section labels: 11px, uppercase, 
+  letter-spacing 0.05em, muted grey color.
+  Body text: 14px, line-height 1.6.
+  Card padding: 1rem 1.25rem.
+  Table cells: 10px padding top and bottom, 
+  10px padding left and right.
+  Button height minimum: 44px.
+  Input height minimum: 36px.
+  No element should touch the edge of 
+  the content area.
+  Every section must have a visible 
+  breathing gap above and below it.
+
+════════════════════════════════════
+CHANGE 4 — ISSUE DETECTION LOGIC
+════════════════════════════════════
+
+Before rendering Step 3, the backend should 
+run these checks on every column and return 
+an issues list:
+
+  Issue type: "text_in_numeric"
+    When: column classified as Nominal but 
+    values look like "Grade 4", "Level 3", 
+    "Stage 2" — number with a text prefix.
+    Flag: show amber sub-line below column name 
+    in the table.
+    Assistant pre-message: mention this column 
+    and offer to strip the prefix.
+
+  Issue type: "low_unique_nominal"
+    When: column classified as Ordinal but 
+    has only 2 unique values.
+    Flag: amber sub-line 
+    "Only 2 unique values — may be Nominal (Yes/No)"
+
+  Issue type: "high_missing"
+    When: > 30% missing.
+    Flag: amber missing count in table.
+    No assistant message needed — covered in Step 5.
+
+  Issue type: "duplicate_values"
+    When: Nominal column has the same label 
+    repeated with different capitalisation 
+    (NECK FRACTURE vs Neck Fracture vs neck fracture).
+    Flag: amber sub-line 
+    "Inconsistent casing detected — may be the same value"
+
+  Issue type: "numeric_as_id"
+    When: column classified as ID but values 
+    are small integers that look like a scale.
+    Flag: amber sub-line 
+    "Classified as ID — verify this is not a score"
+
+The issues list is passed to the frontend.
+The "Issues flagged" summary card shows 
+the count of columns with any issue.
+The assistant's initial message mentions 
+any detected issues by name.
+
+════════════════════════════════════
+CHANGE 5 — CONFIRM BUTTON VALIDATION
+════════════════════════════════════
+
+The "Confirm variables and continue" button 
+must be disabled (grey, not clickable) if:
+
+  Any column still has an unresolved 
+  "text_in_numeric" issue — i.e. a column 
+  flagged as having text prefixes in what 
+  appears to be a numeric variable, 
+  where the user has not yet changed the type 
+  or used the assistant to fix it.
+
+When button is disabled:
+  Show a small message above the button row:
+  "VAS Score still contains text values. 
+   Fix it using the assistant above, or change 
+   its type in the table before continuing."
+
+When all issues are resolved:
+  Button turns blue and becomes clickable.
+  Message disappears.
+
+════════════════════════════════════
+TEST AFTER BUILDING
+════════════════════════════════════
+
+Test 1: Load the gautham dataset (17 columns).
+  Expected:
+    Summary cards show 17 variables, 2 issues, 
+    3 auto-coded.
+    VAS Score shows amber flag 
+    "Contains text prefix".
+    Confirm button is disabled.
+    Assistant initial message mentions VAS Score.
+
+Test 2: User types "Strip Grade from VAS Score".
+  Expected:
+    Green action message confirms the change.
+    Table updates: VAS Score badge changes 
+    from Nominal to Scale.
+    Amber flag below VAS Score disappears.
+    Confirm button becomes active (blue).
+
+Test 3: User types "I want mean and frequency 
+  for VAS Score".
+  Expected:
+    Two new rows in the table: VAS_numeric 
+    and VAS_category.
+    Confirmation message in chat.
+
+Test 4: User clicks Back on Step 3.
+  Expected: returns to Step 2 with 
+  all upload/merge settings preserved.
+
+Test 5: User clicks Back on Step 4.
+  Expected: returns to Step 3 with 
+  all variable type changes preserved.
+
+Test 6: User edits Age cutoffs in recoding.
+  Expected: inline text field appears 
+  on the same row. User types "20-40, 40-60, 60+" 
+  and it is saved.

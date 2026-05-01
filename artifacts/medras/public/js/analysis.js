@@ -35,6 +35,12 @@ const state = {
                        // upload until the user picks an arrangement.
   blankSheets: new Set(), // sheet names we've discovered are blank, so we can pre-uncheck
                           // and grey them out on the next render of the merge list.
+
+  // --- Step 3 (Variables) additions ---
+  issues: [],            // [{column, type, severity, message}]
+  autoCoding: [],        // [{column, kind, mapping, note, columns?}]
+  assistantThread: [],   // [{role: "system"|"user"|"action"|"clarify", text}]
+  recodingChoices: {},   // { age?: {bins:[...]}, bmi?: {...}, hb?: {...} }
 };
 
 /* ------------------------------------------------------------------ */
@@ -538,6 +544,11 @@ function ingestDataset(data) {
     state.sheetMode = null;
     state.previewReady = false;
     state.blankSheets = new Set();
+    // New dataset → clear any Step 3 work from a previous run.
+    state.issues = [];
+    state.autoCoding = [];
+    state.assistantThread = [];
+    state.recodingChoices = {};
   }
   state.jobId = data.job_id;
   state.summary = data.summary;
@@ -945,7 +956,7 @@ function bindPreview() {
       ingestDataset(data);
       setStatus(status, "");
       showScreen("3");
-      renderClassify();
+      await loadVariablesData();
     } catch (err) {
       setStatus(status, `Could not confirm: ${err.message}`, "error");
     }
@@ -974,21 +985,127 @@ function typeBadge(t) {
   return `<span class="se-type-badge t-${safe}">${TYPE_LABELS[safe]}</span>`;
 }
 
+/* ------------------------------------------------------------------ */
+/*  Step 3 · 5-zone layout (A summary / B table / C recoding /         */
+/*  D auto-coding plan / E variable assistant)                         */
+/* ------------------------------------------------------------------ */
+
+const RECODE_PRESETS = {
+  age:  { match: /^age$/i,                       label: "Age",
+          bins: [{ lo: 18, hi: 30, name: "18–30" },
+                 { lo: 31, hi: 45, name: "31–45" },
+                 { lo: 46, hi: 60, name: "46–60" },
+                 { lo: 61, hi: null, name: ">60" }] },
+  bmi:  { match: /^bmi$/i,                       label: "BMI",
+          bins: [{ lo: null, hi: 18.5, name: "Underweight" },
+                 { lo: 18.5, hi: 25,   name: "Normal" },
+                 { lo: 25,   hi: 30,   name: "Overweight" },
+                 { lo: 30,   hi: null, name: "Obese" }] },
+  hb:   { match: /^(haemoglobin|hemoglobin|hb)$/i, label: "Haemoglobin",
+          bins: [{ lo: null, hi: 7,  name: "Severe" },
+                 { lo: 7,    hi: 10, name: "Moderate" },
+                 { lo: 10,   hi: 12, name: "Mild" },
+                 { lo: 12,   hi: null, name: "Normal" }] },
+};
+
+const CHIP_SUGGESTIONS = [
+  { label: "I want both mean and frequency for this column",
+    template: "I want both mean and frequency for {col}" },
+  { label: "Strip the prefix from this column",
+    template: "Strip the prefix from {col}" },
+  { label: "Treat this as discrete instead",
+    template: "Treat {col} as discrete" },
+  { label: "Exclude this column",
+    template: "Exclude {col} from analysis" },
+];
+
+async function loadVariablesData() {
+  // Re-fetch classifications + issues + auto-coding plan from /classify
+  // with no overrides. Used on initial entry to Step 3 and after each
+  // assistant action.
+  const status = $("#classify-status");
+  setStatus(status, "Analysing variables…", "loading");
+  try {
+    const data = await api("/classify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ job_id: state.jobId, overrides: [] }),
+    });
+    state.classifications = data.classifications || [];
+    state.issues = data.issues || [];
+    state.autoCoding = data.auto_coding_plan || [];
+    setStatus(status, "");
+    renderClassify();
+  } catch (err) {
+    setStatus(status, `Could not load variables: ${err.message}`, "error");
+  }
+}
+
 function renderClassify() {
+  renderVariableMetrics();
+  renderClassifyTable();
+  renderRecodingPanel();
+  renderAutocodeSummary();
+  renderAssistantPanel();
+  validateConfirm();
+}
+
+function renderVariableMetrics() {
+  const detected = state.classifications.length;
+  // Count *distinct columns* with issues, not raw issue rows — a single
+  // column can have several issue types (e.g. text_in_numeric + high_missing)
+  // and the metric card is meant to show "how many variables need attention".
+  const issuesCount = new Set(
+    (state.issues || []).map((i) => i.column).filter(Boolean)
+  ).size;
+  const autoCount = state.autoCoding.filter((a) => a.kind !== "excluded").length;
+
+  const setText = (sel, val) => { const el = $(sel); if (el) el.textContent = val; };
+  setText('[data-testid="metric-detected-value"]', detected);
+  setText('[data-testid="metric-issues-value"]', issuesCount);
+  setText('[data-testid="metric-autocoded-value"]', autoCount);
+
+  const issuesCard = $("#metric-issues-card");
+  if (issuesCard) issuesCard.dataset.positive = issuesCount > 0 ? "true" : "false";
+}
+
+function issuesForColumn(col) {
+  return state.issues.filter((i) => i.column === col);
+}
+
+function renderClassifyTable() {
   const tbody = $("#classify-table tbody");
   tbody.innerHTML = state.classifications.map((c, idx) => {
-    const samples = (c.sample_values || []).slice(0, 3).map(escapeHtml).join(", ");
-    const opts = TYPE_OPTIONS.map((t) => `<option value="${t}"${t === c.detected_type ? " selected" : ""}>${TYPE_LABELS[t]}</option>`).join("");
-    const missing = c.missing > 0
-      ? `<span title="${c.missing_pct}% missing">${c.missing} (${c.missing_pct}%)</span>`
+    const samplesArr = (c.sample_values || []).slice(0, 3).map(escapeHtml);
+    const samples = samplesArr.length
+      ? `<span class="se-vars-sample">${samplesArr.join(", ")}</span>`
+      + (((c.sample_values || []).length > 3) ? ' <span class="se-vars-sample-more">…</span>' : "")
       : "—";
+    const opts = TYPE_OPTIONS.map(
+      (t) => `<option value="${t}"${t === c.detected_type ? " selected" : ""}>${TYPE_LABELS[t]}</option>`,
+    ).join("");
+    const isAmber = (c.missing_pct || 0) > 30;
+    const missing = c.missing > 0
+      ? `<span class="se-missing${isAmber ? " is-amber" : ""}" title="${c.missing} of ${c.missing + (c.unique_count || 0)} (${c.missing_pct}%)">
+           <span class="se-missing-dot"></span>${c.missing} (${c.missing_pct}%)
+         </span>`
+      : `<span class="se-missing"><span class="se-missing-dot"></span>0</span>`;
+
+    const colIssues = issuesForColumn(c.column);
+    const issueHtml = colIssues.map((i) => {
+      const cls = i.severity === "blocking" ? " is-blocking" : "";
+      return `<div class="se-issue-sub${cls}" data-testid="issue-${escapeHtml(c.column)}-${i.type}">${escapeHtml(i.message)}</div>`;
+    }).join("");
+
     return `<tr data-row="${idx}" data-testid="classify-row-${escapeHtml(c.column)}">
-      <td><strong>${escapeHtml(c.column)}</strong></td>
-      <td>${typeBadge(c.detected_type)}</td>
-      <td><small>${samples || "—"}</small></td>
-      <td>${c.unique_count}</td>
-      <td>${missing}</td>
       <td>
+        <div class="se-vars-col-name">${escapeHtml(c.column)}</div>
+        ${issueHtml}
+      </td>
+      <td>${typeBadge(c.detected_type)}</td>
+      <td>${samples}</td>
+      <td>${missing}</td>
+      <td class="se-vars-table-action">
         <select class="se-type-select" data-col="${escapeHtml(c.column)}" data-testid="select-type-${escapeHtml(c.column)}">${opts}</select>
       </td>
     </tr>`;
@@ -998,45 +1115,233 @@ function renderClassify() {
     sel.addEventListener("change", () => {
       const col = sel.dataset.col;
       const c = state.classifications.find((x) => x.column === col);
-      if (c) {
-        c.detected_type = sel.value;
-        c.reason = `Manually set to ${sel.value}.`;
-        const row = sel.closest("tr");
-        if (row) row.querySelector(".se-type-badge").outerHTML = typeBadge(sel.value);
+      if (!c) return;
+      c.detected_type = sel.value;
+      c.reason = `Manually set to ${sel.value}.`;
+      const row = sel.closest("tr");
+      if (row) {
+        const badge = row.querySelector(".se-type-badge");
+        if (badge) badge.outerHTML = typeBadge(sel.value);
+      }
+      validateConfirm();
+    });
+  });
+}
+
+function renderRecodingPanel() {
+  const zone = $("#recode-zone");
+  if (!zone) return;
+  // Show only for Scale variables that match a known preset.
+  const matches = [];
+  state.classifications.forEach((c) => {
+    if (c.detected_type !== "scale") return;
+    Object.entries(RECODE_PRESETS).forEach(([key, preset]) => {
+      if (preset.match.test(c.column)) {
+        matches.push({ key, column: c.column, preset });
       }
     });
   });
+  if (!matches.length) {
+    zone.innerHTML = "";
+    return;
+  }
+  const rowsHtml = matches.map(({ key, column, preset }) => {
+    const choice = state.recodingChoices[column];
+    const enabled = !!(choice && choice.enabled);
+    const bins = (choice && choice.bins) || preset.bins;
+    const summary = bins.map((b) => b.name).join(" / ");
+    const editorHtml = `
+      <div class="se-recode-bins" data-testid="recode-bins-${escapeHtml(column)}" hidden>
+        ${bins.map((b, i) => `
+          <input type="number" data-col="${escapeHtml(column)}" data-bin="${i}" data-edge="lo"
+                 value="${b.lo == null ? '' : b.lo}" placeholder="lo" />
+          <input type="number" data-col="${escapeHtml(column)}" data-bin="${i}" data-edge="hi"
+                 value="${b.hi == null ? '' : b.hi}" placeholder="hi" />
+          <input type="text"   data-col="${escapeHtml(column)}" data-bin="${i}" data-edge="name"
+                 value="${escapeHtml(b.name)}" />
+        `).join("")}
+      </div>`;
+    return `<div class="se-recode-row" data-testid="recode-row-${escapeHtml(column)}">
+      <label>
+        <input type="checkbox" data-recode-toggle="${escapeHtml(column)}"
+               data-testid="check-recode-${escapeHtml(column)}" ${enabled ? "checked" : ""}/>
+        Group <strong>${escapeHtml(column)}</strong> into ${escapeHtml(summary)}
+      </label>
+      <button type="button" class="se-recode-edit" data-recode-edit="${escapeHtml(column)}"
+              data-testid="button-recode-edit-${escapeHtml(column)}">Edit cutoffs</button>
+      ${editorHtml}
+    </div>`;
+  }).join("");
+  zone.innerHTML = `
+    <div class="se-section-label">OPTIONAL RECODING</div>
+    <div class="se-recode-zone">${rowsHtml}
+      <p class="se-hint" style="margin:8px 0 0;font-size:12px;color:var(--color-text-muted)">
+        Recoding adds a new column alongside the original. Applies in the next pass.
+      </p>
+    </div>`;
 
-  // Auto-coding summary
-  renderAutocodeSummary();
+  $$("[data-recode-toggle]", zone).forEach((cb) => {
+    cb.addEventListener("change", () => {
+      const col = cb.dataset.recodeToggle;
+      state.recodingChoices[col] = state.recodingChoices[col] || {};
+      state.recodingChoices[col].enabled = cb.checked;
+    });
+  });
+  $$("[data-recode-edit]", zone).forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const col = btn.dataset.recodeEdit;
+      const editor = zone.querySelector(`[data-testid="recode-bins-${CSS.escape(col)}"]`);
+      if (editor) editor.hidden = !editor.hidden;
+    });
+  });
+  $$(".se-recode-bins input", zone).forEach((inp) => {
+    inp.addEventListener("change", () => {
+      const col = inp.dataset.col;
+      const i = parseInt(inp.dataset.bin, 10);
+      const edge = inp.dataset.edge;
+      const preset = matches.find((m) => m.column === col).preset;
+      state.recodingChoices[col] = state.recodingChoices[col] || {
+        enabled: false, bins: preset.bins.map((b) => ({ ...b })),
+      };
+      const bins = state.recodingChoices[col].bins;
+      if (edge === "name") bins[i].name = inp.value;
+      else bins[i][edge] = inp.value === "" ? null : Number(inp.value);
+    });
+  });
 }
 
 function renderAutocodeSummary() {
   const out = $("#autocode-summary");
-  const messages = [];
-  const cols = state.preview;
-  const sexCol = state.classifications.find((c) => /^(sex|gender)$/i.test(c.column));
-  if (sexCol && cols.length) {
-    const sample = (sexCol.sample_values || []).join(", ").toLowerCase();
-    if (/male|female/.test(sample)) {
-      messages.push("Sex / Gender will be coded <strong>Male = 1</strong>, <strong>Female = 2</strong>.");
-    }
-  }
-  const yesNoCol = state.classifications.find((c) => {
-    const sample = (c.sample_values || []).map((v) => String(v).toLowerCase());
-    return c.detected_type === "nominal" && sample.some((v) => v === "yes" || v === "no");
-  });
-  if (yesNoCol) {
-    messages.push(`<strong>${escapeHtml(yesNoCol.column)}</strong> will be coded <strong>Yes = 1</strong>, <strong>No = 0</strong>.`);
-  }
-  const exclude = state.classifications.filter((c) => c.detected_type === "exclude" || c.detected_type === "id");
-  if (exclude.length) {
-    messages.push(`Excluded from analysis: ${exclude.map((c) => `<em>${escapeHtml(c.column)}</em>`).join(", ")}.`);
-  }
-  if (!messages.length) {
+  const label = $("#autocode-label");
+  if (!out || !label) return;
+  if (!state.autoCoding.length) {
+    out.hidden = true;
+    label.hidden = true;
     out.innerHTML = "";
+    return;
+  }
+  out.hidden = false;
+  label.hidden = false;
+  out.innerHTML = state.autoCoding.map((entry) => {
+    if (entry.kind === "excluded") {
+      const list = (entry.columns || []).map((c) => `<em>${escapeHtml(c)}</em>`).join(", ");
+      return `<div class="se-autocode-item" data-testid="autocode-excluded">
+        <strong>Excluded from analysis:</strong> ${list}
+      </div>`;
+    }
+    const map = (entry.mapping || []).map(
+      (m) => `<code>${escapeHtml(m.from)} = ${escapeHtml(String(m.to))}</code>`
+    ).join(", ");
+    return `<div class="se-autocode-item" data-testid="autocode-${escapeHtml(entry.kind)}">
+      <strong>${escapeHtml(entry.column || "")}</strong> — ${map}
+      <small style="color:var(--color-text-muted)">· ${escapeHtml(entry.note || "")}</small>
+    </div>`;
+  }).join("");
+}
+
+/* ----- Zone E · Variable Assistant ----- */
+
+function renderAssistantPanel() {
+  renderAssistantThread();
+  renderAssistantChips();
+}
+
+function renderAssistantThread() {
+  const out = $("#assistant-thread");
+  if (!out) return;
+  out.innerHTML = state.assistantThread.map((m, i) => {
+    const cls = ({ system: "is-system", user: "is-user", action: "is-action", clarify: "is-clarify" })[m.role] || "is-system";
+    return `<div class="se-chat-msg ${cls}" data-testid="chat-msg-${i}-${m.role}">${escapeHtml(m.text)}</div>`;
+  }).join("");
+  out.scrollTop = out.scrollHeight;
+}
+
+function renderAssistantChips() {
+  const out = $("#assistant-chips");
+  if (!out) return;
+  // Pick the first text-in-numeric column as the primary suggestion target,
+  // otherwise the first non-id/exclude column.
+  const blocking = state.classifications.find((c) =>
+    issuesForColumn(c.column).some((i) => i.type === "text_in_numeric"),
+  );
+  const target = blocking || state.classifications.find(
+    (c) => c.detected_type !== "id" && c.detected_type !== "exclude",
+  );
+  const colName = target ? target.column : null;
+  const chips = colName
+    ? CHIP_SUGGESTIONS.map((s) => ({
+        label: s.label.replace("this column", `“${colName}”`),
+        text: s.template.replace("{col}", colName),
+      }))
+    : [{ label: "Show me what you can do", text: "help" }];
+  out.innerHTML = chips.map(
+    (c, i) => `<button type="button" class="se-chip" data-chip="${i}" data-testid="chip-${i}">${escapeHtml(c.label)}</button>`
+  ).join("");
+  $$(".se-chip", out).forEach((btn, i) => {
+    btn.addEventListener("click", () => sendAssistantMessage(chips[i].text));
+  });
+}
+
+async function sendAssistantMessage(message) {
+  const text = (message || "").trim();
+  if (!text) return;
+  state.assistantThread.push({ role: "user", text });
+  renderAssistantThread();
+  const input = $("#assistant-input");
+  if (input) input.value = "";
+
+  try {
+    const res = await api("/variable-assistant", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ job_id: state.jobId, message: text }),
+    });
+    if (res.status === "applied") {
+      state.assistantThread.push({ role: "action", text: res.confirmation_message || "Done." });
+      state.classifications = res.classifications || [];
+      state.issues = res.issues || [];
+      state.autoCoding = res.auto_coding_plan || [];
+      renderClassify();
+    } else {
+      state.assistantThread.push({ role: "clarify", text: res.confirmation_message || "Could you rephrase?" });
+      renderAssistantThread();
+    }
+  } catch (err) {
+    state.assistantThread.push({ role: "clarify", text: `Could not run: ${err.message}` });
+    renderAssistantThread();
+  }
+}
+
+/* ----- Confirm validation (Step 3 → Step 4) ----- */
+
+function validateConfirm() {
+  const btn = $('[data-action="confirm-classify"]');
+  const banner = $("#confirm-validation");
+  if (!btn || !banner) return;
+  // Block on any blocking issue (text_in_numeric) where the column is still
+  // typed as a numeric kind. If the user changed the type to nominal /
+  // exclude, the issue is effectively resolved.
+  const numericKinds = new Set(["scale", "ordinal", "discrete"]);
+  const stillBlocking = state.issues.filter((i) => {
+    if (i.severity !== "blocking") return false;
+    const c = state.classifications.find((x) => x.column === i.column);
+    if (!c) return false;
+    return numericKinds.has(c.detected_type);
+  });
+  if (stillBlocking.length) {
+    btn.disabled = true;
+    banner.hidden = false;
+    banner.innerHTML = `Cannot continue yet. Resolve these:
+      <ul style="margin:6px 0 0 18px;padding:0;">
+        ${stillBlocking.map((i) => `<li><strong>${escapeHtml(i.column)}</strong>: ${escapeHtml(i.message)}</li>`).join("")}
+      </ul>
+      <div style="margin-top:6px;font-size:12px;">
+        Tip: ask the assistant to <em>strip the prefix</em>, or change the type to Nominal.
+      </div>`;
   } else {
-    out.innerHTML = `<strong>Auto-coding plan</strong>${messages.map((m) => `<div>• ${m}</div>`).join("")}`;
+    btn.disabled = false;
+    banner.hidden = true;
+    banner.innerHTML = "";
   }
 }
 
@@ -1046,7 +1351,7 @@ function bindScreen3() {
     const status = $("#classify-status");
     setStatus(status, "Saving classifications…", "loading");
     const overrides = state.classifications
-      .filter((c) => /^Manually set/.test(c.reason || ""))
+      .filter((c) => /^(Manually set|Set by assistant)/.test(c.reason || ""))
       .map((c) => ({ column: c.column, detected_type: c.detected_type }));
     try {
       await api("/classify", {
@@ -1061,6 +1366,16 @@ function bindScreen3() {
       setStatus(status, `Could not save classifications: ${err.message}`, "error");
     }
   });
+
+  // Variable Assistant form submission
+  const form = $("#assistant-form");
+  if (form) {
+    form.addEventListener("submit", (ev) => {
+      ev.preventDefault();
+      const input = $("#assistant-input");
+      if (input && input.value.trim()) sendAssistantMessage(input.value);
+    });
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -1204,9 +1519,14 @@ function bindScreen4() {
 
 function bindSoon() {
   $('[data-action="restart"]', $("#screen-soon")).addEventListener("click", restart);
+  const back = $('[data-action="back-to-quality"]', $("#screen-soon"));
+  if (back) back.addEventListener("click", () => showScreen("4"));
 }
 
 function restart() {
+  // Wipe everything — used only by the explicit "Start over" button. Back
+  // navigation deliberately does NOT call this so the user's classification
+  // overrides, assistant thread, and recoding choices survive a Back trip.
   state.jobId = null;
   state.summary = null;
   state.columns = [];
@@ -1216,6 +1536,10 @@ function restart() {
   state.quality = null;
   state.qualityActions = [];
   state.followUp = null;
+  state.issues = [];
+  state.autoCoding = [];
+  state.assistantThread = [];
+  state.recodingChoices = {};
   setStatus($("#upload-status"), "");
   setStatus($("#practice-status"), "");
   setStatus($("#quality-status"), "");

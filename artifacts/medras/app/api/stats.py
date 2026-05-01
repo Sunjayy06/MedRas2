@@ -31,7 +31,9 @@ from app.services import (
     excel_loader,
     proposal_store,
     stats_tests,
+    variable_assistant,
     variable_classifier,
+    variable_issues,
 )
 
 
@@ -448,16 +450,151 @@ async def classify(payload: ClassifyRequest) -> Dict[str, Any]:
     entry = dataset_store.get(payload.job_id)
     if entry is None:
         raise HTTPException(status_code=404, detail="Dataset expired or not found.")
-    classifications = variable_classifier.classify_dataframe(entry.df)
-    # Apply user overrides on top of auto-classification.
-    if payload.overrides:
-        ov = {o.column: o.detected_type for o in payload.overrides}
-        for c in classifications:
-            if c["column"] in ov:
-                c["detected_type"] = ov[c["column"]]
-                c["reason"] = f"Manually set to {ov[c['column']]}."
+    # Reuse a previously stored classification if there are no overrides
+    # AND we already have one — this preserves changes made by the
+    # variable-assistant (e.g. type promoted to scale after strip_prefix)
+    # so a plain refresh doesn't wipe them.
+    stored = entry.meta.get("classifications") if not payload.overrides else None
+    if stored:
+        # Still need to refresh sample_values / missing counts in case the
+        # DataFrame was mutated by the assistant.
+        fresh = variable_classifier.classify_dataframe(entry.df)
+        fresh_by_col = {c["column"]: c for c in fresh}
+        classifications: List[Dict[str, Any]] = []
+        for c in fresh:
+            prev = next((p for p in stored if p["column"] == c["column"]), None)
+            if prev and prev.get("reason", "").startswith(("Manually set", "Set by assistant")):
+                # User/assistant override wins over re-detection.
+                c["detected_type"] = prev["detected_type"]
+                c["reason"] = prev["reason"]
+            classifications.append(c)
+        # Append columns that exist only in stored (shouldn't normally happen).
+        for prev in stored:
+            if prev["column"] not in fresh_by_col:
+                classifications.append(prev)
+    else:
+        classifications = variable_classifier.classify_dataframe(entry.df)
+        if payload.overrides:
+            ov = {o.column: o.detected_type for o in payload.overrides}
+            for c in classifications:
+                if c["column"] in ov:
+                    c["detected_type"] = ov[c["column"]]
+                    c["reason"] = f"Manually set to {ov[c['column']]}."
     entry.meta["classifications"] = classifications
-    return {"job_id": payload.job_id, "classifications": classifications}
+
+    issues = variable_issues.detect_issues(entry.df, classifications)
+    coding = variable_issues.auto_coding_plan(entry.df, classifications)
+    entry.meta["variable_issues"] = issues
+    entry.meta["auto_coding_plan"] = coding
+
+    return {
+        "job_id": payload.job_id,
+        "classifications": classifications,
+        "issues": issues,
+        "auto_coding_plan": coding,
+        "blocking_issues": variable_issues.has_blocking_issues(issues),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Variable Assistant (Step 3, Zone E)
+# ---------------------------------------------------------------------------
+
+
+class VariableAssistantRequest(BaseModel):
+    job_id: str = Field(..., min_length=1, max_length=64)
+    message: str = Field(..., min_length=1, max_length=600)
+
+
+@router.post("/variable-assistant")
+@limiter.limit("60/minute")
+async def variable_assistant_endpoint(
+    request: Request, payload: VariableAssistantRequest
+) -> Dict[str, Any]:
+    entry = dataset_store.get(payload.job_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Dataset expired or not found.")
+
+    columns = list(entry.df.columns)
+    intent = variable_assistant.parse_intent(payload.message, columns)
+    new_df, meta = variable_assistant.apply_action(entry.df, intent)
+
+    if intent["action"] == "clarify":
+        return {
+            "status": "clarify",
+            "action": "clarify",
+            "column": intent.get("column"),
+            "params": {},
+            "confirmation_message": meta.get("confirmation_message", ""),
+            "classifications": entry.meta.get("classifications") or [],
+            "issues": entry.meta.get("variable_issues") or [],
+            "auto_coding_plan": entry.meta.get("auto_coding_plan") or [],
+            "blocking_issues": variable_issues.has_blocking_issues(
+                entry.meta.get("variable_issues") or []
+            ),
+        }
+
+    # Apply DataFrame mutation if the action produced one.
+    if new_df is not None:
+        dataset_store.replace_df(payload.job_id, new_df)
+        # Bookkeeping: if a column was renamed, propagate to stored
+        # classifications so the override logic above keeps working.
+        if intent["action"] == "rename":
+            old = meta.get("old_column")
+            new = meta.get("new_column")
+            stored = entry.meta.get("classifications") or []
+            for c in stored:
+                if c.get("column") == old:
+                    c["column"] = new
+
+    # Recompute classifications, then layer assistant-driven overrides.
+    classifications = variable_classifier.classify_dataframe(entry.df)
+    stored = entry.meta.get("classifications") or []
+    stored_by_col = {c.get("column"): c for c in stored}
+
+    # Prefer an explicit target_column from the action (e.g. add_numeric_column
+    # creates a NEW column and wants the scale flag on the new one, not the
+    # original). Fall back to meta["column"] / intent["column"] for actions
+    # that operate on the original column directly.
+    target_col = (
+        meta.get("target_column")
+        or meta.get("column")
+        or intent.get("column")
+    )
+    type_after = meta.get("type_after") or meta.get("new_type")
+
+    # Carry forward any prior manual / assistant overrides on other columns.
+    for c in classifications:
+        prev = stored_by_col.get(c["column"])
+        if prev and prev.get("reason", "").startswith(("Manually set", "Set by assistant")):
+            c["detected_type"] = prev["detected_type"]
+            c["reason"] = prev["reason"]
+
+    # Apply this action's type change.
+    if target_col and type_after:
+        for c in classifications:
+            if c["column"] == target_col:
+                c["detected_type"] = type_after
+                c["reason"] = f"Set by assistant to {type_after}."
+                break
+
+    entry.meta["classifications"] = classifications
+    issues = variable_issues.detect_issues(entry.df, classifications)
+    coding = variable_issues.auto_coding_plan(entry.df, classifications)
+    entry.meta["variable_issues"] = issues
+    entry.meta["auto_coding_plan"] = coding
+
+    return {
+        "status": "applied",
+        "action": intent["action"],
+        "column": target_col,
+        "params": intent.get("params") or {},
+        "confirmation_message": meta.get("confirmation_message", ""),
+        "classifications": classifications,
+        "issues": issues,
+        "auto_coding_plan": coding,
+        "blocking_issues": variable_issues.has_blocking_issues(issues),
+    }
 
 
 @router.post("/analyze")
