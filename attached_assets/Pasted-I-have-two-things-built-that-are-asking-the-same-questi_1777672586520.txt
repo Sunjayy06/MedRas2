@@ -1,0 +1,270 @@
+I have two things built that are asking 
+the same question twice and confusing 
+the user. Fix this by wiring them together 
+and removing the duplicate.
+
+Do not rebuild anything that works.
+Only make the changes below.
+
+════════════════════════════════════
+THE PROBLEM IN ONE LINE
+════════════════════════════════════
+
+The wizard asks "what is your outcome 
+variable" in plain English before upload.
+The Assign step asks the same thing again 
+after upload as a raw dropdown.
+The wizard answer is being ignored.
+Fix this by using the wizard answer 
+to do the assignment automatically.
+
+════════════════════════════════════
+CHANGE 1 — WIRE THE WIZARD TO THE 
+VARIABLE ASSIGNMENT
+════════════════════════════════════
+
+When the wizard completes and the user 
+uploads their file, run this logic 
+immediately after the file loads:
+
+Take the outcome description the user 
+typed in Q3 of the wizard.
+Search all column names in the uploaded 
+file for the closest match.
+Use case-insensitive partial matching.
+Example: user typed "time to union" 
+→ matches column "Time to Union (Weeks)"
+
+Rules for matching:
+  Never match an ID column even if the 
+  name is similar.
+  Never match a Date column.
+  If exact match found: use it.
+  If partial match found: use it.
+  If no match found: flag it 
+  (see Change 3 below).
+
+Take the objective text the user typed 
+in Q2.
+Scan for comparison keywords: 
+  "between", "compare", "across", 
+  "by", "among", "in different", 
+  "vs", "versus", "groups"
+The word or phrase after these keywords 
+is the likely grouping variable.
+Find the closest matching column name.
+Set that as the grouping variable.
+
+Save both into the session:
+  session.outcome_variable = matched column
+  session.grouping_variable = matched column
+
+════════════════════════════════════
+CHANGE 2 — REPLACE ASSIGN STEP WITH 
+A CONFIRMATION CARD
+════════════════════════════════════
+
+Remove the Assign step screen completely.
+Delete it from the step navigator.
+The step no longer exists.
+
+Instead, at the very top of the 
+Review Data screen (Step 3, Tab A — 
+Variables), show a confirmation card 
+before the variable table.
+
+Card styling:
+  Light blue background
+  Border: 0.5px solid light blue
+  Border-radius: 14px
+  Padding: 16px
+
+Card content:
+  Small label at top: 
+  "BASED ON YOUR OBJECTIVE"
+  
+  Two rows:
+  Outcome variable: [column name] 
+    — [type e.g. Scale]
+  Grouping variable: [column name] 
+    — [type e.g. Nominal · 4 groups]
+  
+  One line below:
+  "Is this correct?"
+  
+  Two buttons side by side:
+  Left: "Yes, looks right →" 
+    — blue filled button
+    On click: dismiss the card 
+    and proceed with these assignments
+  Right: "Let me change this"
+    — outline button
+    On click: show a simple two-field 
+    form below the card
+
+Change form (only shown when user 
+clicks "Let me change this"):
+  Field 1: Outcome variable
+    Dropdown of all columns
+    ID columns greyed out and 
+    labelled "(ID — excluded)"
+    Date columns greyed out
+    Each option shows: column name, 
+    type badge, first 3 sample values
+    in small muted text
+  
+  Field 2: Grouping variable (optional)
+    Same dropdown format
+    Plus one option at top: 
+    "No grouping — descriptive only"
+  
+  Save button: "Update and confirm"
+  After saving, update the card and 
+  dismiss the form.
+
+════════════════════════════════════
+CHANGE 3 — HANDLE WHEN AUTO-MATCH FAILS
+════════════════════════════════════
+
+If the system cannot find a confident 
+match for the outcome variable:
+
+Show the card with an amber warning:
+  "We could not confidently identify 
+   your outcome variable from what 
+   you described."
+  
+  Below this: show the change form 
+  immediately (pre-opened).
+  
+  Do not block progress — let the user 
+  manually select from the dropdown.
+
+If the system matched a column but it 
+is classified as ID type:
+  Ignore that match.
+  Treat it as no match found.
+  Show the amber warning.
+
+════════════════════════════════════
+CHANGE 4 — REMOVE COVARIATES SECTION
+════════════════════════════════════
+
+Remove the covariates checkbox list 
+from the Assign step entirely.
+It is already being removed with the 
+Assign step above.
+
+The system will automatically use all 
+remaining Scale variables as potential 
+confounders in regression models.
+No user action needed.
+State this in the Plan and Run screen:
+  "Covariates: all Scale variables 
+   will be tested as potential 
+   confounders in regression analysis."
+
+════════════════════════════════════
+CHANGE 5 — FIX THE SILENT ID ERROR
+════════════════════════════════════
+
+The current system allowed "Name" 
+(an ID column) to be selected as the 
+outcome variable and then showed 
+"We will analyse Name — descriptive only" 
+with no warning.
+
+This must never happen again.
+
+Rules:
+  Any column classified as ID type 
+  cannot be the outcome variable.
+  Any column classified as ID type 
+  cannot be the grouping variable.
+  Grey these columns out in any dropdown.
+  If a user somehow forces one 
+  (e.g. by editing session data), 
+  show a red error:
+  "Name is a patient identifier and 
+   cannot be used as an outcome variable. 
+   Please select a measurement column."
+  Block progress until a valid 
+  column is selected.
+
+════════════════════════════════════
+CHANGE 6 — UPDATE THE STEP BAR
+════════════════════════════════════
+
+The step bar now has 7 steps only:
+  1 — Start
+  2 — Data input
+  3 — Review data
+  4 — Normality
+  5 — Plan and Run
+  6 — Results
+  7 — Export
+
+No Assign step anywhere.
+No step 8.
+No step 9.
+Update all step numbers and labels.
+
+════════════════════════════════════
+WHAT STAYS EXACTLY THE SAME
+════════════════════════════════════
+
+The wizard questions Q1 Q2 Q3 Q4 — 
+keep every word, every style, 
+every interaction exactly as built.
+
+The upload screen — no changes.
+
+The Review Data screen tabs 
+(Variables, Quality, Missing) — 
+no changes except adding the 
+confirmation card at the top of 
+the Variables tab.
+
+Normality, Plan and Run, Results, 
+Export — no changes to any of these.
+
+════════════════════════════════════
+TEST AFTER BUILDING
+════════════════════════════════════
+
+Test 1:
+  In Q3 type "Time to Union".
+  Upload Gautham fracture file.
+  Expected: confirmation card shows
+  "Outcome: Time to Union (Weeks) — Scale"
+  without user touching any dropdown.
+
+Test 2:
+  In Q3 type "time to union" lowercase.
+  Expected: same result. 
+  Case-insensitive matching works.
+
+Test 3:
+  In Q3 type "Name".
+  Expected: amber warning shows.
+  Dropdown opens. Name is greyed out.
+  User must pick a different column.
+
+Test 4:
+  Click "Let me change this".
+  Expected: dropdown opens.
+  Name column is greyed out with 
+  "(ID — excluded)" label.
+  All other columns are selectable.
+
+Test 5:
+  Count step circles.
+  Must be exactly 7.
+  No Assign circle anywhere.
+
+Test 6:
+  Go back from Step 3 to Step 2.
+  Upload a different file.
+  Expected: confirmation card 
+  updates to match the new file.
+  Old assignment is cleared.

@@ -2031,3 +2031,111 @@ html[data-medras-init="ok"] .se-actions-fallback { display: none; }
   color: #5f6c80;
   font-size: 14px;
 }
+
+/* ------------------------------------------------------------------
+ * Step 3 · Assignment confirmation card (replaces old Assign step).
+ * Auto-matched outcome / grouping variables surfaced from the wizard.
+ * ------------------------------------------------------------------ */
+
+.se-assign-card {
+  background: #eff6ff;
+  border: 0.5px solid #93c5fd;
+  border-radius: 14px;
+  padding: 16px 18px;
+  margin: 12px 0 18px;
+  color: #0f172a;
+}
+.se-assign-card.is-amber {
+  background: #fffbeb;
+  border-color: #f59e0b;
+}
+.se-assign-card.is-confirmed {
+  background: #f0fdf4;
+  border-color: #86efac;
+}
+.se-assign-card-eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #1d4ed8;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+}
+.se-assign-card.is-amber .se-assign-card-eyebrow { color: #b45309; }
+.se-assign-card.is-confirmed .se-assign-card-eyebrow { color: #15803d; }
+
+.se-assign-warn {
+  background: #fef3c7;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 14px;
+  color: #78350f;
+  margin-bottom: 12px;
+}
+
+.se-assign-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: baseline;
+  font-size: 15px;
+  margin: 4px 0;
+}
+.se-assign-row-label {
+  color: #475569;
+  font-weight: 500;
+  min-width: 140px;
+}
+.se-assign-row-type {
+  color: #64748b;
+  font-size: 13px;
+}
+
+.se-assign-q {
+  margin: 12px 0 8px;
+  font-weight: 500;
+  color: #1f2937;
+}
+.se-assign-buttons {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.se-assign-form {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid #cbd5e1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.se-assign-form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.se-assign-form-row > span {
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+}
+.se-assign-form-row select option:disabled {
+  color: #94a3b8;
+  font-style: italic;
+}
+.se-assign-form-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* Plan-screen covariates auto-info note */
+.se-plan-cov-note {
+  background: #f8fafc;
+  border-left: 3px solid #94a3b8;
+  border-radius: 4px;
+  padding: 10px 14px;
+  margin: 16px 0;
+  color: #475569;
+  font-size: 14px;
+}

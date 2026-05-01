@@ -116,7 +116,7 @@ const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 // screen 1 / intake would defeat the resume banner (there's nothing to
 // resume to) and would also wipe the saved session every time the page
 // reloads cold.
-const RESUMABLE_SCREENS = new Set(["preview", "3", "4", "soon"]);
+const RESUMABLE_SCREENS = new Set(["preview", "3", "4", "normality", "plan", "results", "export"]);
 
 function saveSession() {
   if (!state.jobId) return;
@@ -183,17 +183,32 @@ async function resumeFromSavedSession(saved) {
     const data = await api(`/dataset/${saved.dataset_id}`);
     ingestDataset(data);
     const target = saved.screen;
-    if (target === "4") {
+    // Map legacy 8-step screen ids ("soon", "assign") onto the new 7-step
+    // model so a saved session from before the refactor still resumes
+    // somewhere valid instead of silently hiding every screen.
+    const LEGACY_REMAP = { soon: "normality", assign: "3" };
+    const resolved = LEGACY_REMAP[target] || target;
+    if (resolved === "4") {
       showScreen("4");
       await loadQualityReport();
-    } else if (target === "3") {
+    } else if (resolved === "3") {
       showScreen("3");
       // Step 3 binds its own classification render via showScreen subscribers
       // already; nothing extra needed here.
-    } else if (target === "preview") {
+    } else if (resolved === "preview") {
       showScreen("preview");
-    } else if (target === "soon") {
-      showScreen("soon");
+    } else if (resolved === "normality") {
+      showScreen("normality");
+      loadNormality();
+    } else if (resolved === "plan") {
+      showScreen("plan");
+      loadPlan();
+    } else if (resolved === "results" || resolved === "export") {
+      // Results/Export require a successful run; safer to drop the user
+      // back on the plan screen so they can re-run or jump forward via
+      // the (clickable) done step circles.
+      showScreen("plan");
+      loadPlan();
     } else {
       showScreen("1");
     }
@@ -209,10 +224,16 @@ function renderResumeBanner(saved) {
   const when = _formatRelativeTime(saved.timestamp);
   const stepLabel = (() => {
     switch (saved.screen) {
-      case "4": return "Step 4 · Data quality";
+      case "4": return "Step 3 · Data quality";
       case "3": return "Step 3 · Variables";
       case "preview": return "Step 2 · Preview";
-      case "soon": return "Step 5+";
+      case "normality": return "Step 4 · Normality";
+      case "plan": return "Step 5 · Plan and Run";
+      case "results": return "Step 6 · Results";
+      case "export": return "Step 7 · Export";
+      // Legacy labels for sessions saved before the 8 → 7 refactor:
+      case "soon": return "Step 4 · Normality";
+      case "assign": return "Step 3 · Variables";
       default: return `Step ${saved.step || 1}`;
     }
   })();
@@ -249,16 +270,16 @@ function renderResumeBanner(saved) {
 const SCREENS = [
   "1", "intake", "2a", "2c", "preview",
   "3", "4",
-  "assign", "normality", "plan", "results", "export",
+  "normality", "plan", "results", "export",
 ];
 // Map a logical screen id to which step number is "active" in the tracker.
-// New 8-step model: 1 Start, 2 Data input, 3 Review data (vars+quality),
-// 4 Assign, 5 Normality, 6 Plan and Run, 7 Results, 8 Export.
+// 7-step model: 1 Start, 2 Data input, 3 Review data (vars+quality+assignment-card),
+// 4 Normality, 5 Plan and Run, 6 Results, 7 Export.
 const SCREEN_TO_STEP = {
   "1": 1, "intake": 1,
   "2a": 2, "2c": 2, "preview": 2,
   "3": 3, "4": 3,
-  "assign": 4, "normality": 5, "plan": 6, "results": 7, "export": 8,
+  "normality": 4, "plan": 5, "results": 6, "export": 7,
 };
 
 function showScreen(id) {
@@ -304,7 +325,7 @@ function showScreen(id) {
 function bindStepNavBack() {
   const STEP_TO_SCREEN = {
     1: "1", 2: "preview", 3: "4",
-    4: "assign", 5: "normality", 6: "plan", 7: "results", 8: "export",
+    4: "normality", 5: "plan", 6: "results", 7: "export",
   };
   $$(".se-step").forEach((node) => {
     node.addEventListener("click", () => {
@@ -741,8 +762,10 @@ function ingestDataset(data) {
     state.autoCoding = [];
     state.assistantThread = [];
     state.recodingChoices = {};
-    // Also clear all Step 4–8 state so a new dataset starts clean.
+    // Also clear all Step 4–7 state so a new dataset starts clean.
     state.assignment = null;
+    state.assignmentAutoMatched = false;
+    state.assignmentConfirmed = false;
     state.normality = null;
     state.plan = null;
     state.confirmedTests = null;
@@ -765,6 +788,283 @@ function ingestDataset(data) {
   // Sync canonical intake from server, so any later round-trip (e.g. /dataset/{id})
   // hydrates the form with what the backend actually stored.
   if (data.intake) state.intake = data.intake;
+  // Auto-match the wizard's outcome / grouping answers against actual column
+  // names. Only run for fresh datasets (a back-trip from Step 3 calls
+  // ingestDataset on the same job_id and we want to preserve any manual
+  // override the user already confirmed on the assignment card).
+  if (!state.assignment || !state.assignment.outcome) {
+    autoAssignFromIntake();
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Auto-assignment from wizard answers (Q3 outcome, Q2 / Q4 group)    */
+/* ------------------------------------------------------------------ */
+
+function _normaliseToken(s) {
+  return String(s || "").toLowerCase().replace(/[_\-/]+/g, " ").trim();
+}
+
+function _isUsableAsOutcome(c) {
+  return c && !["id", "exclude", "date"].includes(c.detected_type);
+}
+
+function _isUsableAsGroup(c) {
+  return c && ["nominal", "ordinal"].includes(c.detected_type);
+}
+
+function matchColumn(needle, columns) {
+  // Returns the best column name match for `needle` against an array of
+  // classification rows, or null when nothing scores high enough.
+  if (!needle || !columns || !columns.length) return null;
+  const n = _normaliseToken(needle);
+  if (!n) return null;
+  // 1. Exact (case-insensitive, ignoring connectors)
+  let m = columns.find((c) => _normaliseToken(c.column) === n);
+  if (m) return m.column;
+  // 2. Substring either way
+  m = columns.find((c) => {
+    const col = _normaliseToken(c.column);
+    return col.includes(n) || n.includes(col);
+  });
+  if (m) return m.column;
+  // 3. Token-overlap score — pick the column with the most shared meaningful
+  //    tokens (length > 2). Ties broken by shortest column name.
+  const tokens = n.split(/\s+/).filter((t) => t.length > 2);
+  if (!tokens.length) return null;
+  let best = null;
+  let bestScore = 0;
+  columns.forEach((c) => {
+    const colTokens = _normaliseToken(c.column).split(/\s+/).filter((t) => t.length > 2);
+    const overlap = tokens.filter((t) =>
+      colTokens.some((ct) => ct === t || ct.includes(t) || t.includes(ct))
+    ).length;
+    if (overlap > bestScore || (overlap === bestScore && best && c.column.length < best.length)) {
+      best = c.column;
+      bestScore = overlap;
+    }
+  });
+  return bestScore >= 1 ? best : null;
+}
+
+function extractGroupHint(text) {
+  // Scan free-text objective for comparison keywords and return whatever
+  // word(s) follow, e.g. "compare HHS between treatment groups" → "treatment".
+  if (!text) return null;
+  const re = /\b(?:between|compare(?:d)?|across|by|among|in different|vs\.?|versus|grouped\s+by|groups?\s+of|groups?)\s+([a-zA-Z][a-zA-Z0-9 _\-]{1,40})/i;
+  const m = String(text).match(re);
+  if (!m) return null;
+  // Strip trailing filler words like "groups", "patients", "the", etc.
+  return m[1].replace(/\b(groups?|patients?|subjects?|the|a|an)\b/gi, "").trim() || null;
+}
+
+function autoAssignFromIntake() {
+  const intake = state.intake || {};
+  const cls = state.classifications || [];
+  if (!cls.length) return;
+  const outcomeCols = cls.filter(_isUsableAsOutcome);
+  const groupCols = cls.filter(_isUsableAsGroup);
+
+  // Outcome — Q3 free text (e.g. "Time to Union")
+  let outcome = matchColumn(intake.outcomes, outcomeCols);
+  // Defensive: if matchColumn returns an ID-typed column for any reason,
+  // discard it — Rule 5 (no ID as outcome).
+  if (outcome) {
+    const row = cls.find((c) => c.column === outcome);
+    if (!row || !_isUsableAsOutcome(row)) outcome = null;
+  }
+
+  // Grouping — pull a hint from Q2 (objective) or Q4 (independents)
+  const hint =
+    extractGroupHint(intake.objective) ||
+    extractGroupHint(intake.independents) ||
+    (intake.independents || "").split(/[,;]/)[0] || "";
+  let group = matchColumn(hint, groupCols);
+  if (group) {
+    const row = cls.find((c) => c.column === group);
+    if (!row || !_isUsableAsGroup(row)) group = null;
+  }
+
+  state.assignment = {
+    outcome: outcome || null,
+    group: group || null,
+    covariates: [],
+  };
+  state.assignmentAutoMatched = !!outcome;
+
+  // Persist to the server so /generate-plan and /run-analysis pick it up.
+  if (outcome && state.jobId) {
+    api("/assign", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        job_id: state.jobId,
+        outcome,
+        group: group || null,
+        covariates: [],
+      }),
+    }).catch(() => { /* non-fatal — user can re-confirm on the card */ });
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Step 3 — Assignment confirmation card                              */
+/* ------------------------------------------------------------------ */
+
+function _typeLabel(c) {
+  if (!c) return "—";
+  const t = c.detected_type;
+  if (t === "scale") {
+    return c.scale_subtype ? `Scale (${c.scale_subtype})` : "Scale";
+  }
+  if (t === "nominal") {
+    const n = (c.unique_values && c.unique_values.length) || c.n_levels;
+    return n ? `Nominal · ${n} groups` : "Nominal";
+  }
+  return t ? (t.charAt(0).toUpperCase() + t.slice(1)) : "—";
+}
+
+function _sampleSnippet(c) {
+  const vals = (c && (c.sample_values || c.unique_values)) || [];
+  return vals.slice(0, 3).map((v) => String(v)).join(", ");
+}
+
+function renderAssignmentCard(opts) {
+  // opts.formOpen forces the change form to be visible (used by the amber
+  // warning state and by the "Let me change this" button).
+  const host = document.getElementById("assignment-card-host");
+  if (!host) return;
+  const cls = state.classifications || [];
+  if (!cls.length) { host.innerHTML = ""; return; }
+
+  const a = state.assignment || {};
+  const outcomeRow = cls.find((c) => c.column === a.outcome);
+  const groupRow = cls.find((c) => c.column === a.group);
+  const matched = !!outcomeRow && _isUsableAsOutcome(outcomeRow);
+  const formOpen = (opts && opts.formOpen) || !matched;
+
+  // Build dropdown options. ID, exclude and date columns are greyed out
+  // and disabled — Rule 5 says they can never be selected as outcome/group.
+  const outcomeOptions = cls.map((c) => {
+    const usable = _isUsableAsOutcome(c);
+    const tag = ["id", "exclude"].includes(c.detected_type)
+      ? " (ID — excluded)"
+      : c.detected_type === "date" ? " (Date — excluded)" : "";
+    const sample = _sampleSnippet(c);
+    const label = `${c.column}${tag}${sample ? `  ·  ${sample}` : ""}`;
+    return `<option value="${escapeHtml(c.column)}"${usable ? "" : " disabled"}${a.outcome === c.column ? " selected" : ""}>${escapeHtml(label)}</option>`;
+  }).join("");
+  const groupOptions = `<option value=""${!a.group ? " selected" : ""}>— No grouping (descriptive only) —</option>` + cls.map((c) => {
+    const usable = _isUsableAsGroup(c);
+    const tag = ["id", "exclude"].includes(c.detected_type)
+      ? " (ID — excluded)"
+      : c.detected_type === "date" ? " (Date — excluded)"
+      : c.detected_type === "scale" ? " (Scale — usually not a grouping variable)" : "";
+    const sample = _sampleSnippet(c);
+    const label = `${c.column}${tag}${sample ? `  ·  ${sample}` : ""}`;
+    return `<option value="${escapeHtml(c.column)}"${usable ? "" : " disabled"}${a.group === c.column ? " selected" : ""}>${escapeHtml(label)}</option>`;
+  }).join("");
+
+  const warn = !matched ? `
+    <div class="se-assign-warn" data-testid="assign-warn">
+      We could not confidently identify your outcome variable from what you described.
+      Please pick one below — ID and Date columns are greyed out.
+    </div>` : "";
+
+  const summaryRows = matched ? `
+    <div class="se-assign-row" data-testid="assign-row-outcome">
+      <span class="se-assign-row-label">Outcome variable:</span>
+      <strong>${escapeHtml(a.outcome)}</strong>
+      <span class="se-assign-row-type">— ${escapeHtml(_typeLabel(outcomeRow))}</span>
+    </div>
+    <div class="se-assign-row" data-testid="assign-row-group">
+      <span class="se-assign-row-label">Grouping variable:</span>
+      ${a.group
+        ? `<strong>${escapeHtml(a.group)}</strong> <span class="se-assign-row-type">— ${escapeHtml(_typeLabel(groupRow))}</span>`
+        : `<em>— None (descriptive only) —</em>`}
+    </div>
+    <p class="se-assign-q">Is this correct?</p>
+    <div class="se-assign-buttons">
+      <button type="button" class="btn btn-primary" data-action="assign-confirm" data-testid="button-assign-confirm">Yes, looks right →</button>
+      <button type="button" class="btn btn-secondary" data-action="assign-change" data-testid="button-assign-change">Let me change this</button>
+    </div>` : "";
+
+  const form = formOpen ? `
+    <div class="se-assign-form" data-testid="assign-form">
+      <label class="se-assign-form-row">
+        <span>Outcome variable</span>
+        <select class="se-type-select" data-assign-field="outcome" data-testid="select-outcome">${outcomeOptions}</select>
+      </label>
+      <label class="se-assign-form-row">
+        <span>Grouping variable (optional)</span>
+        <select class="se-type-select" data-assign-field="group" data-testid="select-group">${groupOptions}</select>
+      </label>
+      <div class="se-assign-form-actions">
+        <button type="button" class="btn btn-primary" data-action="assign-save" data-testid="button-assign-save">Update and confirm</button>
+      </div>
+      <div id="assign-form-status" class="se-status" role="status" aria-live="polite" data-testid="status-assign"></div>
+    </div>` : "";
+
+  host.innerHTML = `
+    <section class="se-assign-card${matched ? "" : " is-amber"}${state.assignmentConfirmed ? " is-confirmed" : ""}" data-testid="assignment-card">
+      <div class="se-assign-card-eyebrow">BASED ON YOUR OBJECTIVE</div>
+      ${warn}
+      ${summaryRows}
+      ${form}
+    </section>`;
+
+  bindAssignmentCard();
+}
+
+function bindAssignmentCard() {
+  const host = document.getElementById("assignment-card-host");
+  if (!host) return;
+  const yes = host.querySelector('[data-action="assign-confirm"]');
+  if (yes) yes.addEventListener("click", () => {
+    state.assignmentConfirmed = true;
+    renderAssignmentCard();
+  });
+  const change = host.querySelector('[data-action="assign-change"]');
+  if (change) change.addEventListener("click", () => renderAssignmentCard({ formOpen: true }));
+  const save = host.querySelector('[data-action="assign-save"]');
+  if (save) save.addEventListener("click", () => saveAssignmentFromCard());
+}
+
+async function saveAssignmentFromCard() {
+  const host = document.getElementById("assignment-card-host");
+  if (!host) return;
+  const status = document.getElementById("assign-form-status");
+  const outcome = (host.querySelector('[data-assign-field="outcome"]') || {}).value || null;
+  const group = (host.querySelector('[data-assign-field="group"]') || {}).value || null;
+  const cls = state.classifications || [];
+  const outcomeRow = cls.find((c) => c.column === outcome);
+  if (!outcome) {
+    setStatus(status, "Please pick an outcome variable.", "error");
+    return;
+  }
+  if (!_isUsableAsOutcome(outcomeRow)) {
+    setStatus(status, `${outcome} is a patient identifier and cannot be used as an outcome variable. Please select a measurement column.`, "error");
+    return;
+  }
+  const groupRow = cls.find((c) => c.column === group);
+  if (group && !_isUsableAsGroup(groupRow)) {
+    setStatus(status, `${group} cannot be used as a grouping variable.`, "error");
+    return;
+  }
+  setStatus(status, "Saving…", "loading");
+  try {
+    await api("/assign", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ job_id: state.jobId, outcome, group: group || null, covariates: [] }),
+    });
+    state.assignment = { outcome, group: group || null, covariates: [] };
+    state.assignmentAutoMatched = true;
+    state.assignmentConfirmed = true;
+    renderAssignmentCard();
+  } catch (err) {
+    setStatus(status, `Could not save: ${err.message}`, "error");
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -1513,6 +1813,7 @@ async function loadVariablesData() {
 }
 
 function renderClassify() {
+  renderAssignmentCard();
   renderVariableMetrics();
   renderClassifyTable();
   renderRecodingPanel();
@@ -2148,8 +2449,25 @@ async function _applyQualityHandler() {
       `Done. Removed ${log.removed_rows || 0} rows, capped ${log.capped_values || 0} values.`,
       "success"
     );
-    showScreen("assign");
-    renderAssignScreen();
+    // Skip the old Assign step — the wizard's outcome/group answers were
+    // auto-matched during ingestDataset and confirmed on the Step 3 card.
+    // Re-save assignment defensively in case the user changed it on the card.
+    if (state.assignment && state.assignment.outcome) {
+      try {
+        await api("/assign", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            job_id: state.jobId,
+            outcome: state.assignment.outcome,
+            group: state.assignment.group || null,
+            covariates: [],
+          }),
+        });
+      } catch (_) { /* tolerate; loadNormality doesn't need assignment */ }
+    }
+    showScreen("normality");
+    loadNormality();
   } catch (err) {
     setStatus(status, `Could not apply: ${err.message}`, "error");
   }
@@ -2219,120 +2537,9 @@ function bindSoon() {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Step 4 — Assign                                                    */
-/* ------------------------------------------------------------------ */
-
-function renderAssignScreen() {
-  const outcomeSel = document.getElementById("assign-outcome");
-  const groupSel = document.getElementById("assign-group");
-  const covWrap = document.getElementById("assign-covariates");
-  if (!outcomeSel || !groupSel || !covWrap) return;
-
-  const cls = state.classifications || [];
-  const outcomeCols = cls.filter((c) => ["scale", "ordinal", "nominal"].includes(c.detected_type));
-  const groupCols = cls.filter((c) => ["nominal", "ordinal"].includes(c.detected_type));
-  const covCols = cls.filter((c) => !["id", "exclude", "date"].includes(c.detected_type));
-
-  const prior = state.assignment || {};
-
-  outcomeSel.innerHTML = "";
-  outcomeCols.forEach((c) => {
-    const opt = document.createElement("option");
-    opt.value = c.column;
-    opt.textContent = `${c.column} (${c.detected_type})`;
-    if (prior.outcome === c.column) opt.selected = true;
-    outcomeSel.appendChild(opt);
-  });
-  if (!prior.outcome && outcomeCols[0]) {
-    outcomeSel.value = outcomeCols[0].column;
-  }
-
-  // Reset group select except the first "no grouping" placeholder.
-  while (groupSel.options.length > 1) groupSel.remove(1);
-  groupCols.forEach((c) => {
-    const opt = document.createElement("option");
-    opt.value = c.column;
-    opt.textContent = `${c.column} (${c.detected_type})`;
-    if (prior.group === c.column) opt.selected = true;
-    groupSel.appendChild(opt);
-  });
-
-  covWrap.innerHTML = "";
-  covCols.forEach((c) => {
-    const id = `cov-${c.column.replace(/[^a-zA-Z0-9]/g, "_")}`;
-    const wrap = document.createElement("label");
-    wrap.className = "se-cov-item";
-    wrap.innerHTML = `<input type="checkbox" id="${id}" value="${c.column}" data-testid="cov-${c.column}"> ${c.column} <span class="se-cov-type">${c.detected_type}</span>`;
-    if ((prior.covariates || []).includes(c.column)) {
-      wrap.querySelector("input").checked = true;
-    }
-    covWrap.appendChild(wrap);
-  });
-  updateAssignPreview();
-}
-
-function updateAssignPreview() {
-  const outcome = (document.getElementById("assign-outcome") || {}).value || "";
-  const group = (document.getElementById("assign-group") || {}).value || "";
-  const covs = Array.from(document.querySelectorAll("#assign-covariates input:checked"))
-    .map((i) => i.value);
-  const wrap = document.getElementById("assign-preview");
-  if (!wrap) return;
-  if (!outcome) {
-    wrap.innerHTML = `<em>Pick an outcome to see the planned analysis line.</em>`;
-    return;
-  }
-  let line = `We will analyse <strong>${outcome}</strong>`;
-  if (group) line += ` split by <strong>${group}</strong>`;
-  else line += ` (descriptive only — no grouping)`;
-  if (covs.length) line += `, adjusted for <strong>${covs.join(", ")}</strong>`;
-  wrap.innerHTML = line + ".";
-}
-
-function bindAssign() {
-  const screen = document.getElementById("screen-assign");
-  if (!screen) return;
-  ["assign-outcome", "assign-group"].forEach((id) => {
-    const el = document.getElementById(id);
-    if (el) el.addEventListener("change", updateAssignPreview);
-  });
-  screen.querySelectorAll("#assign-covariates").forEach((wrap) => {
-    wrap.addEventListener("change", updateAssignPreview);
-  });
-  const back = screen.querySelector('[data-action="back-to-quality"]');
-  if (back) back.addEventListener("click", () => showScreen("4"));
-  const cont = screen.querySelector('[data-action="save-assign"]');
-  if (cont) cont.addEventListener("click", saveAssignmentAndContinue);
-}
-
-async function saveAssignmentAndContinue() {
-  const status = document.getElementById("assign-status");
-  const outcome = document.getElementById("assign-outcome").value || null;
-  const group = document.getElementById("assign-group").value || null;
-  const covariates = Array.from(document.querySelectorAll("#assign-covariates input:checked"))
-    .map((i) => i.value);
-  if (!outcome) {
-    setStatus(status, "Please pick an outcome variable first.", "error");
-    return;
-  }
-  setStatus(status, "Saving assignment…", "loading");
-  try {
-    await api("/assign", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ job_id: state.jobId, outcome, group, covariates }),
-    });
-    state.assignment = { outcome, group, covariates };
-    setStatus(status, "Saved.", "success");
-    showScreen("normality");
-    loadNormality();
-  } catch (err) {
-    setStatus(status, `Could not save: ${err.message}`, "error");
-  }
-}
-
-/* ------------------------------------------------------------------ */
-/*  Step 5 — Normality                                                 */
+/*  Step 4 — Normality                                                 */
+/*  (Old Step 4 "Assign" was removed — wizard answers are auto-matched  */
+/*  on Step 3 via renderAssignmentCard / saveAssignmentFromCard.)       */
 /* ------------------------------------------------------------------ */
 
 async function loadNormality() {
@@ -2416,8 +2623,8 @@ async function overrideNormality(column, decision) {
 function bindNormality() {
   const screen = document.getElementById("screen-normality");
   if (!screen) return;
-  const back = screen.querySelector('[data-action="back-to-assign"]');
-  if (back) back.addEventListener("click", () => showScreen("assign"));
+  const back = screen.querySelector('[data-action="back-to-review"]');
+  if (back) back.addEventListener("click", () => showScreen("3"));
   const cont = screen.querySelector('[data-action="continue-to-plan"]');
   if (cont) cont.addEventListener("click", () => { showScreen("plan"); loadPlan(); });
 }
@@ -2740,7 +2947,6 @@ function initApp() {
     bindScreen3();
     bindScreen4();
     bindSoon();
-    bindAssign();
     bindNormality();
     bindPlan();
     bindResults();
@@ -2888,16 +3094,16 @@ async function runSelfTest() {
   const records = document.querySelector('[data-testid="q-total-records"]');
   log(`q-total-records: ${records ? records.textContent : "MISSING"}`);
 
-  // Apply quality → screen soon
+  // Apply quality → screen normality (Assign step removed in 7-step model)
   click('[data-testid="button-apply-quality"]');
-  log("waiting for screen-soon…");
+  log("waiting for screen-normality…");
   for (let i = 0; i < 60; i++) {
-    if (!document.getElementById("screen-soon").classList.contains("is-hidden")) break;
+    if (!document.getElementById("screen-normality").classList.contains("is-hidden")) break;
     await wait(100);
   }
-  const soonVisible = !document.getElementById("screen-soon").classList.contains("is-hidden");
-  log(`screen-soon visible: ${soonVisible}`);
-  if (!soonVisible) throw new Error("screen-soon never became visible");
+  const normVisible = !document.getElementById("screen-normality").classList.contains("is-hidden");
+  log(`screen-normality visible: ${normVisible}`);
+  if (!normVisible) throw new Error("screen-normality never became visible");
 
   log("\n✅ SELFTEST PASSED");
   banner.style.background = "#1f5d36";
