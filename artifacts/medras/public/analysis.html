@@ -10,7 +10,7 @@
     />
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%232f6fed'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-family='Inter,sans-serif' font-size='18' font-weight='700' fill='white'%3EM%3C/text%3E%3C/svg%3E" />
     <link rel="stylesheet" href="/css/style.css" />
-    <link rel="stylesheet" href="/css/analysis.css?v=2026050136" />
+    <link rel="stylesheet" href="/css/analysis.css?v=2026050201" />
   </head>
   <body>
     <header class="site-header" data-testid="site-header">
@@ -34,9 +34,16 @@
         <p class="se-lede" data-testid="text-lede">
           Twelve guided steps. Upload your data, confirm a few decisions, and
           MedRAS does the analysis, the figures and the writing for you.
-          <span class="beta-pill" data-testid="badge-beta">Pass 1</span>
+          <span class="beta-pill se-pass-badge" data-testid="badge-pass">
+            Pass 1 of 2 — data preparation<button type="button" class="se-pass-help" aria-label="What does Pass 1 mean?" data-testid="badge-pass-help">?</button>
+            <span class="se-pass-tip" role="tooltip" data-testid="badge-pass-tip">MedRAS runs two passes. Pass 1 prepares and cleans your data. Pass 2 runs the statistical analysis.</span>
+          </span>
         </p>
       </section>
+
+      <!-- Resume-session banner (populated by analysis.js if a saved
+           session is found in localStorage). Sits above all screens. -->
+      <div id="resume-banner" class="is-hidden" data-testid="resume-banner-host"></div>
 
       <!-- 12-step progress tracker -->
       <ol class="se-steps" aria-label="Twelve-step workflow" data-testid="step-tracker">
@@ -479,6 +486,9 @@
 
         <div class="se-quality-summary" id="quality-summary" data-testid="quality-summary"></div>
 
+        <!-- Filled by renderQuality() when all three sections are empty -->
+        <div id="dq-clean-banner" class="is-hidden" data-testid="dq-clean-banner"></div>
+
         <details class="se-disclose" open id="dq-impossible-wrap">
           <summary>Section A · Outliers and impossible values <span class="se-count" data-testid="count-impossible">0</span></summary>
           <div class="se-table-wrap">
@@ -525,13 +535,25 @@
           </div>
         </details>
 
-        <div class="se-actions">
-          <button type="button" class="btn btn-secondary" data-action="back-to-classify" data-testid="button-back-classify">&larr; Back</button>
+        <div id="quality-status" class="se-status" role="status" aria-live="polite" data-testid="status-quality"></div>
+
+        <!-- Inline action row kept for the no-JS / fallback case. The
+             primary always-visible controls live in #dq-sticky-actions
+             below, which is fixed-positioned and toggled per-screen. -->
+        <div class="se-actions se-actions-fallback">
+          <button type="button" class="btn btn-secondary" data-action="back-to-classify" data-testid="button-back-classify">&larr; Back to Variables</button>
           <button type="button" class="btn btn-primary" data-action="apply-quality" data-testid="button-apply-quality">Apply actions and continue &rarr;</button>
         </div>
-
-        <div id="quality-status" class="se-status" role="status" aria-live="polite" data-testid="status-quality"></div>
       </section>
+
+      <!-- Sticky Step-4 controls. Hidden by default; renderQuality()
+           shows them when on screen 4 with at least one section visible.
+           When the clean-banner is shown they stay hidden because the
+           banner provides its own continue button. -->
+      <div id="dq-sticky-actions" class="se-sticky-actions is-hidden" data-testid="sticky-actions">
+        <button type="button" class="btn se-sticky-back" data-action="back-to-classify" data-testid="button-sticky-back">&larr; Back to Variables</button>
+        <button type="button" class="btn btn-primary se-sticky-continue" data-action="apply-quality" data-testid="button-sticky-continue">Apply actions and continue &rarr;</button>
+      </div>
 
       <!-- ===========================================================
            SCREEN 5+ · Coming in next pass
@@ -570,6 +592,6 @@
       </div>
     </footer>
 
-    <script src="/js/analysis.js?v=2026050136" defer></script>
+    <script src="/js/analysis.js?v=2026050201" defer></script>
   </body>
 </html>

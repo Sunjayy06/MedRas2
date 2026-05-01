@@ -50,9 +50,7 @@
   vertical-align: middle;
 }
 
-/* ---------- 12-step tracker ---------- */
-
-/* ---------- Step tracker — circle + label, connected by a thin line ---------- */
+/* ---------- 12-step tracker — circle + label connected by a line ---------- */
 
 .se-steps {
   display: flex;
@@ -60,7 +58,7 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 0;
-  padding: 18px 12px 14px;
+  padding: 22px 14px 16px;
   background: var(--color-bg-muted);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
@@ -74,10 +72,10 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
+  gap: 10px;             /* labels sit 10px below the circle per spec */
   position: relative;
   padding: 0 4px;
-  font-size: 10px;
+  font-size: 11px;
   color: #94a3b8;
   text-align: center;
   background: transparent;
@@ -92,7 +90,7 @@
 .se-step::after {
   content: "";
   position: absolute;
-  top: 13px;          /* vertical centre of the 26px circle */
+  top: 16px;          /* vertical centre of the 32px circle */
   left: 50%;
   width: 100%;
   height: 1px;
@@ -100,53 +98,68 @@
   z-index: 0;
 }
 .se-step:last-child::after { display: none; }
-/* When the *next* step is also done/active, paint the connector teal. We can't
-   easily look ahead in CSS so we colour the connector based on the current
-   step's status: a completed step paints a teal line forward. */
-.se-step.is-done::after { background: var(--color-success); }
+/* Completed step paints a green connector forward. */
+.se-step.is-done::after { background: #0f6e56; }
 .se-step-num {
   position: relative;
   z-index: 1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
+  width: 32px;          /* spec: 32px on desktop */
+  height: 32px;
   border-radius: 999px;
   background: #e7ebf2;
   color: #94a3b8;
   font-weight: 600;
-  font-size: 12px;
+  font-size: 13px;
   border: 1px solid #d8dee6;
+  transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
 }
 .se-step-label {
-  font-size: 10px;
+  font-size: 11px;
+  font-weight: 500;
   letter-spacing: 0.01em;
   color: inherit;
 }
-.se-step.is-active { color: var(--color-accent); }
-.se-step.is-active .se-step-label { font-weight: 600; }
-.se-step.is-active .se-step-num {
-  background: var(--color-accent);
-  color: #ffffff;
-  border-color: var(--color-accent);
+/* --- DONE state: clickable, green tick --- */
+.se-step.is-done {
+  color: #0f6e56;
+  cursor: pointer;
 }
-.se-step.is-done { color: var(--color-success); }
 .se-step.is-done .se-step-num {
-  background: var(--color-success);
+  background: #0f6e56;
   color: #ffffff;
-  border-color: var(--color-success);
+  border-color: #0f6e56;
   font-size: 0;            /* hide the digit, show only the checkmark */
 }
 .se-step.is-done .se-step-num::before {
   content: "✓";
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 700;
 }
+/* --- ACTIVE state: blue with halo ring --- */
+.se-step.is-active { color: #185fa5; }
+.se-step.is-active .se-step-label { font-weight: 600; color: #185fa5; }
+.se-step.is-active .se-step-num {
+  background: #185fa5;
+  color: #ffffff;
+  border-color: #185fa5;
+  box-shadow: 0 0 0 3px #b5d4f4;
+}
+/* --- FUTURE state: dimmed, NOT clickable --- */
+.se-step.is-future {
+  cursor: default;
+  pointer-events: none;
+  opacity: 0.45;
+}
+.se-step.is-future .se-step-num { background: #e7ebf2; color: #94a3b8; border-color: #d8dee6; }
 @media (max-width: 720px) {
   .se-steps { gap: 4px 0; padding: 12px 6px 10px; }
-  .se-step { min-width: 48px; }
+  .se-step { min-width: 48px; gap: 6px; }
   .se-step-label { font-size: 9px; }
+  .se-step-num { width: 26px; height: 26px; font-size: 11px; }
+  .se-step::after { top: 13px; }
 }
 
 /* ---------- Screen panels ---------- */
@@ -1155,7 +1168,232 @@
   line-height: 1.1;
   margin-top: 4px;
 }
-.se-q-card.is-score .se-q-value { color: var(--color-accent); }
+/* The is-score variant just gives the card a slightly softer label;
+   the actual value colour is driven by data-band below. */
+.se-q-card .se-q-note {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  margin-top: 6px;
+  line-height: 1.35;
+}
+
+/* Colour bands for metric cards (Fix 10).
+     - neutral → default grey/white card, dark text
+     - green   → clean / no problems
+     - amber   → minor problems present
+     - red     → score below 70 */
+.se-q-card[data-band="neutral"] {
+  background: #ffffff;
+  border-color: var(--color-border);
+}
+.se-q-card[data-band="neutral"] .se-q-value { color: var(--color-text); }
+
+.se-q-card[data-band="green"] {
+  background: #EAF3DE;
+  border-color: #C0DD97;
+}
+.se-q-card[data-band="green"] .se-q-value { color: #3B6D11; }
+
+.se-q-card[data-band="amber"] {
+  background: #FAEEDA;
+  border-color: #F2D89A;
+}
+.se-q-card[data-band="amber"] .se-q-value { color: #854F0B; }
+
+.se-q-card[data-band="red"] {
+  background: #FBE5E5;
+  border-color: #F0B8B8;
+}
+.se-q-card[data-band="red"] .se-q-value { color: #A32D2D; }
+
+/* ---------- Pass-badge tooltip (Fix 9) ---------- */
+
+.se-pass-badge {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.se-pass-help {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 11px;
+  line-height: 1;
+  cursor: help;
+}
+.se-pass-help:hover,
+.se-pass-help:focus { outline: none; background: rgba(0,0,0,0.06); }
+.se-pass-tip {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  width: 280px;
+  background: #1f2937;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  padding: 10px 12px;
+  border-radius: 6px;
+  line-height: 1.45;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+  z-index: 50;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+.se-pass-badge:hover .se-pass-tip,
+.se-pass-badge.is-open .se-pass-tip {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* ---------- Resume-session banner (Fix 8) ---------- */
+
+#resume-banner.is-hidden { display: none; }
+.se-resume {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 18px;
+  margin-bottom: 18px;
+  background: #FFF8E1;
+  border: 1px solid #F4D78F;
+  border-radius: 12px;
+  font-size: 14px;
+  color: #5b4710;
+}
+.se-resume-text strong { color: #3a2e08; }
+.se-resume-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* ---------- Step-4 clean banner (Fix 1) ---------- */
+
+#dq-clean-banner.is-hidden { display: none; }
+.se-clean-banner {
+  background: #EAF3DE;
+  border: .5px solid #C0DD97;
+  border-radius: 14px;
+  padding: 24px;
+  max-width: 520px;
+  margin: 8px auto 24px;
+  text-align: center;
+}
+.se-clean-banner-head {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.se-clean-banner-tick {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: #3B6D11;
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 700;
+}
+.se-clean-banner h3 {
+  margin: 0;
+  font-size: 17px;
+  color: #214608;
+}
+.se-clean-banner p {
+  margin: 0 0 18px;
+  color: #3B5A1B;
+  font-size: 14px;
+}
+.se-clean-banner .btn { padding: 12px 24px; }
+
+/* When the clean-banner is showing, hide every section + the inline
+   fallback action row so the banner is the only thing on screen. */
+#screen-4.has-clean-banner .se-disclose,
+#screen-4.has-clean-banner .se-actions-fallback { display: none; }
+
+/* ---------- Hidden bulk row (Fix 3) ---------- */
+
+.se-bulk-row.is-hidden { display: none; }
+.se-disclose.is-hidden { display: none; }
+
+/* ---------- Sticky Step-4 actions (Fix 5 & 6) ---------- */
+
+.se-sticky-actions {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;            /* container itself is transparent */
+  padding: 0 32px 32px;
+  z-index: 100;
+}
+.se-sticky-actions.is-hidden { display: none; }
+.se-sticky-actions .btn { pointer-events: auto; }
+.se-sticky-back {
+  position: fixed;
+  left: 32px;
+  bottom: 32px;
+  background: transparent;
+  border: .5px solid #E5E0D8;
+  color: #888;
+  font-size: 14px;
+  padding: 10px 18px;
+  border-radius: 8px;
+}
+.se-sticky-back:hover {
+  background: #f5f1ea;
+  color: #555;
+}
+.se-sticky-continue {
+  position: fixed;
+  right: 32px;
+  bottom: 32px;
+  padding: 14px 28px;
+  font-size: 14px;
+  border-radius: 10px;
+  box-shadow: 0 6px 20px rgba(24, 95, 165, 0.28);
+}
+/* Hide the inline (fallback) action row when JS has wired the sticky
+   buttons. JS adds a class to <html> on init; until then, the inline
+   row stays visible as a graceful fallback. */
+html[data-medras-init="ok"] .se-actions-fallback { display: none; }
+
+@media (max-width: 720px) {
+  .se-sticky-back {
+    left: 16px;
+    bottom: 80px;            /* sit above the home-bar / mobile nav */
+    padding: 10px 14px;
+    font-size: 13px;
+  }
+  .se-sticky-continue {
+    left: 16px;
+    right: 16px;
+    bottom: 16px;
+    width: calc(100% - 32px);
+  }
+  /* On small viewports we stack: continue spans full width at the bottom,
+     back floats above it on the left. The fixed positioning above already
+     handles this — just tighten the safe-area for thumb reach. */
+}
 
 /* ---------- Soon screen ---------- */
 

@@ -194,6 +194,251 @@ def empty_row_count(df: pd.DataFrame) -> int:
     return int(df.isna().all(axis=1).sum())
 
 
+# -----------------------------------------------------------------------------
+# Section C extensions — categorical consistency on Nominal columns
+# -----------------------------------------------------------------------------
+
+# Common short-form ⇄ long-form pairs we treat as the same label when only
+# one word differs between two unique values. Bidirectional: order does not
+# matter when looking up.
+_ABBREVIATIONS: Dict[str, str] = {
+    "lt": "left",
+    "rt": "right",
+    "l": "left",
+    "r": "right",
+    "yrs": "years",
+    "yr": "year",
+    "mins": "minutes",
+    "min": "minute",
+    "hrs": "hours",
+    "hr": "hour",
+    "wks": "weeks",
+    "wk": "week",
+    "mos": "months",
+    "mo": "month",
+}
+
+# A nominal column whose values look like "4", "7.5", "Grade 3", "Level 2"
+# is almost certainly a numeric variable that landed in nominal because it
+# was stored as text. We flag any column whose share of numeric-looking
+# values is at or above this threshold.
+_NUMERIC_AS_TEXT_THRESHOLD = 0.7
+_NUMERIC_VAL_RE = re.compile(r"^-?\d+(\.\d+)?$")
+_LABELLED_NUMERIC_RE = re.compile(
+    r"^(grade|level|score|stage|class|category|type)\s+-?\d+(\.\d+)?$",
+    re.I,
+)
+
+
+def _first_index_for(df: pd.DataFrame, col: str, predicate) -> int:
+    """Return the first row index where `predicate(value)` is True."""
+    s = df[col]
+    for idx in df.index:
+        v = s.loc[idx]
+        if pd.isna(v):
+            continue
+        if predicate(str(v).strip()):
+            return int(idx)
+    return 0
+
+
+def check_categorical_consistency(
+    df: pd.DataFrame,
+    classifications: Optional[List[Dict[str, Any]]] = None,
+) -> List[Dict[str, Any]]:
+    """Run Nominal-column hygiene checks: case mismatches, near-duplicates,
+    and numeric-stored-as-text. Returns flag dicts in the same shape as
+    ``check_logical_consistency`` so they merge cleanly into Section C.
+    """
+    if not classifications:
+        return []
+    nominal_cols = [
+        c["column"]
+        for c in classifications
+        if c.get("detected_type") == "nominal" and c.get("column") in df.columns
+    ]
+    flags: List[Dict[str, Any]] = []
+
+    for col in nominal_cols:
+        s = df[col].dropna().astype(str).str.strip()
+        s = s[s != ""]
+        if s.empty:
+            continue
+        uniques = list(dict.fromkeys(s.tolist()))  # preserve order, drop dupes
+
+        # CHECK 1 — case-only inconsistency.
+        # Group unique values by their lower-case form. Any group with >1
+        # variant is a single label written in multiple casings.
+        seen_case_keys: set = set()
+        case_groups: Dict[str, List[str]] = {}
+        for v in uniques:
+            key = v.lower()
+            case_groups.setdefault(key, [])
+            if v not in case_groups[key]:
+                case_groups[key].append(v)
+        for key, variants in case_groups.items():
+            if len(variants) <= 1:
+                continue
+            seen_case_keys.add(key)
+            variant_list = sorted(variants)
+            first_idx = _first_index_for(df, col, lambda x: x.lower() == key)
+            flags.append(
+                {
+                    "row": first_idx,
+                    "variable": col,
+                    "value": " / ".join(variant_list),
+                    "issue": (
+                        f"Inconsistent capitalisation in '{col}': "
+                        f"{', '.join(repr(v) for v in variant_list)}."
+                    ),
+                    "issue_type": "case_inconsistency",
+                    "recommended_action": "review",
+                }
+            )
+
+        # CHECK 2 — near-duplicate text (whitespace differences or one-word
+        # abbreviation swap). We deliberately skip pairs whose ONLY difference
+        # is letter case (already caught above).
+        seen_pairs: set = set()
+        norm_uniques = [(u, re.sub(r"\s+", " ", u.strip()).lower()) for u in uniques]
+        for i, (a, na) in enumerate(norm_uniques):
+            for b, nb in norm_uniques[i + 1 :]:
+                if a == b:
+                    continue
+                if a.lower() == b.lower():
+                    # already flagged by case check
+                    continue
+                pair_key = tuple(sorted([a.lower(), b.lower()]))
+                if pair_key in seen_pairs:
+                    continue
+                # Whitespace-only difference (extra/double/trailing space).
+                if na == nb:
+                    seen_pairs.add(pair_key)
+                    first_idx = _first_index_for(
+                        df, col, lambda x, A=a, B=b: x == A or x == B
+                    )
+                    flags.append(
+                        {
+                            "row": first_idx,
+                            "variable": col,
+                            "value": f"{a!r} vs {b!r}",
+                            "issue": (
+                                f"Possible duplicate label in '{col}': "
+                                f"'{a}' and '{b}' differ only by whitespace."
+                            ),
+                            "issue_type": "near_duplicate",
+                            "recommended_action": "review",
+                        }
+                    )
+                    continue
+                # Single-word abbreviation difference, same word count.
+                wa, wb = na.split(), nb.split()
+                if len(wa) != len(wb) or len(wa) == 0:
+                    continue
+                diffs = [(x, y) for x, y in zip(wa, wb) if x != y]
+                if len(diffs) != 1:
+                    continue
+                x, y = diffs[0]
+                if _ABBREVIATIONS.get(x) == y or _ABBREVIATIONS.get(y) == x:
+                    seen_pairs.add(pair_key)
+                    first_idx = _first_index_for(
+                        df, col, lambda v, A=a, B=b: v == A or v == B
+                    )
+                    flags.append(
+                        {
+                            "row": first_idx,
+                            "variable": col,
+                            "value": f"{a!r} vs {b!r}",
+                            "issue": (
+                                f"Possible duplicate label in '{col}': "
+                                f"'{a}' looks like an abbreviation of '{b}'."
+                            ),
+                            "issue_type": "near_duplicate",
+                            "recommended_action": "review",
+                        }
+                    )
+
+        # CHECK 3 — numeric-stored-as-text. If most values are bare numbers
+        # or "Grade 3" / "Level 2" patterns, the column was probably meant
+        # to be numeric.
+        numeric_like = sum(
+            1
+            for v in s
+            if _NUMERIC_VAL_RE.match(v) or _LABELLED_NUMERIC_RE.match(v)
+        )
+        if numeric_like and numeric_like / len(s) >= _NUMERIC_AS_TEXT_THRESHOLD:
+            sample_vals = ", ".join(uniques[:3])
+            first_idx = _first_index_for(df, col, lambda _x: True)
+            flags.append(
+                {
+                    "row": first_idx,
+                    "variable": col,
+                    "value": sample_vals,
+                    "issue": (
+                        f"Column '{col}' is classified as Nominal but values "
+                        f"look numeric — may be a score or grade variable."
+                    ),
+                    "issue_type": "numeric_as_text",
+                    "recommended_action": "review",
+                }
+            )
+
+    return flags
+
+
+def _missingness_by_column(df: pd.DataFrame) -> Dict[str, float]:
+    """Return per-column missingness as a percentage in [0, 100]."""
+    if df.empty or df.shape[0] == 0:
+        return {}
+    out: Dict[str, float] = {}
+    n = float(df.shape[0])
+    for col in df.columns:
+        miss = float(df[col].isna().sum()) / n * 100.0
+        out[str(col)] = round(miss, 2)
+    return out
+
+
+def _compute_quality_score(
+    *,
+    missingness: Dict[str, float],
+    n_outliers: int,
+    n_duplicate_rows: int,
+    n_consistency: int,
+) -> int:
+    """Calculate the composite quality score per the Step 4 spec.
+
+    Start at 100 and apply deductions:
+      - >50%   missing column: -10 each
+      - 20–50% missing column: -5 each
+      - 5–20%  missing column: -2 each
+      - each outlier flag:     -2
+      - each duplicate row:    -3
+      - each consistency error:-3
+    Floor at 0.
+    """
+    score = 100
+    for pct in missingness.values():
+        if pct > 50:
+            score -= 10
+        elif pct >= 20:
+            score -= 5
+        elif pct >= 5:
+            score -= 2
+    score -= 2 * n_outliers
+    score -= 3 * n_duplicate_rows
+    score -= 3 * n_consistency
+    return max(0, score)
+
+
+def _score_band(score: int) -> str:
+    """Map a quality score to its colour band: green / amber / red."""
+    if score >= 90:
+        return "green"
+    if score >= 70:
+        return "amber"
+    return "red"
+
+
 def quality_report(
     df: pd.DataFrame,
     *,
@@ -206,25 +451,35 @@ def quality_report(
     impossible = check_impossible_values(df)
     dups = check_duplicates(df, id_columns=id_columns or None)
     logical = check_logical_consistency(df)
-    n_issues = len(impossible) + len(logical)
+    consistency = check_categorical_consistency(df, classifications=classifications)
+    # Section C surfaces both the cross-column logical errors and the
+    # categorical-hygiene flags as a single list.
+    section_c = list(logical) + list(consistency)
+    n_outliers = len(impossible)
     n_dup_rows = len(dups["exact_duplicate_rows"])
-    # Score: 100 baseline, deduct for each issue, bottom out at 0.
-    score = 100
-    score -= min(60, n_issues * 4)
-    score -= min(20, n_dup_rows * 2)
-    score = max(0, score)
+    n_consistency = len(section_c)
+    missingness = _missingness_by_column(df)
+    score = _compute_quality_score(
+        missingness=missingness,
+        n_outliers=n_outliers,
+        n_duplicate_rows=n_dup_rows,
+        n_consistency=n_consistency,
+    )
     return {
         "summary": {
             "total_records": int(df.shape[0]),
             "variables_checked": int(df.shape[1]),
-            "issues_found": n_issues,
+            "issues_found": n_outliers,
             "exact_duplicate_rows": n_dup_rows,
+            "consistency_errors": n_consistency,
             "empty_rows": empty_row_count(df),
             "quality_score": score,
+            "score_band": _score_band(score),
+            "missingness": missingness,
         },
         "impossible_values": impossible,
         "duplicates": dups,
-        "logical_errors": logical,
+        "logical_errors": section_c,
     }
 
 

@@ -94,6 +94,147 @@ async function api(path, options = {}) {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Session persistence (localStorage)                                  */
+/*                                                                      */
+/*  We persist enough breadcrumbs to drop the user back where they      */
+/*  were after a refresh — the dataset itself stays on the server,      */
+/*  keyed by job_id, so the localStorage payload is metadata only.      */
+/*  TTL: 24 hours, after which the saved session is silently forgotten. */
+/* ------------------------------------------------------------------ */
+
+const SESSION_KEY = "medras_analysis_session";
+const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
+// We only persist sessions for screens past the entry chooser. Saving on
+// screen 1 / intake would defeat the resume banner (there's nothing to
+// resume to) and would also wipe the saved session every time the page
+// reloads cold.
+const RESUMABLE_SCREENS = new Set(["preview", "3", "4", "soon"]);
+
+function saveSession() {
+  if (!state.jobId) return;
+  if (!RESUMABLE_SCREENS.has(state.currentScreen)) return;
+  const payload = {
+    screen: state.currentScreen,
+    step: SCREEN_TO_STEP[state.currentScreen] || 1,
+    dataset_id: state.jobId,
+    filename: (state.summary && state.summary.filename) || null,
+    n_rows: (state.summary && state.summary.rows) || null,
+    n_cols: (state.summary && state.summary.cols) || null,
+    variable_types: Object.fromEntries(
+      (state.classifications || []).map((c) => [c.column, c.detected_type])
+    ),
+    quality_actions: state.qualityActions || [],
+    timestamp: new Date().toISOString(),
+  };
+  try {
+    localStorage.setItem(SESSION_KEY, JSON.stringify(payload));
+  } catch (_e) { /* quota or disabled — fail silently */ }
+}
+
+function loadSavedSession() {
+  try {
+    const raw = localStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    const obj = JSON.parse(raw);
+    const t = obj && obj.timestamp ? Date.parse(obj.timestamp) : NaN;
+    if (!Number.isFinite(t) || Date.now() - t > SESSION_TTL_MS) {
+      localStorage.removeItem(SESSION_KEY);
+      return null;
+    }
+    if (!obj.dataset_id || !obj.screen) return null;
+    return obj;
+  } catch (_e) {
+    return null;
+  }
+}
+
+function clearSavedSession() {
+  try { localStorage.removeItem(SESSION_KEY); } catch (_e) { /* ignore */ }
+}
+
+function _formatRelativeTime(iso) {
+  const d = Date.parse(iso);
+  if (!Number.isFinite(d)) return "earlier";
+  const diff = Date.now() - d;
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins} minute${mins === 1 ? "" : "s"} ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs} hour${hrs === 1 ? "" : "s"} ago`;
+  const days = Math.floor(hrs / 24);
+  return `${days} day${days === 1 ? "" : "s"} ago`;
+}
+
+async function resumeFromSavedSession(saved) {
+  // Pull the dataset back from the server and walk the user forward to
+  // the screen they were on. /dataset returns the same payload that any
+  // upload/generate step would, so ingestDataset rehydrates classifications
+  // automatically. If the dataset is gone (server restarted, 24-hour cache
+  // expired, etc.) we forget the session and stay on screen 1.
+  try {
+    const data = await api(`/dataset/${saved.dataset_id}`);
+    ingestDataset(data);
+    const target = saved.screen;
+    if (target === "4") {
+      showScreen("4");
+      await loadQualityReport();
+    } else if (target === "3") {
+      showScreen("3");
+      // Step 3 binds its own classification render via showScreen subscribers
+      // already; nothing extra needed here.
+    } else if (target === "preview") {
+      showScreen("preview");
+    } else if (target === "soon") {
+      showScreen("soon");
+    } else {
+      showScreen("1");
+    }
+  } catch (_err) {
+    clearSavedSession();
+    showScreen("1");
+  }
+}
+
+function renderResumeBanner(saved) {
+  const host = document.getElementById("resume-banner");
+  if (!host) return;
+  const when = _formatRelativeTime(saved.timestamp);
+  const stepLabel = (() => {
+    switch (saved.screen) {
+      case "4": return "Step 4 · Data quality";
+      case "3": return "Step 3 · Variables";
+      case "preview": return "Step 2 · Preview";
+      case "soon": return "Step 5+";
+      default: return `Step ${saved.step || 1}`;
+    }
+  })();
+  const fname = saved.filename ? `<strong>${escapeHtml(saved.filename)}</strong>` : "your dataset";
+  host.innerHTML = `
+    <div class="se-resume" data-testid="resume-banner" role="status">
+      <div class="se-resume-text">
+        <strong>You have an unfinished analysis</strong> on ${fname}
+        from ${escapeHtml(when)} — paused at ${escapeHtml(stepLabel)}.
+      </div>
+      <div class="se-resume-actions">
+        <button type="button" class="btn btn-primary" data-action="resume-continue" data-testid="button-resume-continue">Continue where you left off →</button>
+        <button type="button" class="btn btn-tertiary" data-action="resume-fresh" data-testid="button-resume-fresh">Start fresh</button>
+      </div>
+    </div>
+  `;
+  host.classList.remove("is-hidden");
+  host.querySelector('[data-action="resume-continue"]').addEventListener("click", async () => {
+    host.classList.add("is-hidden");
+    host.innerHTML = "";
+    await resumeFromSavedSession(saved);
+  });
+  host.querySelector('[data-action="resume-fresh"]').addEventListener("click", () => {
+    clearSavedSession();
+    host.classList.add("is-hidden");
+    host.innerHTML = "";
+  });
+}
+
+/* ------------------------------------------------------------------ */
 /*  Screen routing                                                     */
 /* ------------------------------------------------------------------ */
 
@@ -109,19 +250,50 @@ function showScreen(id) {
     const el = document.getElementById(`screen-${s}`);
     if (el) el.classList.toggle("is-hidden", s !== id);
   });
+  // The step navigator has three explicit states per circle:
+  //   is-done    → completed, clickable to go back, green check
+  //   is-active  → current, blue with halo
+  //   is-future  → not yet reachable, dimmed, NOT clickable
+  // We always reset every node before applying the right one so going
+  // backwards correctly drops the higher steps back into the future bucket.
   const activeStep = SCREEN_TO_STEP[id] || 1;
   $$(".se-step").forEach((node) => {
     const n = Number(node.dataset.step);
-    node.classList.toggle("is-active", n === activeStep);
-    if (n < activeStep && !node.classList.contains("is-todo")) {
+    node.classList.remove("is-active", "is-done", "is-future");
+    if (n < activeStep) {
       node.classList.add("is-done");
-    }
-    if (n >= activeStep) {
-      node.classList.remove("is-done");
+    } else if (n === activeStep) {
+      node.classList.add("is-active");
+    } else {
+      node.classList.add("is-future");
     }
   });
+  // Whenever we leave Step 4, force-hide the sticky controls so they don't
+  // bleed into Step 3 or the soon screen. renderQuality() will re-show
+  // them with the correct continue-button state when we re-enter Step 4.
+  if (id !== "4") {
+    const sticky = document.getElementById("dq-sticky-actions");
+    if (sticky) sticky.classList.add("is-hidden");
+  }
   const target = document.getElementById(`screen-${id}`);
   if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
+  // Persist the latest step + state to localStorage so a refresh can resume.
+  saveSession();
+}
+
+// Click-navigation for completed step circles. Done steps are clickable
+// (the cursor and colour both signal it) — wire each to its corresponding
+// screen so users can jump back without burrowing through the wizard.
+function bindStepNavBack() {
+  const STEP_TO_SCREEN = { 1: "1", 2: "preview", 3: "3", 4: "4" };
+  $$(".se-step").forEach((node) => {
+    node.addEventListener("click", () => {
+      if (!node.classList.contains("is-done")) return;
+      const n = Number(node.dataset.step);
+      const target = STEP_TO_SCREEN[n];
+      if (target) showScreen(target);
+    });
+  });
 }
 
 /* ------------------------------------------------------------------ */
@@ -1749,67 +1921,181 @@ async function loadQualityReport() {
 function renderQuality() {
   const q = state.quality || {};
   const s = q.summary || {};
+
+  const impossible = q.impossible_values || [];
+  const dups = q.duplicates || { exact_duplicate_rows: [], duplicate_id_groups: [] };
+  const dupRows = (dups.exact_duplicate_rows || []).length;
+  const dupGroups = (dups.duplicate_id_groups || []).length;
+  const dupCount = dupRows + dupGroups;
+  const logical = q.logical_errors || [];
+
+  // ---- Quality score → colour band (green / amber / red) ----
+  const score = Number(s.quality_score ?? 100);
+  const band = s.score_band || (score >= 90 ? "green" : score >= 70 ? "amber" : "red");
+
+  // ---- Top metric cards (Fix 10 — colour coded by value) ----
+  // Issues / Duplicates: green at 0, amber when > 0
+  // Score: green/amber/red bands
+  const issueBand = impossible.length === 0 ? "green" : "amber";
+  const dupBand = dupCount === 0 ? "green" : "amber";
   $("#quality-summary").innerHTML = `
-    <div class="se-q-card"><div class="se-q-label">Total records</div><div class="se-q-value" data-testid="q-total-records">${s.total_records ?? 0}</div></div>
-    <div class="se-q-card"><div class="se-q-label">Variables checked</div><div class="se-q-value" data-testid="q-vars-checked">${s.variables_checked ?? 0}</div></div>
-    <div class="se-q-card"><div class="se-q-label">Issues found</div><div class="se-q-value" data-testid="q-issues">${s.issues_found ?? 0}</div></div>
-    <div class="se-q-card"><div class="se-q-label">Duplicates</div><div class="se-q-value" data-testid="q-duplicates">${s.exact_duplicate_rows ?? 0}</div></div>
-    <div class="se-q-card is-score"><div class="se-q-label">Quality score</div><div class="se-q-value" data-testid="q-score">${s.quality_score ?? 100}/100</div></div>
+    <div class="se-q-card" data-band="neutral"><div class="se-q-label">Total records</div><div class="se-q-value" data-testid="q-total-records">${s.total_records ?? 0}</div></div>
+    <div class="se-q-card" data-band="neutral"><div class="se-q-label">Variables checked</div><div class="se-q-value" data-testid="q-vars-checked">${s.variables_checked ?? 0}</div></div>
+    <div class="se-q-card" data-band="${issueBand}"><div class="se-q-label">Issues found</div><div class="se-q-value" data-testid="q-issues">${impossible.length}</div></div>
+    <div class="se-q-card" data-band="${dupBand}"><div class="se-q-label">Duplicates</div><div class="se-q-value" data-testid="q-duplicates">${dupCount}</div></div>
+    <div class="se-q-card is-score" data-band="${band}">
+      <div class="se-q-label">Quality score</div>
+      <div class="se-q-value" data-testid="q-score">${score}/100</div>
+      <div class="se-q-note">Score accounts for missingness, outliers, duplicates, and consistency.</div>
+    </div>
   `;
 
-  // Section A — impossible values
-  const impossible = q.impossible_values || [];
-  $('[data-testid="count-impossible"]').textContent = impossible.length;
-  const tA = $("#dq-impossible-table tbody");
-  tA.innerHTML = impossible.map((f, i) => `
-    <tr data-testid="impossible-row-${i}">
-      <td>${f.row + 1}</td>
-      <td>${escapeHtml(f.variable)}</td>
-      <td>${fmtNum(f.value)} ${escapeHtml(f.unit || "")}</td>
-      <td>${escapeHtml(f.issue)}</td>
-      <td>${actionPicker(i, f.recommended_action || "review")}</td>
-    </tr>
-  `).join("");
-  $$("select.se-impossible-action").forEach((sel) => {
-    sel.addEventListener("change", () => {
-      const i = Number(sel.dataset.i);
-      if (state.qualityActions[i]) state.qualityActions[i].action = sel.value;
-    });
-  });
-  if (!impossible.length) {
-    tA.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:18px; color:var(--color-text-muted)">No impossible values found.</td></tr>`;
+  // ---- Smart collapse decision (Fix 1) ----
+  // When all three Section counts are zero we replace the tables with a
+  // single celebratory banner and hide every section / sticky button. The
+  // banner keeps its own "Apply and continue" button.
+  const allClean = impossible.length === 0 && dupCount === 0 && logical.length === 0;
+  const screen4 = document.getElementById("screen-4");
+  if (screen4) screen4.classList.toggle("has-clean-banner", allClean);
+
+  const banner = document.getElementById("dq-clean-banner");
+  if (banner) {
+    if (allClean) {
+      banner.innerHTML = `
+        <div class="se-clean-banner" data-testid="banner-clean">
+          <div class="se-clean-banner-head">
+            <span class="se-clean-banner-tick" aria-hidden="true">✓</span>
+            <h3>Your dataset is clean</h3>
+          </div>
+          <p>No outliers, duplicate records, or consistency errors were detected.</p>
+          <button type="button" class="btn btn-primary" data-action="apply-quality" data-testid="button-apply-quality-banner">Apply and continue →</button>
+        </div>
+      `;
+      banner.classList.remove("is-hidden");
+      // Re-bind: the banner button is a fresh element so the original
+      // listener on the inline button doesn't apply to it.
+      const btn = banner.querySelector('[data-action="apply-quality"]');
+      if (btn) btn.addEventListener("click", _applyQualityHandler);
+    } else {
+      banner.innerHTML = "";
+      banner.classList.add("is-hidden");
+    }
   }
 
-  // Section B — duplicates
-  const dups = q.duplicates || { exact_duplicate_rows: [], duplicate_id_groups: [] };
-  const dupCount = (dups.exact_duplicate_rows || []).length + (dups.duplicate_id_groups || []).length;
+  // ---- Section visibility (Fix 1, 3 — hide empty sections + bulk btns) ----
+  const wrapA = document.getElementById("dq-impossible-wrap");
+  const wrapB = document.getElementById("dq-dup-wrap");
+  const wrapC = document.getElementById("dq-logical-wrap");
+  if (wrapA) wrapA.classList.toggle("is-hidden", impossible.length === 0);
+  if (wrapB) wrapB.classList.toggle("is-hidden", dupCount === 0);
+  if (wrapC) wrapC.classList.toggle("is-hidden", logical.length === 0);
+  // Bulk-action row only appears when Section A has rows.
+  const bulkRow = document.querySelector("#dq-impossible-wrap .se-bulk-row");
+  if (bulkRow) bulkRow.classList.toggle("is-hidden", impossible.length === 0);
+
+  // ---- Section A — impossible values table ----
+  $('[data-testid="count-impossible"]').textContent = impossible.length;
+  const tA = $("#dq-impossible-table tbody");
+  if (impossible.length) {
+    tA.innerHTML = impossible.map((f, i) => `
+      <tr data-testid="impossible-row-${i}">
+        <td>${f.row + 1}</td>
+        <td>${escapeHtml(f.variable)}</td>
+        <td>${fmtNum(f.value)} ${escapeHtml(f.unit || "")}</td>
+        <td>${escapeHtml(f.issue)}</td>
+        <td>${actionPicker(i, f.recommended_action || "review")}</td>
+      </tr>
+    `).join("");
+    $$("select.se-impossible-action").forEach((sel) => {
+      sel.addEventListener("change", () => {
+        const i = Number(sel.dataset.i);
+        if (state.qualityActions[i]) state.qualityActions[i].action = sel.value;
+      });
+    });
+  } else {
+    tA.innerHTML = "";
+  }
+
+  // ---- Section B — duplicates ----
   $('[data-testid="count-duplicates"]').textContent = dupCount;
   const dupBody = $("#dq-dup-body");
   let dupHtml = "";
-  if ((dups.exact_duplicate_rows || []).length) {
-    dupHtml += `<p data-testid="dq-exact-summary"><strong>${dups.exact_duplicate_rows.length}</strong> exact duplicate rows. They will be removed automatically when you continue.</p>`;
+  if (dupRows) {
+    dupHtml += `<p data-testid="dq-exact-summary"><strong>${dupRows}</strong> exact duplicate rows. They will be removed automatically when you continue.</p>`;
   }
-  if ((dups.duplicate_id_groups || []).length) {
-    dupHtml += `<p>Repeated IDs in <strong>${escapeHtml(dups.duplicate_id_groups[0].id_column)}</strong>: ${dups.duplicate_id_groups.length} ID${dups.duplicate_id_groups.length === 1 ? "" : "s"} appear more than once.</p>`;
+  if (dupGroups) {
+    dupHtml += `<p>Repeated IDs in <strong>${escapeHtml(dups.duplicate_id_groups[0].id_column)}</strong>: ${dupGroups} ID${dupGroups === 1 ? "" : "s"} appear more than once.</p>`;
   }
-  if (!dupHtml) dupHtml = `<p class="se-hint">No duplicates detected.</p>`;
   dupBody.innerHTML = dupHtml;
 
-  // Section C — logical errors
-  const logical = q.logical_errors || [];
+  // ---- Section C — consistency errors (now includes case/near-dup/numeric-text) ----
   $('[data-testid="count-logical"]').textContent = logical.length;
   const tC = $("#dq-logical-table tbody");
-  tC.innerHTML = logical.length
-    ? logical.map((f, i) => `
+  if (logical.length) {
+    tC.innerHTML = logical.map((f, i) => `
       <tr data-testid="logical-row-${i}">
         <td>${f.row + 1}</td>
         <td>${escapeHtml(f.variable)}</td>
-        <td>${escapeHtml(f.value)}</td>
+        <td>${escapeHtml(String(f.value))}</td>
         <td>${escapeHtml(f.issue)}</td>
         <td><em>Flagged for review</em></td>
       </tr>
-    `).join("")
-    : `<tr><td colspan="5" style="text-align:center; padding:18px; color:var(--color-text-muted)">No consistency errors found.</td></tr>`;
+    `).join("");
+  } else {
+    tC.innerHTML = "";
+  }
+
+  // ---- Sticky button visibility (Fix 5) ----
+  // The two sticky buttons live outside the screen markup so we toggle
+  // them centrally from here. They're only on-screen for Step 4 and only
+  // when at least one issue table is shown.
+  _toggleStickyStep4Buttons(!allClean);
+}
+
+// Shared apply-quality logic so it can be wired both to the inline button
+// and to the clean-banner button without duplicating the network code.
+async function _applyQualityHandler() {
+  const status = $("#quality-status");
+  setStatus(status, "Applying actions…", "loading");
+  try {
+    const data = await api("/apply-quality", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        job_id: state.jobId,
+        actions: state.qualityActions,
+        remove_exact_duplicates: true,
+      }),
+    });
+    ingestDataset(data);
+    const log = data.log || {};
+    setStatus(
+      status,
+      `Done. Removed ${log.removed_rows || 0} rows, capped ${log.capped_values || 0} values.`,
+      "success"
+    );
+    showScreen("soon");
+  } catch (err) {
+    setStatus(status, `Could not apply: ${err.message}`, "error");
+  }
+}
+
+function _toggleStickyStep4Buttons(continueVisible) {
+  // The sticky bar has two children with independent visibility rules:
+  //   - Back button: always visible on Step 4 (so users can return to Step 3
+  //     even from the clean-banner state).
+  //   - Continue button: hidden when the clean-banner takes over (the
+  //     banner has its own continue) and on every screen other than 4.
+  const sticky = document.getElementById("dq-sticky-actions");
+  if (!sticky) return;
+  const onStep4 = state.currentScreen === "4";
+  const backBtn = sticky.querySelector(".se-sticky-back");
+  const contBtn = sticky.querySelector(".se-sticky-continue");
+  if (backBtn) backBtn.classList.toggle("is-hidden", !onStep4);
+  if (contBtn) contBtn.classList.toggle("is-hidden", !(onStep4 && continueVisible));
+  // The wrapper itself stays in the DOM but collapses when neither child
+  // is shown, so it doesn't intercept any layout space.
+  sticky.classList.toggle("is-hidden", !onStep4);
 }
 
 function actionPicker(idx, recommended) {
@@ -1821,7 +2107,11 @@ function actionPicker(idx, recommended) {
 }
 
 function bindScreen4() {
-  $('[data-action="back-to-classify"]').addEventListener("click", () => showScreen("3"));
+  // The Step 3 → Step 4 back trip preserves classifications because we
+  // never call restart() here — variable-type overrides survive untouched.
+  $$('[data-action="back-to-classify"]').forEach((b) =>
+    b.addEventListener("click", () => showScreen("3"))
+  );
   $$('[data-action="bulk-impossible"]').forEach((btn) => {
     btn.addEventListener("click", () => {
       const set = btn.dataset.set;
@@ -1829,32 +2119,12 @@ function bindScreen4() {
       $$("select.se-impossible-action").forEach((sel) => { sel.value = set; });
     });
   });
-  $('[data-action="apply-quality"]').addEventListener("click", async () => {
-    const status = $("#quality-status");
-    setStatus(status, "Applying actions…", "loading");
-    try {
-      const data = await api("/apply-quality", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          job_id: state.jobId,
-          actions: state.qualityActions,
-          remove_exact_duplicates: true,
-        }),
-      });
-      ingestDataset(data);
-      const log = data.log || {};
-      setStatus(
-        status,
-        `Done. Removed ${log.removed_rows || 0} rows, capped ${log.capped_values || 0} values.`,
-        "success"
-      );
-      // Pass 1 ends here — show the "coming soon" screen.
-      showScreen("soon");
-    } catch (err) {
-      setStatus(status, `Could not apply: ${err.message}`, "error");
-    }
-  });
+  // Wire every apply-quality button (inline + sticky). The clean-banner
+  // version is wired separately when the banner is rendered, since it
+  // doesn't exist in the DOM at bind time.
+  $$('[data-action="apply-quality"]').forEach((btn) =>
+    btn.addEventListener("click", _applyQualityHandler)
+  );
 }
 
 /* ------------------------------------------------------------------ */
@@ -1887,7 +2157,31 @@ function restart() {
   setStatus($("#upload-status"), "");
   setStatus($("#practice-status"), "");
   setStatus($("#quality-status"), "");
+  // Wipe the saved session too — Start Over should not silently bring
+  // the previous dataset back on the next refresh.
+  clearSavedSession();
   showScreen("1");
+}
+
+/* ------------------------------------------------------------------ */
+/*  Pass-badge tooltip (Fix 9)                                          */
+/* ------------------------------------------------------------------ */
+
+function bindPassBadgeTooltip() {
+  // The (?) icon next to "Pass 1 of 2 — data preparation" supports both
+  // hover (CSS) and click (here, for keyboard/touch users). Clicking
+  // toggles the tooltip; clicking outside closes it.
+  const badge = document.querySelector('[data-testid="badge-pass"]');
+  if (!badge) return;
+  const help = badge.querySelector(".se-pass-help");
+  if (!help) return;
+  help.addEventListener("click", (e) => {
+    e.stopPropagation();
+    badge.classList.toggle("is-open");
+  });
+  document.addEventListener("click", (e) => {
+    if (!badge.contains(e.target)) badge.classList.remove("is-open");
+  });
 }
 
 /* ------------------------------------------------------------------ */
@@ -1905,7 +2199,16 @@ function initApp() {
     bindScreen3();
     bindScreen4();
     bindSoon();
+    bindPassBadgeTooltip();
+    bindStepNavBack();
     showScreen("1");
+    // Offer to resume any in-progress session saved in the last 24h.
+    // We do this AFTER showScreen("1") so the resume banner sits above
+    // the (visible) entry chooser rather than racing against a hidden
+    // screen flip. If the saved dataset can't be re-fetched the resume
+    // handler quietly falls back to a fresh start.
+    const saved = loadSavedSession();
+    if (saved) renderResumeBanner(saved);
     document.documentElement.dataset.medrasInit = "ok";
   } catch (err) {
     document.documentElement.dataset.medrasInit = "error: " + err.message;

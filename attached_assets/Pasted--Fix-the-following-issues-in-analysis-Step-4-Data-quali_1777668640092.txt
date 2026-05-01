@@ -1,0 +1,337 @@
+
+Fix the following issues in analysis Step 4
+(Data quality check) and the step navigator.
+Do not rebuild — fix only what is listed below.
+Fix in this exact order. Checkpoint after each fix.
+
+════════════════════════════════════
+FIX 1 — SMART COLLAPSE WHEN DATASET IS CLEAN
+════════════════════════════════════
+
+When Step 4 loads and ALL THREE of these are true:
+  - Issues Found (outliers/impossible values) = 0
+  - Duplicates = 0
+  - Consistency errors = 0
+
+DO NOT show the three empty section tables.
+Instead replace all three sections with a single 
+green banner:
+
+  ┌──────────────────────────────────────┐
+  │ ✓  Your dataset is clean             │
+  │                                      │
+  │ No outliers, duplicate records, or   │
+  │ consistency errors were detected.    │
+  │                                      │
+  │ [ Apply and continue → ]             │
+  └──────────────────────────────────────┘
+
+Banner styling:
+  background: #EAF3DE
+  border: .5px solid #C0DD97
+  border-radius: 14px
+  padding: 24px
+  max-width: 520px
+  centred on page
+
+The "Apply and continue →" button inside 
+the banner goes directly to Step 5.
+No bulk action buttons shown.
+No empty tables shown.
+
+When ANY issue IS found (> 0 in any section):
+  Show that section's table normally.
+  Still hide the other empty sections.
+  Example: if only duplicates found, 
+  show Section B only.
+
+════════════════════════════════════
+FIX 2 — QUALITY SCORE CALCULATED CORRECTLY
+════════════════════════════════════
+
+The quality score must NOT show 100/100 just 
+because there are no outliers or duplicates.
+
+Recalculate the quality score to include 
+missing data:
+
+  Score = 100 minus deductions:
+  - Each variable with > 50% missing: -10 points
+  - Each variable with 20–50% missing: -5 points
+  - Each variable with 5–20% missing: -2 points
+  - Each outlier flagged: -2 points
+  - Each duplicate row: -3 points
+  - Each consistency error: -3 points
+  - Minimum score: 0
+
+Display the score with colour:
+  90–100: green (#3B6D11)
+  70–89:  amber (#854F0B)
+  Below 70: red (#A32D2D)
+
+Show a small note below the score:
+  "Score accounts for missingness, 
+   outliers, duplicates, and consistency."
+
+════════════════════════════════════
+FIX 3 — HIDE BULK ACTION BUTTONS 
+WHEN SECTION IS EMPTY
+════════════════════════════════════
+
+"Set all to Keep", "Cap all at boundary", 
+and "Mark all for review" buttons must only 
+appear when Section A has at least one row.
+
+If Section A table rows = 0:
+  Hide all three buttons completely.
+  Do not render them at all — not greyed, 
+  not disabled, just not present.
+
+Same rule for Section B and C:
+  Only show section-specific actions 
+  when that section has content.
+
+════════════════════════════════════
+FIX 4 — CATEGORICAL CONSISTENCY CHECKS
+════════════════════════════════════
+
+Section C "Data consistency errors" is currently 
+only checking for logical date/age errors.
+Add these additional checks:
+
+CHECK 1 — Case inconsistency in categorical columns:
+  For every Nominal column, get all unique values.
+  If the same text appears with different 
+  capitalisation (e.g. "neck fracture", 
+  "NECK FRACTURE", "Neck Fracture"):
+    Flag as: Issue = "Inconsistent capitalisation"
+    What to do options: 
+      "Standardise to Title Case"
+      "Standardise to UPPER CASE"  
+      "Keep as is"
+
+CHECK 2 — Near-duplicate text values:
+  If two unique values differ only by:
+    Extra space, trailing space, double space
+    Common abbreviation (e.g. "lt" vs "left")
+    Single character typo
+  Flag as: Issue = "Possible duplicate label"
+  What to do: "Merge these values" / "Keep separate"
+
+CHECK 3 — Numeric values stored as text:
+  If a column classified as Nominal contains 
+  values like "4", "7", "2" or "Grade 4", 
+  "Level 3", "Score 7":
+    Flag as: Issue = "Numeric text — may be 
+    a score variable"
+    What to do: "Convert to numeric" / "Keep as text"
+
+These checks run on all columns automatically 
+when Step 4 loads.
+Results go into Section C table.
+
+════════════════════════════════════
+FIX 5 — STICKY CONTINUE BUTTON
+════════════════════════════════════
+
+The "Apply actions and continue →" button 
+must always be visible without scrolling.
+
+On desktop:
+  Make the button fixed/sticky at bottom-right 
+  of the viewport.
+  Right: 32px, Bottom: 32px, position: fixed.
+  z-index: 100.
+  Padding: 14px 28px. Blue gradient background.
+  
+  When user scrolls, button stays visible.
+  When user reaches bottom, button is already there.
+
+On mobile:
+  Keep it above the bottom nav bar.
+  Width: calc(100% - 32px). Centred.
+  Position: fixed, bottom: 80px (above mobile nav).
+
+When the clean-dataset banner is shown (Fix 1):
+  The button inside the banner is enough.
+  Do NOT also show the sticky fixed button.
+  Only show sticky button when tables are visible.
+
+════════════════════════════════════
+FIX 6 — BACK BUTTON ON STEP 4
+════════════════════════════════════
+
+Add a Back button to Step 4.
+Position: bottom-left, fixed.
+Left: 32px, Bottom: 32px.
+
+Styling: outline button (no fill), 
+border .5px solid #E5E0D8, 
+background transparent, 
+color #888, 14px.
+Text: "← Back to Variables"
+
+On click: navigate to Step 3 (Variables screen).
+All variable type changes from Step 3 
+must be preserved — do not reset.
+
+════════════════════════════════════
+FIX 7 — STEP NAVIGATOR ON DESKTOP
+════════════════════════════════════
+
+The step bar on desktop is too cramped.
+
+Changes:
+  Minimum circle size: 32px on desktop 
+  (currently too small).
+  
+  Steps not yet reachable (future steps):
+    cursor: default (not pointer)
+    pointer-events: none
+    opacity: 0.45
+    No hover effect
+  
+  Steps completed:
+    Green fill (#0F6E56)
+    White checkmark inside
+    cursor: pointer (can go back)
+    
+  Current step:
+    Blue fill (#185FA5)
+    White number inside
+    box-shadow: 0 0 0 3px #B5D4F4
+  
+  Step labels:
+    Always visible on desktop (not just on hover)
+    10px below each circle
+    Current step label: blue, weight 500
+    Done: green
+    Future: grey, opacity 0.45
+  
+  Remove the "soon" text from all step labels.
+  Label should be just the step name.
+
+════════════════════════════════════
+FIX 8 — SESSION PERSISTENCE
+════════════════════════════════════
+
+Save analysis session to localStorage 
+after each confirmed step.
+
+Key: 'medras_analysis_session'
+Value: JSON object containing:
+  {
+    step: current step number (1-12),
+    dataset_id: server-side session ID,
+    filename: uploaded file name,
+    n_rows: number of rows,
+    n_cols: number of columns,
+    variable_types: { columnName: type, ... },
+    quality_actions: { ... user choices ... },
+    timestamp: ISO date string
+  }
+
+Save after:
+  Step 2 confirmed (data uploaded)
+  Step 3 confirmed (variables classified)
+  Step 4 confirmed (quality actions applied)
+  And every subsequent step
+
+On page load:
+  Check localStorage for saved session.
+  If found and timestamp < 24 hours ago:
+    Show a banner at top of page:
+    "You have an unfinished analysis from 
+    [time]. [Continue where you left off →] 
+    or [Start fresh]"
+  
+  If user clicks Continue:
+    Restore to the saved step.
+    Reload the dataset from server using 
+    the dataset_id.
+  
+  If user clicks Start fresh:
+    Clear localStorage key.
+    Go to Step 1.
+
+════════════════════════════════════
+FIX 9 — PASS BADGE EXPLAINED
+════════════════════════════════════
+
+The "PASS 1" badge under the page subtitle 
+must be explained.
+
+Change it to:
+  Text: "Pass 1 of 2 — data preparation"
+  Add a small (?) icon next to it.
+  On hover/click of (?): show tooltip:
+    "MedRAS runs two passes. Pass 1 prepares 
+    and cleans your data. Pass 2 runs 
+    the statistical analysis."
+  
+  Colour: same accent as current.
+
+════════════════════════════════════
+FIX 10 — METRIC CARDS COLOUR CODED
+════════════════════════════════════
+
+The four metric cards at top of Step 4:
+  TOTAL RECORDS — always neutral (grey/default)
+  VARIABLES CHECKED — always neutral
+  ISSUES FOUND:
+    = 0: green text (#3B6D11), 
+         green card bg (#EAF3DE)
+    > 0: amber text (#854F0B), 
+         amber card bg (#FAEEDA)
+  DUPLICATES:
+    = 0: green
+    > 0: amber
+  QUALITY SCORE:
+    90–100: green
+    70–89: amber
+    Below 70: red
+
+The number inside each card takes the colour.
+The card background takes a light version.
+The label text stays muted grey.
+
+════════════════════════════════════
+TEST CHECKLIST AFTER ALL FIXES
+════════════════════════════════════
+
+Test 1: Upload the Gautham fracture Excel.
+  Expected on Step 4:
+    ISSUES FOUND = 0 (metric card green)
+    DUPLICATES = 0 (metric card green)
+    QUALITY SCORE colour based on missing data
+    Section C should flag "NECK FRACTURE" 
+    capitalisation inconsistency
+    Green clean banner shown (if C also clean)
+    OR Section C table shown with the flag
+
+Test 2: Upload a file with obvious outliers 
+(age = 999, Hb = 88).
+  Expected:
+    Section A shows these rows
+    Bulk action buttons appear
+    Quality score deducted
+    Banner NOT shown
+
+Test 3: Refresh page at Step 4.
+  Expected:
+    Banner: "You have an unfinished analysis"
+    Continue button restores to Step 4
+
+Test 4: Click Back button.
+  Expected: returns to Step 3 with 
+  all variable types preserved.
+
+Test 5: Click a future step in navigator.
+  Expected: nothing happens. 
+  No navigation. Cursor stays as default.
+
+Test 6: All issues = 0 (truly clean data).
+  Expected: green banner shown,
+  no empty tables,
+  no bulk buttons,
+  one-click Continue available.
