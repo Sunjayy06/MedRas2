@@ -1089,6 +1089,141 @@ function binsUpper(bins) {
   return bins && bins.length ? bins[bins.length - 1].hi : null;
 }
 
+// Render a bins[] array back into a natural-language groups string the
+// user can type directly into the single-input editor.
+//   [{lo:18,hi:30}, {lo:31,hi:45}, {lo:46,hi:60}, {lo:61,hi:null}]
+//     → "18–30, 31–45, 46–60, >60"
+//   [{lo:null,hi:18.5}, {lo:18.5,hi:25}, ..., {lo:30,hi:null}]
+//     → "<18.5, 18.5–25, 25–30, >30"
+function binsToGroupsString(bins, preset) {
+  if (!bins || !bins.length) return "";
+  const fmt = (n) => String(n);
+  const step = preset.isInteger ? 1 : 0;
+  return bins.map((b) => {
+    if (b.lo == null && b.hi != null) {
+      // Open-low. If the user previously typed an explicit "<N" / "≤N"
+      // the bin name preserves it; otherwise default to "<hi+step" for
+      // integers ("<18" matches lo=null, hi=17) and "<hi" for floats.
+      if (b.name && /^[<≤]/.test(b.name)) return b.name;
+      return preset.isInteger ? `<${fmt(b.hi + step)}` : `<${fmt(b.hi)}`;
+    }
+    if (b.hi == null && b.lo != null) {
+      if (b.name && /^[>≥]/.test(b.name)) return b.name;
+      return preset.isInteger ? `>${fmt(b.lo - step)}` : `>${fmt(b.lo)}`;
+    }
+    if (b.lo != null && b.hi != null) {
+      return `${fmt(b.lo)}–${fmt(b.hi)}`;
+    }
+    return b.name || "";
+  }).join(", ");
+}
+
+// Parse a flexible groups string like "<18, 18–20, 21–30, >30" into a
+// bins[] array. Supports `<N`, `≤N`, `>N`, `≥N`, and `N–M` (en-dash,
+// em-dash, hyphen, or "N to M") chunks. Returns null on any unparseable
+// chunk, on overlapping ranges, or on misplaced open bins.
+function parseGroupsString(text, preset) {
+  if (!text || !text.trim()) return null;
+  const chunks = text.split(",").map((s) => s.trim()).filter(Boolean);
+  if (!chunks.length) return null;
+
+  const step = preset.isInteger ? 1 : 0;
+  const NUM = "(\\d+(?:\\.\\d+)?)";
+  const reLT = new RegExp(`^<${NUM}$`);
+  const reLE = new RegExp(`^≤${NUM}$`);
+  const reGT = new RegExp(`^>${NUM}$`);
+  const reGE = new RegExp(`^≥${NUM}$`);
+  const reRange = new RegExp(`^${NUM}-${NUM}$`);
+
+  const bins = [];
+  for (const raw of chunks) {
+    // Normalise dashes / "to" / whitespace so the regexes only need to
+    // care about a canonical form ("18-30").
+    const cleaned = raw
+      .replace(/[—–]/g, "-")            // em / en dash → hyphen
+      .replace(/\s+to\s+/i, "-")        // "18 to 30"
+      .replace(/\s+/g, "");
+    let m;
+    if ((m = reLT.exec(cleaned))) {
+      const v = Number(m[1]);
+      if (!Number.isFinite(v)) return null;
+      // "<N" means strictly less than N. For integer presets this is
+      // the closed bin (-∞, N-1]; for floats we keep hi=N.
+      bins.push({
+        lo: null,
+        hi: preset.isInteger ? v - step : v,
+        name: `<${m[1]}`,
+      });
+    } else if ((m = reLE.exec(cleaned))) {
+      bins.push({ lo: null, hi: Number(m[1]), name: `≤${m[1]}` });
+    } else if ((m = reGT.exec(cleaned))) {
+      const v = Number(m[1]);
+      if (!Number.isFinite(v)) return null;
+      bins.push({
+        lo: preset.isInteger ? v + step : v,
+        hi: null,
+        name: `>${m[1]}`,
+      });
+    } else if ((m = reGE.exec(cleaned))) {
+      bins.push({ lo: Number(m[1]), hi: null, name: `≥${m[1]}` });
+    } else if ((m = reRange.exec(cleaned))) {
+      const lo = Number(m[1]);
+      const hi = Number(m[2]);
+      if (!Number.isFinite(lo) || !Number.isFinite(hi) || lo > hi) return null;
+      bins.push({ lo, hi, name: `${m[1]}–${m[2]}` });
+    } else {
+      return null;
+    }
+  }
+
+  // At most one open-low bin (must be first); at most one open-high bin
+  // (must be last); closed bins must not overlap (touching is fine, e.g.
+  // "20–30, 30–40" is a common left-closed/right-open style).
+  for (let i = 0; i < bins.length; i++) {
+    const b = bins[i];
+    if (b.lo == null && i !== 0) return null;
+    if (b.hi == null && i !== bins.length - 1) return null;
+  }
+  for (let i = 1; i < bins.length; i++) {
+    const prevHi = bins[i - 1].hi;
+    const curLo = bins[i].lo;
+    if (prevHi == null || curLo == null) continue;
+    if (curLo < prevHi) return null;
+  }
+
+  return maybeApplyPresetNames(bins, preset);
+}
+
+// If the parsed bins exactly match the preset's default cutoff scheme,
+// restore the clinical labels (Underweight / Normal / Severe / …) so
+// users still benefit from the preset semantics when typing the default
+// ranges back in.
+function maybeApplyPresetNames(bins, preset) {
+  if (!preset.defaultNames) return bins;
+  if (bins.length !== preset.defaultNames.length) return bins;
+  const cuts = preset.defaultCutoffs;
+  if (bins[0].lo !== null) return bins;
+  if (bins[0].hi !== (preset.isInteger ? cuts[0] - 1 : cuts[0])) return bins;
+  const last = bins[bins.length - 1];
+  if (last.hi !== null) return bins;
+  if (last.lo !== (preset.isInteger ? cuts[cuts.length - 1] + 1 : cuts[cuts.length - 1])) return bins;
+  for (let i = 1; i < bins.length - 1; i++) {
+    if (bins[i].lo !== cuts[i - 1]) return bins;
+    if (bins[i].hi !== cuts[i]) return bins;
+  }
+  return bins.map((b, i) => ({ ...b, name: preset.defaultNames[i] }));
+}
+
+// Build a placeholder/example string per preset by serializing the
+// seeded default bins. Going through cutoffsToBins ensures the example
+// honours `preset.floor` (so Age becomes "18–30, 31–45, 46–60, >60",
+// not "<30, 30–45, …") and matches the integer-step semantics used
+// elsewhere in the editor.
+function groupsExample(preset) {
+  const seeded = cutoffsToBins(preset.defaultCutoffs, preset);
+  return binsToGroupsString(seeded, preset);
+}
+
 const CHIP_SUGGESTIONS = [
   { label: "What should I do?", text: "What's your suggestion?",
     isStatic: true },
@@ -1246,53 +1381,25 @@ function renderRecodingPanel() {
     const choice = state.recodingChoices[column];
     const enabled = !!choice.enabled;
     const bins = choice.bins;
-    const cutoffs = binsToCutoffs(bins);
-    const cutoffStr = cutoffs.join(", ");
-    const lowerVal = binsLower(bins);
-    const upperVal = binsUpper(bins);
-    const lowerStr = lowerVal == null ? "" : String(lowerVal);
-    const upperStr = upperVal == null ? "" : String(upperVal);
+    const groupsStr = binsToGroupsString(bins, preset);
+    const example = groupsExample(preset);
     const summary = bins.map((b) => b.name).join(" / ");
-    const numAttrs = preset.isInteger ? `step="1"` : `step="any"`;
     const editorHtml = `
       <div class="se-recode-cutoffs" data-testid="recode-bins-${escapeHtml(column)}" hidden>
-        <div class="se-recode-cutoffs-grid">
-          <label class="se-recode-cutoffs-field">
-            <span class="se-recode-cutoffs-label">Lower bound
-              <span class="se-recode-cutoffs-hint">(blank = open)</span>
-            </span>
-            <input type="number" ${numAttrs}
-                   class="se-recode-cutoffs-input"
-                   data-recode-lower="${escapeHtml(column)}"
-                   data-testid="input-recode-lower-${escapeHtml(column)}"
-                   value="${escapeHtml(lowerStr)}"
-                   placeholder="open"
-                   autocomplete="off" />
-          </label>
-          <label class="se-recode-cutoffs-field se-recode-cutoffs-field--wide">
-            <span class="se-recode-cutoffs-label">Cutoffs
-              <span class="se-recode-cutoffs-hint">(comma-separated, e.g. 30, 45, 60)</span>
-            </span>
-            <input type="text"
-                   class="se-recode-cutoffs-input"
-                   data-recode-cutoffs="${escapeHtml(column)}"
-                   data-testid="input-recode-cutoffs-${escapeHtml(column)}"
-                   value="${escapeHtml(cutoffStr)}"
-                   autocomplete="off"
-                   spellcheck="false" />
-          </label>
-          <label class="se-recode-cutoffs-field">
-            <span class="se-recode-cutoffs-label">Upper bound
-              <span class="se-recode-cutoffs-hint">(blank = open)</span>
-            </span>
-            <input type="number" ${numAttrs}
-                   class="se-recode-cutoffs-input"
-                   data-recode-upper="${escapeHtml(column)}"
-                   data-testid="input-recode-upper-${escapeHtml(column)}"
-                   value="${escapeHtml(upperStr)}"
-                   placeholder="open"
-                   autocomplete="off" />
-          </label>
+        <label class="se-recode-cutoffs-label" for="groups-${escapeHtml(column)}">
+          Enter desired groups
+        </label>
+        <input type="text"
+               id="groups-${escapeHtml(column)}"
+               class="se-recode-cutoffs-input"
+               data-recode-groups="${escapeHtml(column)}"
+               data-testid="input-recode-groups-${escapeHtml(column)}"
+               value="${escapeHtml(groupsStr)}"
+               placeholder="${escapeHtml(example)}"
+               autocomplete="off"
+               spellcheck="false" />
+        <div class="se-recode-cutoffs-helper">
+          Define ranges in any format. MedRAS will detect and apply them automatically.
         </div>
         <div class="se-recode-cutoffs-preview"
              data-recode-preview="${escapeHtml(column)}"
@@ -1309,7 +1416,7 @@ function renderRecodingPanel() {
               data-recode-summary="${escapeHtml(column)}">${escapeHtml(summary)}</span>
       </label>
       <button type="button" class="se-recode-edit" data-recode-edit="${escapeHtml(column)}"
-              data-testid="button-recode-edit-${escapeHtml(column)}">Edit cutoffs</button>
+              data-testid="button-recode-edit-${escapeHtml(column)}">Edit groups</button>
       ${editorHtml}
     </div>`;
   }).join("");
@@ -1335,57 +1442,19 @@ function renderRecodingPanel() {
       if (editor) editor.hidden = !editor.hidden;
     });
   });
-  // Single update routine shared by all three inputs (lower / cutoffs /
-  // upper). Reads the current value of each, rebuilds bins, refreshes
-  // preview + summary, and toggles error state on every input together.
+  // Single-input update routine: read the natural-language groups string
+  // (e.g. "<18, 18–30, >30"), parse it into bins, and refresh preview +
+  // summary or flag an error.
   const updateRow = (col) => {
     const preset = matches.find((m) => m.column === col).preset;
-    const cutoffsInp = zone.querySelector(
-      `[data-recode-cutoffs="${CSS.escape(col)}"]`);
-    const lowerInp = zone.querySelector(
-      `[data-recode-lower="${CSS.escape(col)}"]`);
-    const upperInp = zone.querySelector(
-      `[data-recode-upper="${CSS.escape(col)}"]`);
+    const inp = zone.querySelector(
+      `[data-recode-groups="${CSS.escape(col)}"]`);
     const previewEl = zone.querySelector(
       `[data-recode-preview="${CSS.escape(col)}"]`);
     const summaryEl = zone.querySelector(
       `[data-recode-summary="${CSS.escape(col)}"]`);
 
-    const parts = (cutoffsInp.value || "")
-      .split(/[,\s]+/)
-      .map((s) => s.trim())
-      .filter((s) => s.length)
-      .map((s) => Number(s));
-    const allNumeric = parts.length > 0 && parts.every((n) => Number.isFinite(n));
-    // Cutoffs must also be strictly increasing for cutoffsToBins to accept
-    // them — flag the input itself when they're not (architect-noted gap).
-    let cutoffsSorted = allNumeric;
-    if (allNumeric) {
-      for (let i = 1; i < parts.length; i++) {
-        if (parts[i] <= parts[i - 1]) { cutoffsSorted = false; break; }
-      }
-    }
-
-    const parseBound = (raw) => {
-      const t = (raw || "").trim();
-      if (!t) return null;
-      const n = Number(t);
-      return Number.isFinite(n) ? n : NaN;
-    };
-    const lowerRaw = parseBound(lowerInp ? lowerInp.value : "");
-    const upperRaw = parseBound(upperInp ? upperInp.value : "");
-    const lowerOk = !Number.isNaN(lowerRaw);
-    const upperOk = !Number.isNaN(upperRaw);
-
-    const opts = {};
-    opts.lower = lowerRaw;            // null = open, number = override
-    if (upperRaw != null) opts.upper = upperRaw;
-
-    const bins = (cutoffsSorted && lowerOk && upperOk)
-      ? cutoffsToBins(parts, preset, opts)
-      : null;
-
-    const setErr = (el, on) => { if (el) el.classList.toggle("is-error", on); };
+    const bins = parseGroupsString(inp ? inp.value : "", preset);
     if (bins) {
       state.recodingChoices[col] = state.recodingChoices[col] || { enabled: false };
       state.recodingChoices[col].bins = bins;
@@ -1396,30 +1465,22 @@ function renderRecodingPanel() {
           `→ Will create groups: <strong>${escapeHtml(summary)}</strong>`;
       }
       if (summaryEl) summaryEl.textContent = summary;
-      setErr(cutoffsInp, false); setErr(lowerInp, false); setErr(upperInp, false);
+      if (inp) inp.classList.remove("is-error");
     } else {
       if (previewEl) {
         previewEl.classList.add("is-error");
         previewEl.textContent =
-          "Enter one or more cutoffs in increasing order, with the lower bound below the first cutoff and the upper bound at or above the last (blank = open).";
+          "Couldn't read those ranges. Try comma-separated entries like \"<18, 18–30, 31–45, >45\".";
       }
-      setErr(cutoffsInp, !cutoffsSorted);
-      setErr(lowerInp, !lowerOk || (cutoffsSorted && lowerRaw != null && lowerRaw >= parts[0]));
-      const lastLo = cutoffsSorted
-        ? parts[parts.length - 1] + (preset.isInteger ? 1 : 0)
-        : null;
-      setErr(upperInp, !upperOk || (lastLo != null && upperRaw != null && upperRaw < lastLo));
+      if (inp) inp.classList.add("is-error");
     }
   };
 
-  const wireInput = (inp, attr) => {
-    const handler = () => updateRow(inp.dataset[attr]);
+  $$("[data-recode-groups]", zone).forEach((inp) => {
+    const handler = () => updateRow(inp.dataset.recodeGroups);
     inp.addEventListener("input", handler);
     inp.addEventListener("change", handler);
-  };
-  $$("[data-recode-cutoffs]", zone).forEach((inp) => wireInput(inp, "recodeCutoffs"));
-  $$("[data-recode-lower]", zone).forEach((inp) => wireInput(inp, "recodeLower"));
-  $$("[data-recode-upper]", zone).forEach((inp) => wireInput(inp, "recodeUpper"));
+  });
 }
 
 function renderAutocodeSummary() {
