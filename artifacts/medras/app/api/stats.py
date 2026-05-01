@@ -450,6 +450,26 @@ async def classify(payload: ClassifyRequest) -> Dict[str, Any]:
     entry = dataset_store.get(payload.job_id)
     if entry is None:
         raise HTTPException(status_code=404, detail="Dataset expired or not found.")
+    # Pre-clean: extract numeric values from text cells like "2mm" /
+    # "Grade 3" / "12 kg" so the classifier sees them as numeric (scale)
+    # per the MedRAS biostatistician spec. The cleaner is idempotent —
+    # already-numeric columns are skipped — so it is safe to invoke on
+    # every classify call. The notes themselves are persisted on the
+    # dataset entry so subsequent reclassifies can still surface them.
+    cleaned_df, fresh_cleanup_notes = variable_classifier.clean_numeric_like_columns(entry.df)
+    if fresh_cleanup_notes:
+        dataset_store.replace_df(payload.job_id, cleaned_df)
+        existing_notes = dict(entry.meta.get("cleanup_notes") or {})
+        existing_notes.update(fresh_cleanup_notes)
+        entry.meta["cleanup_notes"] = existing_notes
+        # When the underlying df changed, any previously stored
+        # classifications are no longer valid (the dtypes shifted) — so
+        # force a full re-classify by ignoring the stored copy.
+        entry.meta.pop("classifications", None)
+        # Refresh the entry handle so we read the new df below.
+        entry = dataset_store.get(payload.job_id)
+        assert entry is not None
+    cleanup_notes: Dict[str, str] = dict(entry.meta.get("cleanup_notes") or {})
     # Reuse a previously stored classification if there are no overrides
     # AND we already have one — this preserves changes made by the
     # variable-assistant (e.g. type promoted to scale after strip_prefix)
@@ -491,6 +511,18 @@ async def classify(payload: ClassifyRequest) -> Dict[str, Any]:
                         variable_classifier.reenrich_after_override(
                             c, entry.df[c["column"]], c["column"],
                         )
+    # Attach cleanup notes (if any) onto the affected classifications so
+    # the UI can show users what was auto-extracted from text cells.
+    if cleanup_notes:
+        for c in classifications:
+            note = cleanup_notes.get(c["column"])
+            if not note:
+                continue
+            c["cleanup_note"] = note
+            existing_reason = c.get("reasoning") or ""
+            if note not in existing_reason:
+                c["reasoning"] = (note + " " + existing_reason).strip()
+
     entry.meta["classifications"] = classifications
 
     issues = variable_issues.detect_issues(entry.df, classifications)

@@ -991,7 +991,11 @@ function typeBadge(t) {
 const INTERPRETATION_LABELS = {
   measurement:      "Measurement",
   count:            "Count",
-  validated_score:  "Validated score",
+  // validated_score is a legacy interpretation from a prior iteration of
+  // the classifier; the current backend never emits it, but stored
+  // sessions may still carry it so we keep the label mapping for
+  // backwards compatibility.
+  validated_score:  "Score",
   grading:          "Grading / stage",
   binary_indicator: "Binary indicator",
   category:         "Category",
