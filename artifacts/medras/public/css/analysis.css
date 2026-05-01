@@ -337,6 +337,7 @@
   justify-content: center;
   gap: 10px;
   margin: 8px 0 20px;
+  min-height: 12px;
 }
 .se-intake-dot {
   width: 10px;
@@ -354,10 +355,8 @@
 }
 .se-intake-stage {
   position: relative;
-  min-height: 220px;
+  min-height: 240px;
   margin-bottom: 16px;
-  touch-action: pan-y;
-  user-select: text;
 }
 .se-intake-step {
   display: none;
@@ -371,39 +370,119 @@
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--color-text-muted, #6b7280);
-  margin-bottom: 10px;
+  margin-bottom: 8px;
   font-weight: 600;
 }
 .se-intake-q {
-  font-size: 18px !important;
+  font-size: 20px;
   font-weight: 600;
   color: var(--color-text, #0f172a);
   display: block;
-  margin-bottom: 4px;
+  margin: 0 0 6px;
+  line-height: 1.3;
 }
 .se-intake-hint {
   display: block;
   color: var(--color-text-muted, #6b7280);
-  font-size: 12px;
-  margin: 2px 0 8px;
+  font-size: 13px;
+  margin: 2px 0 14px;
 }
 @keyframes intakeFadeIn {
-  from { opacity: 0; transform: translateX(12px); }
-  to   { opacity: 1; transform: translateX(0); }
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
-.se-intake-step.is-leaving-left {
-  animation: intakeSlideLeft 180ms ease forwards;
+
+/* ---------- Choice cards (used inside intake Q1) ---------- */
+.se-choice-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  margin-top: 4px;
 }
-.se-intake-step.is-leaving-right {
-  animation: intakeSlideRight 180ms ease forwards;
+.se-choice-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px 16px 14px;
+  border: 2px solid var(--color-border, #d8dee7);
+  border-radius: 12px;
+  background: #fff;
+  cursor: pointer;
+  transition: border-color 140ms ease, background 140ms ease, box-shadow 140ms ease;
 }
-@keyframes intakeSlideLeft {
-  from { opacity: 1; transform: translateX(0); }
-  to   { opacity: 0; transform: translateX(-20px); }
+.se-choice-card:hover {
+  border-color: var(--color-primary-soft, #93c5fd);
+  background: #f8fafc;
 }
-@keyframes intakeSlideRight {
-  from { opacity: 1; transform: translateX(0); }
-  to   { opacity: 0; transform: translateX(20px); }
+.se-choice-card input[type="radio"] {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.se-choice-card:has(input[type="radio"]:checked) {
+  border-color: var(--color-primary, #2563eb);
+  background: #eff6ff;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+.se-choice-icon {
+  font-size: 28px;
+  line-height: 1;
+}
+.se-choice-title {
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--color-text, #0f172a);
+}
+.se-choice-sub {
+  font-size: 13px;
+  color: var(--color-text-muted, #6b7280);
+  line-height: 1.4;
+}
+
+/* ---------- File dropzone (proposal upload) ---------- */
+.se-dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 28px 18px;
+  border: 2px dashed var(--color-border, #d8dee7);
+  border-radius: 12px;
+  background: #f8fafc;
+  cursor: pointer;
+  text-align: center;
+  transition: border-color 140ms ease, background 140ms ease;
+}
+.se-dropzone:hover,
+.se-dropzone.is-dragover {
+  border-color: var(--color-primary, #2563eb);
+  background: #eff6ff;
+}
+.se-dropzone.is-loaded {
+  border-color: var(--color-primary, #2563eb);
+  background: #eff6ff;
+}
+.se-dropzone.is-error {
+  border-color: #dc2626;
+  background: #fef2f2;
+}
+.se-dropzone-icon {
+  font-size: 28px;
+}
+.se-dropzone-text {
+  font-size: 14px;
+  color: var(--color-text, #0f172a);
+}
+.se-dropzone-sub {
+  font-size: 12px;
+  color: var(--color-text-muted, #6b7280);
+}
+.se-dropzone.is-loaded .se-dropzone-sub,
+.se-dropzone.is-error .se-dropzone-sub {
+  color: var(--color-text, #0f172a);
+  font-weight: 600;
 }
 
 /* ---------- Action bars ---------- */

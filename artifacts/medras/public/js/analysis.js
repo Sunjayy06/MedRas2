@@ -124,10 +124,14 @@ function bindScreen1() {
       state.entryChoice = entry;
       // Pre-fill intake fields from any prior session in this tab.
       if (state.intake) {
-        $("#intake-have").value = state.intake.what_you_have || "proposal";
-        $("#intake-outcomes").value = state.intake.outcomes || "";
-        $("#intake-independents").value = state.intake.independents || "";
-        $("#intake-instructions").value = state.intake.instructions || "";
+        const choiceRadio = $(`input[name='intake-have'][value='${state.intake.what_you_have}']`);
+        if (choiceRadio) choiceRadio.checked = true;
+        if ($("#intake-objective")) $("#intake-objective").value = state.intake.objective || "";
+        if ($("#intake-sample-size")) $("#intake-sample-size").value = state.intake.sample_size || "";
+        if ($("#intake-instructions")) $("#intake-instructions").value = state.intake.instructions || "";
+      } else {
+        // Fresh session: clear any prior selection so Next stays disabled until user picks.
+        $$("input[name='intake-have']").forEach((r) => { r.checked = false; });
       }
       // Reset the wizard to question 1 every time we enter the intake screen.
       if (typeof bindIntake._reset === "function") bindIntake._reset();
@@ -142,47 +146,71 @@ function bindScreen1() {
 
 function bindIntake() {
   const stage = $("#intake-stage");
-  const steps = $$(".se-intake-step", stage);
-  const dots = $$(".se-intake-dot", $(".se-intake-progress"));
+  const progress = $("#intake-progress");
   const prevBtn = $('[data-action="intake-prev"]');
   const nextBtn = $('[data-action="intake-next"]');
-  const total = steps.length;
 
-  function showStep(idx) {
+  // Dynamic step plan. Q1 (have) is always present; the middle question is
+  // chosen by what the user picked in Q1; Q3 (instructions) is always last.
+  function planSteps() {
+    const choice = state.intake && state.intake.what_you_have;
+    const middle = choice === "objective" ? "objective"
+                 : choice === "proposal" ? "proposal"
+                 : null;
+    return middle ? ["have", middle, "instructions"] : ["have"];
+  }
+
+  function renderProgress(plan, idx) {
+    progress.innerHTML = "";
+    plan.forEach((_, i) => {
+      const dot = document.createElement("span");
+      dot.className = "se-intake-dot";
+      if (i === idx) dot.classList.add("is-active");
+      else if (i < idx) dot.classList.add("is-done");
+      progress.appendChild(dot);
+    });
+  }
+
+  function showStepByName(name) {
+    $$(".se-intake-step", stage).forEach((el) => {
+      el.classList.toggle("is-active", el.dataset.step === name);
+    });
+  }
+
+  function refresh() {
+    const plan = planSteps();
+    const idx = Math.max(0, Math.min(state.intakeStep, plan.length - 1));
     state.intakeStep = idx;
-    steps.forEach((el, i) => {
-      el.classList.toggle("is-active", i === idx);
-    });
-    dots.forEach((d, i) => {
-      d.classList.toggle("is-active", i === idx);
-      d.classList.toggle("is-done", i < idx);
-    });
-    // Update labels: on first step, Back returns to Screen 1.
+    const stepName = plan[idx];
+    showStepByName(stepName);
+    renderProgress(plan, idx);
+    // Button labels.
     prevBtn.textContent = idx === 0 ? "← Back" : "← Previous";
-    nextBtn.textContent = idx === total - 1 ? "Continue →" : "Next →";
-    // Auto-focus the input on the visible step (skip on first because select
-    // grabbing focus on touch can scroll the page jarringly).
-    if (idx > 0) {
-      const input = steps[idx].querySelector("textarea, input, select");
-      if (input) setTimeout(() => input.focus(), 50);
+    nextBtn.textContent = idx === plan.length - 1 ? "Continue →" : "Next →";
+    // Q1 requires a choice before Next is enabled. The proposal step needs
+    // a successful upload (otherwise we'd advance with no proposal_id and
+    // silently submit incomplete intake). Other steps always allow Next.
+    if (stepName === "have") {
+      const picked = !!$("input[name='intake-have']:checked");
+      nextBtn.disabled = !picked;
+    } else if (stepName === "proposal") {
+      const haveProposal = !!(state.intake && state.intake.proposal_id);
+      nextBtn.disabled = !haveProposal;
+    } else {
+      nextBtn.disabled = false;
     }
   }
-
-  function commitIntake() {
-    state.intake = {
-      what_you_have: $("#intake-have").value,
-      outcomes: $("#intake-outcomes").value.trim(),
-      independents: $("#intake-independents").value.trim(),
-      instructions: $("#intake-instructions").value.trim(),
-    };
-  }
+  // Expose so the upload handler can re-evaluate Next after upload succeeds.
+  bindIntake._refresh = refresh;
 
   function goNext() {
-    if (state.intakeStep < total - 1) {
-      showStep(state.intakeStep + 1);
+    const plan = planSteps();
+    if (state.intakeStep < plan.length - 1) {
+      state.intakeStep += 1;
+      refresh();
       return;
     }
-    // Last step → commit and continue to upload/practice.
+    // Final step → commit and continue.
     commitIntake();
     setStatus($("#intake-status"), "");
     if (state.entryChoice === "upload") {
@@ -195,20 +223,67 @@ function bindIntake() {
 
   function goPrev() {
     if (state.intakeStep > 0) {
-      showStep(state.intakeStep - 1);
+      state.intakeStep -= 1;
+      refresh();
     } else {
       showScreen("1");
     }
   }
 
-  nextBtn.addEventListener("click", goNext);
-  prevBtn.addEventListener("click", goPrev);
+  function commitIntake() {
+    const choice = (state.intake && state.intake.what_you_have) || "proposal";
+    const out = {
+      what_you_have: choice,
+      proposal_id: null,
+      proposal_filename: null,
+      proposal_size_bytes: null,
+      objective: "",
+      sample_size: null,
+      instructions: ($("#intake-instructions").value || "").trim(),
+    };
+    if (choice === "proposal") {
+      out.proposal_id = (state.intake && state.intake.proposal_id) || null;
+      out.proposal_filename = (state.intake && state.intake.proposal_filename) || null;
+      out.proposal_size_bytes = (state.intake && state.intake.proposal_size_bytes) || null;
+    } else if (choice === "objective") {
+      out.objective = ($("#intake-objective").value || "").trim();
+      const n = parseInt($("#intake-sample-size").value, 10);
+      out.sample_size = Number.isFinite(n) && n > 0 ? n : null;
+    }
+    state.intake = out;
+  }
 
-  // Keyboard: Enter advances on the select; on textareas use Ctrl/Cmd+Enter.
+  // Q1 — choice radios drive the branching. Update state.intake.what_you_have
+  // immediately so planSteps() picks the right middle step on Next.
+  $$("input[name='intake-have']", stage).forEach((r) => {
+    r.addEventListener("change", () => {
+      state.intake = state.intake || {};
+      state.intake.what_you_have = r.value;
+      refresh();
+    });
+  });
+
+  // ---- Debounced navigation: prevents accidental double-tap from skipping
+  //      multiple questions in one click on small/touch viewports. ----
+  let busyUntil = 0;
+  function debouncedClick(fn) {
+    return () => {
+      const now = performance.now();
+      if (now < busyUntil) return;
+      busyUntil = now + 250;
+      fn();
+    };
+  }
+  nextBtn.addEventListener("click", debouncedClick(goNext));
+  prevBtn.addEventListener("click", debouncedClick(goPrev));
+
+  // Keyboard: Enter on textareas/inputs would normally insert newline; only
+  // Ctrl/Cmd+Enter advances. Plain Enter inside a number input also advances.
   stage.addEventListener("keydown", (e) => {
     if (e.key !== "Enter") return;
     const tag = (e.target.tagName || "").toLowerCase();
-    if (tag === "select") {
+    const type = (e.target.type || "").toLowerCase();
+    if (tag === "input" && type === "number") {
       e.preventDefault();
       goNext();
     } else if (tag === "textarea" && (e.ctrlKey || e.metaKey)) {
@@ -217,30 +292,104 @@ function bindIntake() {
     }
   });
 
-  // Touch swipe: left = next, right = prev.
-  let touchStartX = null;
-  let touchStartY = null;
-  stage.addEventListener("touchstart", (e) => {
-    if (e.touches.length !== 1) return;
-    touchStartX = e.touches[0].clientX;
-    touchStartY = e.touches[0].clientY;
-  }, { passive: true });
-  stage.addEventListener("touchend", (e) => {
-    if (touchStartX === null) return;
-    const t = e.changedTouches[0];
-    const dx = t.clientX - touchStartX;
-    const dy = t.clientY - touchStartY;
-    touchStartX = touchStartY = null;
-    // Horizontal swipe of >50px and dominantly horizontal triggers nav.
-    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) {
-      if (dx < 0) goNext(); else goPrev();
-    }
-  }, { passive: true });
+  // ---- Proposal file upload wiring ----
+  bindProposalUpload();
 
   // Reset to first question whenever the screen is freshly shown.
-  // showScreen() doesn't fire an event, so we expose a reset hook.
-  bindIntake._reset = () => showStep(0);
-  showStep(0);
+  bindIntake._reset = () => {
+    state.intakeStep = 0;
+    refresh();
+  };
+  refresh();
+}
+
+/* Proposal upload (intake → POST /upload-proposal) */
+function bindProposalUpload() {
+  const dz = $("#proposal-dropzone");
+  const input = $("#proposal-file");
+  const status = $("#proposal-status");
+  if (!dz || !input || !status) return;
+
+  function setStatusText(text, kind) {
+    status.textContent = text;
+    dz.classList.remove("is-loaded", "is-error", "is-dragover");
+    if (kind === "ok") dz.classList.add("is-loaded");
+    else if (kind === "err") dz.classList.add("is-error");
+  }
+
+  function fmtBytes(n) {
+    if (n < 1024) return `${n} B`;
+    if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
+    return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  function clearStoredProposal() {
+    state.intake = state.intake || {};
+    state.intake.proposal_id = null;
+    state.intake.proposal_filename = null;
+    state.intake.proposal_size_bytes = null;
+  }
+
+  async function uploadFile(file) {
+    if (!file) return;
+    // Always invalidate any prior proposal first — if this new upload fails,
+    // we must NOT silently submit the previous file.
+    clearStoredProposal();
+    if (typeof bindIntake._refresh === "function") bindIntake._refresh();
+    setStatusText(`Uploading ${file.name}…`, null);
+    const fd = new FormData();
+    fd.append("file", file);
+    try {
+      const res = await fetch(`${API_BASE}/upload-proposal`, { method: "POST", body: fd });
+      if (!res.ok) {
+        const text = await res.text();
+        let msg = text;
+        try { msg = JSON.parse(text).detail || text; } catch (_) { /* keep raw */ }
+        throw new Error(msg);
+      }
+      const data = await res.json();
+      state.intake = state.intake || {};
+      state.intake.what_you_have = "proposal";
+      state.intake.proposal_id = data.proposal_id;
+      state.intake.proposal_filename = data.filename;
+      state.intake.proposal_size_bytes = data.size_bytes;
+      setStatusText(`✔ ${data.filename} — ${fmtBytes(data.size_bytes)} received`, "ok");
+    } catch (err) {
+      // Make sure we leave state cleared so Next stays disabled.
+      clearStoredProposal();
+      setStatusText(`Upload failed: ${err.message}`, "err");
+    } finally {
+      if (typeof bindIntake._refresh === "function") bindIntake._refresh();
+    }
+  }
+
+  // Click anywhere in the dropzone opens the file picker (label wraps the
+  // hidden input, so the browser already does this — we just guard against
+  // duplicate dialogs).
+  input.addEventListener("change", (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (file) uploadFile(file);
+  });
+
+  // Drag & drop.
+  ["dragenter", "dragover"].forEach((ev) => {
+    dz.addEventListener(ev, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dz.classList.add("is-dragover");
+    });
+  });
+  ["dragleave", "drop"].forEach((ev) => {
+    dz.addEventListener(ev, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dz.classList.remove("is-dragover");
+    });
+  });
+  dz.addEventListener("drop", (e) => {
+    const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (file) uploadFile(file);
+  });
 }
 
 /* ------------------------------------------------------------------ */
@@ -830,22 +979,23 @@ async function runSelfTest() {
     await wait(100);
   }
   log(`screen-intake visible: ${!document.getElementById("screen-intake").classList.contains("is-hidden")}`);
-  // Q1 – select dropdown, then Next
-  $("#intake-have").value = "objective";
+  // Q1 — pick "objective + sample size" choice card.
+  const choiceRadio = $('[data-testid="radio-have-objective"]');
+  choiceRadio.checked = true;
+  choiceRadio.dispatchEvent(new Event("change", { bubbles: true }));
+  await wait(50);
+  log(`intake step: ${state.intakeStep}, next disabled: ${$('[data-testid="button-intake-next"]').disabled}`);
+  // Wait for debounce (250ms) before next click to avoid swallowed clicks.
+  await wait(280);
+  click('[data-testid="button-intake-next"]');
+  await wait(280);
+  // Q2 — paste objective + sample size.
+  $("#intake-objective").value = "Compare mean haemoglobin at 12 weeks between iron sucrose and oral iron groups in adult women.";
+  $("#intake-sample-size").value = "120";
   log(`intake step: ${state.intakeStep}`);
   click('[data-testid="button-intake-next"]');
-  await wait(150);
-  // Q2 – outcomes, then Next
-  $("#intake-outcomes").value = "haemoglobin at 12 weeks";
-  log(`intake step: ${state.intakeStep}`);
-  click('[data-testid="button-intake-next"]');
-  await wait(150);
-  // Q3 – independents, then Next
-  $("#intake-independents").value = "treatment arm; sex";
-  log(`intake step: ${state.intakeStep}`);
-  click('[data-testid="button-intake-next"]');
-  await wait(150);
-  // Q4 – instructions, then Continue (final Next)
+  await wait(280);
+  // Q3 — instructions + final Continue.
   $("#intake-instructions").value = "use non-parametric tests if skewed";
   log(`intake step: ${state.intakeStep}, button label: ${$('[data-testid="button-intake-next"]').textContent.trim()}`);
   click('[data-testid="button-intake-next"]');

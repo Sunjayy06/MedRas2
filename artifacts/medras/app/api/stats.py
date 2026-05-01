@@ -29,9 +29,15 @@ from app.services import (
     dataset_store,
     dummy_data,
     excel_loader,
+    proposal_store,
     stats_tests,
     variable_classifier,
 )
+
+
+# Allowed extensions for the intake proposal upload (lowercase, with dot).
+_PROPOSAL_EXTS = {".pdf", ".doc", ".docx", ".ppt", ".pptx", ".txt", ".md", ".rtf"}
+_PROPOSAL_MAX_BYTES = 8 * 1024 * 1024  # 8 MB
 
 
 log = get_logger(__name__)
@@ -77,10 +83,24 @@ class AnalyzeRequest(BaseModel):
 
 class IntakeContext(BaseModel):
     """Free-form research context the user provides up front so later analysis
-    steps can interpret variables and instructions in the user's own words."""
+    steps can interpret variables and instructions in the user's own words.
+
+    Two branches based on `what_you_have`:
+      * "proposal"  → user uploads a study proposal document; we keep a
+        reference to it via `proposal_id` (the bytes live in `proposal_store`).
+      * "objective" → user pastes the study objective(s) and an expected
+        sample size; we keep both as plain text/number.
+    Either branch may also include free-text `instructions`.
+    """
     what_you_have: Literal["proposal", "objective"] = "proposal"
-    outcomes: str = Field(default="", max_length=4000)
-    independents: str = Field(default="", max_length=4000)
+    # Proposal branch
+    proposal_id: Optional[str] = Field(default=None, max_length=64)
+    proposal_filename: Optional[str] = Field(default=None, max_length=300)
+    proposal_size_bytes: Optional[int] = Field(default=None, ge=0)
+    # Objective branch
+    objective: str = Field(default="", max_length=8000)
+    sample_size: Optional[int] = Field(default=None, ge=1, le=10_000_000)
+    # Always available
     instructions: str = Field(default="", max_length=4000)
 
 
@@ -143,6 +163,63 @@ def _build_response(job_id: str, entry) -> Dict[str, Any]:
 @router.get("/templates")
 def list_templates() -> Dict[str, Any]:
     return {"templates": dummy_data.list_templates()}
+
+
+@router.post("/upload-proposal")
+@limiter.limit("20/minute")
+async def upload_proposal(request: Request, file: UploadFile = File(...)) -> Dict[str, Any]:
+    """Accept a study-proposal document (PDF/DOCX/PPTX/TXT/MD/RTF) at intake.
+
+    Returns a `proposal_id` the client passes back inside `intake.proposal_id`
+    when it later calls `/upload`, `/generate-dummy`, or `/confirm-preview`.
+    """
+    filename = file.filename or "proposal"
+    # Validate extension.
+    lower = filename.lower()
+    ext = ""
+    if "." in lower:
+        ext = "." + lower.rsplit(".", 1)[-1]
+    if ext not in _PROPOSAL_EXTS:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Unsupported file type. Please upload a PDF, Word (.doc/.docx),"
+                " PowerPoint (.ppt/.pptx), or plain text (.txt/.md/.rtf) file."
+            ),
+        )
+    # Stream the upload in chunks so an attacker can't pin a large blob in
+    # memory before we get a chance to reject it. Abort as soon as we see
+    # more than _PROPOSAL_MAX_BYTES bytes on the wire.
+    chunks: list[bytes] = []
+    total = 0
+    chunk_size = 64 * 1024
+    while True:
+        piece = await file.read(chunk_size)
+        if not piece:
+            break
+        total += len(piece)
+        if total > _PROPOSAL_MAX_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail=f"File too large. Limit is {_PROPOSAL_MAX_BYTES // (1024 * 1024)} MB.",
+            )
+        chunks.append(piece)
+    raw = b"".join(chunks)
+    if len(raw) == 0:
+        raise HTTPException(status_code=400, detail="The uploaded file is empty.")
+    meta = {
+        "filename": filename,
+        "size_bytes": len(raw),
+        "content_type": file.content_type or "",
+        "ext": ext,
+    }
+    proposal_id = proposal_store.put(raw, meta)
+    return {
+        "proposal_id": proposal_id,
+        "filename": filename,
+        "size_bytes": len(raw),
+        "content_type": file.content_type or "",
+    }
 
 
 @router.post("/upload")

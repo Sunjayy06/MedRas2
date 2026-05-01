@@ -10,7 +10,7 @@
     />
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%232f6fed'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-family='Inter,sans-serif' font-size='18' font-weight='700' fill='white'%3EM%3C/text%3E%3C/svg%3E" />
     <link rel="stylesheet" href="/css/style.css" />
-    <link rel="stylesheet" href="/css/analysis.css?v=2026050112" />
+    <link rel="stylesheet" href="/css/analysis.css?v=2026050114" />
   </head>
   <body>
     <header class="site-header" data-testid="site-header">
@@ -96,52 +96,71 @@
       <section class="se-screen is-hidden" id="screen-intake" data-testid="screen-intake">
         <header class="se-screen-head">
           <h2>Let me quickly ask a few questions</h2>
-          <p>One question at a time &mdash; type in plain English, or just hit <em>Next</em> to skip. Swipe (on mobile) or use the arrow buttons below.</p>
+          <p>One question at a time. Pick the option that fits, then hit <em>Next</em>.</p>
         </header>
 
-        <div class="se-intake-progress" data-testid="intake-progress">
-          <span class="se-intake-dot" data-dot="0"></span>
-          <span class="se-intake-dot" data-dot="1"></span>
-          <span class="se-intake-dot" data-dot="2"></span>
-          <span class="se-intake-dot" data-dot="3"></span>
-        </div>
+        <div class="se-intake-progress" id="intake-progress" data-testid="intake-progress" aria-hidden="true"></div>
 
         <div class="se-intake-stage" id="intake-stage" data-testid="intake-stage">
-          <div class="se-intake-step is-active" data-step="0" data-testid="intake-step-0">
-            <div class="se-intake-counter">Question 1 of 4</div>
-            <label class="se-field">
-              <span class="se-intake-q">What do you have ready?</span>
-              <select id="intake-have" data-testid="select-intake-have">
-                <option value="proposal">A study proposal</option>
-                <option value="objective">An objective and sample size</option>
-              </select>
+          <!-- Q1 — choice (always shown) -->
+          <div class="se-intake-step is-active" data-step="have" data-testid="intake-step-have">
+            <div class="se-intake-counter" data-testid="intake-counter">Question 1</div>
+            <p class="se-intake-q">What do you have ready?</p>
+            <div class="se-choice-grid" role="radiogroup" aria-label="What do you have ready?">
+              <label class="se-choice-card" data-testid="choice-have-proposal">
+                <input type="radio" name="intake-have" value="proposal" data-testid="radio-have-proposal" />
+                <span class="se-choice-icon" aria-hidden="true">📄</span>
+                <span class="se-choice-title">A study proposal</span>
+                <span class="se-choice-sub">You'll upload your proposal document (PDF, Word, PowerPoint).</span>
+              </label>
+              <label class="se-choice-card" data-testid="choice-have-objective">
+                <input type="radio" name="intake-have" value="objective" data-testid="radio-have-objective" />
+                <span class="se-choice-icon" aria-hidden="true">🎯</span>
+                <span class="se-choice-title">An objective &amp; sample size</span>
+                <span class="se-choice-sub">You'll paste the objective(s) and enter the sample size.</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Q2-A — proposal upload (shown when "proposal" is chosen) -->
+          <div class="se-intake-step" data-step="proposal" data-testid="intake-step-proposal">
+            <div class="se-intake-counter" data-testid="intake-counter">Question 2</div>
+            <p class="se-intake-q">Upload your study proposal</p>
+            <small class="se-intake-hint">PDF, Word (.doc/.docx), PowerPoint (.ppt/.pptx), or plain text. Max 8&nbsp;MB.</small>
+
+            <label class="se-dropzone" id="proposal-dropzone" data-testid="proposal-dropzone">
+              <input type="file" id="proposal-file" accept=".pdf,.doc,.docx,.ppt,.pptx,.txt,.md,.rtf,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/plain" data-testid="input-proposal-file" hidden />
+              <span class="se-dropzone-icon" aria-hidden="true">📎</span>
+              <span class="se-dropzone-text"><strong>Click to choose a file</strong> or drag &amp; drop here</span>
+              <span class="se-dropzone-sub" id="proposal-status" data-testid="proposal-status">No file selected yet.</span>
             </label>
           </div>
 
-          <div class="se-intake-step" data-step="1" data-testid="intake-step-1">
-            <div class="se-intake-counter">Question 2 of 4</div>
+          <!-- Q2-B — objective + sample size (shown when "objective" is chosen) -->
+          <div class="se-intake-step" data-step="objective" data-testid="intake-step-objective">
+            <div class="se-intake-counter" data-testid="intake-counter">Question 2</div>
+            <p class="se-intake-q">Paste your objective(s) and sample size</p>
+            <small class="se-intake-hint">Paste as much detail as you like &mdash; primary objective, secondary objectives, anything you have.</small>
+
             <label class="se-field">
-              <span class="se-intake-q">What outcome variable(s) are you looking at?</span>
-              <small class="se-intake-hint">Optional &mdash; leave blank if unsure.</small>
-              <textarea id="intake-outcomes" rows="4" placeholder="e.g. haemoglobin level at 12 weeks; 30-day mortality; pain score change" data-testid="input-intake-outcomes"></textarea>
+              <span>Study objective(s)</span>
+              <textarea id="intake-objective" rows="6" placeholder="e.g. To compare mean haemoglobin at 12 weeks between iron sucrose and oral iron groups in adult women with iron-deficiency anaemia." data-testid="input-intake-objective"></textarea>
+            </label>
+
+            <label class="se-field">
+              <span>Expected sample size</span>
+              <input type="number" id="intake-sample-size" min="1" max="10000000" step="1" placeholder="e.g. 120" data-testid="input-intake-sample-size" />
             </label>
           </div>
 
-          <div class="se-intake-step" data-step="2" data-testid="intake-step-2">
-            <div class="se-intake-counter">Question 3 of 4</div>
+          <!-- Q3 — special instructions (always shown last) -->
+          <div class="se-intake-step" data-step="instructions" data-testid="intake-step-instructions">
+            <div class="se-intake-counter" data-testid="intake-counter">Last question</div>
+            <p class="se-intake-q">Any specific instructions for the analysis?</p>
+            <small class="se-intake-hint">Optional. Leave blank and I'll use sensible defaults.</small>
             <label class="se-field">
-              <span class="se-intake-q">What independent variable(s) (predictors / exposures)?</span>
-              <small class="se-intake-hint">Optional.</small>
-              <textarea id="intake-independents" rows="4" placeholder="e.g. treatment arm; age; sex; baseline severity" data-testid="input-intake-independents"></textarea>
-            </label>
-          </div>
-
-          <div class="se-intake-step" data-step="3" data-testid="intake-step-3">
-            <div class="se-intake-counter">Question 4 of 4</div>
-            <label class="se-field">
-              <span class="se-intake-q">Any specific instructions for the analysis?</span>
-              <small class="se-intake-hint">Optional.</small>
-              <textarea id="intake-instructions" rows="4" placeholder="e.g. please use non-parametric tests if data is skewed; analyse males and females separately; report 95% CI" data-testid="input-intake-instructions"></textarea>
+              <span class="se-visually-hidden">Special instructions</span>
+              <textarea id="intake-instructions" rows="5" placeholder="e.g. please use non-parametric tests if data is skewed; analyse males and females separately; report 95% CI" data-testid="input-intake-instructions"></textarea>
             </label>
           </div>
         </div>
@@ -150,7 +169,7 @@
 
         <div class="se-actions">
           <button type="button" class="btn btn-secondary" data-action="intake-prev" data-testid="button-intake-prev">&larr; Back</button>
-          <button type="button" class="btn btn-primary" data-action="intake-next" data-testid="button-intake-next">Next &rarr;</button>
+          <button type="button" class="btn btn-primary" data-action="intake-next" data-testid="button-intake-next" disabled>Next &rarr;</button>
         </div>
       </section>
 
@@ -418,6 +437,6 @@
       </div>
     </footer>
 
-    <script src="/js/analysis.js?v=2026050112" defer></script>
+    <script src="/js/analysis.js?v=2026050114" defer></script>
   </body>
 </html>
