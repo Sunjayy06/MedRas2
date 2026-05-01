@@ -517,22 +517,32 @@ async def variable_assistant_endpoint(
 
     columns = list(entry.df.columns)
     intent = variable_assistant.parse_intent(payload.message, columns)
-    new_df, meta = variable_assistant.apply_action(entry.df, intent)
 
-    if intent["action"] == "clarify":
+    # Informational intents (no DataFrame mutation): the assistant either
+    # gives a tailored suggestion ("what should I do?") or a clarification
+    # whose example commands reference real columns from THIS dataset.
+    if intent["action"] in ("clarify", "suggest"):
+        stored_classifications = entry.meta.get("classifications") or []
+        stored_issues = entry.meta.get("variable_issues") or []
+        if intent["action"] == "suggest":
+            confirmation_message = variable_assistant.suggest_message(
+                columns, stored_classifications, stored_issues,
+            )
+        else:
+            confirmation_message = variable_assistant.generic_clarify(columns)
         return {
             "status": "clarify",
-            "action": "clarify",
+            "action": intent["action"],
             "column": intent.get("column"),
             "params": {},
-            "confirmation_message": meta.get("confirmation_message", ""),
-            "classifications": entry.meta.get("classifications") or [],
-            "issues": entry.meta.get("variable_issues") or [],
+            "confirmation_message": confirmation_message,
+            "classifications": stored_classifications,
+            "issues": stored_issues,
             "auto_coding_plan": entry.meta.get("auto_coding_plan") or [],
-            "blocking_issues": variable_issues.has_blocking_issues(
-                entry.meta.get("variable_issues") or []
-            ),
+            "blocking_issues": variable_issues.has_blocking_issues(stored_issues),
         }
+
+    new_df, meta = variable_assistant.apply_action(entry.df, intent)
 
     # Apply DataFrame mutation if the action produced one.
     if new_df is not None:

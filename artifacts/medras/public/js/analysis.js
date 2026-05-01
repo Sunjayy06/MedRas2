@@ -990,25 +990,81 @@ function typeBadge(t) {
 /*  D auto-coding plan / E variable assistant)                         */
 /* ------------------------------------------------------------------ */
 
+// A preset is described by its "interior" cutoffs (the boundaries between
+// adjacent groups), an optional `floor` (the lower bound of the first
+// group — null = open / "≤cut"), `isInteger` (controls whether bin labels
+// look like "31–45" vs "18.5–25"), and an optional `defaultNames` array
+// used when the cutoffs are unchanged from the preset's defaults.
 const RECODE_PRESETS = {
-  age:  { match: /^age$/i,                       label: "Age",
-          bins: [{ lo: 18, hi: 30, name: "18–30" },
-                 { lo: 31, hi: 45, name: "31–45" },
-                 { lo: 46, hi: 60, name: "46–60" },
-                 { lo: 61, hi: null, name: ">60" }] },
-  bmi:  { match: /^bmi$/i,                       label: "BMI",
-          bins: [{ lo: null, hi: 18.5, name: "Underweight" },
-                 { lo: 18.5, hi: 25,   name: "Normal" },
-                 { lo: 25,   hi: 30,   name: "Overweight" },
-                 { lo: 30,   hi: null, name: "Obese" }] },
+  age:  { match: /^age$/i, label: "Age",
+          isInteger: true, floor: 18, defaultCutoffs: [30, 45, 60] },
+  bmi:  { match: /^bmi$/i, label: "BMI",
+          isInteger: false, floor: null, defaultCutoffs: [18.5, 25, 30],
+          defaultNames: ["Underweight", "Normal", "Overweight", "Obese"] },
   hb:   { match: /^(haemoglobin|hemoglobin|hb)$/i, label: "Haemoglobin",
-          bins: [{ lo: null, hi: 7,  name: "Severe" },
-                 { lo: 7,    hi: 10, name: "Moderate" },
-                 { lo: 10,   hi: 12, name: "Mild" },
-                 { lo: 12,   hi: null, name: "Normal" }] },
+          isInteger: false, floor: null, defaultCutoffs: [7, 10, 12],
+          defaultNames: ["Severe", "Moderate", "Mild", "Normal"] },
 };
 
+// Build the internal bins[] array from a list of comma-separated cutoffs.
+// Returns null if the cutoffs are invalid (non-numeric, empty, unsorted).
+function cutoffsToBins(cutoffs, preset) {
+  const c = (cutoffs || []).filter((x) => Number.isFinite(x));
+  if (c.length === 0) return null;
+  for (let i = 1; i < c.length; i++) if (c[i] <= c[i - 1]) return null;
+
+  const useNames =
+    preset.defaultNames
+    && c.length === preset.defaultCutoffs.length
+    && preset.defaultCutoffs.every((v, i) => v === c[i]);
+
+  const fmt = (n) => (Number.isInteger(n) ? String(n) : String(n));
+  const step = preset.isInteger ? 1 : 0;
+  const bins = [];
+
+  // First bin
+  const firstHi = c[0];
+  const firstLo = preset.floor;
+  bins.push({
+    lo: firstLo,
+    hi: firstHi,
+    name: useNames ? preset.defaultNames[0]
+      : (firstLo == null ? `≤${fmt(firstHi)}` : `${fmt(firstLo)}–${fmt(firstHi)}`),
+  });
+  // Middle bins
+  for (let i = 1; i < c.length; i++) {
+    const lo = c[i - 1] + step;
+    const hi = c[i];
+    bins.push({
+      lo, hi,
+      name: useNames ? preset.defaultNames[i] : `${fmt(lo)}–${fmt(hi)}`,
+    });
+  }
+  // Last bin (open upper)
+  const lastCut = c[c.length - 1];
+  const lastLo = lastCut + step;
+  bins.push({
+    lo: lastLo,
+    hi: null,
+    name: useNames ? preset.defaultNames[c.length]
+      : (preset.isInteger ? `>${fmt(lastCut)}` : `≥${fmt(lastCut)}`),
+  });
+  return bins;
+}
+
+// Inverse of cutoffsToBins — derives the "interior" cutoffs from a
+// bins[] array (for first-render where the user hasn't typed yet).
+function binsToCutoffs(bins) {
+  const cuts = [];
+  for (let i = 0; i < bins.length - 1; i++) {
+    if (bins[i].hi != null) cuts.push(bins[i].hi);
+  }
+  return cuts;
+}
+
 const CHIP_SUGGESTIONS = [
+  { label: "What should I do?", text: "What's your suggestion?",
+    isStatic: true },
   { label: "I want both mean and frequency for this column",
     template: "I want both mean and frequency for {col}" },
   { label: "Strip the prefix from this column",
@@ -1145,27 +1201,53 @@ function renderRecodingPanel() {
     zone.innerHTML = "";
     return;
   }
-  const rowsHtml = matches.map(({ key, column, preset }) => {
+
+  // Per-row state: ensure each match has bins seeded from defaultCutoffs so
+  // the cutoff input can render and Step-4 has a usable bins[] array.
+  matches.forEach(({ column, preset }) => {
     const choice = state.recodingChoices[column];
-    const enabled = !!(choice && choice.enabled);
-    const bins = (choice && choice.bins) || preset.bins;
+    if (!choice || !choice.bins) {
+      const bins = cutoffsToBins(preset.defaultCutoffs, preset);
+      state.recodingChoices[column] = {
+        enabled: choice ? !!choice.enabled : false,
+        bins,
+      };
+    }
+  });
+
+  const rowsHtml = matches.map(({ column, preset }) => {
+    const choice = state.recodingChoices[column];
+    const enabled = !!choice.enabled;
+    const bins = choice.bins;
+    const cutoffs = binsToCutoffs(bins);
+    const cutoffStr = cutoffs.join(", ");
     const summary = bins.map((b) => b.name).join(" / ");
     const editorHtml = `
-      <div class="se-recode-bins" data-testid="recode-bins-${escapeHtml(column)}" hidden>
-        ${bins.map((b, i) => `
-          <input type="number" data-col="${escapeHtml(column)}" data-bin="${i}" data-edge="lo"
-                 value="${b.lo == null ? '' : b.lo}" placeholder="lo" />
-          <input type="number" data-col="${escapeHtml(column)}" data-bin="${i}" data-edge="hi"
-                 value="${b.hi == null ? '' : b.hi}" placeholder="hi" />
-          <input type="text"   data-col="${escapeHtml(column)}" data-bin="${i}" data-edge="name"
-                 value="${escapeHtml(b.name)}" />
-        `).join("")}
+      <div class="se-recode-cutoffs" data-testid="recode-bins-${escapeHtml(column)}" hidden>
+        <label class="se-recode-cutoffs-label" for="cutoffs-${escapeHtml(column)}">
+          Cutoffs <span class="se-recode-cutoffs-hint">(comma-separated, e.g. 30, 45, 60)</span>
+        </label>
+        <input type="text"
+               id="cutoffs-${escapeHtml(column)}"
+               class="se-recode-cutoffs-input"
+               data-recode-cutoffs="${escapeHtml(column)}"
+               data-testid="input-recode-cutoffs-${escapeHtml(column)}"
+               value="${escapeHtml(cutoffStr)}"
+               autocomplete="off"
+               spellcheck="false" />
+        <div class="se-recode-cutoffs-preview"
+             data-recode-preview="${escapeHtml(column)}"
+             data-testid="preview-recode-${escapeHtml(column)}">
+          → Will create groups: <strong>${escapeHtml(summary)}</strong>
+        </div>
       </div>`;
     return `<div class="se-recode-row" data-testid="recode-row-${escapeHtml(column)}">
       <label>
         <input type="checkbox" data-recode-toggle="${escapeHtml(column)}"
                data-testid="check-recode-${escapeHtml(column)}" ${enabled ? "checked" : ""}/>
-        Group <strong>${escapeHtml(column)}</strong> into ${escapeHtml(summary)}
+        Group <strong>${escapeHtml(column)}</strong> into
+        <span class="se-recode-summary"
+              data-recode-summary="${escapeHtml(column)}">${escapeHtml(summary)}</span>
       </label>
       <button type="button" class="se-recode-edit" data-recode-edit="${escapeHtml(column)}"
               data-testid="button-recode-edit-${escapeHtml(column)}">Edit cutoffs</button>
@@ -1194,19 +1276,40 @@ function renderRecodingPanel() {
       if (editor) editor.hidden = !editor.hidden;
     });
   });
-  $$(".se-recode-bins input", zone).forEach((inp) => {
-    inp.addEventListener("change", () => {
-      const col = inp.dataset.col;
-      const i = parseInt(inp.dataset.bin, 10);
-      const edge = inp.dataset.edge;
+  $$("[data-recode-cutoffs]", zone).forEach((inp) => {
+    const update = () => {
+      const col = inp.dataset.recodeCutoffs;
       const preset = matches.find((m) => m.column === col).preset;
-      state.recodingChoices[col] = state.recodingChoices[col] || {
-        enabled: false, bins: preset.bins.map((b) => ({ ...b })),
-      };
-      const bins = state.recodingChoices[col].bins;
-      if (edge === "name") bins[i].name = inp.value;
-      else bins[i][edge] = inp.value === "" ? null : Number(inp.value);
-    });
+      const parts = inp.value
+        .split(/[,\s]+/)
+        .map((s) => s.trim())
+        .filter((s) => s.length)
+        .map((s) => Number(s));
+      const allNumeric = parts.length > 0 && parts.every((n) => Number.isFinite(n));
+      const bins = allNumeric ? cutoffsToBins(parts, preset) : null;
+      const previewEl = zone.querySelector(`[data-recode-preview="${CSS.escape(col)}"]`);
+      const summaryEl = zone.querySelector(`[data-recode-summary="${CSS.escape(col)}"]`);
+      if (bins) {
+        state.recodingChoices[col] = state.recodingChoices[col] || { enabled: false };
+        state.recodingChoices[col].bins = bins;
+        const summary = bins.map((b) => b.name).join(" / ");
+        if (previewEl) {
+          previewEl.classList.remove("is-error");
+          previewEl.innerHTML = `→ Will create groups: <strong>${escapeHtml(summary)}</strong>`;
+        }
+        if (summaryEl) summaryEl.textContent = summary;
+        inp.classList.remove("is-error");
+      } else {
+        if (previewEl) {
+          previewEl.classList.add("is-error");
+          previewEl.textContent =
+            "Enter one or more numbers in increasing order, separated by commas (e.g. 30, 45, 60).";
+        }
+        inp.classList.add("is-error");
+      }
+    };
+    inp.addEventListener("input", update);
+    inp.addEventListener("change", update);
   });
 }
 
@@ -1268,12 +1371,16 @@ function renderAssistantChips() {
     (c) => c.detected_type !== "id" && c.detected_type !== "exclude",
   );
   const colName = target ? target.column : null;
-  const chips = colName
-    ? CHIP_SUGGESTIONS.map((s) => ({
-        label: s.label.replace("this column", `“${colName}”`),
-        text: s.template.replace("{col}", colName),
-      }))
-    : [{ label: "Show me what you can do", text: "help" }];
+  const chips = CHIP_SUGGESTIONS.flatMap((s) => {
+    if (s.isStatic) {
+      return [{ label: s.label, text: s.text }];
+    }
+    if (!colName) return [];
+    return [{
+      label: s.label.replace("this column", `“${colName}”`),
+      text: s.template.replace("{col}", colName),
+    }];
+  });
   out.innerHTML = chips.map(
     (c, i) => `<button type="button" class="se-chip" data-chip="${i}" data-testid="chip-${i}">${escapeHtml(c.label)}</button>`
   ).join("");

@@ -1288,6 +1288,7 @@
 .se-recode-row {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 12px;
   padding: 8px 0;
   border-bottom: 1px solid var(--color-border);
@@ -1309,19 +1310,63 @@
   padding: 4px 6px;
 }
 .se-recode-row .se-recode-edit:hover { text-decoration: underline; }
-.se-recode-bins {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
+/* Single-input cutoff editor (replaces the old per-bin lo/hi/name grid).
+   The user types comma-separated cutoff values and a live preview below
+   shows the auto-generated group labels — much less granular than 12
+   inputs for 4 bins. */
+.se-recode-cutoffs {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  column-gap: 12px;
+  row-gap: 6px;
   margin-top: 6px;
   width: 100%;
+  flex-basis: 100%;            /* break onto its own line below the label/button */
+  padding: 10px 12px;
+  background: rgba(47, 111, 237, 0.04);
+  border: 1px dashed rgba(47, 111, 237, 0.20);
+  border-radius: 6px;
 }
-.se-recode-bins input {
-  width: 80px;
-  padding: 4px 6px;
+.se-recode-cutoffs[hidden] { display: none; }
+.se-recode-cutoffs-label {
   font-size: 12px;
+  font-weight: 600;
+  color: var(--color-navy-800);
+  margin: 0;
+}
+.se-recode-cutoffs-hint {
+  font-weight: 400;
+  color: var(--color-text-muted);
+  margin-left: 4px;
+}
+.se-recode-cutoffs-input {
+  padding: 6px 10px;
+  font-size: 13px;
   border: 1px solid var(--color-border);
   border-radius: 4px;
+  font-variant-numeric: tabular-nums;
+}
+.se-recode-cutoffs-input:focus {
+  outline: 2px solid rgba(47, 111, 237, 0.25);
+  outline-offset: 0;
+  border-color: var(--color-accent);
+}
+.se-recode-cutoffs-input.is-error {
+  border-color: #c43838;
+  background: rgba(196, 56, 56, 0.04);
+}
+.se-recode-cutoffs-preview {
+  grid-column: 1 / -1;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  padding: 4px 0 0;
+}
+.se-recode-cutoffs-preview.is-error {
+  color: #93181a;
+}
+.se-recode-summary {
+  font-weight: 500;
 }
 
 /* Zone D · auto-coding plan box */

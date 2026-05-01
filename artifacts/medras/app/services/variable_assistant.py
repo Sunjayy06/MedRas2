@@ -18,6 +18,9 @@ Supported intents (anything else returns ``clarify``):
   the seven MedRAS types (scale / ordinal / nominal / discrete / date /
   id / exclude).
 * ``exclude_column``     — convenience shorthand for change_type → exclude.
+* ``suggest``            — informational only; the API layer answers with a
+  context-aware recommendation built from the actual dataset (see
+  ``suggest_message`` below).
 """
 
 from __future__ import annotations
@@ -75,13 +78,36 @@ def _find_column(message: str, columns: List[str]) -> Optional[str]:
     return None
 
 
+_SUGGEST_RE = re.compile(
+    r"\b("
+    r"suggest(?:ion|ions)?|recommend(?:ation|ations)?|"
+    r"what (?:should|do|would|could|can) (?:i|we|you)|"
+    r"what(?:'s| is) your (?:suggestion|recommendation|advice|opinion|take)|"
+    r"what next|what now|any (?:idea|ideas|tip|tips|advice)|"
+    r"help me|how (?:do|should|can) i|how to|"
+    r"give me (?:a |an )?(?:suggestion|recommendation|advice|hint)|"
+    r"should (?:i|we)|do you think|is it (?:a )?good idea"
+    r")\b",
+    re.IGNORECASE,
+)
+
+
 def parse_intent(message: str, columns: List[str]) -> Dict[str, Any]:
     """Map ``message`` to one of the supported intents. Always returns a
     dict with at least ``action`` and ``column`` keys (column may be None
-    when the action is ``clarify``)."""
+    when the action is ``clarify`` or ``suggest``).
+
+    Precedence: bare-greeting / question-mark short prompts → ``suggest``;
+    then every concrete action intent (so question forms like "how do I
+    rename age to age_yrs" still resolve to ``rename``); then a broader
+    suggest fallback for open-ended requests; then ``clarify``."""
     msg = (message or "").strip()
     msg_low = msg.lower()
     column = _find_column(msg, columns)
+
+    # Bare greeting / lone "?" / "help" — unambiguous suggest triggers.
+    if msg_low in {"help", "?", "hi", "hello"}:
+        return {"action": "suggest", "column": column, "params": {}}
 
     # rename — "rename X to Y"
     m = re.search(r"rename\s+(.+?)\s+to\s+([A-Za-z0-9_ ]+)", msg, re.IGNORECASE)
@@ -136,6 +162,13 @@ def parse_intent(message: str, columns: List[str]) -> Dict[str, Any]:
     # Bare "strip prefix from VAS" / "strip the prefix"
     if re.search(r"strip.*prefix|remove.*prefix|drop.*prefix", msg_low) and column:
         return {"action": "strip_prefix", "column": column, "params": {}}
+
+    # Open-ended "what should I do?" / "should I add X" / "any
+    # recommendation?" — checked LAST so phrasings like "how do I rename
+    # X to Y" still resolve to the concrete action above instead of
+    # being downgraded to a generic suggestion.
+    if _SUGGEST_RE.search(msg):
+        return {"action": "suggest", "column": column, "params": {}}
 
     return {"action": "clarify", "column": column, "params": {}}
 
@@ -307,14 +340,138 @@ def apply_action(
             ),
         }
 
-    # clarify
-    return None, {
-        "confirmation_message": (
-            "I’m not sure what to do with that yet. Try something like:\n"
-            "• “Strip the Grade prefix from VAS Score”\n"
-            "• “I want both mean and frequency for VAS Score”\n"
-            "• “Treat Hospital_visits as discrete”\n"
-            "• “Rename Hb to Haemoglobin”\n"
-            "• “Exclude Notes from analysis”"
-        ),
+    if action == "suggest":
+        # Informational only. The API layer rebuilds a context-aware message
+        # via ``suggest_message`` because ``apply_action`` doesn't see the
+        # classifications/issues snapshot. We return an empty placeholder
+        # here so the dispatch table is complete.
+        return None, {"confirmation_message": ""}
+
+    # clarify — leave the message empty; the API layer fills it in with
+    # ``generic_clarify`` so the example commands reference the user's
+    # actual columns instead of canned dummy names like "VAS Score".
+    return None, {"confirmation_message": ""}
+
+
+# ---------------------------------------------------------------------------
+# Suggestion / clarification text builders (dataset-aware)
+# ---------------------------------------------------------------------------
+
+
+def _pick_columns(classifications: List[Dict[str, Any]], *kinds: str) -> List[str]:
+    out: List[str] = []
+    for c in classifications or []:
+        if not kinds or c.get("detected_type") in kinds:
+            out.append(c.get("column"))
+    return [c for c in out if c]
+
+
+# Same recoding presets the frontend uses; mirrored here so the assistant
+# can give concrete grouping advice (e.g. "group Age into 18–30 / 31–45 /
+# 46–60 / >60") instead of telling the user to invent their own bands.
+_BAND_PRESETS: List[Tuple[str, "re.Pattern[str]", str]] = [
+    ("age", re.compile(r"^age$", re.IGNORECASE), "18–30 / 31–45 / 46–60 / >60"),
+    ("bmi", re.compile(r"^bmi$", re.IGNORECASE),
+        "Underweight (<18.5) / Normal (18.5–25) / Overweight (25–30) / Obese (≥30)"),
+    ("hb",  re.compile(r"^(haemoglobin|hemoglobin|hb)$", re.IGNORECASE),
+        "Severe (<7) / Moderate (7–10) / Mild (10–12) / Normal (≥12)"),
+]
+
+
+def suggest_message(
+    columns: List[str],
+    classifications: List[Dict[str, Any]],
+    issues: List[Dict[str, Any]],
+) -> str:
+    """Build a concrete, dataset-aware recommendation. The user typed
+    something like "what should I do?" or "any suggestions?" — they want a
+    specific next action, not a list of generic example commands."""
+
+    suggestions: List[str] = []
+
+    issues_by_col: Dict[str, List[Dict[str, Any]]] = {}
+    for i in issues or []:
+        issues_by_col.setdefault(i.get("column"), []).append(i)
+
+    # --- Priority 1: blocking text-in-numeric → strip prefix ----------------
+    for c in classifications or []:
+        col = c.get("column")
+        col_issues = issues_by_col.get(col, [])
+        if any(i.get("type") == "text_in_numeric" for i in col_issues):
+            suggestions.append(
+                f"• “{col}” looks numeric but has text in front (e.g. “Grade 4”). "
+                f"Send: “strip the prefix from {col}”. "
+                f"That converts it to numbers and keeps the original text safely backed up."
+            )
+            break  # one strip-prefix tip is enough
+
+    # --- Priority 2: well-known clinical bands → recoding suggestion --------
+    scale_cols_lower = {
+        c.get("column", "").lower(): c.get("column")
+        for c in classifications or []
+        if c.get("detected_type") == "scale"
     }
+    for _key, pattern, band_label in _BAND_PRESETS:
+        for low, original in scale_cols_lower.items():
+            if pattern.match(low):
+                suggestions.append(
+                    f"• Group “{original}” into {band_label}. "
+                    f"Look at the OPTIONAL RECODING panel on the right — "
+                    f"tick the “Group {original} into …” checkbox, then click "
+                    f"“Edit cutoffs” if you want to change the boundaries."
+                )
+                break
+
+    # --- Priority 3: high-missing columns → exclude or review ---------------
+    high_missing = [
+        c for c in (classifications or [])
+        if (c.get("missing_pct") or 0) > 30
+    ]
+    if high_missing:
+        first = high_missing[0]
+        names = ", ".join(f"“{c['column']}”" for c in high_missing[:3])
+        plural = len(high_missing) > 1
+        suggestions.append(
+            f"• {names} {'have' if plural else 'has'} more than 30% missing data. "
+            f"Consider excluding {'them' if plural else 'it'}: "
+            f"send “exclude {first['column']} from analysis”."
+        )
+
+    # --- Generic fallback that still references real columns ---------------
+    if not suggestions:
+        usable = _pick_columns(classifications, "scale", "ordinal", "nominal", "discrete")
+        if usable:
+            sample = usable[0]
+            suggestions.append(
+                f"• Your dataset looks clean. You can still rename, retype or "
+                f"exclude columns — try “treat {sample} as nominal” or "
+                f"“rename {sample} to something_clearer”."
+            )
+        else:
+            return generic_clarify(columns)
+
+    intro = (
+        "Here’s what I’d suggest based on your data — pick whichever applies:\n\n"
+    )
+    return intro + "\n\n".join(suggestions)
+
+
+def generic_clarify(columns: List[str]) -> str:
+    """Fallback shown when the user's message couldn't be parsed at all.
+    Uses real column names from the dataset so the example commands are
+    actually runnable, instead of the old canned ``VAS Score`` / ``Hb`` /
+    ``Notes`` placeholders that confused users on first contact."""
+    cols = [c for c in (columns or []) if c]
+    pick = lambda i: cols[i] if i < len(cols) else None
+    a = pick(0) or "Age"
+    b = pick(1) or a
+    c = pick(2) or a
+    return (
+        "I’m not sure what to do with that yet. You can ask me to:\n"
+        f"• “Strip the prefix from {a}” — clean up text like “Grade 4” → 4\n"
+        f"• “I want both mean and frequency for {a}” — adds a numeric companion column\n"
+        f"• “Treat {b} as discrete” — change a column’s type\n"
+        f"• “Rename {c} to something_clearer”\n"
+        f"• “Exclude {a} from analysis”\n\n"
+        "Or just ask “what should I do?” for a tailored suggestion."
+    )
