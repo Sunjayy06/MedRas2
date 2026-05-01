@@ -740,28 +740,55 @@ body.home main {
   transform: translateY(0);
 }
 
-@media (max-width: 920px) {
+/* Tablet: hold two-column layout longer, just tighten gap and column ratio. */
+@media (max-width: 1024px) {
+  .about-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+    gap: 48px;
+  }
+  .about-card { padding: 36px 36px; }
+  .about-headline { max-width: 16ch; }
+}
+
+/* Narrow viewport: stack vertically and dissolve the floating "card"
+   treatment so the section reads as a continuous editorial block,
+   not a mobile-app card on a screen. */
+@media (max-width: 760px) {
+  .about-section {
+    padding: 72px 0 80px;
+    margin-top: 56px;
+  }
   .about-grid {
     grid-template-columns: minmax(0, 1fr);
-    gap: 40px;
+    gap: 28px;
   }
+  .about-headline {
+    max-width: none;
+    font-size: clamp(30px, 6.4vw, 40px);
+  }
+  .about-card-wrap { display: block; min-height: 0; }
   .about-card {
     margin-left: 0;
     max-width: none;
+    background: transparent;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    border: 0;
+    border-radius: 0;
+    padding: 0;
+    box-shadow: none;
   }
-  .about-headline { max-width: none; }
+  #about.about-section .about-body {
+    font-size: 16px;
+    line-height: 1.7;
+  }
 }
 
-@media (max-width: 640px) {
-  .about-section {
-    padding: 72px 0 80px;
-    margin-top: 64px;
-  }
-  .about-grid { gap: 32px; }
-  .about-lede { padding-left: 22px; }
-  .about-accent { height: 64px; }
-  .about-card { padding: 32px 26px; border-radius: 18px; }
-  .about-body { font-size: 16px; line-height: 1.75; }
+@media (max-width: 480px) {
+  .about-section { padding: 56px 0 64px; margin-top: 40px; }
+  .about-lede { padding-left: 18px; }
+  .about-accent { height: 56px; top: 4px; }
+  .about-eyebrow { margin-bottom: 16px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
