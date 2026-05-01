@@ -9,6 +9,9 @@ MedRAS variable types (matching SPSS conventions used by clinical researchers):
   Likert 1-5, severity grade 1-3). Median / IQR / non-parametric tests.
 * ``nominal``  — Unordered categories (sex, treatment arm, blood group).
   Frequency / chi-square tests.
+* ``discrete`` — Integer count variable (number of hospital visits, parity,
+  number of children). Treated like scale for descriptives, but reported as
+  median/IQR rather than mean/SD when skewed.
 * ``exclude``  — Free text or columns the user has explicitly removed.
 
 Classification rules — applied in order, first match wins:
@@ -39,12 +42,29 @@ import pandas as pd
 VarType = str  # one of: id, date, scale, ordinal, nominal, exclude
 
 _ID_NAME_RE = re.compile(
-    r"\b(id|uid|uuid|patient[_ ]?id|subject[_ ]?id|mrn|enrol|enroll|sno|s\.?no)\b",
+    r"(?:^|[\W_])(id|uid|uuid|patient[_ ]?id|subject[_ ]?id|study[_ ]?id|"
+    r"mrn|enrol|enroll|sno|s\.?no|pt[_ ]?id|record[_ ]?id)(?:$|[\W_])",
     re.IGNORECASE,
 )
+
+
+def column_name_looks_like_id(name: str) -> bool:
+    """True when the column name strongly suggests it is an identifier,
+    regardless of uniqueness. Used to surface follow-up prompts on
+    longitudinal data where the ID column has many repeats by design."""
+    return bool(_ID_NAME_RE.search(str(name or "")))
 _DATE_NAME_RE = re.compile(r"\b(date|dob|admission|discharge|visit|timestamp|onset)\b", re.IGNORECASE)
 _SCORE_NAME_RE = re.compile(
     r"\b(score|index|scale|grade|stage|severity|vas|nrs|gcs|mmse|likert)\b",
+    re.IGNORECASE,
+)
+# Note: Python regex treats "_" as a word character so \b will NOT match
+# between "_" and a letter. We use (?:^|[\W_]) / (?:$|[\W_]) so snake_case
+# columns like "Hospital_visits" are recognised.
+_COUNT_NAME_RE = re.compile(
+    r"(?:^|[\W_])(count|number|num|no_of|times|visits|episodes|admissions|"
+    r"children|parity|gravida|siblings|cigarettes|drinks|days|hospitalisations|"
+    r"hospitalizations)(?:$|[\W_])",
     re.IGNORECASE,
 )
 
@@ -112,26 +132,44 @@ def classify_column(series: pd.Series, name: str) -> Dict[str, Any]:
                 "Score-like column with limited values — treated as ordinal.",
                 unique_count, sample_values, n_missing, n_total,
             )
+        # Detect integer values (no fractional part).
+        try:
+            vals = series.dropna()
+            all_int = bool(np.all(np.equal(np.mod(vals, 1), 0)))
+            min_v = float(vals.min()) if len(vals) else 0.0
+        except Exception:
+            all_int = False
+            min_v = 0.0
+        # Discrete count by name wins over the ordinal heuristic — a column
+        # called "Hospital_visits" is a count even if it happens to have only
+        # 10 distinct values.
+        if all_int and min_v >= 0 and _COUNT_NAME_RE.search(name) and unique_count <= 30:
+            return _record(
+                name, "discrete",
+                "Integer count variable — treated as discrete.",
+                unique_count, sample_values, n_missing, n_total,
+            )
         # Few unique integer values → ordinal coded category (e.g. 0/1/2).
-        if unique_count <= 10:
-            try:
-                vals = series.dropna()
-                all_int = bool(np.all(np.equal(np.mod(vals, 1), 0)))
-            except Exception:
-                all_int = False
-            if all_int:
-                # 0/1 → nominal binary (sex coded as 1/2 etc.). 0/1/2/3 → ordinal.
-                if unique_count <= 2:
-                    return _record(
-                        name, "nominal",
-                        "Binary numeric coding — treated as nominal.",
-                        unique_count, sample_values, n_missing, n_total,
-                    )
+        if unique_count <= 10 and all_int:
+            # 0/1 → nominal binary (sex coded as 1/2 etc.). 0/1/2/3 → ordinal.
+            if unique_count <= 2:
                 return _record(
-                    name, "ordinal",
-                    "Few integer values — treated as ordinal.",
+                    name, "nominal",
+                    "Binary numeric coding — treated as nominal.",
                     unique_count, sample_values, n_missing, n_total,
                 )
+            return _record(
+                name, "ordinal",
+                "Few integer values — treated as ordinal.",
+                unique_count, sample_values, n_missing, n_total,
+            )
+        # Discrete count by shape: small integer cardinality, non-negative.
+        if all_int and min_v >= 0 and unique_count <= 15:
+            return _record(
+                name, "discrete",
+                "Integer count variable — treated as discrete.",
+                unique_count, sample_values, n_missing, n_total,
+            )
         return _record(
             name, "scale",
             "Continuous numeric — treated as scale.",
@@ -193,7 +231,7 @@ def encode_for_analysis(df: pd.DataFrame, classifications: List[Dict[str, Any]])
         if col not in out.columns:
             continue
         try:
-            if kind == "scale" or kind == "ordinal":
+            if kind in ("scale", "ordinal", "discrete"):
                 out[col] = pd.to_numeric(out[col], errors="coerce")
             elif kind == "date":
                 out[col] = pd.to_datetime(out[col], errors="coerce", format="mixed")

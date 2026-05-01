@@ -72,6 +72,11 @@ def parse_upload(
     if df.shape[1] < 2:
         raise UploadError("Need at least 2 columns to run any meaningful analysis.")
 
+    # Header sanity: if every cell in row 0 (now the column names) parses as a
+    # number, the file probably has no real header row. We surface this so the
+    # UI can ask the user.
+    numeric_header = all(_looks_numeric(str(c)) for c in df.columns)
+
     meta: Dict[str, Any] = {
         "filename": filename,
         "size_bytes": len(raw),
@@ -79,8 +84,39 @@ def parse_upload(
         "cols": int(df.shape[1]),
         "sheet_names": sheet_names,
         "selected_sheet": selected_sheet,
+        "raw_bytes": raw,  # kept in process memory so /select-sheet can re-parse
+        "header_looks_numeric": numeric_header,
     }
     return df, meta
+
+
+def _looks_numeric(s: str) -> bool:
+    try:
+        float(s)
+        return True
+    except (TypeError, ValueError):
+        return False
+
+
+def detect_repeated_ids(df: pd.DataFrame, id_columns: List[str]) -> Dict[str, Any]:
+    """Return per-ID-column repeat statistics for the follow-up-data prompt."""
+    out: Dict[str, Any] = {"any_repeats": False, "columns": []}
+    for col in id_columns:
+        if col not in df.columns:
+            continue
+        counts = df[col].value_counts(dropna=True)
+        repeats = int((counts > 1).sum())
+        out["columns"].append(
+            {
+                "column": col,
+                "unique_ids": int(counts.shape[0]),
+                "repeated_ids": repeats,
+                "max_repeats": int(counts.max()) if not counts.empty else 0,
+            }
+        )
+        if repeats > 0:
+            out["any_repeats"] = True
+    return out
 
 
 def preview_records(df: pd.DataFrame, n: int = 5) -> List[Dict[str, Any]]:

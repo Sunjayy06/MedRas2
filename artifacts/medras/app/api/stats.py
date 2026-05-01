@@ -25,6 +25,7 @@ from pydantic import BaseModel, Field
 from app.core.limiter import limiter
 from app.core.logging import get_logger
 from app.services import (
+    data_quality,
     dataset_store,
     dummy_data,
     excel_loader,
@@ -51,8 +52,10 @@ class DatasetSummary(BaseModel):
     selected_sheet: Optional[str] = None
 
 
-VarTypeLiteral = Literal["scale", "ordinal", "nominal", "date", "id", "exclude"]
-TemplateLiteral = Literal["anaemia", "diabetes", "hypertension"]
+VarTypeLiteral = Literal[
+    "scale", "ordinal", "nominal", "discrete", "date", "id", "exclude"
+]
+TemplateLiteral = Literal["anaemia", "diabetes", "hypertension", "rct"]
 
 
 class ClassificationOverride(BaseModel):
@@ -90,6 +93,16 @@ def _build_response(job_id: str, entry) -> Dict[str, Any]:
     entry.meta["classifications"] = classifications
     preview = excel_loader.preview_records(entry.df, n=5)
     columns = list(entry.df.columns)
+    # Include columns whose NAME strongly suggests an identifier even if the
+    # classifier flagged them otherwise (longitudinal/follow-up files have many
+    # repeats per ID by design, so uniqueness-based id detection misses them).
+    id_columns = list(
+        {c["column"] for c in classifications if c.get("detected_type") == "id"}
+        | {c for c in entry.df.columns if variable_classifier.column_name_looks_like_id(c)}
+    )
+    repeated_ids = excel_loader.detect_repeated_ids(entry.df, id_columns) if id_columns else {
+        "any_repeats": False, "columns": [],
+    }
     return {
         "job_id": job_id,
         "summary": {
@@ -98,10 +111,16 @@ def _build_response(job_id: str, entry) -> Dict[str, Any]:
             "cols": int(entry.df.shape[1]),
             "sheet_names": entry.meta.get("sheet_names", []),
             "selected_sheet": entry.meta.get("selected_sheet"),
+            "header_looks_numeric": bool(entry.meta.get("header_looks_numeric", False)),
+            "is_dummy": bool(entry.meta.get("is_dummy", False)),
+            "template": entry.meta.get("template"),
+            "preview_confirmed": bool(entry.meta.get("preview_confirmed", False)),
+            "follow_up_data": entry.meta.get("follow_up_data"),
         },
         "columns": columns,
         "classifications": classifications,
         "preview": preview,
+        "repeated_ids": repeated_ids,
     }
 
 
@@ -162,6 +181,108 @@ async def get_dataset(job_id: str) -> Dict[str, Any]:
     if entry is None:
         raise HTTPException(status_code=404, detail="Dataset expired or not found.")
     return _build_response(job_id, entry)
+
+
+class SelectSheetRequest(BaseModel):
+    job_id: str = Field(..., min_length=1, max_length=64)
+    sheet_name: str = Field(..., min_length=1, max_length=200)
+
+
+@router.post("/select-sheet")
+async def select_sheet(payload: SelectSheetRequest) -> Dict[str, Any]:
+    """Re-parse a previously uploaded Excel using a different sheet."""
+    entry = dataset_store.get(payload.job_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Dataset expired or not found.")
+    raw = entry.meta.get("raw_bytes")
+    filename = entry.meta.get("filename") or "upload.xlsx"
+    if not raw:
+        raise HTTPException(status_code=400, detail="No raw file available to re-read.")
+    if payload.sheet_name not in (entry.meta.get("sheet_names") or []):
+        raise HTTPException(status_code=400, detail="Unknown sheet name.")
+    try:
+        df, meta = excel_loader.parse_upload(
+            filename=filename, raw=raw, sheet_name=payload.sheet_name
+        )
+    except excel_loader.UploadError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    # Replace dataframe + meta but keep job_id stable so the UI doesn't lose state.
+    dataset_store.replace_df(payload.job_id, df)
+    # Preserve raw_bytes; clear classifications so they re-derive for the new sheet.
+    meta["raw_bytes"] = raw
+    dataset_store.update_meta(payload.job_id, **meta, classifications=None)
+    entry = dataset_store.get(payload.job_id)
+    return _build_response(payload.job_id, entry)
+
+
+class ConfirmPreviewRequest(BaseModel):
+    job_id: str = Field(..., min_length=1, max_length=64)
+    follow_up_data: Optional[bool] = None  # answer to "is this follow-up data?"
+
+
+@router.post("/confirm-preview")
+async def confirm_preview(payload: ConfirmPreviewRequest) -> Dict[str, Any]:
+    """Lock the file-preview confirmation (Screen 2A step)."""
+    entry = dataset_store.get(payload.job_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Dataset expired or not found.")
+    dataset_store.update_meta(
+        payload.job_id,
+        preview_confirmed=True,
+        follow_up_data=payload.follow_up_data,
+    )
+    entry = dataset_store.get(payload.job_id)
+    return _build_response(payload.job_id, entry)
+
+
+@router.get("/quality-check/{job_id}")
+async def quality_check(job_id: str) -> Dict[str, Any]:
+    """Run the data-quality report (Screen 4)."""
+    entry = dataset_store.get(job_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Dataset expired or not found.")
+    classifications = entry.meta.get("classifications") or variable_classifier.classify_dataframe(entry.df)
+    entry.meta["classifications"] = classifications
+    return data_quality.quality_report(entry.df, classifications=classifications)
+
+
+class QualityAction(BaseModel):
+    row: int
+    variable: str = Field(..., min_length=1, max_length=400)
+    action: Literal["keep", "remove", "cap", "review"]
+    bound_low: Optional[float] = None
+    bound_high: Optional[float] = None
+
+
+class ApplyQualityRequest(BaseModel):
+    job_id: str = Field(..., min_length=1, max_length=64)
+    actions: List[QualityAction] = Field(default_factory=list, max_length=5000)
+    remove_exact_duplicates: bool = True
+
+
+@router.post("/apply-quality")
+@limiter.limit("30/minute")
+async def apply_quality(request: Request, payload: ApplyQualityRequest) -> Dict[str, Any]:
+    entry = dataset_store.get(payload.job_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Dataset expired or not found.")
+    new_df, log_counts = data_quality.apply_actions(
+        entry.df,
+        actions=[a.model_dump() for a in payload.actions],
+        remove_exact_duplicates=payload.remove_exact_duplicates,
+    )
+    dataset_store.replace_df(payload.job_id, new_df)
+    dataset_store.update_meta(
+        payload.job_id,
+        classifications=None,  # recompute, since rows changed
+        rows=int(new_df.shape[0]),
+        quality_applied=True,
+        quality_log=log_counts,
+    )
+    entry = dataset_store.get(payload.job_id)
+    response = _build_response(payload.job_id, entry)
+    response["log"] = log_counts
+    return response
 
 
 @router.post("/classify")

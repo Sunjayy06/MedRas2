@@ -3,14 +3,14 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Statistical Analysis — MedRAS</title>
+    <title>Statistical Analysis Engine — MedRAS</title>
     <meta
       name="description"
-      content="Upload your Excel data, classify variables, and run normality-aware statistical tests with publication-grade output."
+      content="Twelve guided steps from raw Excel data to a publication-ready statistical report."
     />
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%232f6fed'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-family='Inter,sans-serif' font-size='18' font-weight='700' fill='white'%3EM%3C/text%3E%3C/svg%3E" />
     <link rel="stylesheet" href="/css/style.css" />
-    <link rel="stylesheet" href="/css/analysis.css" />
+    <link rel="stylesheet" href="/css/analysis.css?v=2026050107" />
   </head>
   <body>
     <header class="site-header" data-testid="site-header">
@@ -27,255 +27,346 @@
       </div>
     </header>
 
-    <main class="analysis-main">
-      <section class="ana-intro">
+    <main class="se-main" data-testid="stats-engine">
+      <section class="se-intro">
         <p class="eyebrow" data-testid="text-eyebrow">Module 03</p>
         <h1 data-testid="text-page-title">Statistical Analysis Engine</h1>
-        <p class="ana-lede" data-testid="text-lede">
-          Upload your dataset (or generate a realistic dummy file), let MedRAS classify
-          your variables, then run an automatic test that respects assumptions of
-          normality, group count and variable type.
-          <span class="beta-pill" aria-label="Beta release" data-testid="badge-beta">Beta</span>
+        <p class="se-lede" data-testid="text-lede">
+          Twelve guided steps. Upload your data, confirm a few decisions, and
+          MedRAS does the analysis, the figures and the writing for you.
+          <span class="beta-pill" data-testid="badge-beta">Pass 1</span>
         </p>
       </section>
 
-      <!-- Stepper -->
-      <ol class="ana-steps" aria-label="Analysis steps" data-testid="step-tracker">
-        <li class="ana-step is-active" data-step="1" data-testid="step-1">
-          <span class="ana-step-num">1</span><span class="ana-step-label">Data source</span>
-        </li>
-        <li class="ana-step" data-step="2" data-testid="step-2">
-          <span class="ana-step-num">2</span><span class="ana-step-label">Classify variables</span>
-        </li>
-        <li class="ana-step is-todo" data-step="3" data-testid="step-3">
-          <span class="ana-step-num">3</span><span class="ana-step-label">Clean data</span>
-          <span class="ana-step-tag">later</span>
-        </li>
-        <li class="ana-step" data-step="4" data-testid="step-4">
-          <span class="ana-step-num">4</span><span class="ana-step-label">Choose analysis</span>
-        </li>
-        <li class="ana-step is-todo" data-step="5" data-testid="step-5">
-          <span class="ana-step-num">5</span><span class="ana-step-label">Run with progress</span>
-          <span class="ana-step-tag">later</span>
-        </li>
-        <li class="ana-step" data-step="6" data-testid="step-6">
-          <span class="ana-step-num">6</span><span class="ana-step-label">Results</span>
-        </li>
-        <li class="ana-step is-todo" data-step="7" data-testid="step-7">
-          <span class="ana-step-num">7</span><span class="ana-step-label">Export</span>
-          <span class="ana-step-tag">later</span>
-        </li>
+      <!-- 12-step progress tracker -->
+      <ol class="se-steps" aria-label="Twelve-step workflow" data-testid="step-tracker">
+        <li class="se-step is-active" data-step="1" data-testid="dot-step-1"><span class="se-step-num">1</span><span class="se-step-label">Start</span></li>
+        <li class="se-step" data-step="2" data-testid="dot-step-2"><span class="se-step-num">2</span><span class="se-step-label">Data input</span></li>
+        <li class="se-step" data-step="3" data-testid="dot-step-3"><span class="se-step-num">3</span><span class="se-step-label">Variables</span></li>
+        <li class="se-step" data-step="4" data-testid="dot-step-4"><span class="se-step-num">4</span><span class="se-step-label">Quality</span></li>
+        <li class="se-step is-todo" data-step="5" data-testid="dot-step-5"><span class="se-step-num">5</span><span class="se-step-label">Missing</span><span class="se-step-tag">soon</span></li>
+        <li class="se-step is-todo" data-step="6" data-testid="dot-step-6"><span class="se-step-num">6</span><span class="se-step-label">Objective</span><span class="se-step-tag">soon</span></li>
+        <li class="se-step is-todo" data-step="7" data-testid="dot-step-7"><span class="se-step-num">7</span><span class="se-step-label">Assign</span><span class="se-step-tag">soon</span></li>
+        <li class="se-step is-todo" data-step="8" data-testid="dot-step-8"><span class="se-step-num">8</span><span class="se-step-label">Normality</span><span class="se-step-tag">soon</span></li>
+        <li class="se-step is-todo" data-step="9" data-testid="dot-step-9"><span class="se-step-num">9</span><span class="se-step-label">Plan</span><span class="se-step-tag">soon</span></li>
+        <li class="se-step is-todo" data-step="10" data-testid="dot-step-10"><span class="se-step-num">10</span><span class="se-step-label">Run</span><span class="se-step-tag">soon</span></li>
+        <li class="se-step is-todo" data-step="11" data-testid="dot-step-11"><span class="se-step-num">11</span><span class="se-step-label">Results</span><span class="se-step-tag">soon</span></li>
+        <li class="se-step is-todo" data-step="12" data-testid="dot-step-12"><span class="se-step-num">12</span><span class="se-step-label">Export</span><span class="se-step-tag">soon</span></li>
       </ol>
 
-      <!-- =================================================================== -->
-      <!-- STEP 1: data source                                                 -->
-      <!-- =================================================================== -->
-      <section class="ana-panel" id="panel-1" data-testid="panel-1">
-        <header class="ana-panel-head">
-          <h2>Step 1 · Where is your data coming from?</h2>
-          <p>Pick one entry point. You can switch later by clicking <em>Start over</em>.</p>
+      <!-- ===========================================================
+           SCREEN 1 · Opening — choose entry method
+           =========================================================== -->
+      <section class="se-screen" id="screen-1" data-testid="screen-1">
+        <header class="se-screen-head">
+          <h2>Welcome to MedRAS — Medical Research Analysis System</h2>
+          <p>Move from data to publication-ready results, step by step.</p>
         </header>
 
-        <div class="ana-cards" role="list">
-          <article class="ana-card is-clickable" role="listitem" data-source="upload" data-testid="card-upload">
-            <span class="ana-card-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                <polyline points="17 8 12 3 7 8"/>
-                <line x1="12" y1="3" x2="12" y2="15"/>
+        <div class="se-entry-grid" role="list">
+          <article class="se-entry-card is-clickable" role="listitem" data-entry="upload" data-testid="card-entry-upload">
+            <span class="se-entry-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="4" y="3" width="16" height="18" rx="2"/>
+                <path d="M8 8h8M8 12h8M8 16h5"/>
               </svg>
             </span>
-            <h3>Upload my own dataset</h3>
-            <p>Excel (.xlsx, .xls) or CSV. Up to 8&nbsp;MB. We never store your file.</p>
-            <input type="file" id="file-input" accept=".xlsx,.xls,.csv" hidden data-testid="input-file" />
-            <button type="button" class="btn btn-primary" data-action="open-file" data-testid="button-open-file">
-              Choose file…
-            </button>
+            <h3>I have an Excel file</h3>
+            <p>Upload an existing dataset (.xlsx, .xls, .csv) and analyse it.</p>
+            <span class="se-entry-cta" aria-hidden="true">Upload &rarr;</span>
           </article>
 
-          <article class="ana-card is-clickable" role="listitem" data-source="dummy" data-testid="card-dummy">
-            <span class="ana-card-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M3 5h18v14H3z"/>
-                <path d="M3 9h18M9 5v14"/>
+          <article class="se-entry-card" role="listitem" data-entry="form" data-testid="card-entry-form" aria-disabled="true">
+            <span class="se-entry-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="6" y="3" width="12" height="18" rx="2"/>
+                <path d="M9 7h6M9 11h6M9 15h4"/>
+                <circle cx="12" cy="3" r="1.2" fill="currentColor"/>
               </svg>
             </span>
-            <h3>Use a realistic dummy dataset</h3>
-            <p>Practice the workflow on a clinically-plausible Anaemia, Diabetes or Hypertension trial.</p>
-            <div class="ana-dummy-controls" data-testid="dummy-controls">
-              <label>
-                <span>Template</span>
-                <select id="dummy-template" data-testid="select-template">
-                  <option value="anaemia">Anaemia trial (Hb, Ferritin)</option>
-                  <option value="diabetes">Diabetes trial (HbA1c, FBS)</option>
-                  <option value="hypertension">Hypertension trial (SBP, DBP)</option>
-                </select>
-              </label>
-              <label>
-                <span>Patients</span>
-                <input type="number" id="dummy-n" min="20" max="2000" step="10" value="150" data-testid="input-n" />
-              </label>
-              <label>
-                <span>Groups</span>
-                <select id="dummy-groups" data-testid="select-groups">
-                  <option value="2">Two arms</option>
-                  <option value="3">Three arms</option>
-                  <option value="1">Single cohort</option>
-                </select>
-              </label>
-            </div>
-            <button type="button" class="btn btn-primary" data-action="generate-dummy" data-testid="button-generate">
-              Generate dataset
-            </button>
+            <h3>I need to create a form</h3>
+            <p>Build a data-collection proforma field by field.</p>
+            <span class="se-entry-cta is-soon">Coming in Pass 4</span>
           </article>
 
-          <article class="ana-card is-disabled" role="listitem" data-testid="card-merge">
-            <span class="ana-card-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="6" cy="6" r="3"/>
-                <circle cx="18" cy="6" r="3"/>
-                <circle cx="12" cy="18" r="3"/>
-                <path d="M8 8l3 7M16 8l-3 7"/>
+          <article class="se-entry-card is-clickable" role="listitem" data-entry="practice" data-testid="card-entry-practice">
+            <span class="se-entry-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M9 3h6"/>
+                <path d="M10 3v6L5 19a2 2 0 0 0 1.7 3h10.6A2 2 0 0 0 19 19l-5-10V3"/>
               </svg>
             </span>
-            <h3>Merge files from multiple researchers</h3>
-            <p>Combine Excels with conflict resolution. Coming in the next phase.</p>
-            <span class="ana-soon">Coming next</span>
+            <h3>I want to practice</h3>
+            <p>Generate a realistic clinical dataset and try the workflow.</p>
+            <span class="se-entry-cta" aria-hidden="true">Generate &rarr;</span>
           </article>
         </div>
-
-        <div id="upload-status" class="ana-status" role="status" aria-live="polite" data-testid="status-upload"></div>
       </section>
 
-      <!-- =================================================================== -->
-      <!-- STEP 2: classify                                                    -->
-      <!-- =================================================================== -->
-      <section class="ana-panel is-hidden" id="panel-2" data-testid="panel-2">
-        <header class="ana-panel-head">
-          <h2>Step 2 · Confirm what each column is</h2>
-          <p>
-            We auto-classified each column. Review and override anything that looks
-            wrong, then continue. The variable type drives which test runs in Step&nbsp;4.
-          </p>
+      <!-- ===========================================================
+           SCREEN 2A · Upload Excel
+           =========================================================== -->
+      <section class="se-screen is-hidden" id="screen-2a" data-testid="screen-2a">
+        <header class="se-screen-head">
+          <h2>Step 2 · Upload your dataset</h2>
+          <p>Drop your Excel or CSV file. Files up to 8&nbsp;MB. Nothing is stored on disk.</p>
         </header>
 
-        <div class="ana-meta" id="dataset-meta" data-testid="dataset-meta"></div>
+        <div class="se-drop" id="drop-zone" data-testid="drop-zone">
+          <input type="file" id="file-input" accept=".xlsx,.xls,.csv" hidden data-testid="input-file" />
+          <div class="se-drop-inner">
+            <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="17 8 12 3 7 8"/>
+              <line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+            <p><strong>Drop your file here</strong>, or <button type="button" class="se-link-button" data-action="open-file" data-testid="button-open-file">click to browse</button>.</p>
+            <p class="se-formats">Accepted: .xlsx · .xls · .csv</p>
+          </div>
+        </div>
 
-        <div class="ana-table-wrap">
-          <table class="ana-table" id="classify-table" data-testid="table-classify">
+        <div id="upload-status" class="se-status" role="status" aria-live="polite" data-testid="status-upload"></div>
+
+        <div class="se-actions">
+          <button type="button" class="btn btn-secondary" data-action="back-to-1" data-testid="button-back-1">&larr; Back</button>
+        </div>
+      </section>
+
+      <!-- ===========================================================
+           SCREEN 2C · Practice dataset
+           =========================================================== -->
+      <section class="se-screen is-hidden" id="screen-2c" data-testid="screen-2c">
+        <header class="se-screen-head">
+          <h2>Step 2 · Generate a practice dataset</h2>
+          <p>Pick a clinical scenario, choose how many patients, then click Generate.</p>
+        </header>
+
+        <fieldset class="se-radio-grid" id="practice-templates" data-testid="practice-templates">
+          <legend class="se-visually-hidden">Choose a study template</legend>
+          <!-- filled by JS -->
+        </fieldset>
+
+        <div class="se-form-row">
+          <label class="se-field">
+            <span>Number of patients <strong data-testid="text-n-value">100</strong></span>
+            <input type="range" id="practice-n" min="30" max="500" step="10" value="100" data-testid="input-n" />
+            <small class="se-hint">30 — 500</small>
+          </label>
+          <label class="se-field">
+            <span>Number of groups</span>
+            <select id="practice-groups" data-testid="select-groups">
+              <option value="2">Two arms</option>
+              <option value="3">Three arms</option>
+              <option value="1">Single cohort</option>
+            </select>
+          </label>
+          <label class="se-field">
+            <span>Random missing data (%)</span>
+            <input type="number" id="practice-missing" min="0" max="30" step="1" value="5" data-testid="input-missing" />
+          </label>
+        </div>
+
+        <div class="se-actions">
+          <button type="button" class="btn btn-secondary" data-action="back-to-1" data-testid="button-back-1c">&larr; Back</button>
+          <button type="button" class="btn btn-primary" data-action="generate" data-testid="button-generate">Generate dataset</button>
+        </div>
+
+        <div id="practice-status" class="se-status" role="status" aria-live="polite" data-testid="status-practice"></div>
+      </section>
+
+      <!-- ===========================================================
+           SCREEN 2-PREVIEW · File check (between 2A and 3)
+           =========================================================== -->
+      <section class="se-screen is-hidden" id="screen-preview" data-testid="screen-preview">
+        <header class="se-screen-head">
+          <h2>Does this look correct?</h2>
+          <p data-testid="text-preview-summary">Confirm the preview below before we move on.</p>
+        </header>
+
+        <div class="se-meta" id="preview-meta" data-testid="preview-meta"></div>
+
+        <div class="se-sheet-picker is-hidden" id="sheet-picker" data-testid="sheet-picker">
+          <label class="se-field">
+            <span>Your file has multiple sheets. Which one contains your research data?</span>
+            <select id="sheet-select" data-testid="select-sheet"></select>
+          </label>
+        </div>
+
+        <div class="se-banner is-hidden" id="header-warning" data-testid="banner-header">
+          <strong>Heads up</strong> — the first row looks like numbers, not column names.
+          Please confirm your file actually has a header row.
+        </div>
+
+        <div class="se-banner is-amber is-hidden" id="repeat-id-banner" data-testid="banner-repeat-id">
+          <strong>Repeated patient IDs</strong> —
+          <span id="repeat-id-text"></span>
+          <div class="se-banner-actions">
+            <button type="button" class="btn btn-tertiary" data-action="set-followup" data-yn="yes" data-testid="button-followup-yes">Yes — follow-up data</button>
+            <button type="button" class="btn btn-tertiary" data-action="set-followup" data-yn="no" data-testid="button-followup-no">No — data entry error</button>
+          </div>
+        </div>
+
+        <details class="se-disclose" open>
+          <summary>Preview first 5 rows</summary>
+          <div class="se-table-wrap">
+            <table class="se-table" id="preview-table" data-testid="table-preview"><thead></thead><tbody></tbody></table>
+          </div>
+        </details>
+
+        <div class="se-actions">
+          <button type="button" class="btn btn-secondary" data-action="restart" data-testid="button-preview-restart">Upload a different file</button>
+          <button type="button" class="btn btn-primary" data-action="confirm-preview" data-testid="button-confirm-preview">Yes, continue &rarr;</button>
+        </div>
+
+        <div id="preview-status" class="se-status" role="status" aria-live="polite" data-testid="status-preview"></div>
+      </section>
+
+      <!-- ===========================================================
+           SCREEN 3 · Variable Classification
+           =========================================================== -->
+      <section class="se-screen is-hidden" id="screen-3" data-testid="screen-3">
+        <header class="se-screen-head">
+          <h2>Step 3 · Review your variable types</h2>
+          <p>We classified each column automatically. Confirm or change any type. The variable type drives which test runs later.</p>
+        </header>
+
+        <div class="se-table-wrap">
+          <table class="se-table se-classify" id="classify-table" data-testid="table-classify">
             <thead>
               <tr>
                 <th>Column</th>
                 <th>Detected type</th>
+                <th>Sample values</th>
                 <th>Unique</th>
                 <th>Missing</th>
-                <th>Sample values</th>
-                <th>Why</th>
+                <th>Change type</th>
               </tr>
             </thead>
             <tbody></tbody>
           </table>
         </div>
 
-        <details class="ana-preview">
-          <summary>Preview first 5 rows</summary>
-          <div class="ana-table-wrap">
-            <table class="ana-table" id="preview-table" data-testid="table-preview"><thead></thead><tbody></tbody></table>
+        <div class="se-callout" id="autocode-summary" data-testid="autocode-summary"></div>
+
+        <details class="se-disclose">
+          <summary>Optional recoding (group continuous variables into categories)</summary>
+          <div class="se-recode" data-testid="recode-panel">
+            <label><input type="checkbox" data-recode="age" data-testid="check-recode-age"/> Group <strong>Age</strong> into 18–30 / 31–45 / 46–60 / &gt;60</label>
+            <label><input type="checkbox" data-recode="bmi" data-testid="check-recode-bmi"/> Group <strong>BMI</strong> into Underweight / Normal / Overweight / Obese</label>
+            <label><input type="checkbox" data-recode="hb" data-testid="check-recode-hb"/> Group <strong>Haemoglobin</strong> into Severe / Moderate / Mild / Normal</label>
+            <p class="se-hint">Recoding adds a new column alongside the original. Enabled in Pass 2.</p>
           </div>
         </details>
 
-        <div class="ana-actions">
-          <button type="button" class="btn btn-secondary" data-action="restart" data-testid="button-restart">
-            Start over
-          </button>
-          <button type="button" class="btn btn-primary" data-action="confirm-classify" data-testid="button-confirm-classify">
-            Continue to analysis →
-          </button>
+        <div class="se-actions">
+          <button type="button" class="btn btn-secondary" data-action="back-to-preview" data-testid="button-back-preview">&larr; Back</button>
+          <button type="button" class="btn btn-primary" data-action="confirm-classify" data-testid="button-confirm-classify">Confirm and continue &rarr;</button>
         </div>
+
+        <div id="classify-status" class="se-status" role="status" aria-live="polite" data-testid="status-classify"></div>
       </section>
 
-      <!-- =================================================================== -->
-      <!-- STEP 4: choose analysis                                             -->
-      <!-- =================================================================== -->
-      <section class="ana-panel is-hidden" id="panel-4" data-testid="panel-4">
-        <header class="ana-panel-head">
-          <h2>Step 4 · What are you comparing?</h2>
-          <p>
-            Pick the outcome you want to study and (optionally) a grouping or predictor
-            variable. We will choose the right test based on the variable types.
+      <!-- ===========================================================
+           SCREEN 4 · Data quality
+           =========================================================== -->
+      <section class="se-screen is-hidden" id="screen-4" data-testid="screen-4">
+        <header class="se-screen-head">
+          <h2>Step 4 · Data quality check</h2>
+          <p>Impossible values, duplicates and logical errors. Choose what to do with each flagged row.</p>
+        </header>
+
+        <div class="se-quality-summary" id="quality-summary" data-testid="quality-summary"></div>
+
+        <details class="se-disclose" open id="dq-impossible-wrap">
+          <summary>Section A · Outliers and impossible values <span class="se-count" data-testid="count-impossible">0</span></summary>
+          <div class="se-table-wrap">
+            <table class="se-table" id="dq-impossible-table" data-testid="table-impossible">
+              <thead>
+                <tr>
+                  <th>Row #</th>
+                  <th>Variable</th>
+                  <th>Value</th>
+                  <th>Issue</th>
+                  <th>What to do</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div class="se-bulk-row">
+            <button type="button" class="btn btn-tertiary" data-action="bulk-impossible" data-set="keep" data-testid="button-bulk-keep">Set all to Keep</button>
+            <button type="button" class="btn btn-tertiary" data-action="bulk-impossible" data-set="cap" data-testid="button-bulk-cap">Cap all at boundary</button>
+            <button type="button" class="btn btn-tertiary" data-action="bulk-impossible" data-set="review" data-testid="button-bulk-review">Mark all for review</button>
+          </div>
+        </details>
+
+        <details class="se-disclose" id="dq-dup-wrap">
+          <summary>Section B · Duplicate records <span class="se-count" data-testid="count-duplicates">0</span></summary>
+          <div id="dq-dup-body" data-testid="dq-dup-body"></div>
+        </details>
+
+        <details class="se-disclose" id="dq-logical-wrap">
+          <summary>Section C · Data consistency errors <span class="se-count" data-testid="count-logical">0</span></summary>
+          <div class="se-table-wrap">
+            <table class="se-table" id="dq-logical-table" data-testid="table-logical">
+              <thead>
+                <tr>
+                  <th>Row #</th>
+                  <th>Columns</th>
+                  <th>Value</th>
+                  <th>Issue</th>
+                  <th>What to do</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </details>
+
+        <div class="se-actions">
+          <button type="button" class="btn btn-secondary" data-action="back-to-classify" data-testid="button-back-classify">&larr; Back</button>
+          <button type="button" class="btn btn-primary" data-action="apply-quality" data-testid="button-apply-quality">Apply actions and continue &rarr;</button>
+        </div>
+
+        <div id="quality-status" class="se-status" role="status" aria-live="polite" data-testid="status-quality"></div>
+      </section>
+
+      <!-- ===========================================================
+           SCREEN 5+ · Coming in next pass
+           =========================================================== -->
+      <section class="se-screen is-hidden" id="screen-soon" data-testid="screen-soon">
+        <header class="se-screen-head">
+          <h2 data-testid="text-soon-title">Coming in the next pass</h2>
+          <p data-testid="text-soon-body">
+            This screen is part of Pass 2 (missing data, research objective,
+            variable assignment) or later. The data you cleaned in step 4 has
+            been saved and will flow straight into the next steps once they
+            ship.
           </p>
         </header>
 
-        <div class="ana-form">
-          <label class="ana-field">
-            <span>Primary outcome variable</span>
-            <select id="select-outcome" data-testid="select-outcome"></select>
-            <small id="outcome-hint" class="ana-hint" data-testid="hint-outcome"></small>
-          </label>
-
-          <label class="ana-field">
-            <span>Group / predictor variable <em>(optional)</em></span>
-            <select id="select-group" data-testid="select-group"></select>
-            <small id="group-hint" class="ana-hint" data-testid="hint-group"></small>
-          </label>
-
-          <label class="ana-field ana-field-narrow">
-            <span>Significance level (α)</span>
-            <select id="select-alpha" data-testid="select-alpha">
-              <option value="0.05">0.05 (standard)</option>
-              <option value="0.01">0.01 (strict)</option>
-              <option value="0.10">0.10 (exploratory)</option>
-            </select>
-          </label>
+        <div class="se-soon-card" data-testid="soon-card">
+          <ul>
+            <li><strong>Pass 2:</strong> Missing data manager (heatmap, MICE, Little's MCAR), 16-option research-direction picker, variable assignment.</li>
+            <li><strong>Pass 3:</strong> Normality with thumb rules, full plan confirmation gate, expanded test library, tabbed results viewer.</li>
+            <li><strong>Pass 4:</strong> Form builder, Word/PDF/Excel export, auto-written Methods section.</li>
+          </ul>
         </div>
 
-        <div id="recommendation" class="ana-callout" aria-live="polite" data-testid="recommendation"></div>
-
-        <div class="ana-actions">
-          <button type="button" class="btn btn-secondary" data-action="back-to-classify" data-testid="button-back-classify">
-            ← Back to classification
-          </button>
-          <button type="button" class="btn btn-primary" data-action="run-analysis" data-testid="button-run-analysis">
-            Run analysis →
-          </button>
+        <div class="se-actions">
+          <button type="button" class="btn btn-secondary" data-action="restart" data-testid="button-soon-restart">Start over with new data</button>
+          <a href="/" class="btn btn-tertiary" data-testid="link-soon-home">Back to MedRAS home</a>
         </div>
-      </section>
-
-      <!-- =================================================================== -->
-      <!-- STEP 6: results                                                     -->
-      <!-- =================================================================== -->
-      <section class="ana-panel is-hidden" id="panel-6" data-testid="panel-6">
-        <header class="ana-panel-head">
-          <h2>Step 6 · Results</h2>
-          <p>Auto-selected test, with assumptions, descriptives and a plain-English interpretation.</p>
-        </header>
-        <div id="results-body" data-testid="results-body"></div>
-
-        <div class="ana-actions">
-          <button type="button" class="btn btn-secondary" data-action="back-to-analysis" data-testid="button-back-analysis">
-            ← Adjust analysis
-          </button>
-          <button type="button" class="btn btn-secondary" data-action="restart" data-testid="button-restart-from-results">
-            Start over with new dataset
-          </button>
-          <a href="/" class="btn btn-tertiary" data-testid="link-home-results">
-            Back to MedRAS home
-          </a>
-        </div>
-
-        <p class="ana-soon-note" data-testid="note-export">
-          Export to Word / PDF / Excel coming in the next phase.
-        </p>
       </section>
     </main>
 
     <footer class="site-footer" data-testid="site-footer">
       <div class="footer-inner">
         <span>&copy; MedRAS — Medical Research Acceleration System</span>
-        <span class="footer-meta">Beta · for research use</span>
+        <span class="footer-meta">Pass 1 of 4 · for research use</span>
       </div>
     </footer>
 
-    <script src="/js/analysis.js" defer></script>
+    <script src="/js/analysis.js?v=2026050107" defer></script>
   </body>
 </html>

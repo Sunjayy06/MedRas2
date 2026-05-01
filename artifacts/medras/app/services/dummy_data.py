@@ -22,7 +22,9 @@ def _inject_missing(df: pd.DataFrame, pct: float, rng: np.random.Generator) -> p
     """Sprinkle ``pct`` percent missing values into non-ID, non-group columns."""
     if pct <= 0:
         return df
-    skip = {"Patient_ID", "Group", "Treatment", "Sex", "Diagnosis"}
+    skip = {
+        "Patient_ID", "Group", "Treatment", "Treatment_arm", "Sex", "Diagnosis",
+    }
     for col in df.columns:
         if col in skip:
             continue
@@ -109,10 +111,38 @@ def _hypertension(n: int, n_groups: int, rng: np.random.Generator) -> pd.DataFra
     )
 
 
+def _rct(n: int, n_groups: int, rng: np.random.Generator) -> pd.DataFrame:
+    """Generic randomised controlled trial — continuous outcome + a few covariates."""
+    sex = rng.choice(["Male", "Female"], size=n, p=[0.5, 0.5])
+    age = rng.normal(loc=50, scale=14, size=n).clip(18, 85).round(0)
+    if n_groups <= 1:
+        arm = np.array(["Cohort"] * n)
+    else:
+        labels = (["Treatment"] + (["Placebo"] if n_groups == 2 else ["DoseB", "Placebo"]))[:n_groups]
+        arm = rng.choice(labels, size=n)
+    bmi = rng.normal(loc=27, scale=4.5, size=n).clip(16, 50)
+    base_outcome = 70.0
+    treatment_effect = np.where(arm == (labels[0] if n_groups > 1 else "Cohort"), -8.0, 0.0)
+    outcome = base_outcome + treatment_effect + 0.15 * (age - 50) + rng.normal(0, 9, size=n)
+    visits = rng.poisson(lam=3.5, size=n)  # discrete count
+    return pd.DataFrame(
+        {
+            "Patient_ID": np.arange(1, n + 1),
+            "Age": age.astype(int),
+            "Sex": sex,
+            "Treatment_arm": arm,
+            "BMI": np.round(bmi, 1),
+            "Outcome_score": np.round(outcome, 1),
+            "Hospital_visits": visits.astype(int),
+        }
+    )
+
+
 _GENERATORS = {
     "anaemia": _anaemia,
     "diabetes": _diabetes,
     "hypertension": _hypertension,
+    "rct": _rct,
 }
 
 
@@ -121,6 +151,7 @@ def list_templates() -> List[Dict[str, str]]:
         {"id": "anaemia", "label": "Anaemia trial", "description": "Hb, Ferritin, Severity"},
         {"id": "diabetes", "label": "Diabetes trial", "description": "HbA1c, FBS, BMI"},
         {"id": "hypertension", "label": "Hypertension trial", "description": "SBP, DBP, smoking"},
+        {"id": "rct", "label": "Randomised controlled trial", "description": "Treatment arms, continuous outcome, count covariate"},
     ]
 
 
