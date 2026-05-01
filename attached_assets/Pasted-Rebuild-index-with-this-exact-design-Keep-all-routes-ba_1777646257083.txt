@@ -1,0 +1,362 @@
+Rebuild index with this exact design.
+Keep all routes, backend, and existing content.
+Fully responsive — desktop, tablet, and mobile.
+
+════════════════════════════════════
+HERO SLIDES — 6 SLIDES TOTAL
+════════════════════════════════════
+
+SLIDE STRUCTURE:
+  One full-width viewport, overflow hidden,
+  border-radius 22px.
+  Inner flex track, transition .55s ease.
+  Each slide: min-width 100%.
+  Auto-advance every 4.5 seconds.
+  Pause 8 seconds on user interaction.
+  Touch swipe + mouse drag both work.
+  6 dot indicators below — active dot 
+  becomes a wide pill (22px × 7px).
+
+SLIDE 0 — Identity / Brand (subtle dark blue-navy):
+  Background: linear-gradient(140deg,
+    #0F172A 0%, #1E2D5A 100%)
+  Two decorative translucent circles 
+  (rgba white, 0.15 opacity, large, 
+  position absolute top-right and bottom-left).
+
+  Content centred:
+    Badge: "From Chennai, for researchers everywhere"
+      10px, rgba(white,.8), pill with 
+      rgba(white,.12) background.
+    
+    Headline (large keyword style):
+      "Your research"  (line 1, white)
+      "operating system." (line 2, gradient text:
+        linear-gradient(90deg,#A78BFA,#60A5FA),
+        webkit-background-clip: text)
+    
+    Sub: "A structured research OS for medical 
+    and academic researchers. From objective 
+    to submission-ready manuscript — guided, 
+    validated, compliance-aware."
+    15px, rgba(white,.65), max-width 420px.
+    
+    Headline font-size: 48px desktop, 32px mobile.
+
+SLIDE 1 — Sample Size (indigo-purple):
+  Background: linear-gradient(135deg,
+    #1A1035, #3B1D8F, #4F46E5)
+  Status tag top-right: "Module 02 · Available"
+  Module pill: "Sample Size Calculator"
+  Big keyword: "Know your n."
+    52px desktop, 36px mobile.
+    Font-weight 500. White. Letter-spacing -2px.
+  Tagline: "Before you collect a single data 
+  point, know exactly how many patients you need. 
+  Formula-driven. Power-aware. 14 study designs."
+    16px, rgba(white,.75).
+  Button: "Open calculator →"
+    White background, #4F46E5 text.
+    On click: /sample-size.html
+
+SLIDE 2 — Statistical Analysis (ocean blue):
+  Background: linear-gradient(135deg,
+    #0C1F40, #0D3B6E, #0369A1)
+  Status tag: "Module 03 · Beta"
+  Module pill: "Statistical Analysis Engine"
+  Big keyword: "Upload. Analyse. Done."
+  Tagline: "Upload your Excel. MedRAS cleans it, 
+  classifies it, tests normality, selects the 
+  right statistical test, and writes your 
+  Results section."
+  Button: "Open analysis engine →"
+    White bg, #0369A1 text.
+    On click: /analysis.html
+
+SLIDE 3 — Proposal Generator (warm amber-dark):
+  Background: linear-gradient(135deg,
+    #1A0F0A, #78350F, #B45309)
+  Status tag: "Module 04 · Coming soon"
+  Module pill: "Proposal Generator"
+  Big keyword: "Write your proposal."
+  Tagline: "Draft ICMR, ethics committee, and 
+  university research proposals directly from 
+  your methodology. No template hunting. 
+  No blank page."
+  Button: "Notify me →"
+    White bg, #B45309 text.
+    Opacity 0.6. Not clickable (cursor default).
+
+SLIDE 4 — Thesis Writer (deep crimson):
+  Background: linear-gradient(135deg,
+    #1A0A14, #7F1D1D, #B91C1C)
+  Status tag: "Module 05 · Coming soon"
+  Module pill: "Thesis & Article Writer"
+  Big keyword: "Write your paper."
+  Tagline: "Compile a structured manuscript 
+  with auto-generated tables, validated 
+  references, and APA-compliant formatting 
+  — ready to submit."
+  Button: "Notify me →" — Dimmed, not clickable.
+
+SLIDE 5 — Plagiarism (deep teal):
+  Background: linear-gradient(135deg,
+    #0A1214, #134E4A, #0F766E)
+  Status tag: "Module 06 · Coming soon"
+  Module pill: "Plagiarism & Compliance"
+  Big keyword: "Verify before you submit."
+  Tagline: "Originality scoring, citation 
+  verification, and academic integrity checks 
+  — aligned with Turnitin, iThenticate, 
+  and Aarjav standards."
+  Button: "Notify me →" — Dimmed, not clickable.
+
+SLIDE PADDING:
+  Desktop: 52px 64px
+  Tablet: 40px 48px
+  Mobile: 36px 28px
+
+SLIDE MIN-HEIGHT:
+  Desktop: 380px
+  Mobile: 300px
+
+BUTTONS on slides:
+  Primary: white background, coloured text
+  matching slide accent, 13px weight 500,
+  padding 10px 22px, border-radius 10px,
+  no border.
+
+MODULE PILL on each slide:
+  background rgba(white,.15),
+  color rgba(white,.85),
+  font-size 10px, font-weight 500,
+  padding 4px 14px, border-radius 20px,
+  letter-spacing .05em, margin-bottom 20px.
+
+STATUS TAG (absolute top-right of each slide):
+  background rgba(white,.12),
+  color rgba(white,.8),
+  font-size 10px, font-weight 500,
+  padding 4px 12px, border-radius 20px,
+  top 24px, right 28px.
+
+DOT INDICATORS:
+  Below slides, centred, gap 7px.
+  Inactive: 7px circle, #CFC9E0.
+  Active: 22px wide × 7px tall,
+  border-radius 4px, #7C3AED.
+  Transition: width and background .3s ease.
+  Each dot clickable.
+
+════════════════════════════════════
+LIFECYCLE — HORIZONTAL SWIPE CARDS
+════════════════════════════════════
+
+Section heading row (left-aligned):
+  Eyebrow: "HOW RESEARCHERS USE MEDRAS"
+  Title: "An eight-step research lifecycle"
+  Sub: "Swipe through each step — from your 
+  first research question to a verified 
+  submission."
+  Padding: 0 5%.
+
+SWIPE CONTAINER:
+  display flex, gap 14px.
+  overflow-x auto. scrollbar hidden.
+  scroll-snap-type x mandatory.
+  padding 4px 5% 20px.
+  
+  This is the Satvic recipe swipe style —
+  cards peek at the edges showing 
+  the next card is there.
+
+EACH LIFECYCLE CARD:
+  width 200px, flex-shrink 0.
+  background white.
+  border .5px solid #E5E0D8.
+  border-radius 18px.
+  padding 22px 18px.
+  scroll-snap-align start.
+  position relative.
+  
+  On hover: border-color #A78BFA.
+  transition .2s.
+
+CARD CONTENTS:
+  Step number badge (absolute top-right):
+    22×22px circle, background #F5F3FF,
+    border .5px solid #DDD6FE,
+    font-size 10px, font-weight 500,
+    color #7C3AED.
+  
+  Icon wrap: 48×48px, border-radius 14px,
+  coloured background, 24px emoji centred.
+  Margin-bottom 14px.
+  
+  Step name: 14px, weight 500, #111,
+  margin-bottom 4px.
+  
+  Description: 12px, #888, line-height 1.4.
+  
+  Status badge: 10px weight 500, pill,
+  margin-top 12px.
+    Available: #EFF6FF bg, #1D4ED8 text.
+    Beta: #F0FDF4 bg, #15803D text.
+    Coming soon: #F3F4F6 bg, #6B7280 text.
+
+THE 8 CARDS:
+  1 — 🎯 Define — background #F5F3FF
+      "State your research objective in one 
+      sentence. MedRAS structures the rest."
+      Status: Start here (use Available style)
+
+  2 — 🗂 Design — background #EFF6FF
+      "Choose your study type — RCT, cohort, 
+      cross-sectional, diagnostic, and more."
+      Status: Coming soon
+
+  3 — 📐 Calculate — background #F5F3FF
+      "Get your required sample size with 
+      power, alpha, and dropout built in."
+      Status: Available now
+
+  4 — 📝 Propose — background #FFFBEB
+      "Draft ICMR and ethics proposals 
+      from your methodology automatically."
+      Status: Coming soon
+
+  5 — 📊 Upload — background #EFF6FF
+      "Upload your Excel. MedRAS cleans, 
+      classifies, and prepares it for analysis."
+      Status: Beta
+
+  6 — 📈 Compile — background #F0FDF4
+      "Tests run automatically. Tables, graphs, 
+      and interpretation generated instantly."
+      Status: Beta
+
+  7 — 📄 Draft — background #FFF1F2
+      "Manuscript compiled with your results, 
+      references, and APA formatting."
+      Status: Coming soon
+
+  8 — ✅ Verify — background #F0FDFA
+      "Plagiarism check and compliance 
+      verification before final submission."
+      Status: Coming soon
+
+════════════════════════════════════
+MODULE GRID — UNCHANGED FROM BEFORE
+════════════════════════════════════
+
+Keep the 6-card grid exactly as built 
+in the previous version.
+3 columns desktop, 2 tablet, 1 mobile.
+All content, badges, and links unchanged.
+
+════════════════════════════════════
+ABOUT SECTION — UNCHANGED
+════════════════════════════════════
+
+Keep all text exactly as is.
+"ABOUT MEDRAS" eyebrow.
+"Not a chatbot. A research operating system."
+Full paragraph body text.
+
+════════════════════════════════════
+MOBILE BOTTOM NAVIGATION — REDESIGNED
+════════════════════════════════════
+
+Replace the centre + button with something
+more useful. The + was too generic.
+
+New layout (5 items):
+
+  Left 1: 🏠 Home (active, #7C3AED)
+  Left 2: 📐 Sample Size (/sample-size.html)
+  CENTRE: 📊 (large gradient circle, lifted)
+    This goes to /analysis.html
+    Label below circle: "Analyse"
+    This is the most-used action.
+    Gradient: linear-gradient(135deg,
+    #1D4ED8, #7C3AED). 52×52px circle.
+    Lifted 16px above bar.
+    Border: 3px solid page background.
+  Right 1: 📄 Reports (/reports or coming soon)
+  Right 2: ☰ All Modules 
+    (scrolls to modules section on homepage)
+
+Labels: 10px, weight 500.
+Active: #7C3AED. Inactive: #888.
+Bottom padding: env(safe-area-inset-bottom).
+
+════════════════════════════════════
+COLOUR AND TYPOGRAPHY RULES
+════════════════════════════════════
+
+Page background: #F7F5F2 (warm off-white)
+Card background: #FFFFFF
+Card border: #E5E0D8
+Nav background: #FFFFFF
+
+Primary: #1D4ED8
+Accent / Active: #7C3AED
+Gradient: linear-gradient(135deg,#1D4ED8,#7C3AED)
+
+Text primary: #111111
+Text secondary: #555555
+Text muted: #888780
+Text hint: #AAAAAA
+
+Font stack:
+  -apple-system, BlinkMacSystemFont,
+  'SF Pro Display', 'Segoe UI', sans-serif
+
+Weights: 400 regular, 500 medium only.
+No 600, no 700, no bold.
+
+Letter-spacing on big keywords: -1.5px to -2px
+(gives the modern editorial feel)
+
+Line-heights: 1.1 for headlines, 1.6 for body.
+
+════════════════════════════════════
+REMOVE THESE COMPLETELY
+════════════════════════════════════
+
+1. "OpenAI key missing" and all system 
+   status messages — never public facing.
+
+2. The orbit diagram — completely gone.
+
+3. "Hover or tap any module on the orbit" text.
+
+4. "Plan · Compute · Write · Verify" legend.
+
+5. Any dark navy full-page sections.
+   (Footer remains dark — that is correct.)
+
+════════════════════════════════════
+TEST CHECKLIST
+════════════════════════════════════
+
+1. Hero slides auto-advance every 4.5 seconds.
+   Swiping on mobile changes slide.
+   Dragging on desktop changes slide.
+   Dots update correctly.
+
+2. Lifecycle cards scroll horizontally.
+   Peek effect visible (next card shows).
+   Works on both touch and mouse.
+
+3. Slide buttons navigate correctly:
+   Slide 1 → /sample-size.html
+   Slide 2 → /analysis.html
+   Slides 3–5 → no navigation (dimmed).
+
+4. Mobile bottom nav centre button → /analysis.html
+
+5. No horizontal page overflow on any screen size.
+
+6. "OpenAI key missing" does not appear 
+   anywhere in the page source.

@@ -11,7 +11,6 @@
   document.addEventListener("DOMContentLoaded", function () {
     enableSmoothAnchors();
     blockDisabledAnchors();
-    pingBackend();
   });
 
   // Anchors marked aria-disabled="true" (planned modules in the orbit) must
@@ -47,29 +46,4 @@
     });
   }
 
-  function pingBackend() {
-    var statusEl = document.querySelector('[data-testid="text-status"]');
-    if (!statusEl) return;
-    fetch("/api/readyz", { headers: { Accept: "application/json" } })
-      .then(function (response) {
-        if (!response.ok) throw new Error("readyz " + response.status);
-        return response.json();
-      })
-      .then(function (data) {
-        var integrations = data && data.integrations ? data.integrations : {};
-        var notes = [];
-        if (!integrations.openai) notes.push("OpenAI key missing");
-        if (!integrations.copyleaks) notes.push("Copyleaks credentials missing");
-        var statusText = notes.length
-          ? "Foundation ready \u00b7 " + notes.join(" \u00b7 ")
-          : "Foundation ready \u00b7 all integrations connected";
-        var dot = statusEl.querySelector(".status-dot");
-        statusEl.textContent = "";
-        if (dot) statusEl.appendChild(dot);
-        statusEl.appendChild(document.createTextNode(" " + statusText));
-      })
-      .catch(function () {
-        /* Silent: status defaults to its initial markup. */
-      });
-  }
 })();

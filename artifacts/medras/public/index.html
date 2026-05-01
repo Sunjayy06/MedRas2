@@ -8,10 +8,11 @@
       name="description"
       content="MedRAS is a structured research operating system for medical and academic research. Plan, calculate, analyse, write, and verify — end to end."
     />
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%232f6fed'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-family='Inter,sans-serif' font-size='18' font-weight='700' fill='white'%3EM%3C/text%3E%3C/svg%3E" />
-    <link rel="stylesheet" href="/css/style.css?v=2026043003" />
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%237c3aed'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-family='Inter,sans-serif' font-size='18' font-weight='700' fill='white'%3EM%3C/text%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="/css/style.css?v=2026050126" />
+    <link rel="stylesheet" href="/css/home.css?v=2026050126" />
   </head>
-  <body>
+  <body class="home">
     <header class="site-header" data-testid="site-header">
       <div class="header-inner">
         <a href="/" class="brand" data-testid="link-home">
@@ -21,303 +22,320 @@
         <nav class="primary-nav" aria-label="Primary">
           <a href="/" class="nav-link" data-testid="link-nav-home">Home</a>
           <a href="#modules" class="nav-link" data-testid="link-nav-modules">Modules</a>
-          <a href="#workflow" class="nav-link" data-testid="link-nav-workflow">Workflow</a>
+          <a href="#lifecycle" class="nav-link" data-testid="link-nav-workflow">Workflow</a>
           <a href="#about" class="nav-link" data-testid="link-nav-about">About</a>
         </nav>
       </div>
     </header>
 
     <main>
-      <section class="hero">
-        <div class="hero-inner">
-          <p class="eyebrow" data-testid="text-eyebrow">Medical Research Acceleration System</p>
-          <h1 class="hero-title" data-testid="text-hero-title">
-            A structured research operating system for medical and academic researchers.
-          </h1>
-          <p class="hero-subtitle" data-testid="text-hero-subtitle">
-            From research objective to submission-ready manuscript — guided, statistically
-            validated, and compliance-aware at every step.
-          </p>
-          <div class="hero-actions">
-            <a href="#modules" class="btn btn-primary" data-testid="button-explore">
-              Explore the modules
-            </a>
-            <a href="#workflow" class="btn btn-secondary" data-testid="button-workflow">
-              See the workflow
-            </a>
+      <!-- ============================================================ -->
+      <!-- HERO SLIDER (6 slides)                                       -->
+      <!-- ============================================================ -->
+      <section class="hero-slider" data-slider data-testid="hero-slider">
+        <div class="slider-viewport">
+          <div class="slider-track">
+
+            <!-- Slide 0 — Identity / Brand -->
+            <article class="slide slide--brand" data-testid="slide-brand">
+              <span class="slide-brand-badge">From Chennai, for researchers everywhere</span>
+              <h1 class="slide-brand-headline">
+                Your research<br/>
+                <span class="grad-text">operating system.</span>
+              </h1>
+              <p class="slide-brand-sub">
+                A structured research OS for medical and academic researchers.
+                From objective to submission-ready manuscript — guided,
+                validated, compliance-aware.
+              </p>
+            </article>
+
+            <!-- Slide 1 — Sample Size -->
+            <article class="slide slide--ss" data-testid="slide-ss">
+              <span class="slide-status">Module 02 · Available</span>
+              <span class="slide-pill">Sample Size Calculator</span>
+              <h2 class="slide-keyword">Know your n.</h2>
+              <p class="slide-tagline">
+                Before you collect a single data point, know exactly how many
+                patients you need. Formula-driven. Power-aware. 14 study designs.
+              </p>
+              <a class="slide-btn" href="/sample-size.html" data-testid="link-slide-ss">
+                Open calculator →
+              </a>
+            </article>
+
+            <!-- Slide 2 — Statistical Analysis -->
+            <article class="slide slide--stats" data-testid="slide-stats">
+              <span class="slide-status">Module 03 · Beta</span>
+              <span class="slide-pill">Statistical Analysis Engine</span>
+              <h2 class="slide-keyword">Upload. Analyse. Done.</h2>
+              <p class="slide-tagline">
+                Upload your Excel. MedRAS cleans it, classifies it, tests
+                normality, selects the right statistical test, and writes your
+                Results section.
+              </p>
+              <a class="slide-btn" href="/analysis.html" data-testid="link-slide-stats">
+                Open analysis engine →
+              </a>
+            </article>
+
+            <!-- Slide 3 — Proposal Generator -->
+            <article class="slide slide--prop" data-testid="slide-prop">
+              <span class="slide-status">Module 04 · Coming soon</span>
+              <span class="slide-pill">Proposal Generator</span>
+              <h2 class="slide-keyword">Write your proposal.</h2>
+              <p class="slide-tagline">
+                Draft ICMR, ethics committee, and university research proposals
+                directly from your methodology. No template hunting. No blank
+                page.
+              </p>
+              <a class="slide-btn is-disabled" href="#" aria-disabled="true"
+                 data-testid="link-slide-prop">Notify me →</a>
+            </article>
+
+            <!-- Slide 4 — Thesis Writer -->
+            <article class="slide slide--write" data-testid="slide-write">
+              <span class="slide-status">Module 05 · Coming soon</span>
+              <span class="slide-pill">Thesis &amp; Article Writer</span>
+              <h2 class="slide-keyword">Write your paper.</h2>
+              <p class="slide-tagline">
+                Compile a structured manuscript with auto-generated tables,
+                validated references, and APA-compliant formatting — ready to
+                submit.
+              </p>
+              <a class="slide-btn is-disabled" href="#" aria-disabled="true"
+                 data-testid="link-slide-write">Notify me →</a>
+            </article>
+
+            <!-- Slide 5 — Plagiarism -->
+            <article class="slide slide--verify" data-testid="slide-verify">
+              <span class="slide-status">Module 06 · Coming soon</span>
+              <span class="slide-pill">Plagiarism &amp; Compliance</span>
+              <h2 class="slide-keyword">Verify before you submit.</h2>
+              <p class="slide-tagline">
+                Originality scoring, citation verification, and academic
+                integrity checks — aligned with Turnitin, iThenticate, and
+                Aarjav standards.
+              </p>
+              <a class="slide-btn is-disabled" href="#" aria-disabled="true"
+                 data-testid="link-slide-verify">Notify me →</a>
+            </article>
+
           </div>
-          <p class="hero-status" data-testid="text-status">
-            <span class="status-dot" aria-hidden="true"></span>
-            Foundation ready &middot; modules coming online
+        </div>
+        <div class="slider-dots" aria-label="Slide indicators"></div>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- LIFECYCLE — horizontal swipe                                  -->
+      <!-- ============================================================ -->
+      <section id="lifecycle" class="lifecycle" data-testid="lifecycle">
+        <header class="lifecycle-head">
+          <p class="home-eyebrow">How researchers use MedRAS</p>
+          <h2 class="home-section-title">An eight-step research lifecycle</h2>
+          <p class="home-section-sub">
+            Swipe through each step — from your first research question to a
+            verified submission.
           </p>
+        </header>
+
+        <div class="lifecycle-rail" data-lifecycle-rail data-testid="list-lifecycle">
+          <article class="life-card" data-testid="life-card-1">
+            <span class="life-step">1</span>
+            <span class="life-icon" style="background:#f5f3ff;">🎯</span>
+            <h3 class="life-name">Define</h3>
+            <p class="life-desc">State your research objective in one sentence. MedRAS structures the rest.</p>
+            <span class="life-status" data-state="available">Start here</span>
+          </article>
+
+          <article class="life-card" data-testid="life-card-2">
+            <span class="life-step">2</span>
+            <span class="life-icon" style="background:#eff6ff;">🗂</span>
+            <h3 class="life-name">Design</h3>
+            <p class="life-desc">Choose your study type — RCT, cohort, cross-sectional, diagnostic, and more.</p>
+            <span class="life-status" data-state="coming-soon">Coming soon</span>
+          </article>
+
+          <article class="life-card" data-testid="life-card-3">
+            <span class="life-step">3</span>
+            <span class="life-icon" style="background:#f5f3ff;">📐</span>
+            <h3 class="life-name">Calculate</h3>
+            <p class="life-desc">Get your required sample size with power, alpha, and dropout built in.</p>
+            <span class="life-status" data-state="available">Available now</span>
+          </article>
+
+          <article class="life-card" data-testid="life-card-4">
+            <span class="life-step">4</span>
+            <span class="life-icon" style="background:#fffbeb;">📝</span>
+            <h3 class="life-name">Propose</h3>
+            <p class="life-desc">Draft ICMR and ethics proposals from your methodology automatically.</p>
+            <span class="life-status" data-state="coming-soon">Coming soon</span>
+          </article>
+
+          <article class="life-card" data-testid="life-card-5">
+            <span class="life-step">5</span>
+            <span class="life-icon" style="background:#eff6ff;">📊</span>
+            <h3 class="life-name">Upload</h3>
+            <p class="life-desc">Upload your Excel. MedRAS cleans, classifies, and prepares it for analysis.</p>
+            <span class="life-status" data-state="beta">Beta</span>
+          </article>
+
+          <article class="life-card" data-testid="life-card-6">
+            <span class="life-step">6</span>
+            <span class="life-icon" style="background:#f0fdf4;">📈</span>
+            <h3 class="life-name">Compile</h3>
+            <p class="life-desc">Tests run automatically. Tables, graphs, and interpretation generated instantly.</p>
+            <span class="life-status" data-state="beta">Beta</span>
+          </article>
+
+          <article class="life-card" data-testid="life-card-7">
+            <span class="life-step">7</span>
+            <span class="life-icon" style="background:#fff1f2;">📄</span>
+            <h3 class="life-name">Draft</h3>
+            <p class="life-desc">Manuscript compiled with your results, references, and APA formatting.</p>
+            <span class="life-status" data-state="coming-soon">Coming soon</span>
+          </article>
+
+          <article class="life-card" data-testid="life-card-8">
+            <span class="life-step">8</span>
+            <span class="life-icon" style="background:#f0fdfa;">✅</span>
+            <h3 class="life-name">Verify</h3>
+            <p class="life-desc">Plagiarism check and compliance verification before final submission.</p>
+            <span class="life-status" data-state="coming-soon">Coming soon</span>
+          </article>
         </div>
       </section>
 
-      <section id="modules" class="section">
-        <div class="section-inner">
-          <header class="section-header">
-            <p class="eyebrow">Phase 1 — Six Core Modules</p>
-            <h2 data-testid="text-modules-heading">The MedRAS workflow, end to end</h2>
-            <p class="section-lead">
-              Hover or tap any module on the orbit to see what it does, then click to open it.
-              Available modules glow blue; the rest are coming soon.
+      <!-- ============================================================ -->
+      <!-- MODULES GRID                                                  -->
+      <!-- ============================================================ -->
+      <section id="modules" class="modules-section">
+        <header class="modules-head">
+          <p class="home-eyebrow">Phase 1 — Six core modules</p>
+          <h2 class="home-section-title">The MedRAS workflow, end to end</h2>
+          <p class="home-section-sub">
+            Available modules are live; the rest are on the way.
+          </p>
+        </header>
+
+        <div class="modules-grid" data-testid="list-modules">
+          <a class="m-card is-disabled" href="#" aria-disabled="true" data-testid="card-module-1">
+            <span class="m-card-num">01</span>
+            <h3 class="m-card-title">Study Builder</h3>
+            <p class="m-card-desc">
+              Translate a research objective into a structured methodology.
             </p>
-          </header>
-
-          <!-- Interactive circle-and-spoke orbit. Each module node is a small
-               circle that expands into a card on hover/focus. On mobile the
-               orbit collapses into a stacked card list (no hover required). -->
-          <div class="orbit" data-testid="orbit">
-            <svg class="orbit-spokes" viewBox="0 0 600 600" aria-hidden="true" focusable="false">
-              <circle class="orbit-ring" cx="300" cy="300" r="216" fill="none" />
-              <g class="orbit-lines">
-                <line x1="300" y1="300" x2="300" y2="84"  />
-                <line x1="300" y1="300" x2="487" y2="192" />
-                <line x1="300" y1="300" x2="487" y2="408" />
-                <line x1="300" y1="300" x2="300" y2="516" />
-                <line x1="300" y1="300" x2="113" y2="408" />
-                <line x1="300" y1="300" x2="113" y2="192" />
-              </g>
-            </svg>
-
-            <div class="orbit-core" aria-hidden="true">
-              <span class="orbit-core-mark">M</span>
-              <span class="orbit-core-name">MedRAS</span>
-              <span class="orbit-core-tag">Research OS</span>
+            <div class="m-card-footer">
+              <span class="m-card-cta">Coming soon</span>
+              <span class="m-card-status" data-state="coming-soon">Planned</span>
             </div>
+          </a>
 
-            <ol class="orbit-nodes" data-testid="list-modules">
-              <li class="orbit-slot" style="--top:14%;--left:50%;">
-                <a class="orbit-node is-planned" data-cat="plan"
-                   href="#modules" aria-disabled="true"
-                   data-testid="card-module-1"
-                   aria-label="Module 1, Study Builder. Status: Planned.">
-                  <span class="orbit-node-mini" aria-hidden="true">
-                    <span class="orbit-node-num">01</span>
-                    <span class="orbit-node-abbr">Plan</span>
-                  </span>
-                  <span class="orbit-node-card">
-                    <span class="orbit-node-title">Study Builder</span>
-                    <span class="orbit-node-desc">
-                      Translate a research objective into a structured methodology.
-                    </span>
-                    <span class="orbit-node-status status-planned">Planned</span>
-                  </span>
-                </a>
-              </li>
-
-              <li class="orbit-slot" style="--top:32%;--left:81.18%;">
-                <a class="orbit-node is-available" data-cat="compute"
-                   href="/sample-size.html"
-                   data-testid="card-module-2"
-                   aria-label="Module 2, Sample Size Calculator. Available. Open calculator.">
-                  <span class="orbit-node-mini" aria-hidden="true">
-                    <span class="orbit-node-num">02</span>
-                    <span class="orbit-node-abbr">Size</span>
-                  </span>
-                  <span class="orbit-node-card">
-                    <span class="orbit-node-title">Sample Size Calculator</span>
-                    <span class="orbit-node-desc">
-                      Formula-driven n with explicit power, alpha and effect size — 14 designs.
-                    </span>
-                    <span class="orbit-node-cta" data-testid="link-sample-size">Open calculator →</span>
-                    <span class="orbit-node-status status-active">Available</span>
-                  </span>
-                </a>
-              </li>
-
-              <li class="orbit-slot" style="--top:68%;--left:81.18%;">
-                <a class="orbit-node is-available" data-cat="compute"
-                   href="/analysis.html"
-                   data-testid="card-module-3"
-                   aria-label="Module 3, Statistical Analysis Engine. Available, Beta. Open analysis engine.">
-                  <span class="orbit-node-mini" aria-hidden="true">
-                    <span class="orbit-node-num">03</span>
-                    <span class="orbit-node-abbr">Stats</span>
-                  </span>
-                  <span class="orbit-node-card">
-                    <span class="orbit-node-title">Statistical Analysis Engine</span>
-                    <span class="orbit-node-desc">
-                      Upload Excel, classify variables, run normality-aware tests with APA outputs.
-                    </span>
-                    <span class="orbit-node-cta" data-testid="link-analysis">Open analysis engine →</span>
-                    <span class="orbit-node-status status-active">Available · Beta</span>
-                  </span>
-                </a>
-              </li>
-
-              <li class="orbit-slot" style="--top:86%;--left:50%;">
-                <a class="orbit-node is-planned" data-cat="write"
-                   href="#modules" aria-disabled="true"
-                   data-testid="card-module-4"
-                   aria-label="Module 4, Proposal Generator. Status: Planned.">
-                  <span class="orbit-node-mini" aria-hidden="true">
-                    <span class="orbit-node-num">04</span>
-                    <span class="orbit-node-abbr">Prop</span>
-                  </span>
-                  <span class="orbit-node-card">
-                    <span class="orbit-node-title">Proposal Generator</span>
-                    <span class="orbit-node-desc">
-                      Draft ICMR, ethics and university proposals from your methodology.
-                    </span>
-                    <span class="orbit-node-status status-planned">Planned</span>
-                  </span>
-                </a>
-              </li>
-
-              <li class="orbit-slot" style="--top:68%;--left:18.82%;">
-                <a class="orbit-node is-planned" data-cat="write"
-                   href="#modules" aria-disabled="true"
-                   data-testid="card-module-5"
-                   aria-label="Module 5, Thesis and Article Writer. Status: Planned.">
-                  <span class="orbit-node-mini" aria-hidden="true">
-                    <span class="orbit-node-num">05</span>
-                    <span class="orbit-node-abbr">Write</span>
-                  </span>
-                  <span class="orbit-node-card">
-                    <span class="orbit-node-title">Thesis &amp; Article Writer</span>
-                    <span class="orbit-node-desc">
-                      Compile structured manuscripts with auto tables and validated references.
-                    </span>
-                    <span class="orbit-node-status status-planned">Planned</span>
-                  </span>
-                </a>
-              </li>
-
-              <li class="orbit-slot" style="--top:32%;--left:18.82%;">
-                <a class="orbit-node is-planned" data-cat="verify"
-                   href="#modules" aria-disabled="true"
-                   data-testid="card-module-6"
-                   aria-label="Module 6, Plagiarism and Compliance. Status: Planned.">
-                  <span class="orbit-node-mini" aria-hidden="true">
-                    <span class="orbit-node-num">06</span>
-                    <span class="orbit-node-abbr">Check</span>
-                  </span>
-                  <span class="orbit-node-card">
-                    <span class="orbit-node-title">Plagiarism &amp; Compliance</span>
-                    <span class="orbit-node-desc">
-                      Originality scoring, citation verification and integrity checks.
-                    </span>
-                    <span class="orbit-node-status status-planned">Planned</span>
-                  </span>
-                </a>
-              </li>
-            </ol>
-          </div>
-
-          <ul class="category-legend" aria-label="Module categories" data-testid="list-legend">
-            <li><span class="legend-dot" data-cat="plan"></span>Plan</li>
-            <li><span class="legend-dot" data-cat="compute"></span>Compute</li>
-            <li><span class="legend-dot" data-cat="write"></span>Write</li>
-            <li><span class="legend-dot" data-cat="verify"></span>Verify</li>
-          </ul>
-        </div>
-      </section>
-
-      <section id="workflow" class="section section-muted">
-        <div class="section-inner">
-          <header class="section-header">
-            <p class="eyebrow">How researchers use MedRAS</p>
-            <h2 data-testid="text-workflow-heading">An eight-step research lifecycle</h2>
-            <p class="section-lead">
-              From the first research question to a verified submission — each step
-              flows naturally into the next.
+          <a class="m-card" href="/sample-size.html" data-testid="card-module-2">
+            <span class="m-card-num">02</span>
+            <h3 class="m-card-title">Sample Size Calculator</h3>
+            <p class="m-card-desc">
+              Formula-driven n with explicit power, alpha and effect size — 14 designs.
             </p>
-          </header>
+            <div class="m-card-footer">
+              <span class="m-card-cta">Open calculator →</span>
+              <span class="m-card-status" data-state="available">Available</span>
+            </div>
+          </a>
 
-          <ol class="workflow-stepper" data-testid="list-workflow">
-            <li class="workflow-step" data-testid="step-1">
-              <span class="step-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-                  <circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="1" fill="currentColor"/>
-                </svg>
-              </span>
-              <span class="step-num" aria-hidden="true">1</span>
-              <span class="step-label"><strong>Define</strong><br/>research objective</span>
-            </li>
-            <li class="workflow-step" data-testid="step-2">
-              <span class="step-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-                  <rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 9h16M9 4v16"/>
-                </svg>
-              </span>
-              <span class="step-num" aria-hidden="true">2</span>
-              <span class="step-label"><strong>Design</strong><br/>the study</span>
-            </li>
-            <li class="workflow-step" data-testid="step-3">
-              <span class="step-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-                  <rect x="5" y="3" width="14" height="18" rx="2"/><rect x="8" y="6" width="8" height="3" rx="0.5"/><circle cx="9" cy="13" r="0.6" fill="currentColor"/><circle cx="12" cy="13" r="0.6" fill="currentColor"/><circle cx="15" cy="13" r="0.6" fill="currentColor"/><circle cx="12" cy="17" r="0.6" fill="currentColor"/>
-                </svg>
-              </span>
-              <span class="step-num" aria-hidden="true">3</span>
-              <span class="step-label"><strong>Calculate</strong><br/>sample size</span>
-            </li>
-            <li class="workflow-step" data-testid="step-4">
-              <span class="step-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M7 3h7l4 4v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M14 3v4h4"/><path d="M9 13h6M9 16h6"/>
-                </svg>
-              </span>
-              <span class="step-num" aria-hidden="true">4</span>
-              <span class="step-label"><strong>Generate</strong><br/>proposal</span>
-            </li>
-            <li class="workflow-step" data-testid="step-5">
-              <span class="step-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M12 16V4"/><path d="M7 9l5-5 5 5"/><path d="M5 20h14"/>
-                </svg>
-              </span>
-              <span class="step-num" aria-hidden="true">5</span>
-              <span class="step-label"><strong>Upload</strong><br/>data</span>
-            </li>
-            <li class="workflow-step" data-testid="step-6">
-              <span class="step-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M4 7l8-3 8 3-8 3-8-3z"/><path d="M4 12l8 3 8-3"/><path d="M4 17l8 3 8-3"/>
-                </svg>
-              </span>
-              <span class="step-num" aria-hidden="true">6</span>
-              <span class="step-label"><strong>Compile</strong><br/>results</span>
-            </li>
-            <li class="workflow-step" data-testid="step-7">
-              <span class="step-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M5 4h9l4 4v5"/><path d="M5 4v16a1 1 0 0 0 1 1h6"/><path d="M14 4v4h4"/><path d="M14.5 19.5l5-5 1.5 1.5-5 5-2 .5z"/>
-                </svg>
-              </span>
-              <span class="step-num" aria-hidden="true">7</span>
-              <span class="step-label"><strong>Draft</strong><br/>manuscript</span>
-            </li>
-            <li class="workflow-step" data-testid="step-8">
-              <span class="step-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M12 3l8 3v6c0 5-3.5 8.5-8 9-4.5-.5-8-4-8-9V6l8-3z"/><path d="M8.5 12l2.5 2.5L16 10"/>
-                </svg>
-              </span>
-              <span class="step-num" aria-hidden="true">8</span>
-              <span class="step-label"><strong>Verify</strong><br/>compliance</span>
-            </li>
-          </ol>
+          <a class="m-card" href="/analysis.html" data-testid="card-module-3">
+            <span class="m-card-num">03</span>
+            <h3 class="m-card-title">Statistical Analysis Engine</h3>
+            <p class="m-card-desc">
+              Upload Excel, classify variables, run normality-aware tests with APA outputs.
+            </p>
+            <div class="m-card-footer">
+              <span class="m-card-cta">Open analysis engine →</span>
+              <span class="m-card-status" data-state="beta">Available · Beta</span>
+            </div>
+          </a>
+
+          <a class="m-card is-disabled" href="#" aria-disabled="true" data-testid="card-module-4">
+            <span class="m-card-num">04</span>
+            <h3 class="m-card-title">Proposal Generator</h3>
+            <p class="m-card-desc">
+              Draft ICMR, ethics and university proposals from your methodology.
+            </p>
+            <div class="m-card-footer">
+              <span class="m-card-cta">Coming soon</span>
+              <span class="m-card-status" data-state="coming-soon">Planned</span>
+            </div>
+          </a>
+
+          <a class="m-card is-disabled" href="#" aria-disabled="true" data-testid="card-module-5">
+            <span class="m-card-num">05</span>
+            <h3 class="m-card-title">Thesis &amp; Article Writer</h3>
+            <p class="m-card-desc">
+              Compile structured manuscripts with auto tables and validated references.
+            </p>
+            <div class="m-card-footer">
+              <span class="m-card-cta">Coming soon</span>
+              <span class="m-card-status" data-state="coming-soon">Planned</span>
+            </div>
+          </a>
+
+          <a class="m-card is-disabled" href="#" aria-disabled="true" data-testid="card-module-6">
+            <span class="m-card-num">06</span>
+            <h3 class="m-card-title">Plagiarism &amp; Compliance</h3>
+            <p class="m-card-desc">
+              Originality scoring, citation verification and integrity checks.
+            </p>
+            <div class="m-card-footer">
+              <span class="m-card-cta">Coming soon</span>
+              <span class="m-card-status" data-state="coming-soon">Planned</span>
+            </div>
+          </a>
         </div>
       </section>
 
-      <section id="about" class="section">
-        <div class="section-inner narrow">
-          <header class="section-header">
-            <p class="eyebrow">About MedRAS</p>
-            <h2 data-testid="text-about-heading">Not a chat bot. A research operating system.</h2>
-          </header>
-          <p>
-            MedRAS is purpose-built for medical, biomedical, and academic researchers who
-            need methodological rigour at every step. The interface is structured and
-            menu-driven; statistical computation is performed by validated libraries, not
-            by language models. AI assists with planning and writing — never with numerical
-            results.
-          </p>
-        </div>
+      <!-- ============================================================ -->
+      <!-- ABOUT                                                         -->
+      <!-- ============================================================ -->
+      <section id="about" class="about-section">
+        <p class="home-eyebrow">About MedRAS</p>
+        <h2 class="home-section-title" data-testid="text-about-heading">
+          Not a chatbot. A research operating system.
+        </h2>
+        <p>
+          MedRAS is purpose-built for medical, biomedical, and academic
+          researchers who need methodological rigour at every step. The
+          interface is structured and menu-driven; statistical computation is
+          performed by validated libraries, not by language models. AI assists
+          with planning and writing — never with numerical results.
+        </p>
       </section>
     </main>
+
+    <!-- ============================================================== -->
+    <!-- MOBILE BOTTOM NAV (≤720px)                                      -->
+    <!-- ============================================================== -->
+    <nav class="mobile-bottom-nav" aria-label="Mobile shortcuts" data-testid="mobile-bottom-nav">
+      <a href="/" class="mb-item is-active" data-testid="mb-home">
+        <span class="mb-item-icon" aria-hidden="true">🏠</span>
+        <span>Home</span>
+      </a>
+      <a href="/sample-size.html" class="mb-item" data-testid="mb-ss">
+        <span class="mb-item-icon" aria-hidden="true">📐</span>
+        <span>Sample Size</span>
+      </a>
+      <a href="/analysis.html" class="mb-center" data-testid="mb-analyse">
+        <span class="mb-center-circle" aria-hidden="true">📊</span>
+        <span>Analyse</span>
+      </a>
+      <a href="#modules" class="mb-item" data-testid="mb-reports">
+        <span class="mb-item-icon" aria-hidden="true">📄</span>
+        <span>Reports</span>
+      </a>
+      <a href="#modules" class="mb-item" data-testid="mb-modules">
+        <span class="mb-item-icon" aria-hidden="true">☰</span>
+        <span>All Modules</span>
+      </a>
+    </nav>
 
     <footer class="site-footer">
       <div class="footer-inner">
@@ -328,6 +346,7 @@
       </div>
     </footer>
 
-    <script src="/js/app.js" defer></script>
+    <script src="/js/app.js?v=2026050126" defer></script>
+    <script src="/js/home.js?v=2026050126" defer></script>
   </body>
 </html>
