@@ -300,6 +300,32 @@
   background: #ffffff;
 }
 .se-field input[type="range"] { padding: 0; }
+.se-field textarea {
+  padding: 9px 11px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  font: inherit;
+  background: #ffffff;
+  resize: vertical;
+  min-height: 64px;
+}
+.se-field textarea:focus,
+.se-field input:focus,
+.se-field select:focus {
+  outline: 2px solid var(--color-primary, #2453d6);
+  outline-offset: 1px;
+}
+.se-field small {
+  font-weight: 400;
+  color: var(--color-text-muted);
+  margin-left: 4px;
+}
+.se-form-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 18px;
+}
 .se-hint {
   color: var(--color-text-muted);
   font-size: 12px;

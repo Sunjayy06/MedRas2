@@ -26,6 +26,8 @@ const state = {
   currentScreen: 1,
   followUp: null,
   practiceTemplate: "anaemia",
+  entryChoice: null,   // "upload" | "practice"
+  intake: null,        // {what_you_have, outcomes, independents, instructions}
 };
 
 /* ------------------------------------------------------------------ */
@@ -82,10 +84,10 @@ async function api(path, options = {}) {
 /*  Screen routing                                                     */
 /* ------------------------------------------------------------------ */
 
-const SCREENS = ["1", "2a", "2c", "preview", "3", "4", "soon"];
+const SCREENS = ["1", "intake", "2a", "2c", "preview", "3", "4", "soon"];
 // Map a logical screen id to which step number is "active" in the tracker.
 const SCREEN_TO_STEP = {
-  "1": 1, "2a": 2, "2c": 2, "preview": 2, "3": 3, "4": 4, "soon": 5,
+  "1": 1, "intake": 1, "2a": 2, "2c": 2, "preview": 2, "3": 3, "4": 4, "soon": 5,
 };
 
 function showScreen(id) {
@@ -117,13 +119,39 @@ function bindScreen1() {
   $$(".se-entry-card.is-clickable").forEach((card) => {
     card.addEventListener("click", () => {
       const entry = card.dataset.entry;
-      if (entry === "upload") {
-        showScreen("2a");
-      } else if (entry === "practice") {
-        showScreen("2c");
-        renderPracticeTemplates();
+      if (entry !== "upload" && entry !== "practice") return;
+      state.entryChoice = entry;
+      // Pre-fill intake fields from any prior session in this tab.
+      if (state.intake) {
+        $("#intake-have").value = state.intake.what_you_have || "proposal";
+        $("#intake-outcomes").value = state.intake.outcomes || "";
+        $("#intake-independents").value = state.intake.independents || "";
+        $("#intake-instructions").value = state.intake.instructions || "";
       }
+      showScreen("intake");
     });
+  });
+}
+
+/* ------------------------------------------------------------------ */
+/*  Screen INTAKE — quick questions                                    */
+/* ------------------------------------------------------------------ */
+
+function bindIntake() {
+  $('[data-action="continue-intake"]').addEventListener("click", () => {
+    state.intake = {
+      what_you_have: $("#intake-have").value,
+      outcomes: $("#intake-outcomes").value.trim(),
+      independents: $("#intake-independents").value.trim(),
+      instructions: $("#intake-instructions").value.trim(),
+    };
+    setStatus($("#intake-status"), "");
+    if (state.entryChoice === "upload") {
+      showScreen("2a");
+    } else {
+      showScreen("2c");
+      renderPracticeTemplates();
+    }
   });
 }
 
@@ -242,6 +270,7 @@ async function handleGenerate() {
         n_patients: n,
         n_groups: groups,
         missing_pct: missing,
+        intake: state.intake || null,
       }),
     });
     ingestDataset(data);
@@ -267,6 +296,9 @@ function ingestDataset(data) {
   state.quality = null;
   state.qualityActions = [];
   state.followUp = null;
+  // Sync canonical intake from server, so any later round-trip (e.g. /dataset/{id})
+  // hydrates the form with what the backend actually stored.
+  if (data.intake) state.intake = data.intake;
 }
 
 /* ------------------------------------------------------------------ */
@@ -349,7 +381,11 @@ function bindPreview() {
       const data = await api("/confirm-preview", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ job_id: state.jobId, follow_up_data: state.followUp }),
+        body: JSON.stringify({
+          job_id: state.jobId,
+          follow_up_data: state.followUp,
+          intake: state.intake || null,
+        }),
       });
       ingestDataset(data);
       setStatus(status, "");
@@ -639,6 +675,7 @@ function initApp() {
   document.documentElement.dataset.medrasInit = "running";
   try {
     bindScreen1();
+    bindIntake();
     bindScreen2A();
     bindScreen2C();
     bindPreview();
@@ -696,8 +733,21 @@ async function runSelfTest() {
     log(`clicked ${sel}`);
   };
 
-  // Screen 1 → 2C
+  // Screen 1 → intake
   click('[data-testid="card-entry-practice"]');
+  await wait(200);
+  log("waiting for screen-intake…");
+  for (let i = 0; i < 30; i++) {
+    if (!document.getElementById("screen-intake").classList.contains("is-hidden")) break;
+    await wait(100);
+  }
+  log(`screen-intake visible: ${!document.getElementById("screen-intake").classList.contains("is-hidden")}`);
+  // Fill intake fields and continue
+  $("#intake-have").value = "objective";
+  $("#intake-outcomes").value = "haemoglobin at 12 weeks";
+  $("#intake-independents").value = "treatment arm; sex";
+  $("#intake-instructions").value = "use non-parametric tests if skewed";
+  click('[data-testid="button-continue-intake"]');
   await wait(300);
   // Screen 2C: pick rct, click generate
   await loadTemplates();

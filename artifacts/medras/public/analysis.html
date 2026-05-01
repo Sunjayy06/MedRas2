@@ -10,7 +10,7 @@
     />
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%232f6fed'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-family='Inter,sans-serif' font-size='18' font-weight='700' fill='white'%3EM%3C/text%3E%3C/svg%3E" />
     <link rel="stylesheet" href="/css/style.css" />
-    <link rel="stylesheet" href="/css/analysis.css?v=2026050108" />
+    <link rel="stylesheet" href="/css/analysis.css?v=2026050111" />
   </head>
   <body>
     <header class="site-header" data-testid="site-header">
@@ -87,6 +87,48 @@
             <p>Generate a realistic clinical dataset and try the workflow.</p>
             <span class="se-entry-cta" aria-hidden="true">Generate &rarr;</span>
           </article>
+        </div>
+      </section>
+
+      <!-- ===========================================================
+           SCREEN INTAKE · A few quick questions
+           =========================================================== -->
+      <section class="se-screen is-hidden" id="screen-intake" data-testid="screen-intake">
+        <header class="se-screen-head">
+          <h2>Let me quickly ask a few questions</h2>
+          <p>These help me tailor the analysis to your study. Type in plain English &mdash; I'll work it out. Skip anything you don't know and I'll make sensible assumptions.</p>
+        </header>
+
+        <div class="se-form-stack">
+          <label class="se-field">
+            <span>What do you have ready?</span>
+            <select id="intake-have" data-testid="select-intake-have">
+              <option value="proposal">A study proposal</option>
+              <option value="objective">An objective and sample size</option>
+            </select>
+          </label>
+
+          <label class="se-field">
+            <span>What outcome variable(s) are you looking at? <small>(optional &mdash; leave blank if unsure)</small></span>
+            <textarea id="intake-outcomes" rows="3" placeholder="e.g. haemoglobin level at 12 weeks; 30-day mortality; pain score change" data-testid="input-intake-outcomes"></textarea>
+          </label>
+
+          <label class="se-field">
+            <span>What independent variable(s) (predictors / exposures)? <small>(optional)</small></span>
+            <textarea id="intake-independents" rows="3" placeholder="e.g. treatment arm; age; sex; baseline severity" data-testid="input-intake-independents"></textarea>
+          </label>
+
+          <label class="se-field">
+            <span>Any specific instructions for the analysis? <small>(optional)</small></span>
+            <textarea id="intake-instructions" rows="3" placeholder="e.g. please use non-parametric tests if data is skewed; analyse males and females separately; report 95% CI" data-testid="input-intake-instructions"></textarea>
+          </label>
+        </div>
+
+        <div id="intake-status" class="se-status" role="status" aria-live="polite" data-testid="status-intake"></div>
+
+        <div class="se-actions">
+          <button type="button" class="btn btn-secondary" data-action="back-to-1" data-testid="button-back-intake">&larr; Back</button>
+          <button type="button" class="btn btn-primary" data-action="continue-intake" data-testid="button-continue-intake">Continue &rarr;</button>
         </div>
       </section>
 
@@ -354,6 +396,6 @@
       </div>
     </footer>
 
-    <script src="/js/analysis.js?v=2026050108" defer></script>
+    <script src="/js/analysis.js?v=2026050111" defer></script>
   </body>
 </html>

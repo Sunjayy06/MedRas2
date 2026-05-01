@@ -75,12 +75,22 @@ class AnalyzeRequest(BaseModel):
     alpha: float = Field(default=0.05, gt=0.0, lt=1.0)
 
 
+class IntakeContext(BaseModel):
+    """Free-form research context the user provides up front so later analysis
+    steps can interpret variables and instructions in the user's own words."""
+    what_you_have: Literal["proposal", "objective"] = "proposal"
+    outcomes: str = Field(default="", max_length=4000)
+    independents: str = Field(default="", max_length=4000)
+    instructions: str = Field(default="", max_length=4000)
+
+
 class GenerateDummyRequest(BaseModel):
     template: TemplateLiteral
     n_patients: int = Field(default=150, ge=10, le=5000)
     n_groups: int = Field(default=2, ge=1, le=3)
     missing_pct: float = Field(default=5.0, ge=0.0, le=50.0)
     seed: Optional[int] = Field(default=None, ge=0, le=2**31 - 1)
+    intake: Optional[IntakeContext] = None
 
 
 # ---------------------------------------------------------------------------
@@ -121,6 +131,7 @@ def _build_response(job_id: str, entry) -> Dict[str, Any]:
         "classifications": classifications,
         "preview": preview,
         "repeated_ids": repeated_ids,
+        "intake": entry.meta.get("intake"),
     }
 
 
@@ -169,6 +180,7 @@ async def generate_dummy(request: Request, payload: GenerateDummyRequest) -> Dic
         "selected_sheet": None,
         "is_dummy": True,
         "template": payload.template,
+        "intake": payload.intake.model_dump() if payload.intake else None,
     }
     job_id = dataset_store.put(df, meta)
     entry = dataset_store.get(job_id)
@@ -218,6 +230,7 @@ async def select_sheet(payload: SelectSheetRequest) -> Dict[str, Any]:
 class ConfirmPreviewRequest(BaseModel):
     job_id: str = Field(..., min_length=1, max_length=64)
     follow_up_data: Optional[bool] = None  # answer to "is this follow-up data?"
+    intake: Optional[IntakeContext] = None
 
 
 @router.post("/confirm-preview")
@@ -226,11 +239,15 @@ async def confirm_preview(payload: ConfirmPreviewRequest) -> Dict[str, Any]:
     entry = dataset_store.get(payload.job_id)
     if entry is None:
         raise HTTPException(status_code=404, detail="Dataset expired or not found.")
-    dataset_store.update_meta(
-        payload.job_id,
-        preview_confirmed=True,
-        follow_up_data=payload.follow_up_data,
-    )
+    update_kwargs: Dict[str, Any] = {
+        "preview_confirmed": True,
+        "follow_up_data": payload.follow_up_data,
+    }
+    # Only overwrite intake if the client sent one (uploads attach intake here
+    # for the first time; practice mode already sent it on /generate-dummy).
+    if payload.intake is not None:
+        update_kwargs["intake"] = payload.intake.model_dump()
+    dataset_store.update_meta(payload.job_id, **update_kwargs)
     entry = dataset_store.get(payload.job_id)
     return _build_response(payload.job_id, entry)
 
