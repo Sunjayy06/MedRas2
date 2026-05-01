@@ -1315,11 +1315,7 @@
    shows the auto-generated group labels — much less granular than 12
    inputs for 4 bins. */
 .se-recode-cutoffs {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  align-items: center;
-  column-gap: 12px;
-  row-gap: 6px;
+  display: block;
   margin-top: 6px;
   width: 100%;
   flex-basis: 100%;            /* break onto its own line below the label/button */
@@ -1329,6 +1325,27 @@
   border-radius: 6px;
 }
 .se-recode-cutoffs[hidden] { display: none; }
+.se-recode-cutoffs-grid {
+  display: grid;
+  grid-template-columns: 110px 1fr 110px;
+  gap: 10px 12px;
+  align-items: end;
+}
+@media (max-width: 640px) {
+  .se-recode-cutoffs-grid { grid-template-columns: 1fr; }
+}
+/* Use higher specificity (.se-recode-row label) to override the row-level
+   `display:flex; align-items:center; flex:1` rule that would otherwise
+   apply because these fields are also <label> elements. */
+.se-recode-cutoffs-field,
+.se-recode-row label.se-recode-cutoffs-field {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  flex: initial;
+  gap: 4px;
+  margin: 0;
+}
 .se-recode-cutoffs-label {
   font-size: 12px;
   font-weight: 600;
@@ -1346,6 +1363,8 @@
   border: 1px solid var(--color-border);
   border-radius: 4px;
   font-variant-numeric: tabular-nums;
+  width: 100%;
+  box-sizing: border-box;
 }
 .se-recode-cutoffs-input:focus {
   outline: 2px solid rgba(47, 111, 237, 0.25);

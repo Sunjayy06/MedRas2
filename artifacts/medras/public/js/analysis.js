@@ -1007,29 +1007,50 @@ const RECODE_PRESETS = {
 };
 
 // Build the internal bins[] array from a list of comma-separated cutoffs.
-// Returns null if the cutoffs are invalid (non-numeric, empty, unsorted).
-function cutoffsToBins(cutoffs, preset) {
+// `opts.lower` overrides the first bin's lower bound (defaults to
+// `preset.floor`; pass `null` to force open "≤cut1"). `opts.upper`
+// overrides the last bin's upper bound (defaults to open ">cutN" /
+// "≥cutN"; pass a finite number to cap it).
+// Returns null if cutoffs are invalid (non-numeric, empty, unsorted) or
+// if lower/upper are inconsistent with the cutoffs.
+function cutoffsToBins(cutoffs, preset, opts = {}) {
   const c = (cutoffs || []).filter((x) => Number.isFinite(x));
   if (c.length === 0) return null;
   for (let i = 1; i < c.length; i++) if (c[i] <= c[i - 1]) return null;
 
+  const lower = ("lower" in opts)
+    ? (Number.isFinite(opts.lower) ? opts.lower : null)
+    : preset.floor;
+  const upper = Number.isFinite(opts.upper) ? opts.upper : null;
+
+  // Validate: lower must sit strictly below the first cut; upper must
+  // sit at-or-above the last bin's lower edge (after the integer step).
+  if (lower != null && lower >= c[0]) return null;
+  const step = preset.isInteger ? 1 : 0;
+  const lastCut = c[c.length - 1];
+  const lastLo = lastCut + step;
+  if (upper != null && upper < lastLo) return null;
+
+  // Use preset names ("Underweight" / "Severe" / …) only when cutoffs
+  // AND lower/upper are at their preset defaults — once the user moves
+  // any boundary, fall back to numeric labels.
   const useNames =
     preset.defaultNames
     && c.length === preset.defaultCutoffs.length
-    && preset.defaultCutoffs.every((v, i) => v === c[i]);
+    && preset.defaultCutoffs.every((v, i) => v === c[i])
+    && lower === preset.floor
+    && upper == null;
 
-  const fmt = (n) => (Number.isInteger(n) ? String(n) : String(n));
-  const step = preset.isInteger ? 1 : 0;
+  const fmt = (n) => String(n);
   const bins = [];
 
   // First bin
   const firstHi = c[0];
-  const firstLo = preset.floor;
   bins.push({
-    lo: firstLo,
+    lo: lower,
     hi: firstHi,
     name: useNames ? preset.defaultNames[0]
-      : (firstLo == null ? `≤${fmt(firstHi)}` : `${fmt(firstLo)}–${fmt(firstHi)}`),
+      : (lower == null ? `≤${fmt(firstHi)}` : `${fmt(lower)}–${fmt(firstHi)}`),
   });
   // Middle bins
   for (let i = 1; i < c.length; i++) {
@@ -1040,14 +1061,14 @@ function cutoffsToBins(cutoffs, preset) {
       name: useNames ? preset.defaultNames[i] : `${fmt(lo)}–${fmt(hi)}`,
     });
   }
-  // Last bin (open upper)
-  const lastCut = c[c.length - 1];
-  const lastLo = lastCut + step;
+  // Last bin
   bins.push({
     lo: lastLo,
-    hi: null,
+    hi: upper,
     name: useNames ? preset.defaultNames[c.length]
-      : (preset.isInteger ? `>${fmt(lastCut)}` : `≥${fmt(lastCut)}`),
+      : (upper == null
+          ? (preset.isInteger ? `>${fmt(lastCut)}` : `≥${fmt(lastCut)}`)
+          : `${fmt(lastLo)}–${fmt(upper)}`),
   });
   return bins;
 }
@@ -1060,6 +1081,12 @@ function binsToCutoffs(bins) {
     if (bins[i].hi != null) cuts.push(bins[i].hi);
   }
   return cuts;
+}
+
+// Read the lower/upper overrides currently encoded in a bins[] array.
+function binsLower(bins) { return bins && bins.length ? bins[0].lo : null; }
+function binsUpper(bins) {
+  return bins && bins.length ? bins[bins.length - 1].hi : null;
 }
 
 const CHIP_SUGGESTIONS = [
@@ -1221,20 +1248,52 @@ function renderRecodingPanel() {
     const bins = choice.bins;
     const cutoffs = binsToCutoffs(bins);
     const cutoffStr = cutoffs.join(", ");
+    const lowerVal = binsLower(bins);
+    const upperVal = binsUpper(bins);
+    const lowerStr = lowerVal == null ? "" : String(lowerVal);
+    const upperStr = upperVal == null ? "" : String(upperVal);
     const summary = bins.map((b) => b.name).join(" / ");
+    const numAttrs = preset.isInteger ? `step="1"` : `step="any"`;
     const editorHtml = `
       <div class="se-recode-cutoffs" data-testid="recode-bins-${escapeHtml(column)}" hidden>
-        <label class="se-recode-cutoffs-label" for="cutoffs-${escapeHtml(column)}">
-          Cutoffs <span class="se-recode-cutoffs-hint">(comma-separated, e.g. 30, 45, 60)</span>
-        </label>
-        <input type="text"
-               id="cutoffs-${escapeHtml(column)}"
-               class="se-recode-cutoffs-input"
-               data-recode-cutoffs="${escapeHtml(column)}"
-               data-testid="input-recode-cutoffs-${escapeHtml(column)}"
-               value="${escapeHtml(cutoffStr)}"
-               autocomplete="off"
-               spellcheck="false" />
+        <div class="se-recode-cutoffs-grid">
+          <label class="se-recode-cutoffs-field">
+            <span class="se-recode-cutoffs-label">Lower bound
+              <span class="se-recode-cutoffs-hint">(blank = open)</span>
+            </span>
+            <input type="number" ${numAttrs}
+                   class="se-recode-cutoffs-input"
+                   data-recode-lower="${escapeHtml(column)}"
+                   data-testid="input-recode-lower-${escapeHtml(column)}"
+                   value="${escapeHtml(lowerStr)}"
+                   placeholder="open"
+                   autocomplete="off" />
+          </label>
+          <label class="se-recode-cutoffs-field se-recode-cutoffs-field--wide">
+            <span class="se-recode-cutoffs-label">Cutoffs
+              <span class="se-recode-cutoffs-hint">(comma-separated, e.g. 30, 45, 60)</span>
+            </span>
+            <input type="text"
+                   class="se-recode-cutoffs-input"
+                   data-recode-cutoffs="${escapeHtml(column)}"
+                   data-testid="input-recode-cutoffs-${escapeHtml(column)}"
+                   value="${escapeHtml(cutoffStr)}"
+                   autocomplete="off"
+                   spellcheck="false" />
+          </label>
+          <label class="se-recode-cutoffs-field">
+            <span class="se-recode-cutoffs-label">Upper bound
+              <span class="se-recode-cutoffs-hint">(blank = open)</span>
+            </span>
+            <input type="number" ${numAttrs}
+                   class="se-recode-cutoffs-input"
+                   data-recode-upper="${escapeHtml(column)}"
+                   data-testid="input-recode-upper-${escapeHtml(column)}"
+                   value="${escapeHtml(upperStr)}"
+                   placeholder="open"
+                   autocomplete="off" />
+          </label>
+        </div>
         <div class="se-recode-cutoffs-preview"
              data-recode-preview="${escapeHtml(column)}"
              data-testid="preview-recode-${escapeHtml(column)}">
@@ -1276,41 +1335,91 @@ function renderRecodingPanel() {
       if (editor) editor.hidden = !editor.hidden;
     });
   });
-  $$("[data-recode-cutoffs]", zone).forEach((inp) => {
-    const update = () => {
-      const col = inp.dataset.recodeCutoffs;
-      const preset = matches.find((m) => m.column === col).preset;
-      const parts = inp.value
-        .split(/[,\s]+/)
-        .map((s) => s.trim())
-        .filter((s) => s.length)
-        .map((s) => Number(s));
-      const allNumeric = parts.length > 0 && parts.every((n) => Number.isFinite(n));
-      const bins = allNumeric ? cutoffsToBins(parts, preset) : null;
-      const previewEl = zone.querySelector(`[data-recode-preview="${CSS.escape(col)}"]`);
-      const summaryEl = zone.querySelector(`[data-recode-summary="${CSS.escape(col)}"]`);
-      if (bins) {
-        state.recodingChoices[col] = state.recodingChoices[col] || { enabled: false };
-        state.recodingChoices[col].bins = bins;
-        const summary = bins.map((b) => b.name).join(" / ");
-        if (previewEl) {
-          previewEl.classList.remove("is-error");
-          previewEl.innerHTML = `→ Will create groups: <strong>${escapeHtml(summary)}</strong>`;
-        }
-        if (summaryEl) summaryEl.textContent = summary;
-        inp.classList.remove("is-error");
-      } else {
-        if (previewEl) {
-          previewEl.classList.add("is-error");
-          previewEl.textContent =
-            "Enter one or more numbers in increasing order, separated by commas (e.g. 30, 45, 60).";
-        }
-        inp.classList.add("is-error");
+  // Single update routine shared by all three inputs (lower / cutoffs /
+  // upper). Reads the current value of each, rebuilds bins, refreshes
+  // preview + summary, and toggles error state on every input together.
+  const updateRow = (col) => {
+    const preset = matches.find((m) => m.column === col).preset;
+    const cutoffsInp = zone.querySelector(
+      `[data-recode-cutoffs="${CSS.escape(col)}"]`);
+    const lowerInp = zone.querySelector(
+      `[data-recode-lower="${CSS.escape(col)}"]`);
+    const upperInp = zone.querySelector(
+      `[data-recode-upper="${CSS.escape(col)}"]`);
+    const previewEl = zone.querySelector(
+      `[data-recode-preview="${CSS.escape(col)}"]`);
+    const summaryEl = zone.querySelector(
+      `[data-recode-summary="${CSS.escape(col)}"]`);
+
+    const parts = (cutoffsInp.value || "")
+      .split(/[,\s]+/)
+      .map((s) => s.trim())
+      .filter((s) => s.length)
+      .map((s) => Number(s));
+    const allNumeric = parts.length > 0 && parts.every((n) => Number.isFinite(n));
+    // Cutoffs must also be strictly increasing for cutoffsToBins to accept
+    // them — flag the input itself when they're not (architect-noted gap).
+    let cutoffsSorted = allNumeric;
+    if (allNumeric) {
+      for (let i = 1; i < parts.length; i++) {
+        if (parts[i] <= parts[i - 1]) { cutoffsSorted = false; break; }
       }
+    }
+
+    const parseBound = (raw) => {
+      const t = (raw || "").trim();
+      if (!t) return null;
+      const n = Number(t);
+      return Number.isFinite(n) ? n : NaN;
     };
-    inp.addEventListener("input", update);
-    inp.addEventListener("change", update);
-  });
+    const lowerRaw = parseBound(lowerInp ? lowerInp.value : "");
+    const upperRaw = parseBound(upperInp ? upperInp.value : "");
+    const lowerOk = !Number.isNaN(lowerRaw);
+    const upperOk = !Number.isNaN(upperRaw);
+
+    const opts = {};
+    opts.lower = lowerRaw;            // null = open, number = override
+    if (upperRaw != null) opts.upper = upperRaw;
+
+    const bins = (cutoffsSorted && lowerOk && upperOk)
+      ? cutoffsToBins(parts, preset, opts)
+      : null;
+
+    const setErr = (el, on) => { if (el) el.classList.toggle("is-error", on); };
+    if (bins) {
+      state.recodingChoices[col] = state.recodingChoices[col] || { enabled: false };
+      state.recodingChoices[col].bins = bins;
+      const summary = bins.map((b) => b.name).join(" / ");
+      if (previewEl) {
+        previewEl.classList.remove("is-error");
+        previewEl.innerHTML =
+          `→ Will create groups: <strong>${escapeHtml(summary)}</strong>`;
+      }
+      if (summaryEl) summaryEl.textContent = summary;
+      setErr(cutoffsInp, false); setErr(lowerInp, false); setErr(upperInp, false);
+    } else {
+      if (previewEl) {
+        previewEl.classList.add("is-error");
+        previewEl.textContent =
+          "Enter one or more cutoffs in increasing order, with the lower bound below the first cutoff and the upper bound at or above the last (blank = open).";
+      }
+      setErr(cutoffsInp, !cutoffsSorted);
+      setErr(lowerInp, !lowerOk || (cutoffsSorted && lowerRaw != null && lowerRaw >= parts[0]));
+      const lastLo = cutoffsSorted
+        ? parts[parts.length - 1] + (preset.isInteger ? 1 : 0)
+        : null;
+      setErr(upperInp, !upperOk || (lastLo != null && upperRaw != null && upperRaw < lastLo));
+    }
+  };
+
+  const wireInput = (inp, attr) => {
+    const handler = () => updateRow(inp.dataset[attr]);
+    inp.addEventListener("input", handler);
+    inp.addEventListener("change", handler);
+  };
+  $$("[data-recode-cutoffs]", zone).forEach((inp) => wireInput(inp, "recodeCutoffs"));
+  $$("[data-recode-lower]", zone).forEach((inp) => wireInput(inp, "recodeLower"));
+  $$("[data-recode-upper]", zone).forEach((inp) => wireInput(inp, "recodeUpper"));
 }
 
 function renderAutocodeSummary() {
