@@ -1,0 +1,112 @@
+Refine and finalize the MedRAS homepage into a premium, cohesive SaaS experience with stronger narrative flow, reduced repetition, and a visually elevated closing section.
+
+Primary Objective:
+Create a homepage that feels intentional, concise, elegant, and strategically structured. Every section must serve a unique purpose, with no overlap in messaging.
+
+-----------------------------------
+STRUCTURAL REFINEMENT
+-----------------------------------
+
+Problem:
+The current “Research Lifecycle” section and “Peek at Workspace” section overlap in messaging, creating redundancy.
+
+Required Solution:
+
+1. Keep the “Research Lifecycle” section as the ONLY process-focused section.
+- It should clearly explain the MedRAS methodology and end-to-end user journey.
+- Reduce the number of steps if needed (prefer 5–6 instead of 8 for better homepage efficiency).
+- Maintain the interactive card/slider format.
+- This section should educate users on the research pathway.
+
+2. Redesign the “Peek at Workspace” section into a product immersion showcase.
+- Remove any workflow/process explanation.
+- Do NOT repeat lifecycle concepts.
+- Focus only on the actual experience of using MedRAS:
+  - dashboard interface
+  - AI-powered tools
+  - analytics panels
+  - project tracking
+  - document workspace
+- This section should create desire and help users visualize daily usage.
+
+3. Clearly define section purposes:
+- Lifecycle = understanding methodology
+- Workspace = visualizing product experience
+
+4. Improve homepage narrative flow in this exact order:
+Hero → Features → Lifecycle → Workspace → About → CTA
+
+5. Keep existing content wherever possible.
+Do not rewrite core messaging unless required for clarity or brevity.
+
+-----------------------------------
+ABOUT SECTION REDESIGN
+-----------------------------------
+
+Redesign the final “About MedRAS” section into a clean, visually striking brand statement area that feels premium, spacious, and memorable.
+
+Current content must remain exactly the same:
+- “About MedRAS”
+- “Not a chatbot. A research operating system.”
+- Retain the full paragraph exactly as written
+
+Design Goals:
+- Remove cramped feeling
+- Create breathing space and strong visual hierarchy
+- Make it feel like a signature closing section, not a text block
+- Improve readability for all age groups
+- Keep it elegant and trustworthy
+
+Layout Requirements:
+
+1. Use a two-column layout on desktop:
+- Left side: headline + subheadline
+- Right side: supporting paragraph inside a premium card/container
+
+2. Add generous whitespace:
+- Minimum 100px top and bottom padding
+
+3. Make the line:
+“Not a chatbot. A research operating system.”
+the visual anchor with larger, stronger typography.
+
+4. Place the paragraph inside a soft-glass or elevated card:
+- rounded corners
+- subtle shadow
+- max width for readability
+- increased line spacing
+
+5. Add one subtle accent element:
+- abstract medical/research icon
+OR
+- vertical gradient bar
+OR
+- thin glowing divider
+
+6. Optional micro-animation:
+- fade-up entrance on scroll
+- very subtle only
+
+-----------------------------------
+STYLE DIRECTION
+-----------------------------------
+
+- Premium SaaS feel
+- Calm confidence
+- White / gray / blue palette
+- No clutter
+- No heavy graphics
+- Spacious and breathable layout
+- Smooth polished interactions
+
+-----------------------------------
+FINAL GOAL
+-----------------------------------
+
+Users should experience a seamless product story:
+understand what MedRAS does,
+see how it works,
+imagine using it daily,
+and leave with a strong sense of trust and sophistication.
+
+The homepage must feel concise, world-class, and logically structured—with every section contributing to conversion and credibility.

@@ -632,13 +632,9 @@ body.home main {
   z-index: 0;
 }
 
-.about-grid {
+.about-inner {
   position: relative;
   z-index: 1;
-  display: grid;
-  grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
-  gap: 72px;
-  align-items: start;
   max-width: 1180px;
   margin: 0 auto;
 }
@@ -646,53 +642,59 @@ body.home main {
 .about-lede {
   position: relative;
   padding-left: 28px;
+  margin-bottom: 56px;
 }
 
 .about-accent {
   /* Thin vertical gradient bar — the single accent. */
   position: absolute;
-  top: 8px;
+  top: 6px;
   left: 0;
   width: 3px;
-  height: 88px;
+  /* Fits eyebrow + single-line headline. */
+  height: calc(100% - 6px);
+  max-height: 84px;
   border-radius: 3px;
   background: var(--home-grad);
   box-shadow: 0 0 18px rgba(124, 58, 237, 0.35);
 }
 
 .about-eyebrow {
-  margin: 0 0 22px;
+  margin: 0 0 18px;
   letter-spacing: 0.18em;
   color: var(--home-text-muted);
 }
 
 .about-headline {
   margin: 0;
-  font-size: clamp(36px, 4.4vw, 56px);
+  /* Sized to fit on a single line at every supported viewport.
+     The 3.6 vw curve gives ~20 px at 550 px and stays readable
+     down to ~13 px on very narrow phones. */
+  font-size: clamp(13px, 3.6vw, 36px);
   font-weight: 500;
-  line-height: 1.08;
-  letter-spacing: -0.02em;
+  line-height: 1.15;
+  letter-spacing: -0.015em;
   color: var(--home-text);
-  max-width: 14ch;
+  white-space: nowrap;
+  max-width: none;
 }
 
 .about-card-wrap {
-  display: flex;
-  align-items: center;
-  min-height: 100%;
+  display: block;
 }
 
 .about-card {
   position: relative;
   width: 100%;
-  max-width: 620px;
-  margin-left: auto;
+  /* Comfortable reading measure for the body lede. */
+  max-width: 760px;
+  margin: 0;
   background: rgba(255, 255, 255, 0.78);
   -webkit-backdrop-filter: blur(14px);
   backdrop-filter: blur(14px);
   border: 0.5px solid rgba(229, 224, 216, 0.9);
   border-radius: 22px;
-  padding: 44px 48px;
+  padding: 36px 44px;
   text-align: left;
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.6) inset,
@@ -740,35 +742,16 @@ body.home main {
   transform: translateY(0);
 }
 
-/* Tablet: hold two-column layout longer, just tighten gap and column ratio. */
-@media (max-width: 1024px) {
-  .about-grid {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
-    gap: 48px;
-  }
-  .about-card { padding: 36px 36px; }
-  .about-headline { max-width: 16ch; }
-}
-
-/* Narrow viewport: stack vertically and dissolve the floating "card"
-   treatment so the section reads as a continuous editorial block,
-   not a mobile-app card on a screen. */
+/* Narrow viewport: dissolve the floating "card" so the body reads as
+   continuous editorial copy below the tagline rather than a mobile-app
+   card on a screen. */
 @media (max-width: 760px) {
   .about-section {
     padding: 72px 0 80px;
     margin-top: 56px;
   }
-  .about-grid {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 28px;
-  }
-  .about-headline {
-    max-width: none;
-    font-size: clamp(30px, 6.4vw, 40px);
-  }
-  .about-card-wrap { display: block; min-height: 0; }
+  .about-lede { margin-bottom: 36px; }
   .about-card {
-    margin-left: 0;
     max-width: none;
     background: transparent;
     -webkit-backdrop-filter: none;
@@ -786,9 +769,9 @@ body.home main {
 
 @media (max-width: 480px) {
   .about-section { padding: 56px 0 64px; margin-top: 40px; }
-  .about-lede { padding-left: 18px; }
-  .about-accent { height: 56px; top: 4px; }
-  .about-eyebrow { margin-bottom: 16px; }
+  .about-lede { padding-left: 18px; margin-bottom: 28px; }
+  .about-accent { max-height: 64px; top: 4px; }
+  .about-eyebrow { margin-bottom: 14px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
