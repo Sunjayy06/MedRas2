@@ -35,7 +35,38 @@
     initHeroSlider();
     initLifecycleDrag();
     document.querySelectorAll("[data-rail]").forEach(initRailCarousel);
+    initScrollReveal();
   });
+
+  /* ----------------------------------------------------------------- */
+  /* Scroll reveal — adds .is-revealed when the element scrolls into   */
+  /* view, used by the closing About section for a subtle fade-up.    */
+  /* ----------------------------------------------------------------- */
+  function initScrollReveal() {
+    const targets = document.querySelectorAll("[data-reveal]");
+    if (targets.length === 0) return;
+
+    const reduceMotion =
+      window.matchMedia &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduceMotion || typeof window.IntersectionObserver !== "function") {
+      targets.forEach(function (el) { el.classList.add("is-revealed"); });
+      return;
+    }
+
+    const io = new window.IntersectionObserver(
+      function (entries) {
+        entries.forEach(function (entry) {
+          if (entry.isIntersecting) {
+            entry.target.classList.add("is-revealed");
+            io.unobserve(entry.target);
+          }
+        });
+      },
+      { threshold: 0.18, rootMargin: "0px 0px -40px 0px" }
+    );
+    targets.forEach(function (el) { io.observe(el); });
+  }
 
   /* ----------------------------------------------------------------- */
   /* Hero slider                                                        */

@@ -595,26 +595,181 @@ body.home main {
    About
    ========================================================================= */
 
+/* Premium two-column closing brand statement.
+   Left: vertical gradient accent + eyebrow + oversized headline.
+   Right: paragraph inside an elevated soft-glass card. */
+
 .about-section {
-  margin: 56px 0 0;
-  background: var(--home-card);
-  border: 0.5px solid var(--home-card-border);
-  border-radius: var(--home-radius-card);
-  padding: 36px 36px;
-  max-width: 720px;
+  position: relative;
+  margin: 88px 0 0;
+  padding: 104px 0 112px;
+  max-width: none;
+  background: none;
+  border: none;
+  border-radius: 0;
+  /* Subtle hairline divider above the section to set it apart. */
+  border-top: 0.5px solid var(--home-card-border);
 }
 
-.about-section .home-section-title { margin-bottom: 16px; }
+.about-section::before {
+  /* Very faint blue→purple wash behind the section to give it depth
+     without ever overwhelming the off-white page background. */
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      900px 320px at 18% 28%,
+      rgba(29, 78, 216, 0.05),
+      transparent 70%
+    ),
+    radial-gradient(
+      700px 280px at 88% 78%,
+      rgba(124, 58, 237, 0.05),
+      transparent 70%
+    );
+  z-index: 0;
+}
 
-.about-section p {
-  font-size: 15px;
-  color: var(--home-text-secondary);
-  line-height: 1.7;
+.about-grid {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+  gap: 72px;
+  align-items: start;
+  max-width: 1180px;
+  margin: 0 auto;
+}
+
+.about-lede {
+  position: relative;
+  padding-left: 28px;
+}
+
+.about-accent {
+  /* Thin vertical gradient bar — the single accent. */
+  position: absolute;
+  top: 8px;
+  left: 0;
+  width: 3px;
+  height: 88px;
+  border-radius: 3px;
+  background: var(--home-grad);
+  box-shadow: 0 0 18px rgba(124, 58, 237, 0.35);
+}
+
+.about-eyebrow {
+  margin: 0 0 22px;
+  letter-spacing: 0.18em;
+  color: var(--home-text-muted);
+}
+
+.about-headline {
+  margin: 0;
+  font-size: clamp(36px, 4.4vw, 56px);
+  font-weight: 500;
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  color: var(--home-text);
+  max-width: 14ch;
+}
+
+.about-card-wrap {
+  display: flex;
+  align-items: center;
+  min-height: 100%;
+}
+
+.about-card {
+  position: relative;
+  width: 100%;
+  max-width: 620px;
+  margin-left: auto;
+  background: rgba(255, 255, 255, 0.78);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  border: 0.5px solid rgba(229, 224, 216, 0.9);
+  border-radius: 22px;
+  padding: 44px 48px;
+  text-align: left;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.6) inset,
+    0 24px 60px -28px rgba(17, 24, 39, 0.18),
+    0 8px 24px -16px rgba(29, 78, 216, 0.12);
+}
+
+/* The shared `style.css` defines `#about p { text-align: center;
+   font-size: 16.5px; margin: 0; }` with ID specificity. Reset every
+   <p> inside the redesigned About section back to a left-aligned
+   baseline, then layer the typography for each role on top using the
+   same ID-anchored specificity. */
+#about.about-section p {
+  text-align: left;
+}
+
+#about.about-section .about-eyebrow {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--home-text-muted);
   margin: 0;
 }
 
+#about.about-section .about-body {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.8;
+  color: var(--home-text-secondary);
+}
+
+/* Subtle scroll-reveal: fade + small upward translate. */
+[data-reveal] {
+  opacity: 0;
+  transform: translateY(18px);
+  transition:
+    opacity 0.9s cubic-bezier(0.32, 0.72, 0, 1),
+    transform 0.9s cubic-bezier(0.32, 0.72, 0, 1);
+  will-change: opacity, transform;
+}
+
+[data-reveal].is-revealed {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (max-width: 920px) {
+  .about-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 40px;
+  }
+  .about-card {
+    margin-left: 0;
+    max-width: none;
+  }
+  .about-headline { max-width: none; }
+}
+
 @media (max-width: 640px) {
-  .about-section { padding: 28px 24px; }
+  .about-section {
+    padding: 72px 0 80px;
+    margin-top: 64px;
+  }
+  .about-grid { gap: 32px; }
+  .about-lede { padding-left: 22px; }
+  .about-accent { height: 64px; }
+  .about-card { padding: 32px 26px; border-radius: 18px; }
+  .about-body { font-size: 16px; line-height: 1.75; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-reveal] {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
 }
 
 

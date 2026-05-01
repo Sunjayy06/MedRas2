@@ -9,8 +9,8 @@
       content="MedRAS is a structured research operating system for medical and academic research. Plan, calculate, analyse, write, and verify — end to end."
     />
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%237c3aed'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-family='Inter,sans-serif' font-size='18' font-weight='700' fill='white'%3EM%3C/text%3E%3C/svg%3E" />
-    <link rel="stylesheet" href="/css/style.css?v=2026050134" />
-    <link rel="stylesheet" href="/css/home.css?v=2026050134" />
+    <link rel="stylesheet" href="/css/style.css?v=2026050139" />
+    <link rel="stylesheet" href="/css/home.css?v=2026050139" />
   </head>
   <body class="home">
     <header class="site-header" data-testid="site-header">
@@ -537,18 +537,35 @@
       <!-- ============================================================ -->
       <!-- ABOUT                                                         -->
       <!-- ============================================================ -->
-      <section id="about" class="about-section">
-        <p class="home-eyebrow">About MedRAS</p>
-        <h2 class="home-section-title" data-testid="text-about-heading">
-          Not a chatbot. A research operating system.
-        </h2>
-        <p>
-          MedRAS is purpose-built for medical, biomedical, and academic
-          researchers who need methodological rigour at every step. The
-          interface is structured and menu-driven; statistical computation is
-          performed by validated libraries, not by language models. AI assists
-          with planning and writing — never with numerical results.
-        </p>
+      <section
+        id="about"
+        class="about-section"
+        data-testid="about-section"
+        data-reveal
+      >
+        <div class="about-grid">
+          <div class="about-lede">
+            <span class="about-accent" aria-hidden="true"></span>
+            <p class="home-eyebrow about-eyebrow">About MedRAS</p>
+            <h2
+              class="about-headline"
+              data-testid="text-about-heading"
+            >
+              Not a chatbot. A research operating system.
+            </h2>
+          </div>
+          <div class="about-card-wrap">
+            <article class="about-card" data-testid="about-card">
+              <p class="about-body">
+                MedRAS is purpose-built for medical, biomedical, and academic
+                researchers who need methodological rigour at every step. The
+                interface is structured and menu-driven; statistical computation is
+                performed by validated libraries, not by language models. AI assists
+                with planning and writing — never with numerical results.
+              </p>
+            </article>
+          </div>
+        </div>
       </section>
     </main>
 
@@ -561,7 +578,7 @@
       </div>
     </footer>
 
-    <script src="/js/app.js?v=2026050134" defer></script>
-    <script src="/js/home.js?v=2026050134" defer></script>
+    <script src="/js/app.js?v=2026050139" defer></script>
+    <script src="/js/home.js?v=2026050139" defer></script>
   </body>
 </html>
