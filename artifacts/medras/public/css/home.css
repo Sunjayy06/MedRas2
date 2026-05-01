@@ -36,14 +36,6 @@ body.home main {
   padding: 32px 5% 96px;
 }
 
-/* When the bottom nav is mounted (mobile), reserve room so content
-   isn't covered by the fixed bar. */
-@media (max-width: 720px) {
-  body.home main {
-    padding-bottom: 110px;
-  }
-}
-
 .home-eyebrow {
   font-size: 11px;
   font-weight: 500;
@@ -550,74 +542,3 @@ body.home main {
   .about-section { padding: 28px 24px; }
 }
 
-/* =========================================================================
-   Mobile bottom navigation (≤720px only)
-   ========================================================================= */
-
-.mobile-bottom-nav {
-  display: none;
-}
-
-@media (max-width: 720px) {
-  .mobile-bottom-nav {
-    display: flex;
-    align-items: flex-end;
-    justify-content: space-around;
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 100;
-    background: #ffffff;
-    border-top: 0.5px solid var(--home-card-border);
-    padding: 8px 8px calc(8px + env(safe-area-inset-bottom)) 8px;
-    box-shadow: 0 -4px 18px rgba(17, 17, 17, 0.05);
-  }
-
-  .mb-item {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 3px;
-    color: #888888;
-    font-size: 10px;
-    font-weight: 500;
-    text-decoration: none;
-    padding: 8px 4px 4px;
-  }
-
-  .mb-item-icon {
-    font-size: 18px;
-    line-height: 1;
-  }
-
-  .mb-item.is-active { color: var(--home-accent); }
-
-  .mb-center {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    text-decoration: none;
-    color: var(--home-accent);
-    font-size: 10px;
-    font-weight: 500;
-    transform: translateY(-16px);
-  }
-
-  .mb-center-circle {
-    width: 52px;
-    height: 52px;
-    border-radius: 50%;
-    background: var(--home-grad);
-    color: #ffffff;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 22px;
-    border: 3px solid var(--home-bg);
-    box-shadow: 0 6px 18px rgba(124, 58, 237, 0.35);
-    margin-bottom: 4px;
-  }
-}
