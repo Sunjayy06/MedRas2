@@ -146,6 +146,8 @@ def _build_response(job_id: str, entry) -> Dict[str, Any]:
             "cols": int(entry.df.shape[1]),
             "sheet_names": entry.meta.get("sheet_names", []),
             "selected_sheet": entry.meta.get("selected_sheet"),
+            "merged_sheets": entry.meta.get("merged_sheets") or [],
+            "merge_group_column": entry.meta.get("merge_group_column"),
             "header_looks_numeric": bool(entry.meta.get("header_looks_numeric", False)),
             "is_dummy": bool(entry.meta.get("is_dummy", False)),
             "template": entry.meta.get("template"),
@@ -303,6 +305,61 @@ async def select_sheet(payload: SelectSheetRequest) -> Dict[str, Any]:
     # Replace dataframe + meta but keep job_id stable so the UI doesn't lose state.
     dataset_store.replace_df(payload.job_id, df)
     # Preserve raw_bytes; clear classifications so they re-derive for the new sheet.
+    # Also explicitly clear merge bookkeeping — update_meta is a merge, so without
+    # this an earlier /combine-sheets run would leave merged_sheets dangling.
+    meta["raw_bytes"] = raw
+    dataset_store.update_meta(
+        payload.job_id,
+        **meta,
+        classifications=None,
+        merged_sheets=[],
+        merge_group_column=None,
+    )
+    entry = dataset_store.get(payload.job_id)
+    return _build_response(payload.job_id, entry)
+
+
+class CombineSheetsRequest(BaseModel):
+    job_id: str = Field(..., min_length=1, max_length=64)
+    sheet_names: List[str] = Field(..., min_length=2, max_length=20)
+    add_group_column: bool = Field(default=True)
+    group_column_name: str = Field(default="Group", min_length=1, max_length=60)
+
+
+@router.post("/combine-sheets")
+async def combine_sheets(payload: CombineSheetsRequest) -> Dict[str, Any]:
+    """Concatenate the rows of two or more sheets into a single dataset.
+
+    Common use case: each treatment arm lives on its own sheet and the
+    researcher needs them stacked together with a "Group" column so a
+    between-groups test can be run.
+    """
+    entry = dataset_store.get(payload.job_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Dataset expired or not found.")
+    raw = entry.meta.get("raw_bytes")
+    filename = entry.meta.get("filename") or "upload.xlsx"
+    if not raw:
+        raise HTTPException(status_code=400, detail="No raw file available to re-read.")
+    available = entry.meta.get("sheet_names") or []
+    unknown = [s for s in payload.sheet_names if s not in available]
+    if unknown:
+        raise HTTPException(status_code=400, detail=f"Unknown sheets: {', '.join(unknown)}.")
+    # Reject duplicate sheet names — concatenating the same sheet twice would
+    # silently double its rows and bias every downstream summary statistic.
+    if len(set(payload.sheet_names)) != len(payload.sheet_names):
+        raise HTTPException(status_code=400, detail="Pick each sheet at most once.")
+    try:
+        df, meta = excel_loader.combine_sheets(
+            filename=filename,
+            raw=raw,
+            sheet_names=payload.sheet_names,
+            add_group_column=payload.add_group_column,
+            group_column_name=payload.group_column_name,
+        )
+    except excel_loader.UploadError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    dataset_store.replace_df(payload.job_id, df)
     meta["raw_bytes"] = raw
     dataset_store.update_meta(payload.job_id, **meta, classifications=None)
     entry = dataset_store.get(payload.job_id)

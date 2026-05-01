@@ -90,6 +90,105 @@ def parse_upload(
     return df, meta
 
 
+def combine_sheets(
+    *,
+    filename: str,
+    raw: bytes,
+    sheet_names: List[str],
+    add_group_column: bool = True,
+    group_column_name: str = "Group",
+) -> Tuple[pd.DataFrame, Dict[str, Any]]:
+    """Concatenate the rows of multiple sheets into one DataFrame.
+
+    Sheets that share columns line up; columns missing from a given sheet are
+    filled with NaN (pandas default). When ``add_group_column`` is True, an
+    extra column (default name "Group") is prepended to record which sheet
+    each row came from — that's the common "two groups in two sheets" pattern.
+
+    Returns ``(df, meta)`` shaped like :func:`parse_upload`.
+    """
+    if not raw:
+        raise UploadError("Uploaded file is empty.")
+    if len(raw) > MAX_BYTES:
+        raise UploadError(
+            f"File is {len(raw) // 1024} KB — limit is {MAX_BYTES // 1024} KB."
+        )
+    if len(sheet_names) < 2:
+        raise UploadError("Pick at least two sheets to merge.")
+
+    name = (filename or "").lower()
+    if not (name.endswith(".xls") or name.endswith(".xlsx")):
+        raise UploadError("Sheet merging only applies to Excel files.")
+
+    engine = "openpyxl" if name.endswith(".xlsx") else "xlrd"
+    try:
+        xls = pd.ExcelFile(io.BytesIO(raw), engine=engine)
+    except Exception as exc:  # noqa: BLE001
+        raise UploadError(f"Could not read file: {exc}") from exc
+
+    available = list(xls.sheet_names)
+    missing = [s for s in sheet_names if s not in available]
+    if missing:
+        raise UploadError(
+            f"These sheets are not in the file: {', '.join(missing)}."
+        )
+
+    # Read each sheet first, then pick a group-column name that doesn't collide
+    # with ANY of the union of columns across all sheets. (Checking only the
+    # first sheet would crash later if a later sheet already had "Group".)
+    raw_pieces: List[Tuple[str, pd.DataFrame]] = []
+    union_cols: set = set()
+    for sheet in sheet_names:
+        try:
+            piece = pd.read_excel(xls, sheet_name=sheet)
+        except Exception as exc:  # noqa: BLE001
+            raise UploadError(f"Could not read sheet '{sheet}': {exc}") from exc
+        piece.columns = [str(c).strip() for c in piece.columns]
+        # Drop fully empty rows/cols *per sheet* before concat so blank trailing
+        # rows in one sheet don't poison the union with NaN noise.
+        piece = piece.dropna(axis=1, how="all").dropna(axis=0, how="all")
+        union_cols.update(piece.columns)
+        raw_pieces.append((sheet, piece))
+
+    safe_group_col = group_column_name
+    if add_group_column:
+        bumped = group_column_name
+        i = 2
+        while bumped in union_cols:
+            bumped = f"{group_column_name}_{i}"
+            i += 1
+        safe_group_col = bumped
+
+    pieces: List[pd.DataFrame] = []
+    for sheet, piece in raw_pieces:
+        if add_group_column:
+            piece.insert(0, safe_group_col, sheet)
+        pieces.append(piece.reset_index(drop=True))
+
+    df = pd.concat(pieces, axis=0, ignore_index=True, sort=False)
+    df = df.dropna(axis=1, how="all").dropna(axis=0, how="all").reset_index(drop=True)
+    if df.empty:
+        raise UploadError("Merged sheets contained no usable rows.")
+    if df.shape[1] < 2:
+        raise UploadError("Merged sheets need at least 2 columns to analyse.")
+
+    numeric_header = all(_looks_numeric(str(c)) for c in df.columns)
+    selected_label = " + ".join(sheet_names)
+    meta: Dict[str, Any] = {
+        "filename": filename,
+        "size_bytes": len(raw),
+        "rows": int(df.shape[0]),
+        "cols": int(df.shape[1]),
+        "sheet_names": available,
+        "selected_sheet": selected_label,
+        "merged_sheets": list(sheet_names),
+        "merge_group_column": safe_group_col if add_group_column else None,
+        "raw_bytes": raw,
+        "header_looks_numeric": numeric_header,
+    }
+    return df, meta
+
+
 def _looks_numeric(s: str) -> bool:
     try:
         float(s)

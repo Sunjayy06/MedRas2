@@ -206,31 +206,48 @@
   text-transform: uppercase;
 }
 
-/* ---------- Drop zone (screen 2A) ---------- */
+/* ---------- Upload card (screen 2A) ---------- */
 
-.se-drop {
-  border: 2px dashed var(--color-border);
-  border-radius: var(--radius-lg);
-  padding: 36px 24px;
-  text-align: center;
-  background: var(--color-bg-muted);
-  cursor: pointer;
-  transition: border-color 0.15s ease, background 0.15s ease;
-}
-.se-drop:hover, .se-drop.is-dragover {
-  border-color: var(--color-accent);
-  background: rgba(47, 111, 237, 0.06);
-}
-.se-drop-inner {
+.se-upload-card {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
+  justify-content: center;
+  gap: 14px;
+  border: 2px dashed var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 56px 24px;
+  text-align: center;
+  background: var(--color-bg-muted);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+}
+.se-upload-card:hover,
+.se-upload-card.is-dragover {
+  border-color: var(--color-accent);
+  background: rgba(47, 111, 237, 0.06);
+}
+.se-upload-card.is-dragover { transform: scale(1.01); }
+.se-upload-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: var(--color-bg);
+  color: var(--color-accent);
+  border: 1px solid var(--color-border);
+}
+.se-upload-title {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+.se-upload-sub {
+  font-size: 13px;
   color: var(--color-text-muted);
 }
-.se-drop-inner p { margin: 0; }
-.se-drop strong { color: var(--color-text); }
-.se-formats { font-size: 12px; }
 .se-link-button {
   background: none;
   border: none;
@@ -240,6 +257,101 @@
   font-weight: 600;
   text-decoration: underline;
 }
+
+/* ---------- Sheet handling card (screen Preview) ---------- */
+
+.se-sheet-card {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 18px 20px;
+  background: var(--color-bg);
+  margin-bottom: 4px;
+}
+.se-sheet-card-title {
+  margin: 0 0 4px;
+  font-size: 16px;
+  font-weight: 600;
+}
+.se-sheet-card-sub {
+  margin: 0 0 14px;
+  color: var(--color-text-muted);
+  font-size: 14px;
+}
+.se-sheet-options {
+  display: grid;
+  gap: 12px;
+}
+.se-sheet-option {
+  display: block;
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-md, 10px);
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+  background: var(--color-bg);
+}
+.se-sheet-option:hover { border-color: var(--color-accent); }
+.se-sheet-option:has(input[type="radio"]:checked) {
+  border-color: var(--color-accent);
+  background: rgba(47, 111, 237, 0.04);
+}
+.se-sheet-option input[type="radio"] { display: none; }
+.se-sheet-option-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+.se-sheet-option-icon { font-size: 18px; }
+.se-sheet-option-sub {
+  display: block;
+  margin-top: 4px;
+  margin-left: 28px;
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+.se-sheet-option-body {
+  display: none;
+  margin-top: 14px;
+  margin-left: 28px;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-border);
+}
+.se-sheet-option:has(input[type="radio"]:checked) .se-sheet-option-body {
+  display: block;
+}
+.se-sheet-checkboxes {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.se-sheet-checkboxes label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: var(--color-bg-muted);
+  cursor: pointer;
+  font-size: 14px;
+}
+.se-sheet-checkboxes label:hover { background: rgba(47, 111, 237, 0.06); }
+.se-sheet-merge-instructions {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+.se-sheet-group-toggle {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+.se-sheet-group-toggle input { margin-top: 2px; }
+.se-sheet-merge-actions { justify-content: flex-start !important; margin-top: 12px; }
 
 /* ---------- Practice radio grid (screen 2C) ---------- */
 

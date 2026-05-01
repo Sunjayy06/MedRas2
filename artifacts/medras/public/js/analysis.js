@@ -29,6 +29,7 @@ const state = {
   entryChoice: null,   // "upload" | "practice"
   intake: null,        // {what_you_have, outcomes, independents, instructions}
   intakeStep: 0,       // current question index in intake wizard (0..3)
+  sheetMode: null,     // null | "single" | "merge" — set once the user picks a radio
 };
 
 /* ------------------------------------------------------------------ */
@@ -406,15 +407,9 @@ function bindScreen2A() {
   const drop = $("#drop-zone");
   const input = $("#file-input");
 
-  drop.addEventListener("click", (ev) => {
-    if (ev.target.closest("button") || ev.target.closest("a")) return;
-    input.click();
-  });
-  $('[data-action="open-file"]').addEventListener("click", (ev) => {
-    ev.stopPropagation();
-    input.click();
-  });
-
+  // The drop-zone is a <label> wrapping the hidden input, so a plain click
+  // already opens the OS file picker — no JS click handler needed (and adding
+  // one would double-fire). We only handle drag-and-drop visuals + drop here.
   ["dragover", "dragenter"].forEach((evt) =>
     drop.addEventListener(evt, (e) => {
       e.preventDefault();
@@ -530,6 +525,10 @@ async function handleGenerate() {
 /* ------------------------------------------------------------------ */
 
 function ingestDataset(data) {
+  // A brand-new dataset (different job_id) means the user uploaded again or
+  // generated fresh practice data — wipe the explicit sheet-mode choice so the
+  // intake hint can pre-select the merge radio on the next render.
+  if (data.job_id !== state.jobId) state.sheetMode = null;
   state.jobId = data.job_id;
   state.summary = data.summary;
   state.columns = data.columns;
@@ -548,6 +547,121 @@ function ingestDataset(data) {
 /*  File-preview screen                                                 */
 /* ------------------------------------------------------------------ */
 
+// Words in the "anything else" instructions that suggest the researcher
+// already wants their sheets stacked together. Picked deliberately broad —
+// false-positives just pre-select the merge radio, which the user can flip.
+const MERGE_HINT_RE = /\b(merge|merging|combin(e|ing)|stack(ed)?|concatenat(e|ing)|join(ed)?|append|different\s+sheets|two\s+sheets|each\s+sheet)\b/i;
+
+function intakeWantsMerge(intake) {
+  if (!intake || typeof intake.instructions !== "string") return false;
+  return MERGE_HINT_RE.test(intake.instructions);
+}
+
+function renderSheetCard(summary) {
+  const card = $("#sheet-picker");
+  const sheets = (summary && summary.sheet_names) || [];
+  if (sheets.length < 2) {
+    card.classList.add("is-hidden");
+    return;
+  }
+  card.classList.remove("is-hidden");
+
+  const isMerged = Array.isArray(summary.merged_sheets) && summary.merged_sheets.length >= 2;
+  const hint = intakeWantsMerge(state.intake);
+  // Decide which radio to highlight by default. Priority:
+  //   1. If we are physically in a merged dataset right now, force "merge".
+  //   2. If the user has explicitly clicked a radio before, honour that choice.
+  //   3. Otherwise (first render of a multi-sheet upload), use the intake hint
+  //      to smart-default to merge when the researcher mentioned merging.
+  let preferMerge;
+  if (isMerged) preferMerge = true;
+  else if (state.sheetMode === "merge") preferMerge = true;
+  else if (state.sheetMode === "single") preferMerge = false;
+  else preferMerge = Boolean(hint);
+
+  const radioSingle = $('input[name="sheet-mode"][value="single"]');
+  const radioMerge = $('input[name="sheet-mode"][value="merge"]');
+  radioSingle.checked = !preferMerge;
+  radioMerge.checked = preferMerge;
+  // Record the user's explicit choice the next time they touch a radio so we
+  // don't keep overriding it from the intake hint on subsequent renders.
+  radioSingle.onchange = () => { state.sheetMode = "single"; };
+  radioMerge.onchange = () => { state.sheetMode = "merge"; };
+
+  const hintEl = $("#sheet-card-hint");
+  if (hint && !isMerged) {
+    hintEl.innerHTML = "Your earlier notes mention combining sheets, so we’ve pre-selected <strong>Merge</strong>. Adjust if that’s not right.";
+  } else if (isMerged) {
+    hintEl.innerHTML = `Currently merged: <strong>${escapeHtml(summary.merged_sheets.join(" + "))}</strong>${summary.merge_group_column ? ` (with a <strong>${escapeHtml(summary.merge_group_column)}</strong> column added)` : ""}. Switch back to a single sheet at any time.`;
+  } else {
+    hintEl.textContent = "Which one holds your research data — or do you need to merge several together?";
+  }
+
+  // Single-sheet dropdown
+  const sel = $("#sheet-select");
+  const currentSingle = isMerged ? sheets[0] : (summary.selected_sheet || sheets[0]);
+  sel.innerHTML = sheets.map((n) =>
+    `<option value="${escapeHtml(n)}"${n === currentSingle ? " selected" : ""}>${escapeHtml(n)}</option>`
+  ).join("");
+  sel.onchange = async () => {
+    const status = $("#preview-status");
+    setStatus(status, "Reading sheet…", "loading");
+    try {
+      const data = await api("/select-sheet", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ job_id: state.jobId, sheet_name: sel.value }),
+      });
+      ingestDataset(data);
+      setStatus(status, "");
+      renderPreview();
+    } catch (err) {
+      setStatus(status, `Could not switch sheet: ${err.message}`, "error");
+    }
+  };
+
+  // Merge checkboxes — pre-tick whatever was previously merged, otherwise all sheets.
+  const list = $("#sheet-merge-list");
+  const preTicked = new Set(isMerged ? summary.merged_sheets : sheets);
+  list.innerHTML = sheets.map((n, i) => `
+    <label>
+      <input type="checkbox" value="${escapeHtml(n)}" data-testid="check-merge-sheet-${i}"${preTicked.has(n) ? " checked" : ""} />
+      <span>${escapeHtml(n)}</span>
+    </label>
+  `).join("");
+
+  const addGroup = $("#sheet-merge-add-group");
+  addGroup.checked = isMerged ? Boolean(summary.merge_group_column) : true;
+
+  // Wire the merge button (replace any prior handler).
+  const btn = $('[data-action="run-merge"]');
+  btn.onclick = async () => {
+    const checked = Array.from(list.querySelectorAll('input[type="checkbox"]:checked')).map((cb) => cb.value);
+    const status = $("#sheet-merge-status");
+    if (checked.length < 2) {
+      setStatus(status, "Tick at least two sheets to merge.", "error");
+      return;
+    }
+    setStatus(status, `Merging ${checked.length} sheets…`, "loading");
+    try {
+      const data = await api("/combine-sheets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          job_id: state.jobId,
+          sheet_names: checked,
+          add_group_column: addGroup.checked,
+        }),
+      });
+      ingestDataset(data);
+      setStatus(status, "");
+      renderPreview();
+    } catch (err) {
+      setStatus(status, `Could not merge sheets: ${err.message}`, "error");
+    }
+  };
+}
+
 function renderPreview() {
   const meta = $("#preview-meta");
   const s = state.summary || {};
@@ -558,31 +672,8 @@ function renderPreview() {
     ${s.selected_sheet ? `<div><dt>Sheet</dt><dd data-testid="meta-sheet">${escapeHtml(s.selected_sheet)}</dd></div>` : ""}
   `;
 
-  // Sheet picker
-  const picker = $("#sheet-picker");
-  if (s.sheet_names && s.sheet_names.length > 1) {
-    picker.classList.remove("is-hidden");
-    const sel = $("#sheet-select");
-    sel.innerHTML = s.sheet_names.map((n) => `<option value="${escapeHtml(n)}"${n === s.selected_sheet ? " selected" : ""}>${escapeHtml(n)}</option>`).join("");
-    sel.onchange = async () => {
-      const status = $("#preview-status");
-      setStatus(status, "Reading sheet…", "loading");
-      try {
-        const data = await api("/select-sheet", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ job_id: state.jobId, sheet_name: sel.value }),
-        });
-        ingestDataset(data);
-        setStatus(status, "");
-        renderPreview();
-      } catch (err) {
-        setStatus(status, `Could not switch sheet: ${err.message}`, "error");
-      }
-    };
-  } else {
-    picker.classList.add("is-hidden");
-  }
+  // Sheet handling card (only when the file has 2+ sheets)
+  renderSheetCard(s);
 
   // Header warning
   $("#header-warning").classList.toggle("is-hidden", !s.header_looks_numeric);
