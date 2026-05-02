@@ -1,0 +1,914 @@
+Build the complete MedRAS Statistical Analysis 
+Engine end to end. This is a virtual statistician 
+for researchers who know nothing about statistics. 
+The product must replace a human statistician 
+completely for standard medical research analysis.
+
+Read this entire prompt before writing a single 
+line of code. The order of instructions matters.
+
+════════════════════════════════════
+THE GOLDEN RULE — NEVER BREAK THIS
+════════════════════════════════════
+
+Statistical calculations must match SPSS and R 
+exactly for the same dataset.
+
+This means:
+  All statistical tests use scipy, statsmodels, 
+  pingouin, or lifelines only.
+  
+  No AI model calculates any number.
+  No language model produces a p-value, 
+  OR, HR, AUC, mean, SD, or any test statistic.
+  
+  AI is used only for:
+    Explaining results in plain English
+    Answering user questions about the analysis
+    Helping the user add or remove tests
+    Writing the Results and Methods sections
+  
+  AI is never used for:
+    Any calculation
+    Any test selection decision
+    Any data transformation
+    Any imputation
+
+If this rule is violated anywhere in the code, 
+the product is wrong and cannot be used globally.
+
+════════════════════════════════════
+PART 1 — INSTALL ALL REQUIRED LIBRARIES
+════════════════════════════════════
+
+Run this install command first:
+
+pip install pandas numpy openpyxl xlrd scipy 
+statsmodels scikit-learn lifelines pingouin 
+matplotlib seaborn python-docx reportlab 
+jinja2 missingno scikit-posthocs factor-analyzer 
+--break-system-packages
+
+These are the only libraries used for 
+statistical calculations. No others.
+
+════════════════════════════════════
+PART 2 — VARIABLE CLASSIFICATION ENGINE
+(Fix this once, permanently)
+════════════════════════════════════
+
+The classification engine runs when a file 
+is uploaded. It must never misclassify 
+a clinical score as Ordinal when it is Scale.
+
+RULE 1 — Scale classification by column name:
+Any column whose name contains any of these 
+words must be classified as Scale automatically:
+  score, index, scale, VAS, NRS, HHS, harris,
+  union, time, duration, age, weight, height,
+  bmi, pressure, rate, level, count, days,
+  weeks, months, minutes, hours, length,
+  distance, volume, dose, hb, haemoglobin,
+  creatinine, egfr, hba1c, glucose, sodium,
+  potassium, calcium, temperature, spo2,
+  pulse, bp, systolic, diastolic, radiological,
+  harris hip, operating, surgery
+
+This rule overrides any logic based on 
+unique value count. Do not use "fewer than 
+10 unique values means ordinal". Remove that 
+rule permanently.
+
+RULE 2 — Ordinal only when explicitly ordered:
+A variable is Ordinal only if its values 
+contain words like:
+  mild, moderate, severe
+  low, medium, high
+  grade 1, grade 2, grade 3
+  stage 1, stage 2
+  class I, class II, class III
+  NYHA, TNM, WHO grade
+  never, sometimes, always
+  strongly disagree, disagree, agree
+
+RULE 3 — String mixed variables:
+When a column contains values like 
+"Grade 4", "2 mm", "Score 7", "Level 3":
+  Strip all non-numeric text
+  Keep only the number
+  Classify as Scale
+  Show user: "We removed the text prefix 
+  from [column]. Values converted to numbers. 
+  Original column kept as [column]_original."
+
+RULE 4 — Discrete vs continuous:
+Both are treated as Scale for all analyses.
+Discrete = whole numbers only (count data)
+Continuous = can have decimals
+Both use mean, SD, and the same tests.
+Show sub-type as information only.
+
+RULE 5 — ID columns:
+Never usable as outcome or grouping variable.
+Grey them out in all dropdowns.
+Block if somehow selected.
+
+════════════════════════════════════
+PART 3 — THE 7-STEP FLOW
+════════════════════════════════════
+
+The analysis has exactly 7 steps:
+  1 — Start (wizard)
+  2 — Data input (upload)
+  3 — Review data (3 tabs)
+  4 — Normality
+  5 — Plan and Run
+  6 — Results
+  7 — Export
+
+No Assign step. No Objective step.
+The step bar shows exactly these 7.
+
+STEP 1 — WIZARD (one question at a time):
+  Q1: What do you have ready?
+      Cards: A study proposal / 
+      An objective and sample size
+  Q2: Paste your objective and sample size
+      Text area for objective
+      Number field for expected sample size
+  Q3: What is the outcome variable?
+      Free text — user describes in plain English
+      Example: "Time to union in weeks"
+  Q4: Any specific instructions?
+      Optional free text
+  Save all answers to session.
+
+STEP 2 — DATA INPUT:
+  Upload screen as already built.
+  After file loads, run auto-assignment:
+    Match Q3 answer to closest column name
+    Case-insensitive, partial match allowed
+    Never match an ID or Date column
+    Match grouping variable from Q2 objective text
+    Save both to session
+  Show confirmation card at top of Step 3
+
+STEP 3 — REVIEW DATA (3 tabs):
+  Tab A: Variables
+    Confirmation card at top showing 
+    auto-assigned outcome and grouping variable
+    Buttons: "Yes, correct" or "Let me change"
+    Variable classification table below
+    Variable assistant chatbox (see Part 5)
+  Tab B: Quality check
+    Metric cards, Section A B C
+    Smart collapse when all clean
+    Colour-coded metric cards
+  Tab C: Missing data
+    Missing data table with colour coding
+    Method selector per variable
+    Impact preview before applying
+
+STEP 4 — NORMALITY:
+  Run tests automatically on all Scale variables
+  Use Shapiro-Wilk for n below 50
+  Use KS with Lilliefors for n 50 to 2000
+  Use Anderson-Darling for n above 2000
+  Apply thumb rules alongside formal tests:
+    Skewness must be between -2 and +2
+    Kurtosis must be between -7 and +7
+    Mean and median within 0.5 SD of each other
+  Decision: Normal, Borderline, or Non-normal
+  Attempt transformations if non-normal:
+    Try log first, then sqrt, then Box-Cox
+    If transformation works: use parametric 
+    on transformed data, note in Methods
+  Show QQ plot thumbnail per variable
+  Expert override toggle per row
+  Normality assistant chatbox (see Part 5)
+  Confirm button at bottom
+
+STEP 5 — PLAN AND RUN:
+  Full plan screen before any test runs
+  Call /api/stats/generate-plan with session ID
+  Show test cards, graph cards, output list
+  AI chatbox for plan questions (see Part 5)
+  Three confirmation checkboxes
+  Run button only active when all ticked
+  Progress screen with live updates when Run clicked
+  Auto-advance to Step 6 when done
+
+STEP 6 — RESULTS:
+  Tabbed interface
+  Tabs only shown for tests that ran
+  Results assistant chatbox (see Part 5)
+  Every table has Copy button
+  Every graph has Download button
+  Back button to Step 5
+
+STEP 7 — EXPORT:
+  Three download cards: Word, PDF, Excel
+  Checklist before downloading
+  Links to run again or start fresh
+
+════════════════════════════════════
+PART 4 — STATISTICAL TEST SELECTION ENGINE
+(The brain of the product)
+════════════════════════════════════
+
+This engine runs after normality is confirmed.
+It takes the variable types, normality results,
+and study structure as inputs.
+It outputs a list of tests to run.
+It uses rules only — no AI, no guessing.
+
+THE DECISION TREE:
+
+ALWAYS RUN FIRST:
+  Descriptive statistics for all variables
+  Cannot be removed or skipped
+
+COMPARISON TESTS — select based on:
+  How many groups (2 groups, 3+ groups, paired)
+  Variable type (continuous, categorical)
+  Normality result (normal, non-normal)
+
+  2 independent groups, continuous outcome:
+    Normal: Independent t-test
+      Check Levene test for equal variance
+      If Levene p below 0.05: use Welch t-test
+    Non-normal: Mann-Whitney U
+
+  2 paired groups (before/after, matched):
+    Normal: Paired t-test
+    Non-normal: Wilcoxon signed-rank
+
+  3 or more groups, continuous outcome:
+    Normal: One-way ANOVA
+      If Levene p below 0.05: 
+      Welch ANOVA (Brown-Forsythe)
+      Post-hoc: Tukey if equal variance
+      Post-hoc: Games-Howell if unequal variance
+    Non-normal: Kruskal-Wallis
+      Post-hoc: Dunn with Bonferroni correction
+
+  Repeated measures, 3 or more timepoints:
+    Normal: Repeated Measures ANOVA
+      Check Mauchly sphericity
+      Apply Greenhouse-Geisser if violated
+    Non-normal: Friedman
+      Post-hoc: Wilcoxon with Bonferroni
+
+  Mixed design (groups x timepoints):
+    Normal: Mixed ANOVA
+    Non-normal: use Mixed Linear Model
+
+  2 groups, categorical outcome:
+    Expected cell count 5 or above: Chi-square
+    Any cell below 5: Fisher exact
+  
+  3 or more groups, categorical outcome:
+    Chi-square
+    Fisher-Freeman-Halton if cells below 5
+  
+  Paired categorical (before/after binary):
+    McNemar test
+
+CORRELATION:
+  Both continuous, both normal: Pearson
+  Either non-normal or ordinal: Spearman
+  Both binary: Phi coefficient
+  Both categorical: Cramers V
+  Multiple variables: correlation matrix 
+  with heatmap
+
+REGRESSION — select based on outcome type:
+  Continuous outcome, one predictor:
+    Simple linear regression
+  Continuous outcome, multiple predictors:
+    Multiple linear regression
+    Run univariate first
+    Include variables with p below 0.25 
+    in multivariate
+    Check VIF for multicollinearity
+    Warn if VIF above 10
+  Binary outcome (Yes/No, 0/1):
+    Binary logistic regression
+    Run univariate then multivariate
+    Report crude and adjusted OR with 95% CI
+    Generate forest plot
+    Run Hosmer-Lemeshow goodness of fit
+  Ordinal outcome:
+    Ordinal logistic regression
+  Count outcome:
+    Poisson regression
+    Check overdispersion
+    If overdispersed: negative binomial
+  Time to event outcome:
+    Cox proportional hazards regression
+    Check Schoenfeld residuals for PH assumption
+    If violated: stratified Cox or time-varying
+
+SURVIVAL — trigger when:
+  Time column + Event column (0/1) detected
+  OR objective text contains: survival, 
+  mortality, time to, death, recurrence
+  
+  Always run:
+    Kaplan-Meier per group
+    Log-rank test
+    At-risk table below KM curve
+  
+  If predictors present:
+    Cox proportional hazards regression
+
+DIAGNOSTIC ACCURACY — trigger when:
+  Binary outcome + test result column
+  OR objective contains: sensitivity, 
+  specificity, ROC, diagnostic, screening
+  
+  Calculate all from 2x2 table:
+    Sensitivity with 95% CI
+    Specificity with 95% CI
+    PPV with 95% CI
+    NPV with 95% CI
+    Positive Likelihood Ratio
+    Negative Likelihood Ratio
+    Diagnostic Odds Ratio
+    Accuracy
+  
+  ROC curve with AUC and 95% CI
+  Youden index for optimal cutoff
+
+RELIABILITY — trigger when:
+  Two rater columns detected
+  OR objective contains: agreement, 
+  reliability, kappa, ICC, inter-rater
+  
+  Categorical: Cohen Kappa with interpretation
+  Ordinal: Weighted Kappa
+  3 or more raters: Fleiss Kappa
+  Continuous: ICC + Bland-Altman plot
+
+EFFECT SIZE — add to every test result:
+  t-test: Cohen's d
+  ANOVA: eta-squared and omega-squared
+  Mann-Whitney: r = Z divided by sqrt(N)
+  Kruskal-Wallis: eta-squared H
+  Chi-square 2x2: Phi coefficient
+  Chi-square larger: Cramers V
+  Correlation: r or rho is the effect size
+  Linear regression: R-squared and f-squared
+  Logistic regression: OR with 95% CI
+  Cox: HR with 95% CI
+  Kappa: kappa value itself
+  AUC: AUC value itself
+
+MULTIPLE TESTING CORRECTION:
+  When more than 3 outcomes are tested:
+    Apply Bonferroni for small number of tests
+    Apply Benjamini-Hochberg FDR for many tests
+  Always report both uncorrected 
+  and corrected p-value
+
+════════════════════════════════════
+PART 5 — AI CHATBOX PLACEMENT AND RULES
+════════════════════════════════════
+
+The chatbox appears in these 4 locations only.
+Each location has a different purpose.
+The chatbox in each location only knows 
+about that screen's content.
+
+CHATBOX 1 — Variable review screen (Tab A):
+  Purpose: help user understand and fix 
+  variable classification
+  
+  What it can do:
+    Explain why a variable was classified 
+    a certain way
+    Strip prefix from a column 
+    ("strip Grade from VAS Score")
+    Convert a column to numeric
+    Create two columns for mean and frequency
+    Rename a column
+    Exclude a column from analysis
+    Explain difference between scale, 
+    ordinal, and nominal
+  
+  What it cannot do:
+    Change any statistical result
+    Run any analysis
+    Make final classification decisions 
+    without user confirmation
+  
+  Suggested prompts shown as chips:
+    "Why is [variable] classified as ordinal?"
+    "Strip the text prefix from [variable]"
+    "I want both mean and frequency for [variable]"
+    "Exclude [variable] from analysis"
+    "Explain the difference between scale and ordinal"
+  
+  Backend: rule-based pattern matching
+  on keywords. No external AI API needed 
+  for basic commands.
+  For explanation questions: use Claude API
+  with strict system prompt:
+    "You are a variable classification assistant.
+     You only explain variable types and help 
+     the user understand their data. You never 
+     calculate statistics. You never decide 
+     which test to run. If asked for a p-value 
+     or any statistical result, say: I cannot 
+     calculate that. The statistical engine 
+     handles all calculations."
+
+CHATBOX 2 — Normality screen:
+  Purpose: explain normality decisions 
+  in plain English
+  
+  What it can do:
+    Explain what non-normal distribution means
+    Explain why it matters for test selection
+    Explain what a QQ plot shows
+    Explain skewness and kurtosis in plain terms
+    Explain what transformation was applied 
+    and why
+  
+  What it cannot do:
+    Change a normality decision
+    Override the formal test result
+  
+  System prompt for AI:
+    "You are a normality explanation assistant.
+     Explain statistical concepts in plain 
+     English for a researcher with no 
+     statistics background. Never produce 
+     any statistical calculations. Never 
+     override the normality decision made 
+     by the statistical engine."
+
+CHATBOX 3 — Plan and Run screen:
+  Purpose: let user modify the test plan 
+  and understand what will run
+  
+  What it can do:
+    Add a test that is not in the plan
+      (user says "also run survival analysis"
+       → add KM and log-rank to the plan)
+    Remove a test from the plan
+      (user says "I don't need regression"
+       → remove regression from plan)
+    Explain why a specific test was chosen
+    Explain what a specific test does
+    Answer "what is the difference between 
+    t-test and Mann-Whitney"
+  
+  What it cannot do:
+    Run any calculation
+    Override the normality-based test selection 
+    without updating the normality decision first
+  
+  System prompt for AI:
+    "You are an analysis planning assistant 
+     for a medical research platform.
+     You help researchers understand and 
+     modify their analysis plan.
+     You can add or remove tests from the plan.
+     When adding a test, return a structured 
+     response the app can parse:
+     ACTION: add_test
+     TEST_ID: [test name]
+     REASON: [why this test applies]
+     When removing a test:
+     ACTION: remove_test
+     TEST_ID: [test name]
+     Never calculate any statistical values.
+     Never produce p-values, OR, HR, or 
+     any numerical result."
+
+CHATBOX 4 — Results screen:
+  Purpose: help user understand their results
+  
+  What it can do:
+    Explain what a p-value means for 
+    this specific result
+    Explain what the OR or HR means clinically
+    Explain whether a result is practically 
+    significant beyond statistical significance
+    Help write a sentence for the paper
+    Explain a limitation of the analysis
+    Answer "what does this mean for my patients"
+  
+  What it cannot do:
+    Recalculate any result
+    Change any number in the output
+    Disagree with the statistical engine result
+  
+  System prompt for AI:
+    "You are a results interpretation assistant.
+     The statistical results were calculated 
+     by validated Python libraries and are 
+     correct. Your job is to explain them 
+     clearly to a medical researcher.
+     Never recalculate. Never dispute a result.
+     If asked to recalculate, say: 
+     The calculations are done by our 
+     statistical engine and are validated.
+     I can help you understand or explain 
+     them but cannot change them.
+     Always explain in plain English suitable 
+     for a clinician with no statistics training."
+
+CHATBOX DESIGN:
+  Position: fixed panel on right side of screen
+  Width: 300px on desktop
+  Collapsible: yes — small chat icon 
+  visible when collapsed
+  On mobile: full-width bottom sheet
+  
+  Always visible message at top of every chatbox:
+  "Ask me anything about [this screen's topic].
+   I explain — the statistical engine calculates."
+  
+  Message from system (first message always):
+  Chatbox 1: "I have reviewed your [n] variables.
+              [If any issues detected, mention them]
+              Ask me anything about your variables."
+  Chatbox 2: "I have completed the normality check.
+              [Summary of results]
+              Ask me what any result means."
+  Chatbox 3: "Here is your analysis plan.
+              You can add or remove any test.
+              Ask me what any test does."
+  Chatbox 4: "Your analysis is complete.
+              Ask me what any result means 
+              for your research."
+
+════════════════════════════════════
+PART 6 — STATISTICAL ACCURACY CONTROLS
+(Ensuring results match SPSS and R)
+════════════════════════════════════
+
+CONTROL 1 — Library version pinning:
+  Pin all library versions in requirements.txt
+  scipy >= 1.11.0
+  statsmodels >= 0.14.0
+  pingouin >= 0.5.3
+  lifelines >= 0.27.0
+  This ensures reproducible results.
+
+CONTROL 2 — Two-tailed tests by default:
+  All hypothesis tests use two-tailed 
+  alpha = 0.05 unless otherwise specified.
+  Always report exact p-value to 3 decimal places.
+  Report p < 0.001 when p is very small.
+
+CONTROL 3 — Exact formula verification:
+
+  For independent t-test:
+    Use scipy.stats.ttest_ind
+    Check Levene test first: scipy.stats.levene
+    If Levene p below 0.05: 
+    use equal_var=False (Welch)
+    This matches SPSS exactly.
+
+  For Mann-Whitney U:
+    Use scipy.stats.mannwhitneyu
+    alternative='two-sided'
+    This matches SPSS exactly.
+
+  For ANOVA:
+    Use scipy.stats.f_oneway
+    Post-hoc Tukey: 
+    statsmodels.stats.multicomp.pairwise_tukeyhsd
+    Post-hoc Games-Howell: 
+    pingouin.pairwise_gameshowell
+    These match SPSS exactly.
+
+  For Kruskal-Wallis:
+    Use scipy.stats.kruskal
+    Post-hoc Dunn: 
+    scikit_posthocs.posthoc_dunn
+    with p_adjust='bonferroni'
+    This matches SPSS exactly.
+
+  For Chi-square:
+    Use scipy.stats.chi2_contingency
+    correction=False for tables larger than 2x2
+    correction=True only for 2x2 with small n
+    This matches SPSS exactly.
+
+  For Fisher exact:
+    Use scipy.stats.fisher_exact for 2x2
+    For larger tables: 
+    scipy.stats.chi2_contingency with 
+    correction note in output
+    This matches SPSS exactly.
+
+  For Pearson correlation:
+    Use scipy.stats.pearsonr
+    This matches SPSS exactly.
+
+  For Spearman correlation:
+    Use scipy.stats.spearmanr
+    This matches SPSS exactly.
+
+  For logistic regression:
+    Use statsmodels.formula.api.logit
+    Report Nagelkerke R-squared
+    Run Hosmer-Lemeshow test
+    These match SPSS exactly.
+
+  For linear regression:
+    Use statsmodels.formula.api.ols
+    Report adjusted R-squared
+    Run Breusch-Pagan for homoscedasticity
+    Run Durbin-Watson for independence
+    These match SPSS exactly.
+
+  For Kaplan-Meier:
+    Use lifelines.KaplanMeierFitter
+    Log-rank: lifelines.statistics.logrank_test
+    These match SPSS exactly.
+
+  For Cox regression:
+    Use lifelines.CoxPHFitter
+    Test PH assumption using 
+    Schoenfeld residuals
+    This matches SPSS exactly.
+
+  For Repeated Measures ANOVA:
+    Use pingouin.rm_anova
+    Check sphericity with Mauchly test
+    Apply Greenhouse-Geisser if violated
+    This matches SPSS exactly.
+
+  For ICC:
+    Use pingouin.intraclass_corr
+    Specify ICC type explicitly
+    This matches SPSS exactly.
+
+  For Shapiro-Wilk:
+    Use scipy.stats.shapiro
+    This matches SPSS exactly.
+
+CONTROL 4 — Numerical precision:
+  All intermediate calculations use 
+  float64 precision.
+  Round only at display time.
+  Never round intermediate values.
+
+CONTROL 5 — Missing data handling in tests:
+  Always use listwise deletion for 
+  the specific variables in each test.
+  Report exact n used in each test.
+  This matches SPSS default behaviour.
+
+CONTROL 6 — Effect size calculations:
+  Cohen's d = mean difference divided 
+  by pooled SD
+  Eta-squared = SS_between divided by SS_total
+  Omega-squared = (SS_between minus 
+  df_between times MS_error) divided by 
+  (SS_total plus MS_error)
+  r for Mann-Whitney = Z divided by sqrt(N)
+  Cramers V = sqrt(chi2 divided by 
+  (n times min(rows-1, cols-1)))
+  All these match SPSS and R exactly.
+
+════════════════════════════════════
+PART 7 — OUTPUT THAT IS SUBMISSION READY
+════════════════════════════════════
+
+The final Word document must be ready 
+to paste directly into a research paper 
+or dissertation without any editing 
+of content (only formatting preferences).
+
+REPORT STRUCTURE — in this exact order:
+
+  Page 1: Cover page
+    Study title from wizard Q2
+    Date of analysis
+    Dataset filename
+    Number of patients and variables
+
+  Section 1: Data summary
+    Variables table with types
+    Missing data handling summary
+    Cleaning actions taken
+
+  Section 2: Table 1 — Baseline characteristics
+    All variables
+    Grouped by main IV if applicable
+    p-values for group comparisons
+    Formatted as journal table:
+      No vertical lines
+      Horizontal lines at top, below header, bottom
+      p-values to 3 decimal places
+      Bold p-values below 0.05
+      Footnote: "Values expressed as mean ± SD, 
+      median (IQR), or n (%) as appropriate. 
+      [Test name] used for group comparisons."
+
+  Section 3: Normality results
+    Table per continuous variable
+    Test name, statistic, p-value, decision
+
+  Section 4: Primary analysis
+    Main comparison table
+    Test used, statistic, df, p-value, effect size
+    Formatted as journal table
+
+  Section 5: Secondary analyses
+    One sub-section per analysis type run
+    Correlation results
+    Regression tables with crude and adjusted
+    Forest plot
+    Survival tables
+    Diagnostic accuracy tables
+    Reliability results
+
+  Section 6: All graphs
+    Numbered Figure 1, Figure 2...
+    Caption below each
+    300 DPI embedded
+
+  Section 7: Auto-written Results section
+    Publication-ready narrative
+    Labelled: "Paste into your Results section"
+
+  Section 8: Auto-written Methods section
+    Complete statistical methods paragraph
+    Reflects exactly what was done
+    Labelled: "Paste into your Methods section"
+
+  Section 9: Suggested next steps
+    Based on findings
+
+  Section 10: Limitations
+    Assumption violations
+    Power warnings
+    Missing data notes
+
+TABLE FORMATTING RULES:
+  Use python-docx for Word tables
+  No vertical borders anywhere
+  Only horizontal: top, below header, bottom
+  Header row: bold, no background colour
+  Alternating row shading: very light grey
+  Font: Times New Roman or Calibri
+  Table font size: 10pt
+  Caption above table: "Table [n]. [Description]"
+  Footnote below: abbreviations, 
+  test names, significance threshold
+
+GRAPH FORMATTING RULES:
+  All graphs: minimum 300 DPI
+  Font: Arial, minimum 11pt on axes
+  Axis labels include units in brackets
+  Each graph has a title and caption
+  Significant differences marked with 
+  * for p below 0.05
+  ** for p below 0.01
+  *** for p below 0.001
+  Export PNG and SVG for each graph
+
+AUTO-WRITTEN RESULTS SECTION:
+  Opening sentence with total n
+  Table 1 summary
+  Normality statement per key variable
+  Primary result with exact values, 
+  test name, statistic, p-value, 
+  and effect size
+  Secondary results if applicable
+  Regression findings if applicable
+  Close with key finding
+
+AUTO-WRITTEN METHODS SECTION:
+  "Statistical Analysis" as sub-heading
+  Software: Python with scipy, statsmodels, 
+  pingouin, and lifelines libraries
+  How continuous variables expressed
+  How categorical variables expressed
+  How normality assessed
+  Which comparison tests used and why
+  How missing data handled
+  Significance threshold (p < 0.05, two-tailed)
+  Multiple testing correction if applied
+  This must reflect exactly what was done — 
+  not a template. Pull values from analysis.
+
+════════════════════════════════════
+PART 8 — SESSION AND ERROR MANAGEMENT
+════════════════════════════════════
+
+SESSION PERSISTENCE:
+  Save session to localStorage after 
+  every confirmed step.
+  Key: medras_session
+  Value: JSON with step, dataset ID, 
+  all user choices, timestamp.
+  On page load: check for saved session 
+  under 24 hours old.
+  Show: "Continue unfinished analysis?"
+  with Continue or Start fresh buttons.
+
+BACK NAVIGATION:
+  Every step has a Back button.
+  Going back never resets any data.
+  All choices preserved exactly.
+  Back from Step 3 Tab B goes to Tab A.
+  Back from Step 3 Tab A goes to Step 2.
+
+ERROR MESSAGES:
+  Never show a raw Python error to the user.
+  Catch all exceptions.
+  Show friendly message:
+    "Something went wrong with [action].
+     [Specific friendly description]
+     Please [specific action to fix it]."
+  Log the technical error internally.
+
+PROGRESS INDICATORS:
+  Any operation over 2 seconds shows 
+  a progress indicator.
+  Any operation over 5 seconds shows 
+  a progress bar with phase labels.
+  Never show a blank or frozen screen.
+
+VALIDATION BEFORE RUNNING:
+  Before clicking Run on Step 5:
+    Check outcome variable is not an ID column
+    Check normality decisions are confirmed
+    Check at least one test is selected
+    Check dataset has at least 5 rows
+    If sample size is below recommended:
+      Show warning with expected power
+      Let user proceed with disclaimer
+
+════════════════════════════════════
+PART 9 — COMPLETE TEST CHECKLIST
+════════════════════════════════════
+
+After building, test every item below.
+Do not mark complete until all pass.
+
+ACCURACY TESTS:
+  Upload the Gautham fracture dataset.
+  Run Kruskal-Wallis on Time to Union 
+  by AO Classification.
+  Verify H statistic and p-value match 
+  SPSS output for same data.
+  
+  Run logistic regression on Outcome 
+  using Age as predictor.
+  Verify OR and 95% CI match SPSS output.
+  
+  Run Pearson correlation between 
+  Time to Union and Harris Hip Score.
+  Verify r and p-value match SPSS output.
+
+CLASSIFICATION TESTS:
+  Harris Hip Score must be Scale.
+  Operating Time must be Scale.
+  Time to Union must be Scale.
+  Radiological Union must be Scale.
+  AO Classification must be Nominal.
+  Outcome (Good/Poor) must be Nominal.
+
+CHATBOX TESTS:
+  Ask chatbox 1: "Why is Harris Hip 
+  classified as ordinal"
+    Expected: explanation given.
+    Harris Hip Score reclassified as Scale.
+  
+  Ask chatbox 3: "Also run survival analysis"
+    Expected: KM and log-rank added to plan.
+  
+  Ask chatbox 4: "What does p = 0.023 mean"
+    Expected: plain English explanation.
+    No new calculation performed.
+
+FLOW TESTS:
+  Complete all 7 steps with real data.
+  Back from Step 4 preserves Step 3 choices.
+  Back from Step 5 preserves Step 4 choices.
+  Refresh page at Step 5 shows 
+  "Continue unfinished analysis" banner.
+  Export downloads a Word file with 
+  all sections present and formatted correctly.
+
+CHATBOX BOUNDARY TEST:
+  Ask any chatbox: "Calculate the t-test 
+  p-value for me"
+    Expected: chatbox refuses and says 
+    "The statistical engine handles all 
+    calculations. I can explain results 
+    but cannot calculate them."
+  
+  Ask any chatbox: "Which test should I use"
+    Expected: chatbox explains the test 
+    the engine already selected and 
+    why it was chosen. Does not override.
