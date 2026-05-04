@@ -62,6 +62,7 @@ def generate_plan(
     classifications: List[Dict[str, Any]],
     assignment: Dict[str, Any],
     normality: Dict[str, Any],
+    session: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Produce the full plan dict consumed by screen-6.
 
@@ -291,6 +292,22 @@ def generate_plan(
         summary_bits.append(f"{outcome} (no grouping)")
     if covariates:
         summary_bits.append(f"adjusted for {', '.join(covariates)}")
+    # ---- Phase B: trigger-based extra tests -----------------------------
+    # Each trigger only fires if the relevant session keys / dataset shape
+    # is present.  Existing logic above is untouched — these are additive.
+    _add_phase_b_triggers(
+        tests=tests,
+        df=df,
+        classes=classes,
+        norm=norm,
+        outcome=outcome,
+        group=group,
+        o_kind=o_kind,
+        o_normal=o_normal,
+        n_levels=n_levels,
+        session=session or {},
+    )
+
     # Filter to runners we actually implement so users never see a confirmed
     # card that ends up "planned but not yet implemented" at run time.
     from . import results as _results
@@ -312,3 +329,368 @@ def generate_plan(
         "outputs": outputs,
         "summary": summary,
     }
+
+
+# ---------------------------------------------------------------------------
+# Phase B — trigger-based test selection (additive)
+# ---------------------------------------------------------------------------
+import re as _re
+
+
+_RATER_WORDS = ('rater', 'observer', 'assessor', 'scorer', 'reader')
+_DIAG_WORDS = ('sensitivity', 'specificity', 'roc', 'diagnostic',
+               'screening', 'accuracy', 'ppv', 'npv', 'auc')
+_SURVIVAL_WORDS = ('survival', 'mortality', 'time to', 'death',
+                   'recurrence', 'progression', 'discharge')
+_KAPPA_WORDS = ('agreement', 'reliability', 'kappa', 'icc',
+                'inter-rater', 'reproducibility')
+_PAIRED_WORDS = ('before and after', 'pre and post', 'pre vs post',
+                 'paired', 'matched', 'same patient', 'same subject',
+                 'repeated on the same')
+_RM_WORDS = ('repeated measures', 'longitudinal', 'over time',
+             'follow-up at', 'multiple timepoints')
+
+
+def _objective_text(session: Dict[str, Any]) -> str:
+    s = session.get('objective') or session.get('objective_text') or ''
+    return str(s).lower()
+
+
+def _detect_rater_cols(df: pd.DataFrame) -> List[str]:
+    return [c for c in df.columns
+            if any(w in str(c).lower() for w in _RATER_WORDS)]
+
+
+def _detect_time_event(df: pd.DataFrame,
+                       classes: Dict[str, Dict[str, Any]],
+                       session: Dict[str, Any]) -> tuple:
+    time_col = session.get('time_variable')
+    event_col = session.get('event_variable')
+    if time_col and event_col:
+        return time_col, event_col
+    # Auto-detect: time-like column name + binary event column
+    time_candidates = [c for c in df.columns
+                       if _re.search(r'time[_ ]?to|follow.?up|duration|months|weeks|days',
+                                     str(c), _re.I)]
+    event_candidates = []
+    for c in df.columns:
+        s = str(c).lower()
+        if any(w in s for w in ('event', 'death', 'died', 'status',
+                                 'outcome_binary', 'censor')):
+            try:
+                vals = set(df[c].dropna().unique().tolist())
+                if vals.issubset({0, 1, 0.0, 1.0, True, False}):
+                    event_candidates.append(c)
+            except Exception:
+                pass
+    if time_candidates and event_candidates:
+        return time_candidates[0], event_candidates[0]
+    return None, None
+
+
+def _detect_paired_cols(df: pd.DataFrame, outcome: Optional[str]) -> tuple:
+    """Look for `<x>_pre` / `<x>_post` style pairs."""
+    if not outcome:
+        return None, None
+    cols = [str(c) for c in df.columns]
+    for c in cols:
+        cl = c.lower()
+        if cl.endswith('_pre') or cl.endswith('_baseline'):
+            base = c.rsplit('_', 1)[0]
+            for p in cols:
+                pl = p.lower()
+                if pl.startswith(base.lower() + '_') and (
+                    pl.endswith('_post') or pl.endswith('_followup') or
+                    pl.endswith('_final') or pl.endswith('_end')
+                ):
+                    return c, p
+    return None, None
+
+
+def _detect_timepoint_cols(df: pd.DataFrame) -> List[str]:
+    """Find columns belonging to a repeated-measures design."""
+    pat = _re.compile(r'(?:_|^)(t\d|wk\d+|week\d+|m\d+|month\d+|day\d+|baseline|followup|final)$', _re.I)
+    cols = [c for c in df.columns if pat.search(str(c))]
+    return cols if len(cols) >= 3 else []
+
+
+def _is_binary_outcome(df: pd.DataFrame, col: Optional[str]) -> bool:
+    if not col or col not in df.columns:
+        return False
+    try:
+        return df[col].dropna().nunique() == 2
+    except Exception:
+        return False
+
+
+def _is_count_outcome(df: pd.DataFrame, col: Optional[str]) -> bool:
+    if not col or col not in df.columns:
+        return False
+    try:
+        s = pd.to_numeric(df[col], errors='coerce').dropna()
+        if len(s) == 0:
+            return False
+        return bool((s >= 0).all() and (s == s.astype(int)).all())
+    except Exception:
+        return False
+
+
+def _add_phase_b_triggers(
+    tests: List[Dict[str, Any]],
+    df: pd.DataFrame,
+    classes: Dict[str, Dict[str, Any]],
+    norm: Dict[str, Dict[str, Any]],
+    outcome: Optional[str],
+    group: Optional[str],
+    o_kind: str,
+    o_normal: bool,
+    n_levels: int,
+    session: Dict[str, Any],
+) -> None:
+    objective = _objective_text(session)
+
+    # ---- TRIGGER 1 — Paired t-test / Wilcoxon -------------------------
+    paired_flag = bool(session.get('paired')) or any(w in objective for w in _PAIRED_WORDS)
+    p_col1 = session.get('paired_col1') or outcome
+    p_col2 = session.get('paired_col2')
+    if not p_col2 and paired_flag:
+        d1, d2 = _detect_paired_cols(df, outcome)
+        if d1 and d2:
+            p_col1, p_col2 = d1, d2
+    if paired_flag and p_col1 and p_col2 and p_col2 in df.columns:
+        normality_ok = norm.get(p_col1, {}).get('decision') == 'normal'
+        if normality_ok:
+            tests.append({
+                'id': 'pb_paired_t',
+                'title': 'Paired samples t-test',
+                'why': 'Same subjects measured twice with normally distributed outcome.',
+                'columns': [p_col1, p_col2],
+                'parametric': True,
+                '_phase_b': {
+                    'function': 'run_paired_ttest',
+                    'test_type': 't_test_paired',
+                    'args': {'col1': p_col1, 'col2': p_col2},
+                },
+            })
+        else:
+            tests.append({
+                'id': 'pb_wilcoxon',
+                'title': 'Wilcoxon signed-rank test',
+                'why': 'Same subjects measured twice with non-normally distributed outcome.',
+                'columns': [p_col1, p_col2],
+                'parametric': False,
+                '_phase_b': {
+                    'function': 'run_wilcoxon',
+                    'test_type': 'wilcoxon',
+                    'args': {'col1': p_col1, 'col2': p_col2},
+                },
+            })
+
+    # ---- TRIGGER 2 — McNemar -----------------------------------------
+    if paired_flag and _is_binary_outcome(df, p_col1) and p_col2 and p_col2 in df.columns:
+        tests.append({
+            'id': 'pb_mcnemar',
+            'title': 'McNemar test',
+            'why': 'Paired binary outcomes — comparing proportions before and after in the same subjects.',
+            'columns': [p_col1, p_col2],
+            'parametric': False,
+            '_phase_b': {
+                'function': 'run_mcnemar',
+                'test_type': 'mcnemar',
+                'args': {'col1': p_col1, 'col2': p_col2},
+            },
+        })
+
+    # ---- TRIGGER 3 — Repeated measures ANOVA / Friedman --------------
+    timepoints = list(session.get('timepoints') or _detect_timepoint_cols(df))
+    rm_flag = (session.get('design') == 'repeated_measures'
+               or any(w in objective for w in _RM_WORDS))
+    if rm_flag and len(timepoints) >= 3 and outcome:
+        normality_ok = norm.get(outcome, {}).get('decision') == 'normal'
+        within = session.get('within_factor')
+        subject = session.get('subject_col')
+        if normality_ok and within and subject:
+            tests.append({
+                'id': 'pb_rm_anova',
+                'title': 'Repeated Measures ANOVA',
+                'why': 'Same subjects at 3 or more timepoints with normally distributed outcome.',
+                'columns': [outcome, within, subject],
+                'parametric': True,
+                '_phase_b': {
+                    'function': 'run_rm_anova',
+                    'test_type': 'rm_anova',
+                    'args': {'dv': outcome, 'within': within, 'subject': subject},
+                },
+            })
+        elif not normality_ok:
+            tests.append({
+                'id': 'pb_friedman',
+                'title': 'Friedman test',
+                'why': 'Same subjects at 3 or more timepoints with non-normally distributed outcome.',
+                'columns': list(timepoints),
+                'parametric': False,
+                '_phase_b': {
+                    'function': 'run_friedman',
+                    'test_type': 'friedman',
+                    'args': {'cols': list(timepoints)},
+                },
+            })
+
+    # ---- TRIGGER 4 — Chi or Fisher swap ------------------------------
+    # When the existing logic queued a generic chi_square + fisher fallback,
+    # add a single smart entry that picks Fisher automatically when expected
+    # cells fall below 5.
+    if outcome and group and o_kind in ('nominal', 'ordinal'):
+        tests.append({
+            'id': 'pb_chi_or_fisher',
+            'title': "Chi-square / Fisher's exact (auto-select)",
+            'why': "Picks Fisher's exact automatically if any expected cell count is below 5.",
+            'columns': [outcome, group],
+            'parametric': False,
+            '_phase_b': {
+                'function': 'run_chi_or_fisher',
+                'test_type': 'chi_square',
+                'args': {'col1': outcome, 'col2': group},
+            },
+        })
+
+    # ---- TRIGGER 5 — Kappa / ICC -------------------------------------
+    rater_cols = list(session.get('rater_cols') or _detect_rater_cols(df))
+    kappa_in_objective = any(w in objective for w in _KAPPA_WORDS)
+    if (len(rater_cols) >= 2 or kappa_in_objective) and len(rater_cols) >= 2:
+        outcome_type = session.get('outcome_type')
+        if outcome_type is None and outcome:
+            outcome_type = ('binary' if _is_binary_outcome(df, outcome)
+                            else o_kind)
+        if outcome_type in ('nominal', 'binary'):
+            tests.append({
+                'id': 'pb_kappa',
+                'title': "Cohen's Kappa",
+                'why': 'Two rater columns detected or reliability mentioned in objective.',
+                'columns': rater_cols[:2],
+                'parametric': False,
+                '_phase_b': {
+                    'function': 'run_kappa',
+                    'test_type': 'kappa',
+                    'args': {
+                        'rater_cols': rater_cols[:2],
+                        'weighted': outcome_type == 'ordinal',
+                    },
+                },
+            })
+        else:
+            tests.append({
+                'id': 'pb_icc_ba',
+                'title': 'ICC and Bland-Altman',
+                'why': 'Continuous ratings from two raters — assessing agreement.',
+                'columns': rater_cols[:2],
+                'parametric': True,
+                '_phase_b': {
+                    'function': 'run_icc_bland_altman',
+                    'test_type': 'icc',
+                    'args': {'col1': rater_cols[0], 'col2': rater_cols[1]},
+                },
+            })
+
+    # ---- TRIGGER 6 — Kaplan-Meier / Cox ------------------------------
+    time_col, event_col = _detect_time_event(df, classes, session)
+    survival_in_objective = any(w in objective for w in _SURVIVAL_WORDS)
+    if (time_col and event_col) or survival_in_objective:
+        if group and time_col and event_col:
+            tests.append({
+                'id': 'pb_km',
+                'title': 'Kaplan-Meier + Log-rank',
+                'why': 'Time-to-event outcome with group comparison.',
+                'columns': [time_col, event_col, group],
+                'parametric': False,
+                '_phase_b': {
+                    'function': 'run_kaplan_meier',
+                    'test_type': 'log_rank',
+                    'args': {'time_col': time_col,
+                             'event_col': event_col,
+                             'group_col': group},
+                },
+            })
+        predictors = list(session.get('continuous_predictors') or [])
+        if not predictors:
+            # Fall back to scale covariates from the assignment
+            predictors = [c for c in (session.get('covariates') or [])
+                          if classes.get(c, {}).get('detected_type') == 'scale']
+        if predictors and time_col and event_col:
+            tests.append({
+                'id': 'pb_cox',
+                'title': 'Cox proportional hazards',
+                'why': 'Survival outcome with predictor variables present.',
+                'columns': [time_col, event_col] + predictors,
+                'parametric': True,
+                '_phase_b': {
+                    'function': 'run_cox_regression',
+                    'test_type': 'cox_regression',
+                    'args': {'time_col': time_col,
+                             'event_col': event_col,
+                             'predictors': predictors},
+                },
+            })
+
+    # ---- TRIGGER 7 — Diagnostic accuracy / ROC -----------------------
+    diagnostic_in_objective = any(w in objective for w in _DIAG_WORDS)
+    disease_col = session.get('disease_col')
+    test_result_col = session.get('test_result_col')
+    if diagnostic_in_objective or (disease_col and test_result_col):
+        d_col = disease_col or outcome
+        t_col = test_result_col or group
+        if d_col and t_col and d_col in df.columns and t_col in df.columns:
+            tests.append({
+                'id': 'pb_diagnostic',
+                'title': 'Diagnostic accuracy + ROC',
+                'why': 'Diagnostic accuracy assessment requested in objective.',
+                'columns': [d_col, t_col],
+                'parametric': False,
+                '_phase_b': {
+                    'function': 'run_diagnostic_accuracy',
+                    'test_type': 'diagnostic_accuracy',
+                    'args': {'disease_col': d_col, 'test_col': t_col},
+                },
+            })
+
+    # ---- TRIGGER 8 — Ordinal logistic regression ---------------------
+    outcome_type = session.get('outcome_type')
+    if outcome_type is None and outcome and o_kind == 'ordinal':
+        outcome_type = 'ordinal'
+    if outcome_type == 'ordinal' and outcome:
+        predictors = list(session.get('regression_predictors')
+                          or session.get('covariates') or [])
+        if predictors:
+            tests.append({
+                'id': 'pb_ordinal',
+                'title': 'Ordinal logistic regression',
+                'why': 'Outcome variable is ordinal (ordered categories).',
+                'columns': [outcome] + predictors,
+                'parametric': True,
+                '_phase_b': {
+                    'function': 'run_ordinal_logistic',
+                    'test_type': 'ordinal_logistic',
+                    'args': {'outcome': outcome, 'predictors': predictors},
+                },
+            })
+
+    # ---- TRIGGER 9 — Poisson / Negative binomial ---------------------
+    if outcome_type is None and _is_count_outcome(df, outcome):
+        outcome_type = 'count'
+    if outcome_type == 'count' and outcome:
+        predictors = list(session.get('regression_predictors')
+                          or session.get('covariates') or [])
+        if predictors:
+            tests.append({
+                'id': 'pb_count',
+                'title': 'Poisson / Negative binomial',
+                'why': ('Count outcome (whole numbers with no upper limit). '
+                        'Model selected based on overdispersion check.'),
+                'columns': [outcome] + predictors,
+                'parametric': True,
+                '_phase_b': {
+                    'function': 'run_count_regression',
+                    'test_type': 'count_regression',
+                    'args': {'outcome': outcome, 'predictors': predictors},
+                },
+            })

@@ -132,6 +132,46 @@ class GenerateDummyRequest(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+def _build_session_view(entry, classifications, assignment) -> Dict[str, Any]:
+    """Build the `session` dict consumed by phase-B trigger logic.
+
+    Pulls intake answers, assignment and per-column display names so that
+    new tests can resolve names and detect study-design hints.
+    """
+    from app.services.results import clean_display_name as _clean
+    intake = entry.meta.get("intake") or {}
+    objective = ""
+    if isinstance(intake, dict):
+        objective = (intake.get("objective")
+                     or intake.get("objective_text")
+                     or intake.get("text")
+                     or "")
+    variables = {}
+    for c in classifications or []:
+        col = c.get("column")
+        if col:
+            variables[str(col)] = {
+                "display_name": _clean(col),
+                "type": c.get("detected_type"),
+                "subtype": c.get("subtype"),
+                "unit": "",
+            }
+    return {
+        "objective": str(objective),
+        "variables": variables,
+        "outcome_variable": (assignment or {}).get("outcome"),
+        "grouping_variable": (assignment or {}).get("group"),
+        "covariates": list((assignment or {}).get("covariates") or []),
+        # Future wizard work will populate these:
+        "paired": bool(intake.get("paired")) if isinstance(intake, dict) else False,
+        "design": intake.get("design") if isinstance(intake, dict) else None,
+        "timepoints": list(intake.get("timepoints") or []) if isinstance(intake, dict) else [],
+        "time_variable": intake.get("time_variable") if isinstance(intake, dict) else None,
+        "event_variable": intake.get("event_variable") if isinstance(intake, dict) else None,
+        "outcome_type": intake.get("outcome_type") if isinstance(intake, dict) else None,
+    }
+
+
 def _build_response(job_id: str, entry) -> Dict[str, Any]:
     classifications = entry.meta.get("classifications") or variable_classifier.classify_dataframe(entry.df)
     entry.meta["classifications"] = classifications
@@ -857,7 +897,10 @@ async def generate_plan(job_id: str) -> Dict[str, Any]:
             entry.df, classifications, include_qq=False
         )
         entry.meta["normality"] = normality_data
-    plan_dict = plan_service.generate_plan(entry.df, classifications, assignment, normality_data)
+    session_view = _build_session_view(entry, classifications, assignment)
+    plan_dict = plan_service.generate_plan(
+        entry.df, classifications, assignment, normality_data, session=session_view,
+    )
     entry.meta["plan"] = plan_dict
     return {"job_id": job_id, "assignment": assignment, "plan": plan_dict}
 
@@ -880,12 +923,17 @@ async def run_analysis(payload: RunAnalysisRequest) -> Dict[str, Any]:
         normality_data = entry.meta.get("normality") or normality_service.normality_for_dataset(
             entry.df, classifications, include_qq=False
         )
-        plan_dict = plan_service.generate_plan(entry.df, classifications, assignment, normality_data)
+        session_view = _build_session_view(entry, classifications, assignment)
+        plan_dict = plan_service.generate_plan(
+            entry.df, classifications, assignment, normality_data, session=session_view,
+        )
         entry.meta["plan"] = plan_dict
+    session_view = _build_session_view(entry, classifications, assignment)
     res = results_service.run_plan(
         entry.df, classifications, assignment, plan_dict,
         confirmed_test_ids=payload.confirmed_test_ids or None,
         confirmed_graph_ids=payload.confirmed_graph_ids or None,
+        session=session_view,
     )
     entry.meta["results"] = res
     return {"job_id": payload.job_id, "results": res}

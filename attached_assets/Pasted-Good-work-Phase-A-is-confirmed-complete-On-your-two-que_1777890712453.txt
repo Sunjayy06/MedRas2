@@ -1,0 +1,401 @@
+Good work. Phase A is confirmed complete.
+
+On your two questions:
+
+Question 1 — the t-test assertion:
+Fix the threshold to 4.05. Replace the 
+assertion line with:
+assert abs(t - 4.054) < 0.1, f"t-test FAIL: got {t}"
+The code is correct. The spec had a 
+calculation error.
+
+Question 2 — wiring the new tests:
+Yes. Phase B is to wire all new test 
+functions into the existing run_plan() 
+and test selection engine so they are 
+actually called during analysis.
+
+Do Phase B now as follows:
+
+In the existing test selection engine 
+(plan.py or wherever run_plan lives),
+add triggers for each new test.
+Do not rebuild the existing logic.
+Only add the new triggers below.
+
+TRIGGER 1 — Paired t-test and Wilcoxon:
+In the section that selects comparison tests,
+after the existing 2-group logic, add:
+
+if session.get('paired') == True:
+    outcome = session['outcome_variable']
+    col1 = session.get('paired_col1', outcome)
+    col2 = session.get('paired_col2')
+    if col2:
+        normality_ok = session.get(
+            'normality_results', {}
+        ).get(col1, {}).get('normal', False)
+        if normality_ok:
+            planned_tests.append({
+                'test_type': 't_test_paired',
+                'function': 'run_paired_ttest',
+                'args': {
+                    'col1': col1,
+                    'col2': col2
+                },
+                'name': 'Paired samples t-test',
+                'reason': (
+                    'Same subjects measured twice '
+                    'with normally distributed outcome.'
+                )
+            })
+        else:
+            planned_tests.append({
+                'test_type': 'wilcoxon',
+                'function': 'run_wilcoxon',
+                'args': {
+                    'col1': col1,
+                    'col2': col2
+                },
+                'name': 'Wilcoxon signed-rank test',
+                'reason': (
+                    'Same subjects measured twice '
+                    'with non-normally distributed '
+                    'outcome.'
+                )
+            })
+
+TRIGGER 2 — McNemar:
+After the existing chi-square / Fisher logic,
+add:
+
+if (session.get('paired') == True and
+    session.get('outcome_type') == 'binary'):
+    planned_tests.append({
+        'test_type': 'mcnemar',
+        'function': 'run_mcnemar',
+        'args': {
+            'col1': session.get('paired_col1'),
+            'col2': session.get('paired_col2')
+        },
+        'name': 'McNemar test',
+        'reason': (
+            'Paired binary outcomes — '
+            'comparing proportions before '
+            'and after in the same subjects.'
+        )
+    })
+
+TRIGGER 3 — Repeated Measures ANOVA and Friedman:
+After existing ANOVA / Kruskal-Wallis logic,
+add:
+
+if (session.get('design') == 'repeated_measures'
+    and len(session.get('timepoints', [])) >= 3):
+    outcome = session['outcome_variable']
+    normality_ok = session.get(
+        'normality_results', {}
+    ).get(outcome, {}).get('normal', False)
+    
+    if normality_ok:
+        planned_tests.append({
+            'test_type': 'rm_anova',
+            'function': 'run_rm_anova',
+            'args': {
+                'dv': outcome,
+                'within': session.get('within_factor'),
+                'subject': session.get('subject_col')
+            },
+            'name': 'Repeated Measures ANOVA',
+            'reason': (
+                'Same subjects at 3 or more '
+                'timepoints with normally '
+                'distributed outcome.'
+            )
+        })
+    else:
+        cols = session.get('timepoints', [])
+        planned_tests.append({
+            'test_type': 'friedman',
+            'function': 'run_friedman',
+            'args': {'cols': cols},
+            'name': 'Friedman test',
+            'reason': (
+                'Same subjects at 3 or more '
+                'timepoints with non-normally '
+                'distributed outcome.'
+            )
+        })
+
+TRIGGER 4 — Replace chi-square with chi_or_fisher:
+Find every place in the existing code where
+scipy.stats.chi2_contingency is called directly
+for the main comparison.
+Replace those calls with run_chi_or_fisher()
+so expected count checking happens automatically.
+
+TRIGGER 5 — Kappa and ICC:
+Add this detection block:
+
+rater_cols = [
+    col for col in df.columns
+    if any(word in col.lower() 
+           for word in ['rater', 'observer', 
+                        'assessor', 'scorer',
+                        'reader'])
+]
+
+kappa_in_objective = any(
+    word in session.get('objective', '').lower()
+    for word in ['agreement', 'reliability',
+                 'kappa', 'icc', 'inter-rater',
+                 'reproducibility']
+)
+
+if len(rater_cols) >= 2 or kappa_in_objective:
+    outcome_type = session.get('outcome_type')
+    if outcome_type in ['nominal', 'binary']:
+        weighted = (
+            outcome_type == 'ordinal')
+        planned_tests.append({
+            'test_type': 'kappa',
+            'function': 'run_kappa',
+            'args': {
+                'rater_cols': rater_cols,
+                'weighted': weighted
+            },
+            'name': "Cohen's Kappa",
+            'reason': (
+                'Two rater columns detected '
+                'or reliability mentioned '
+                'in objective.'
+            )
+        })
+    else:
+        planned_tests.append({
+            'test_type': 'icc',
+            'function': 'run_icc_bland_altman',
+            'args': {
+                'col1': rater_cols[0],
+                'col2': rater_cols[1]
+            },
+            'name': 'ICC and Bland-Altman',
+            'reason': (
+                'Continuous ratings from two '
+                'raters — assessing agreement.'
+            )
+        })
+
+TRIGGER 6 — Kaplan-Meier and Cox:
+Add this survival detection block:
+
+time_col = session.get('time_variable')
+event_col = session.get('event_variable')
+
+survival_in_objective = any(
+    word in session.get('objective', '').lower()
+    for word in ['survival', 'mortality',
+                 'time to', 'death', 'recurrence',
+                 'progression', 'discharge']
+)
+
+if (time_col and event_col) or survival_in_objective:
+    group_col = session.get('grouping_variable')
+    if group_col:
+        planned_tests.append({
+            'test_type': 'log_rank',
+            'function': 'run_kaplan_meier',
+            'args': {
+                'time_col': time_col,
+                'event_col': event_col,
+                'group_col': group_col
+            },
+            'name': 'Kaplan-Meier + Log-rank',
+            'reason': (
+                'Time-to-event outcome with '
+                'group comparison.'
+            )
+        })
+    
+    predictors = session.get(
+        'continuous_predictors', [])
+    if predictors:
+        planned_tests.append({
+            'test_type': 'cox_regression',
+            'function': 'run_cox_regression',
+            'args': {
+                'time_col': time_col,
+                'event_col': event_col,
+                'predictors': predictors
+            },
+            'name': 'Cox proportional hazards',
+            'reason': (
+                'Survival outcome with '
+                'predictor variables present.'
+            )
+        })
+
+TRIGGER 7 — Diagnostic accuracy and ROC:
+Add this detection block:
+
+diagnostic_in_objective = any(
+    word in session.get('objective', '').lower()
+    for word in ['sensitivity', 'specificity',
+                 'roc', 'diagnostic', 'screening',
+                 'accuracy', 'ppv', 'npv',
+                 'auc']
+)
+
+disease_col = session.get('disease_col')
+test_result_col = session.get('test_result_col')
+
+if (diagnostic_in_objective or
+    (disease_col and test_result_col)):
+    planned_tests.append({
+        'test_type': 'diagnostic_accuracy',
+        'function': 'run_diagnostic_accuracy',
+        'args': {
+            'disease_col': (
+                disease_col or 
+                session['outcome_variable']),
+            'test_col': (
+                test_result_col or
+                session.get('grouping_variable'))
+        },
+        'name': 'Diagnostic accuracy + ROC',
+        'reason': (
+            'Diagnostic accuracy assessment '
+            'requested in objective.'
+        )
+    })
+
+TRIGGER 8 — Ordinal logistic regression:
+In the existing regression selection block,
+find where outcome_type is checked.
+Add after the binary logistic block:
+
+if outcome_type == 'ordinal':
+    predictors = session.get(
+        'regression_predictors', [])
+    if predictors:
+        planned_tests.append({
+            'test_type': 'ordinal_logistic',
+            'function': 'run_ordinal_logistic',
+            'args': {
+                'outcome': session['outcome_variable'],
+                'predictors': predictors
+            },
+            'name': 'Ordinal logistic regression',
+            'reason': (
+                'Outcome variable is ordinal '
+                '(ordered categories).'
+            )
+        })
+
+TRIGGER 9 — Poisson and Negative Binomial:
+In the regression selection block, add:
+
+if outcome_type == 'count':
+    predictors = session.get(
+        'regression_predictors', [])
+    if predictors:
+        planned_tests.append({
+            'test_type': 'count_regression',
+            'function': 'run_count_regression',
+            'args': {
+                'outcome': session['outcome_variable'],
+                'predictors': predictors
+            },
+            'name': 'Poisson / Negative binomial',
+            'reason': (
+                'Count outcome (whole numbers '
+                'with no upper limit). '
+                'Model selected based on '
+                'overdispersion check.'
+            )
+        })
+
+WIRING THE FUNCTION CALLS:
+After building the planned_tests list,
+the run_analysis function must call each 
+function listed in planned_tests.
+
+Add this execution block to run_analysis():
+
+from results import (
+    run_paired_ttest, run_wilcoxon,
+    run_mcnemar, run_rm_anova,
+    run_friedman, run_chi_or_fisher,
+    run_kappa, run_icc_bland_altman,
+    run_kaplan_meier, run_cox_regression,
+    run_diagnostic_accuracy,
+    run_ordinal_logistic, run_count_regression,
+    apply_correction_if_needed,
+    hosmer_lemeshow, nagelkerke_r2
+)
+
+FUNCTION_MAP = {
+    'run_paired_ttest': run_paired_ttest,
+    'run_wilcoxon': run_wilcoxon,
+    'run_mcnemar': run_mcnemar,
+    'run_rm_anova': run_rm_anova,
+    'run_friedman': run_friedman,
+    'run_chi_or_fisher': run_chi_or_fisher,
+    'run_kappa': run_kappa,
+    'run_icc_bland_altman': run_icc_bland_altman,
+    'run_kaplan_meier': run_kaplan_meier,
+    'run_cox_regression': run_cox_regression,
+    'run_diagnostic_accuracy': run_diagnostic_accuracy,
+    'run_ordinal_logistic': run_ordinal_logistic,
+    'run_count_regression': run_count_regression
+}
+
+all_results = []
+
+for test in planned_tests:
+    fn_name = test['function']
+    fn = FUNCTION_MAP.get(fn_name)
+    if fn is None:
+        continue
+    try:
+        result = fn(
+            session=session,
+            df=df,
+            **test['args']
+        )
+        if result:
+            result['test_type'] = test['test_type']
+            result['plan_name'] = test['name']
+            result['plan_reason'] = test['reason']
+            all_results.append(result)
+    except Exception as e:
+        all_results.append({
+            'test_type': test['test_type'],
+            'plan_name': test['name'],
+            'error': (
+                f'{test["name"]} could not '
+                f'complete: {str(e)}'
+            )
+        })
+
+# Apply multiple testing correction
+all_results, correction_info = (
+    apply_correction_if_needed(all_results))
+
+session['results'] = all_results
+session['correction_info'] = correction_info
+
+After wiring is complete, run this 
+end-to-end test:
+
+Upload the Gautham fracture dataset.
+Confirm the analysis runs without errors.
+Confirm results appear in the results screen.
+Confirm the test plan shows the correct 
+tests based on the dataset.
+
+When complete:
+checkpoint
+print "Phase B complete — all tests wired 
+into the analysis engine"
+stop and wait
