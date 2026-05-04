@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Practice Data Wizard — MedRAS</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%237c3aed'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-family='Inter,sans-serif' font-size='18' font-weight='700' fill='white'%3EM%3C/text%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="/css/style.css?v=2026050144" />
+    <link rel="stylesheet" href="/css/practice.css?v=2026050144" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="header-inner">
+        <a href="/" class="brand">
+          <span class="brand-mark">M</span>
+          <span class="brand-text">MedRAS</span>
+        </a>
+        <nav class="primary-nav" aria-label="Primary">
+          <a href="/" class="nav-link">Home</a>
+          <a href="/analysis.html" class="nav-link">Analysis</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="pw-main">
+      <div class="pw-shell">
+        <header class="pw-hero">
+          <span class="pw-eyebrow">🔬 Practice data generator</span>
+          <h1>Build a custom practice dataset</h1>
+          <p class="pw-lead">
+            Answer four short questions and we'll generate a realistic-looking
+            medical dataset for learning and demos.
+            <strong>No real patient data is used or required.</strong>
+          </p>
+        </header>
+
+        <ol class="pw-steps" id="pw-steps" aria-label="Wizard steps">
+          <li data-step="1" class="is-active"><span>1</span> Study</li>
+          <li data-step="2"><span>2</span> Variables</li>
+          <li data-step="3"><span>3</span> Sizes &amp; effect</li>
+          <li data-step="4"><span>4</span> Instructions</li>
+          <li data-step="summary"><span>✓</span> Review</li>
+        </ol>
+
+        <!-- ============================================================ -->
+        <!-- STEP 1 — Study objective + outcome                           -->
+        <!-- ============================================================ -->
+        <section class="pw-card" data-screen="step-1">
+          <h2>Step 1 · What is the study about?</h2>
+          <p class="pw-help">Tell us your research question and the main thing you want to measure.</p>
+          <label class="pw-field">
+            <span>Study objective <em>(required)</em></span>
+            <textarea id="pw-objective" rows="3" placeholder="e.g. Compare HbA1c control between metformin and placebo in newly diagnosed Type 2 diabetics."></textarea>
+          </label>
+          <label class="pw-field">
+            <span>Primary outcome variable <em>(required)</em></span>
+            <input type="text" id="pw-outcome" placeholder="e.g. HbA1c" />
+          </label>
+          <div class="pw-actions">
+            <a href="/analysis.html" class="btn btn-ghost">Cancel</a>
+            <button type="button" class="btn btn-primary" data-next>Next →</button>
+          </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- STEP 2 — Variable list + auto-detected types                 -->
+        <!-- ============================================================ -->
+        <section class="pw-card is-hidden" data-screen="step-2">
+          <h2>Step 2 · What variables will you collect?</h2>
+          <p class="pw-help">One variable per line. We'll auto-detect each type — you can override it below.</p>
+          <label class="pw-field">
+            <span>Variables</span>
+            <textarea id="pw-vars" rows="6" placeholder="Age&#10;Gender&#10;HbA1c&#10;BMI&#10;Treatment_arm&#10;Outcome"></textarea>
+          </label>
+          <button type="button" class="btn btn-secondary" id="pw-detect">Detect types</button>
+
+          <div class="pw-table-wrap is-hidden" id="pw-vars-table-wrap">
+            <table class="pw-table">
+              <thead>
+                <tr><th>Variable</th><th>Type</th><th>Outcome?</th></tr>
+              </thead>
+              <tbody id="pw-vars-tbody"></tbody>
+            </table>
+          </div>
+
+          <div class="pw-actions">
+            <button type="button" class="btn btn-ghost" data-prev>← Back</button>
+            <button type="button" class="btn btn-primary" data-next>Next →</button>
+          </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- STEP 3 — Sample size + per-variable hints + expected effect  -->
+        <!-- ============================================================ -->
+        <section class="pw-card is-hidden" data-screen="step-3">
+          <h2>Step 3 · How many patients and what to expect?</h2>
+          <p class="pw-help">Set the sample size, refine each variable's range, and (optionally) the effect you expect to see.</p>
+
+          <label class="pw-field">
+            <span>Number of patients <strong id="pw-n-display">60</strong></span>
+            <input type="range" id="pw-n" min="20" max="500" step="10" value="60" />
+            <small class="pw-hint">20 — 500</small>
+          </label>
+
+          <div class="pw-table-wrap" id="pw-detail-wrap">
+            <table class="pw-table">
+              <thead>
+                <tr><th>Variable</th><th>Type</th><th>Settings</th></tr>
+              </thead>
+              <tbody id="pw-detail-tbody"></tbody>
+            </table>
+          </div>
+
+          <label class="pw-field">
+            <span>Expected effect <em>(optional)</em></span>
+            <input type="text" id="pw-effect" placeholder="e.g. HbA1c lower in Treatment group" />
+          </label>
+
+          <div class="pw-actions">
+            <button type="button" class="btn btn-ghost" data-prev>← Back</button>
+            <button type="button" class="btn btn-primary" data-next>Next →</button>
+          </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- STEP 4 — Special instructions for analysis                   -->
+        <!-- ============================================================ -->
+        <section class="pw-card is-hidden" data-screen="step-4">
+          <h2>Step 4 · Any special instructions?</h2>
+          <p class="pw-help">
+            Optional free-text. Mention anything specific you want — e.g. data-cleaning
+            preferences, particular tests to run, Excel formatting notes, sub-group
+            analyses, etc. The note travels with the dataset.
+          </p>
+          <label class="pw-field">
+            <span>Special instructions <em>(optional)</em></span>
+            <textarea id="pw-instructions" rows="5" placeholder="e.g. Please run a Mann-Whitney comparison in addition to the t-test, and flag any HbA1c &gt; 10 as outlier candidates."></textarea>
+          </label>
+          <div class="pw-actions">
+            <button type="button" class="btn btn-ghost" data-prev>← Back</button>
+            <button type="button" class="btn btn-primary" data-next>Review →</button>
+          </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- SUMMARY                                                      -->
+        <!-- ============================================================ -->
+        <section class="pw-card is-hidden" data-screen="summary">
+          <h2>Review your answers</h2>
+          <dl class="pw-summary" id="pw-summary"></dl>
+          <div class="pw-actions">
+            <button type="button" class="btn btn-ghost" data-edit>Edit answers</button>
+            <button type="button" class="btn btn-primary" id="pw-generate">Generate dataset →</button>
+          </div>
+          <p class="pw-status" id="pw-status" role="status" aria-live="polite"></p>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- LOADING                                                      -->
+        <!-- ============================================================ -->
+        <section class="pw-card is-hidden pw-loading" data-screen="loading">
+          <div class="pw-spinner" aria-hidden="true"></div>
+          <h2 id="pw-loading-msg">Creating variables…</h2>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- RESULT                                                       -->
+        <!-- ============================================================ -->
+        <section class="pw-card is-hidden" data-screen="result">
+          <span class="pw-success-pill">✓ Dataset ready</span>
+          <h2>Your practice dataset is ready</h2>
+          <ul class="pw-result-list" id="pw-result-list"></ul>
+          <div class="pw-actions pw-actions--stacked">
+            <a href="#" id="pw-use" class="btn btn-primary">Use this data for analysis →</a>
+            <a href="#" id="pw-download" class="btn btn-secondary" download>Download Excel</a>
+            <button type="button" class="btn btn-ghost" id="pw-restart">Start a new dataset</button>
+          </div>
+          <p class="pw-disclaimer">
+            ⚠ This is generated practice data — for learning only. Not real patient data.
+          </p>
+        </section>
+
+      </div>
+    </main>
+
+    <script src="/js/practice.js?v=2026050144"></script>
+  </body>
+</html>

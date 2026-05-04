@@ -781,6 +781,15 @@ function ingestDataset(data) {
   state.jobId = data.job_id;
   state.summary = data.summary;
   state.columns = data.columns;
+  // Surface the practice banner whenever the backend marks the dataset
+  // as dummy/wizard-generated. The banner stays visible across screens.
+  try {
+    const s = data.summary || {};
+    if (s.is_dummy || s.is_practice_wizard || data.is_dummy || data.is_practice_wizard) {
+      const banner = document.getElementById("practice-banner");
+      if (banner) banner.classList.remove("is-hidden");
+    }
+  } catch (_) { /* banner is purely cosmetic */ }
   state.classifications = data.classifications || [];
   state.preview = data.preview || [];
   state.repeated = data.repeated_ids || { any_repeats: false, columns: [] };
@@ -3178,6 +3187,21 @@ function initApp() {
     // handler quietly falls back to a fresh start.
     const saved = loadSavedSession();
     if (saved) renderResumeBanner(saved);
+
+    // If the user came here from the Practice Data Wizard with
+    // ?practice=<job_id>, hydrate the dataset and skip past the entry chooser.
+    const practiceId = new URLSearchParams(window.location.search).get("practice");
+    if (practiceId) {
+      api(`/dataset/${practiceId}`)
+        .then((data) => {
+          state.entryChoice = "practice";
+          ingestDataset(data);
+          showScreen("preview");
+        })
+        .catch((err) => {
+          console.warn("Could not load practice dataset:", err.message);
+        });
+    }
     document.documentElement.dataset.medrasInit = "ok";
   } catch (err) {
     document.documentElement.dataset.medrasInit = "error: " + err.message;

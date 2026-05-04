@@ -311,6 +311,7 @@ def _build_session(entry, results: Dict[str, Any], assignment: Dict[str, Any]) -
         "correction_info": results.get("correction_info"),
         "results": results.get("tests") or [],
         "table_one": results.get("table_one") or {},
+        "is_practice": bool(meta.get("is_dummy") or meta.get("is_practice_wizard")),
     }
 
 
@@ -788,6 +789,21 @@ def generate_report(session: Dict[str, Any], df: pd.DataFrame) -> Document:
 
     graph_paths = session.get("graph_paths", [])
     results = session.get("results", [])
+
+    # Red disclaimer banner at the very top when this report was built from
+    # generated practice data — keeps reports from being mistaken for real
+    # patient analyses.
+    if session.get("is_practice"):
+        warn = doc.add_paragraph()
+        warn.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run = warn.add_run(
+            "⚠ NOT REAL PATIENT DATA — DO NOT PUBLISH. "
+            "This report was generated from a MedRAS practice dataset "
+            "for learning purposes only."
+        )
+        run.bold = True
+        run.font.color.rgb = RGBColor(0xC0, 0x39, 0x2B)
+        run.font.size = Pt(12)
 
     # ── 1. COVER ───────────────────────────────────────────────
     doc.add_heading("Statistical Analysis Report", 0)

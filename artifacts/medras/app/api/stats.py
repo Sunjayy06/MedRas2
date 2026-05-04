@@ -201,6 +201,7 @@ def _build_response(job_id: str, entry) -> Dict[str, Any]:
             "skipped_blank_sheets": entry.meta.get("skipped_blank_sheets") or [],
             "header_looks_numeric": bool(entry.meta.get("header_looks_numeric", False)),
             "is_dummy": bool(entry.meta.get("is_dummy", False)),
+            "is_practice_wizard": bool(entry.meta.get("is_practice_wizard", False)),
             "template": entry.meta.get("template"),
             "preview_confirmed": bool(entry.meta.get("preview_confirmed", False)),
             "follow_up_data": entry.meta.get("follow_up_data"),

@@ -3,6 +3,45 @@
    Builds on the design tokens in style.css
    ============================================================ */
 
+/* Practice-data banner + custom-wizard link --------------------------------- */
+.se-practice-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-left: 4px solid #ea580c;
+  border-radius: 12px;
+  padding: 12px 16px;
+  margin: 0 0 18px;
+  color: #9a3412;
+  font-size: 14px;
+}
+.se-practice-banner.is-hidden { display: none; }
+.se-practice-banner-icon {
+  font-size: 18px;
+  line-height: 1;
+  margin-top: 1px;
+}
+.se-practice-banner strong {
+  display: block;
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+.se-practice-custom-link {
+  margin: 18px 0 0;
+  text-align: center;
+  font-size: 13px;
+  color: #6b7280;
+}
+.se-practice-custom-link a {
+  color: #6d28d9;
+  font-weight: 600;
+  text-decoration: none;
+  margin-left: 6px;
+}
+.se-practice-custom-link a:hover { text-decoration: underline; }
+
 .se-main {
   max-width: var(--container-width);
   margin: 0 auto;
