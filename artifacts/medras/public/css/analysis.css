@@ -194,11 +194,23 @@
 }
 .se-step.is-future .se-step-num { background: #e7ebf2; color: #94a3b8; border-color: #d8dee6; }
 @media (max-width: 720px) {
-  .se-steps { gap: 4px 0; padding: 12px 6px 10px; }
-  .se-step { min-width: 48px; gap: 6px; }
+  /* 8 circles must always sit on a single row; otherwise the connector
+     lines (drawn from each step's right edge) break across rows and look
+     broken. Force nowrap and let the labels shrink instead. */
+  .se-steps { gap: 0; padding: 12px 6px 10px; flex-wrap: nowrap; }
+  .se-step { min-width: 0; gap: 6px; padding: 0 2px; }
   .se-step-label { font-size: 9px; }
   .se-step-num { width: 26px; height: 26px; font-size: 11px; }
   .se-step::after { top: 13px; }
+}
+@media (max-width: 420px) {
+  /* On very small phones (≤420px) 8 × 26px circles + padding still fits,
+     but labels need to wrap to two lines instead of overflowing. */
+  .se-steps { padding: 10px 4px 8px; }
+  .se-step { padding: 0 1px; }
+  .se-step-label { font-size: 8px; line-height: 1.15; }
+  .se-step-num { width: 22px; height: 22px; font-size: 10px; }
+  .se-step::after { top: 11px; }
 }
 
 /* ---------- Screen panels ---------- */

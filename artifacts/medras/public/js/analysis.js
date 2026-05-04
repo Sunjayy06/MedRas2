@@ -187,7 +187,7 @@ async function resumeFromSavedSession(saved) {
     const data = await api(`/dataset/${saved.dataset_id}`);
     ingestDataset(data);
     const target = saved.screen;
-    // Map legacy 8-step screen ids ("soon", "assign") onto the new 7-step
+    // Map legacy screen ids ("soon", "assign") onto the current 8-step
     // model so a saved session from before the refactor still resumes
     // somewhere valid instead of silently hiding every screen.
     const LEGACY_REMAP = { soon: "normality", assign: "3" };
@@ -228,15 +228,15 @@ function renderResumeBanner(saved) {
   const when = _formatRelativeTime(saved.timestamp);
   const stepLabel = (() => {
     switch (saved.screen) {
-      case "4": return "Step 3 · Data quality";
+      case "4": return "Step 4 · Review data";
       case "3": return "Step 3 · Variables";
       case "preview": return "Step 2 · Preview";
-      case "normality": return "Step 4 · Normality";
-      case "plan": return "Step 5 · Plan and Run";
-      case "results": return "Step 6 · Results";
-      case "export": return "Step 7 · Export";
-      // Legacy labels for sessions saved before the 8 → 7 refactor:
-      case "soon": return "Step 4 · Normality";
+      case "normality": return "Step 5 · Normality";
+      case "plan": return "Step 6 · Plan and Run";
+      case "results": return "Step 7 · Results";
+      case "export": return "Step 8 · Export";
+      // Legacy labels for sessions saved before the 7 → 8 refactor:
+      case "soon": return "Step 5 · Normality";
       case "assign": return "Step 3 · Variables";
       default: return `Step ${saved.step || 1}`;
     }
@@ -277,13 +277,14 @@ const SCREENS = [
   "normality", "plan", "results", "export",
 ];
 // Map a logical screen id to which step number is "active" in the tracker.
-// 7-step model: 1 Start, 2 Data input, 3 Review data (vars+quality+assignment-card),
-// 4 Normality, 5 Plan and Run, 6 Results, 7 Export.
+// 8-step model: 1 Start, 2 Data input, 3 Variables, 4 Review data (quality),
+//               5 Normality, 6 Plan and Run, 7 Results, 8 Export.
 const SCREEN_TO_STEP = {
   "1": 1, "intake": 1,
   "2a": 2, "2c": 2, "preview": 2,
-  "3": 3, "4": 3,
-  "normality": 4, "plan": 5, "results": 6, "export": 7,
+  "3": 3,
+  "4": 4,
+  "normality": 5, "plan": 6, "results": 7, "export": 8,
 };
 
 function showScreen(id) {
@@ -3335,7 +3336,7 @@ async function runSelfTest() {
   const records = document.querySelector('[data-testid="q-total-records"]');
   log(`q-total-records: ${records ? records.textContent : "MISSING"}`);
 
-  // Apply quality → screen normality (Assign step removed in 7-step model)
+  // Apply quality → screen normality (legacy "Assign" step is gone in the 8-step model)
   click('[data-testid="button-apply-quality"]');
   log("waiting for screen-normality…");
   for (let i = 0; i < 60; i++) {

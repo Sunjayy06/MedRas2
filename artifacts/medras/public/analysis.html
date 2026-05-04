@@ -10,7 +10,7 @@
     />
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%232f6fed'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-family='Inter,sans-serif' font-size='18' font-weight='700' fill='white'%3EM%3C/text%3E%3C/svg%3E" />
     <link rel="stylesheet" href="/css/style.css" />
-    <link rel="stylesheet" href="/css/analysis.css?v=2026050303" />
+    <link rel="stylesheet" href="/css/analysis.css?v=2026050402" />
   </head>
   <body>
     <header class="site-header" data-testid="site-header">
@@ -55,15 +55,16 @@
         </div>
       </div>
 
-      <!-- 7-step progress tracker -->
-      <ol class="se-steps" aria-label="Seven-step workflow" data-testid="step-tracker">
+      <!-- 8-step progress tracker -->
+      <ol class="se-steps" aria-label="Eight-step workflow" data-testid="step-tracker">
         <li class="se-step is-active" data-step="1" data-testid="dot-step-1"><span class="se-step-num">1</span><span class="se-step-label">Start</span></li>
         <li class="se-step" data-step="2" data-testid="dot-step-2"><span class="se-step-num">2</span><span class="se-step-label">Data input</span></li>
-        <li class="se-step" data-step="3" data-testid="dot-step-3"><span class="se-step-num">3</span><span class="se-step-label">Review data</span></li>
-        <li class="se-step" data-step="4" data-testid="dot-step-4"><span class="se-step-num">4</span><span class="se-step-label">Normality</span></li>
-        <li class="se-step" data-step="5" data-testid="dot-step-5"><span class="se-step-num">5</span><span class="se-step-label">Plan and Run</span></li>
-        <li class="se-step" data-step="6" data-testid="dot-step-6"><span class="se-step-num">6</span><span class="se-step-label">Results</span></li>
-        <li class="se-step" data-step="7" data-testid="dot-step-7"><span class="se-step-num">7</span><span class="se-step-label">Export</span></li>
+        <li class="se-step" data-step="3" data-testid="dot-step-3"><span class="se-step-num">3</span><span class="se-step-label">Variables</span></li>
+        <li class="se-step" data-step="4" data-testid="dot-step-4"><span class="se-step-num">4</span><span class="se-step-label">Review data</span></li>
+        <li class="se-step" data-step="5" data-testid="dot-step-5"><span class="se-step-num">5</span><span class="se-step-label">Normality</span></li>
+        <li class="se-step" data-step="6" data-testid="dot-step-6"><span class="se-step-num">6</span><span class="se-step-label">Plan and Run</span></li>
+        <li class="se-step" data-step="7" data-testid="dot-step-7"><span class="se-step-num">7</span><span class="se-step-label">Results</span></li>
+        <li class="se-step" data-step="8" data-testid="dot-step-8"><span class="se-step-num">8</span><span class="se-step-label">Export</span></li>
       </ol>
 
       <!-- ===========================================================
@@ -571,11 +572,11 @@
       </div>
 
       <!-- ===========================================================
-           SCREEN NORMALITY · Step 4
+           SCREEN NORMALITY · Step 5
            =========================================================== -->
       <section class="se-screen se-screen-narrow is-hidden" id="screen-normality" data-testid="screen-normality">
         <header class="se-screen-head">
-          <h2>Step 4 · Check normality</h2>
+          <h2>Step 5 · Check normality</h2>
           <p>For each scale variable we run Shapiro-Wilk (n &lt; 50) or Kolmogorov-Smirnov (50–2000). Above 2000 we use shape thumb-rules instead. Override the verdict if you have a strong reason.</p>
         </header>
 
@@ -620,11 +621,11 @@
       </section>
 
       <!-- ===========================================================
-           SCREEN PLAN · Step 5 — Plan and Run
+           SCREEN PLAN · Step 6 — Plan and Run
            =========================================================== -->
       <section class="se-screen se-screen-narrow is-hidden" id="screen-plan" data-testid="screen-plan">
         <header class="se-screen-head">
-          <h2>Step 5 · Plan and run</h2>
+          <h2>Step 6 · Plan and run</h2>
           <p id="plan-summary" data-testid="plan-summary">Building your plan…</p>
         </header>
 
@@ -681,7 +682,7 @@
            =========================================================== -->
       <section class="se-screen is-hidden" id="screen-results" data-testid="screen-results">
         <header class="se-screen-head">
-          <h2>Step 6 · Results</h2>
+          <h2>Step 7 · Results</h2>
           <p>Tabbed view of every test, graph, and the auto-written narrative.</p>
         </header>
 
@@ -712,7 +713,7 @@
            =========================================================== -->
       <section class="se-screen se-screen-narrow is-hidden" id="screen-export" data-testid="screen-export">
         <header class="se-screen-head">
-          <h2>Step 7 · Export your report</h2>
+          <h2>Step 8 · Export your report</h2>
           <p>Download the full results as Word, PDF or Excel. Each file embeds Table 1, every test, every graph, methods and results paragraphs.</p>
         </header>
 
@@ -751,6 +752,6 @@
       </div>
     </footer>
 
-    <script src="/js/analysis.js?v=2026050305" defer></script>
+    <script src="/js/analysis.js?v=2026050402" defer></script>
   </body>
 </html>
