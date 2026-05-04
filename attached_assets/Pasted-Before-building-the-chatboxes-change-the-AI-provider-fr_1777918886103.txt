@@ -1,0 +1,112 @@
+Before building the chatboxes, 
+change the AI provider from Anthropic 
+to Google Gemini.
+
+Replace the call_anthropic function 
+with this:
+
+def call_gemini(screen, message, 
+                session, api_key):
+    import urllib.request, json
+    
+    system_prompts = {
+        'normality': """You are a normality 
+explanation assistant for a medical research 
+platform. Explain in plain English only.
+Never produce any number or calculation.
+Never change the normality decision.
+If asked to calculate say: The statistical 
+engine handles all calculations.""",
+        
+        'plan': """You are an analysis planning 
+assistant. Help researchers understand their 
+analysis plan.
+When user asks to ADD a test respond with 
+exactly this JSON:
+{"action": "add_test", "test_id": "[name]", 
+"message": "Added [name]."}
+When REMOVING:
+{"action": "remove_test", "test_id": "[name]",
+"message": "Removed [name]."}
+Never produce any statistical number.""",
+        
+        'results': """You are a results 
+interpretation assistant. Results are correct 
+and cannot be changed.
+Never recalculate. Never dispute a result.
+If asked to recalculate say: Results were 
+produced by validated libraries and cannot 
+be changed. I can help you understand them."""
+    }
+    
+    system = system_prompts.get(screen, '')
+    context = build_context(screen, session)
+    full_prompt = (system + '\n\n' + 
+                   context + '\n\n' + 
+                   'User: ' + message)
+    
+    url = ('https://generativelanguage.'
+           'googleapis.com/v1beta/models/'
+           'gemini-1.5-flash:generateContent'
+           '?key=' + api_key)
+    
+    payload = json.dumps({
+        'contents': [{
+            'parts': [{'text': full_prompt}]
+        }],
+        'generationConfig': {
+            'maxOutputTokens': 400,
+            'temperature': 0.3
+        }
+    }).encode('utf-8')
+    
+    req = urllib.request.Request(
+        url,
+        data=payload,
+        headers={'Content-Type': 
+                 'application/json'},
+        method='POST'
+    )
+    
+    try:
+        with urllib.request.urlopen(
+                req, timeout=10) as resp:
+            result = json.loads(
+                resp.read().decode())
+            text = (result['candidates'][0]
+                    ['content']['parts'][0]
+                    ['text'])
+            
+            # Parse JSON for plan screen
+            if screen == 'plan':
+                import re
+                match = re.search(
+                    r'\{.*\}', text, re.DOTALL)
+                if match:
+                    try:
+                        action = json.loads(
+                            match.group())
+                        return action
+                    except Exception:
+                        pass
+            
+            return {'message': text}
+    
+    except Exception as e:
+        return rule_based_response(
+            screen, message, session)
+
+In the chat_endpoint function,
+replace the api_key check with:
+
+api_key = os.environ.get('GEMINI_API_KEY')
+
+if api_key:
+    response = call_gemini(
+        screen, message, session, api_key)
+else:
+    response = rule_based_response(
+        screen, message, session)
+
+Then continue building the chatboxes 
+exactly as specified in Prompt 4.
