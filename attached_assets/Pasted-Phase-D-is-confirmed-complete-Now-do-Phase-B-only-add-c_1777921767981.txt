@@ -1,0 +1,841 @@
+Phase D is confirmed complete.
+Now do Phase B only — add chatboxes 
+2, 3, and 4.
+Do not touch results.py, export.py, 
+or plan.py.
+
+Use Google Gemini as the AI provider.
+The API key is in Replit Secrets as 
+GEMINI_API_KEY.
+
+If GEMINI_API_KEY is not set, use 
+rule-based responses only.
+Either way show the chatbox UI.
+
+════════════════════════════════════
+STEP 1 — ADD GEMINI FUNCTION TO BACKEND
+════════════════════════════════════
+
+Add this to main.py or wherever 
+the chat endpoint will live:
+
+import os, json, re
+import urllib.request
+
+def call_gemini(screen, message, 
+                session, api_key):
+    
+    system_prompts = {
+        'normality': (
+            'You are a normality explanation '
+            'assistant for a medical research '
+            'platform. Explain in plain English '
+            'only. Never produce any number or '
+            'calculation. Never change the '
+            'normality decision made by the '
+            'engine. If asked to calculate say: '
+            'The statistical engine handles all '
+            'calculations. I can only explain.'
+        ),
+        'plan': (
+            'You are an analysis planning '
+            'assistant. Help researchers '
+            'understand and modify their plan. '
+            'When user asks to ADD a test '
+            'respond with exactly this JSON: '
+            '{"action":"add_test",'
+            '"test_id":"[name]",'
+            '"message":"Added [name]."} '
+            'When REMOVING a test: '
+            '{"action":"remove_test",'
+            '"test_id":"[name]",'
+            '"message":"Removed [name]."} '
+            'For all other questions respond '
+            'with plain text explanation only. '
+            'Never produce any p-value, OR, HR, '
+            'or any statistical number.'
+        ),
+        'results': (
+            'You are a results interpretation '
+            'assistant. The results were '
+            'calculated by validated Python '
+            'libraries and are correct. '
+            'Never recalculate. Never dispute '
+            'any result. Never produce a new '
+            'number. If asked to recalculate '
+            'say exactly: These results were '
+            'produced by validated statistical '
+            'libraries and cannot be changed. '
+            'I can help you understand them. '
+            'Explain in plain English suitable '
+            'for a clinician with no statistics '
+            'background.'
+        )
+    }
+    
+    system = system_prompts.get(
+        screen, system_prompts['results'])
+    context = build_context(screen, session)
+    
+    full_prompt = (
+        system + '\n\n' +
+        context + '\n\n' +
+        'User question: ' + message
+    )
+    
+    url = (
+        'https://generativelanguage.googleapis'
+        '.com/v1beta/models/'
+        'gemini-1.5-flash:generateContent'
+        '?key=' + api_key
+    )
+    
+    payload = json.dumps({
+        'contents': [{
+            'parts': [{'text': full_prompt}]
+        }],
+        'generationConfig': {
+            'maxOutputTokens': 400,
+            'temperature': 0.3
+        }
+    }).encode('utf-8')
+    
+    req = urllib.request.Request(
+        url,
+        data=payload,
+        headers={
+            'Content-Type': 'application/json'
+        },
+        method='POST'
+    )
+    
+    try:
+        with urllib.request.urlopen(
+                req, timeout=10) as resp:
+            result = json.loads(
+                resp.read().decode())
+            text = (
+                result['candidates'][0]
+                ['content']['parts'][0]['text']
+            )
+            
+            if screen == 'plan':
+                match = re.search(
+                    r'\{.*?\}', text, re.DOTALL)
+                if match:
+                    try:
+                        action = json.loads(
+                            match.group())
+                        if 'action' in action:
+                            return action
+                    except Exception:
+                        pass
+            
+            return {'message': text}
+    
+    except Exception:
+        return rule_based_response(
+            screen, message, session)
+
+
+def build_context(screen, session):
+    if screen == 'normality':
+        norm = session.get(
+            'normality_results', {})
+        normal = [
+            v for v, r in norm.items()
+            if r.get('normal', True)]
+        non_normal = [
+            v for v, r in norm.items()
+            if not r.get('normal', True)]
+        return (
+            f'Normality context: '
+            f'{len(normal)} variables normal, '
+            f'{len(non_normal)} non-normal. '
+            f'Non-normal: '
+            f'{", ".join(non_normal) or "none"}.'
+        )
+    
+    elif screen == 'plan':
+        tests = session.get(
+            'planned_tests', [])
+        names = [
+            t.get('label', '') 
+            for t in tests]
+        return (
+            f'Plan context: '
+            f'{len(tests)} tests planned: '
+            f'{", ".join(names)}.'
+        )
+    
+    elif screen == 'results':
+        results = session.get('results', [])
+        primary = next(
+            (r for r in results
+             if 'error' not in r), None)
+        if primary:
+            p = primary.get('p')
+            name = primary.get(
+                'plan_name', 'Primary test')
+            p_str = (
+                '< 0.001' if p and p < 0.001
+                else f'{p:.3f}' if p
+                else 'N/A')
+            return (
+                f'Results context: '
+                f'Primary result is {name}, '
+                f'p = {p_str}.')
+        return 'Results context: Analysis complete.'
+    
+    return ''
+
+
+def rule_based_response(screen, message, session):
+    msg = message.lower()
+    
+    if screen == 'normality':
+        if any(w in msg for w in [
+                'non-normal', 'not normal',
+                'non normal']):
+            return {'message': (
+                'Non-normal means your data '
+                'does not follow a bell curve. '
+                'This matters because t-test '
+                'and ANOVA assume normality. '
+                'When data is non-normal we '
+                'use non-parametric tests like '
+                'Mann-Whitney or Kruskal-Wallis '
+                'which make no assumption about '
+                'distribution shape.'
+            )}
+        elif 'qq' in msg:
+            return {'message': (
+                'A QQ plot compares your data '
+                'to a perfect normal distribution. '
+                'If points follow the diagonal '
+                'line your data is normal. '
+                'Points curving away indicate '
+                'non-normality.'
+            )}
+        elif 'skew' in msg:
+            return {'message': (
+                'Skewness measures how asymmetric '
+                'your data is. Values between -2 '
+                'and +2 are acceptable. Positive '
+                'skewness means a long tail to '
+                'the right. Negative means a '
+                'long tail to the left.'
+            )}
+        elif any(w in msg for w in [
+                'transform', 'log']):
+            return {'message': (
+                'Log transformation reduces '
+                'right skewness and brings data '
+                'closer to normal distribution. '
+                'This allows parametric tests '
+                'to be used. It is noted in '
+                'your Methods section.'
+            )}
+        else:
+            return {'message': (
+                'I can explain normality results, '
+                'QQ plots, skewness, kurtosis, '
+                'and transformations. What would '
+                'you like to understand?'
+            )}
+    
+    elif screen == 'plan':
+        if 'add' in msg and 'survival' in msg:
+            return {
+                'action': 'add_test',
+                'test_id': 'kaplan_meier',
+                'message': (
+                    'Added Kaplan-Meier survival '
+                    'analysis to your plan.')
+            }
+        elif 'add' in msg and 'regression' in msg:
+            return {
+                'action': 'add_test',
+                'test_id': 'logistic_regression',
+                'message': (
+                    'Added logistic regression '
+                    'to your plan.')
+            }
+        elif 'remove' in msg and 'regression' in msg:
+            return {
+                'action': 'remove_test',
+                'test_id': 'logistic_regression',
+                'message': (
+                    'Removed regression from '
+                    'your plan.')
+            }
+        elif any(w in msg for w in [
+                'kruskal', 'mann', 'whitney']):
+            return {'message': (
+                'Kruskal-Wallis compares medians '
+                'across 3 or more groups without '
+                'assuming normality. Mann-Whitney '
+                'compares two groups. Both are '
+                'non-parametric alternatives '
+                'selected because your outcome '
+                'is not normally distributed.'
+            )}
+        elif 't-test' in msg and 'mann' in msg:
+            return {'message': (
+                't-test assumes normality and '
+                'compares means. Mann-Whitney '
+                'makes no normality assumption '
+                'and compares medians. For normal '
+                'data t-test is more powerful. '
+                'For non-normal data Mann-Whitney '
+                'is more appropriate.'
+            )}
+        else:
+            return {'message': (
+                'I can explain any test in your '
+                'plan or help you add and remove '
+                'tests. Try asking: what does '
+                'Kruskal-Wallis do, or say '
+                'add survival analysis.'
+            )}
+    
+    elif screen == 'results':
+        if any(w in msg for w in [
+                'p value', 'p-value', 'p =']):
+            return {'message': (
+                'A p-value is the probability '
+                'of getting your result by chance '
+                'if there was truly no difference. '
+                'p below 0.05 means less than 5% '
+                'chance of a false positive — '
+                'we call this statistically '
+                'significant. Smaller p-values '
+                'mean stronger evidence.'
+            )}
+        elif any(w in msg for w in [
+                'odds ratio', ' or ', 'or=']):
+            return {'message': (
+                'An Odds Ratio above 1 means '
+                'the factor increases the odds '
+                'of the outcome. OR below 1 is '
+                'protective. OR = 2.0 means '
+                'twice the odds. If the 95% CI '
+                'does not cross 1.0 the result '
+                'is statistically significant.'
+            )}
+        elif any(w in msg for w in [
+                'hazard', ' hr ', 'hr=']):
+            return {'message': (
+                'Hazard Ratio above 1 means '
+                'higher risk of the event at '
+                'any given time. HR below 1 is '
+                'protective. HR = 1.5 means '
+                '50% higher hazard compared '
+                'to the reference group.'
+            )}
+        elif any(w in msg for w in [
+                'write', 'paper', 'sentence',
+                'results section']):
+            results = session.get('results', [])
+            primary = next(
+                (r for r in results
+                 if 'error' not in r), None)
+            if primary:
+                p = primary.get('p')
+                name = primary.get(
+                    'plan_name', 'The test')
+                sig = (
+                    'statistically significant'
+                    if p and p < 0.05
+                    else 'not statistically '
+                         'significant')
+                p_str = (
+                    '< 0.001' if p and p < 0.001
+                    else f'{p:.3f}' if p
+                    else 'N/A')
+                return {'message': (
+                    f'For your Results section: '
+                    f'"{name} showed a {sig} '
+                    f'result (p = {p_str}). '
+                    f'[Insert your group values '
+                    f'from the table above]." '
+                    f'Use the Copy button on the '
+                    f'table to get exact numbers.'
+                )}
+            return {'message': (
+                'To write a results sentence: '
+                'state the test name, group '
+                'values, test statistic, '
+                'p-value, and effect size. '
+                'Use the Copy button above '
+                'to get the exact numbers.'
+            )}
+        elif any(w in msg for w in [
+                'patient', 'clinical', 'mean']):
+            return {'message': (
+                'Statistical significance tells '
+                'you the result is unlikely by '
+                'chance. Clinical significance '
+                'tells you if the difference '
+                'is large enough to matter for '
+                'patients. Always consider both. '
+                'A very small p-value with a '
+                'tiny effect size may not change '
+                'clinical practice.'
+            )}
+        else:
+            return {'message': (
+                'I can explain p-values, odds '
+                'ratios, hazard ratios, effect '
+                'sizes, or help you write your '
+                'results section. What would '
+                'you like to understand?'
+            )}
+    
+    return {'message': (
+        'I am here to help you understand '
+        'your analysis. What would you '
+        'like to know?'
+    )}
+
+
+@app.route('/api/stats/chat/<screen>',
+           methods=['POST'])
+def chat_endpoint(screen):
+    data = request.json
+    message = data.get('message', '')
+    session_id = data.get('session_id', '')
+    session = get_session(session_id)
+    
+    FORBIDDEN = [
+        'calculate', 'compute',
+        'give me the p', 'what is the p',
+        'run the test', 'give me the result',
+        'what is the t value',
+        'what is the or', 'what is the hr',
+        'recalculate', 'redo the analysis'
+    ]
+    if any(f in message.lower() 
+           for f in FORBIDDEN):
+        return jsonify({'message': (
+            'The statistical engine handles '
+            'all calculations. I can explain '
+            'your results but cannot calculate '
+            'or change them.'
+        )})
+    
+    api_key = os.environ.get('GEMINI_API_KEY')
+    
+    if api_key:
+        response = call_gemini(
+            screen, message, session, api_key)
+    else:
+        response = rule_based_response(
+            screen, message, session)
+    
+    return jsonify(response)
+
+════════════════════════════════════
+STEP 2 — ADD CHATBOX UI TO SCREENS
+════════════════════════════════════
+
+Add this CSS to the main stylesheet:
+
+.medras-chatbox {
+  position: fixed;
+  right: 24px;
+  bottom: 80px;
+  z-index: 500;
+}
+.chatbox-toggle {
+  background: #185FA5;
+  color: white;
+  border: none;
+  border-radius: 24px;
+  padding: 10px 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+.chatbox-panel {
+  position: absolute;
+  bottom: 52px;
+  right: 0;
+  width: 320px;
+  background: white;
+  border: 0.5px solid #E5E0D8;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+  display: flex;
+  flex-direction: column;
+}
+.chatbox-header {
+  background: #F7F5F2;
+  padding: 12px 14px;
+  border-bottom: 0.5px solid #E5E0D8;
+}
+.chatbox-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: #111;
+  display: block;
+  margin-bottom: 2px;
+}
+.chatbox-rule {
+  font-size: 10px;
+  color: #888;
+}
+.chatbox-messages {
+  height: 240px;
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.msg-ai {
+  background: #E6F1FB;
+  color: #0C447C;
+  border-radius: 10px;
+  padding: 8px 11px;
+  font-size: 12px;
+  line-height: 1.5;
+  max-width: 92%;
+  align-self: flex-start;
+}
+.msg-user {
+  background: #F7F5F2;
+  color: #111;
+  border-radius: 10px;
+  padding: 8px 11px;
+  font-size: 12px;
+  line-height: 1.5;
+  max-width: 92%;
+  align-self: flex-end;
+}
+.msg-action {
+  background: #EAF3DE;
+  color: #27500A;
+  border-left: 3px solid #3B6D11;
+  border-radius: 0 10px 10px 0;
+  padding: 8px 11px;
+  font-size: 12px;
+  line-height: 1.5;
+  max-width: 92%;
+  align-self: flex-start;
+}
+.chatbox-chips {
+  padding: 8px 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  border-top: 0.5px solid #F0EAE4;
+}
+.chip {
+  font-size: 11px;
+  padding: 4px 10px;
+  background: #F7F5F2;
+  border: 0.5px solid #E5E0D8;
+  border-radius: 20px;
+  cursor: pointer;
+  color: #555;
+}
+.chip:hover {
+  background: #E6F1FB;
+  border-color: #B5D4F4;
+  color: #185FA5;
+}
+.chatbox-input-row {
+  padding: 10px 12px;
+  display: flex;
+  gap: 8px;
+  border-top: 0.5px solid #E5E0D8;
+}
+.chatbox-input-row input {
+  flex: 1;
+  padding: 7px 10px;
+  border: 0.5px solid #E5E0D8;
+  border-radius: 8px;
+  font-size: 12px;
+  outline: none;
+}
+.chatbox-input-row button {
+  padding: 7px 14px;
+  background: #185FA5;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+Add this HTML to three screens:
+
+Normality screen — add before closing tag:
+<div class="medras-chatbox" id="chatbox-normality">
+  <button class="chatbox-toggle" 
+    onclick="toggleChatbox('normality')">
+    💬 Ask assistant
+  </button>
+  <div class="chatbox-panel" 
+    id="chatbox-panel-normality" 
+    style="display:none">
+    <div class="chatbox-header">
+      <span class="chatbox-title">
+        Normality assistant
+      </span>
+      <span class="chatbox-rule">
+        I explain — the engine calculates
+      </span>
+    </div>
+    <div class="chatbox-messages" 
+      id="chatbox-messages-normality"></div>
+    <div class="chatbox-chips" 
+      id="chatbox-chips-normality"></div>
+    <div class="chatbox-input-row">
+      <input type="text" 
+        id="chatbox-input-normality"
+        placeholder="Ask about normality..."
+        onkeydown="if(event.key==='Enter')
+          sendChat('normality')">
+      <button onclick="sendChat('normality')">
+        Send
+      </button>
+    </div>
+  </div>
+</div>
+
+Plan screen — same structure, replace 
+'normality' with 'plan' everywhere,
+title: "Analysis plan assistant"
+placeholder: "Ask about your plan..."
+
+Results screen — same structure, replace 
+'normality' with 'results' everywhere,
+title: "Results assistant"
+placeholder: "Ask about your results..."
+
+════════════════════════════════════
+STEP 3 — ADD JAVASCRIPT TO analysis.js
+════════════════════════════════════
+
+function toggleChatbox(screen) {
+  const panel = document.getElementById(
+    'chatbox-panel-' + screen);
+  const isOpen = panel.style.display !== 'none';
+  panel.style.display = isOpen ? 'none' : 'flex';
+  panel.style.flexDirection = 'column';
+}
+
+function addChatMessage(screen, text, type) {
+  const container = document.getElementById(
+    'chatbox-messages-' + screen);
+  const div = document.createElement('div');
+  div.className = 'msg-' + type;
+  div.textContent = text;
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+}
+
+function setChatChips(screen, chips) {
+  const container = document.getElementById(
+    'chatbox-chips-' + screen);
+  container.innerHTML = '';
+  chips.forEach(chip => {
+    const btn = document.createElement('button');
+    btn.className = 'chip';
+    btn.textContent = chip;
+    btn.onclick = () => {
+      document.getElementById(
+        'chatbox-input-' + screen
+      ).value = chip;
+      sendChat(screen);
+    };
+    container.appendChild(btn);
+  });
+}
+
+async function sendChat(screen) {
+  const input = document.getElementById(
+    'chatbox-input-' + screen);
+  const message = input.value.trim();
+  if (!message) return;
+  input.value = '';
+  
+  addChatMessage(screen, message, 'user');
+  
+  const forbidden = [
+    'calculate', 'compute',
+    'give me the p', 'what is the p',
+    'run the test', 'recalculate'
+  ];
+  if (forbidden.some(f => 
+      message.toLowerCase().includes(f))) {
+    addChatMessage(screen,
+      'The statistical engine handles all ' +
+      'calculations. I can explain results ' +
+      'but cannot calculate or change them.',
+      'ai');
+    return;
+  }
+  
+  try {
+    const res = await fetch(
+      '/api/stats/chat/' + screen, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        message: message,
+        session_id: window.currentSessionId || ''
+      })
+    });
+    
+    const data = await res.json();
+    
+    if (data.action) {
+      handlePlanAction(data);
+      addChatMessage(
+        screen, data.message, 'action');
+    } else {
+      addChatMessage(
+        screen, data.message, 'ai');
+    }
+  } catch (e) {
+    addChatMessage(screen,
+      'Could not connect. Please try again.',
+      'ai');
+  }
+}
+
+function handlePlanAction(data) {
+  if (!data.action || !data.test_id) return;
+  const card = document.querySelector(
+    '[data-test-id="' + data.test_id + '"]');
+  if (!card) return;
+  if (data.action === 'add_test') {
+    card.classList.remove('test-removed');
+    const tick = card.querySelector('.test-tick');
+    if (tick) tick.classList.add('active');
+  } else if (data.action === 'remove_test') {
+    card.classList.add('test-removed');
+    const tick = card.querySelector('.test-tick');
+    if (tick) tick.classList.remove('active');
+  }
+}
+
+function initChatbox(screen, 
+                     openingMessage, chips) {
+  addChatMessage(screen, openingMessage, 'ai');
+  setChatChips(screen, chips);
+}
+
+Call initChatbox when each screen loads:
+
+Normality screen loads:
+  const normResults = 
+    window.normalityResults || {};
+  const nNormal = Object.values(normResults)
+    .filter(r => r.normal).length;
+  const nNonNormal = Object.values(normResults)
+    .filter(r => !r.normal).length;
+  initChatbox('normality',
+    'Normality check complete. ' + nNormal + 
+    ' variables normal, ' + nNonNormal + 
+    ' non-normal. Ask me what any result means.',
+    [
+      'What does non-normal mean?',
+      'Why does this affect my test?',
+      'What is a QQ plot?',
+      'What is skewness?',
+      'Why was log transformation used?'
+    ]
+  );
+
+Plan screen loads:
+  const planTests = window.plannedTests || [];
+  const primaryTest = planTests.find(
+    t => t.id !== 'descriptive');
+  const primaryName = primaryTest ? 
+    primaryTest.label : 'your primary test';
+  initChatbox('plan',
+    'Your plan has ' + planTests.length + 
+    ' tests. Primary test: ' + primaryName + 
+    '. Add or remove any test, or ask me ' +
+    'what any test does.',
+    [
+      'What does ' + primaryName + ' do?',
+      'Why was this test chosen?',
+      'Add survival analysis',
+      'Remove regression',
+      'Difference between t-test and Mann-Whitney'
+    ]
+  );
+
+Results screen loads:
+  const allResults = window.analysisResults || [];
+  const primary = allResults.find(
+    r => !r.error);
+  const pVal = primary ? primary.p : null;
+  const pStr = pVal 
+    ? (pVal < 0.001 ? '< 0.001' 
+       : pVal.toFixed(3)) 
+    : 'N/A';
+  const sig = pVal && pVal < 0.05 
+    ? 'significant' : 'not significant';
+  initChatbox('results',
+    'Analysis complete. Your primary result ' +
+    'is ' + sig + ' (p = ' + pStr + '). ' +
+    'Ask me what any result means.',
+    [
+      'What does p = ' + pStr + ' mean?',
+      'Is this effect size meaningful?',
+      'Help me write this for my paper',
+      'What are the limitations?',
+      'What does this mean for my patients?'
+    ]
+  );
+
+════════════════════════════════════
+VERIFY AFTER BUILDING
+════════════════════════════════════
+
+Test 1: Go to normality screen.
+  Expected: blue "Ask assistant" button 
+  visible bottom right. Click it — panel 
+  opens with opening message and 5 chips.
+
+Test 2: Click chip "What does non-normal mean?"
+  Expected: explanation appears in blue bubble.
+
+Test 3: Type "calculate the p-value" 
+  in any chatbox.
+  Expected: boundary refusal message appears.
+  No API call made.
+
+Test 4: Go to plan screen chatbox.
+  Type "Add survival analysis".
+  Expected: green action message appears.
+  Survival test card activates in plan.
+
+Test 5: Go to results screen chatbox.
+  Type "Help me write this for my paper".
+  Expected: draft sentence provided.
+
+Test 6: Remove GEMINI_API_KEY from secrets.
+  Expected: chatboxes still work with 
+  rule-based responses. Restore key after.
+
+When all 6 tests pass:
+checkpoint
+print "Phase B complete — all 4 chatboxes 
+working with Gemini AI and rule-based fallback"
+print "ALL PHASES COMPLETE"
+print "MedRAS engine ready for real data testing"
+stop and wait

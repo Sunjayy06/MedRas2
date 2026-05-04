@@ -14,8 +14,15 @@ Design rules:
 
 from __future__ import annotations
 
+import json
+import logging
+import os
 import re
+import urllib.error
+import urllib.request
 from typing import Any, Dict, List, Optional, Tuple
+
+logger = logging.getLogger(__name__)
 
 
 REFUSE_CALCULATION = (
@@ -561,6 +568,157 @@ def chatbox4_reply(message: str, context: Dict[str, Any]) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# Gemini AI layer (optional) — wraps the rule-based engine.
+#
+# Behaviour:
+# * Calculation requests are still refused at the gate BEFORE any LLM call,
+#   so the boundary holds even if Gemini misbehaves.
+# * If GEMINI_API_KEY is set we try Gemini 1.5 Flash with a screen-specific
+#   system prompt + a short context summary built from the live session.
+# * For chatbox 3 we look for an action JSON in the response and convert it
+#   to the same `_action_msg` shape the rule-based path emits.
+# * Any failure (no key, network error, malformed response) silently falls
+#   back to the rule-based reply so the UI keeps working.
+# ---------------------------------------------------------------------------
+
+
+_GEMINI_URL = (
+    "https://generativelanguage.googleapis.com/v1beta/"
+    "models/gemini-1.5-flash:generateContent"
+)
+
+
+_SYSTEM_PROMPTS: Dict[str, str] = {
+    "normality": (
+        "You are a normality explanation assistant for a medical research "
+        "platform. Explain in plain English only. Never produce any number "
+        "or calculation. Never change the normality decision made by the "
+        "engine. If asked to calculate say: 'The statistical engine handles "
+        "all calculations. I can only explain.' Keep replies under 120 words."
+    ),
+    "plan": (
+        "You are an analysis planning assistant. Help researchers understand "
+        "and modify their plan. When the user asks to ADD a test respond with "
+        'EXACTLY this JSON on its own line: '
+        '{"action":"add_test","test_id":"<snake_case_id>","reason":"<short>"}. '
+        "When REMOVING a test: "
+        '{"action":"remove_test","test_id":"<snake_case_id>","reason":"<short>"}. '
+        "For all other questions respond with plain text only. Never produce "
+        "any p-value, OR, HR, or any statistical number. Keep replies under "
+        "120 words. Valid test_id values include: ttest_independent, "
+        "mann_whitney, anova_oneway, kruskal_wallis, tukey_hsd, chi_square, "
+        "linear_regression, logistic_regression, ancova, pb_km, pb_cox, "
+        "pb_paired_t, pb_wilcoxon, pb_mcnemar, pb_rm_anova, pb_friedman, "
+        "pb_kappa, pb_icc_ba, pb_chi_or_fisher."
+    ),
+    "results": (
+        "You are a results interpretation assistant. The results were "
+        "calculated by validated Python libraries and are correct. Never "
+        "recalculate. Never dispute any result. Never produce a new number. "
+        "If asked to recalculate say exactly: 'These results were produced "
+        "by validated statistical libraries and cannot be changed. I can "
+        "help you understand them.' Explain in plain English suitable for a "
+        "clinician with no statistics background. Keep replies under 120 words."
+    ),
+}
+
+
+def _build_gemini_context(kind: str, context: Dict[str, Any]) -> str:
+    if kind == "normality":
+        cols = context.get("columns") or []
+        normal = [c.get("column", "") for c in cols if c.get("decision") == "normal"]
+        non_normal = [
+            c.get("column", "") for c in cols if c.get("decision") == "non_normal"
+        ]
+        return (
+            f"Normality context: {len(normal)} normal, {len(non_normal)} "
+            f"non-normal. Non-normal columns: "
+            f"{', '.join(non_normal) or 'none'}."
+        )
+    if kind == "plan":
+        plan = context.get("plan") or {}
+        tests = plan.get("tests") or []
+        names = [t.get("title") or t.get("id", "") for t in tests]
+        return (
+            f"Plan context: {len(tests)} test(s) currently planned: "
+            f"{', '.join(names) or 'none'}."
+        )
+    if kind == "results":
+        res = context.get("results") or {}
+        tests = res.get("tests") or []
+        names = [t.get("title") or t.get("id", "") for t in tests]
+        return (
+            f"Results context: {len(tests)} test(s) completed: "
+            f"{', '.join(names) or 'none'}."
+        )
+    return ""
+
+
+def _try_gemini(kind: str, message: str, context: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Call Gemini; return a reply dict on success, None on any failure."""
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        return None
+
+    system = _SYSTEM_PROMPTS.get(kind)
+    if not system:
+        return None
+
+    prompt = (
+        system
+        + "\n\n"
+        + _build_gemini_context(kind, context)
+        + "\n\nUser question: "
+        + message
+    )
+
+    body = json.dumps({
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {"maxOutputTokens": 400, "temperature": 0.3},
+    }).encode("utf-8")
+
+    req = urllib.request.Request(
+        f"{_GEMINI_URL}?key={api_key}",
+        data=body,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        text = (
+            data.get("candidates", [{}])[0]
+            .get("content", {})
+            .get("parts", [{}])[0]
+            .get("text", "")
+        ).strip()
+        if not text:
+            return None
+    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, ValueError, KeyError, IndexError) as exc:
+        logger.info("Gemini call failed (%s); falling back to rule-based.", exc)
+        return None
+    except Exception as exc:  # noqa: BLE001 - never let LLM kill the request
+        logger.warning("Unexpected Gemini error: %s", exc)
+        return None
+
+    if kind == "plan":
+        match = re.search(r'\{[^{}]*"action"[^{}]*\}', text, re.DOTALL)
+        if match:
+            try:
+                action = json.loads(match.group())
+                act = action.get("action")
+                tid = action.get("test_id")
+                if act in ("add_test", "remove_test") and isinstance(tid, str) and tid:
+                    reason = action.get("reason") or action.get("message") or ""
+                    return _action_msg(act, tid, reason)
+            except (ValueError, TypeError):
+                pass
+
+    return _msg(text)
+
+
 def opening_message(kind: str, context: Dict[str, Any]) -> str:
     if kind == "normality":
         return _opening_normality(context)
@@ -571,7 +729,7 @@ def opening_message(kind: str, context: Dict[str, Any]) -> str:
     return ""
 
 
-def reply(kind: str, message: str, context: Dict[str, Any]) -> Dict[str, Any]:
+def _rule_based_reply(kind: str, message: str, context: Dict[str, Any]) -> Dict[str, Any]:
     if kind == "normality":
         return chatbox2_reply(message, context)
     if kind == "plan":
@@ -579,3 +737,17 @@ def reply(kind: str, message: str, context: Dict[str, Any]) -> Dict[str, Any]:
     if kind == "results":
         return chatbox4_reply(message, context)
     return _msg("Unknown chatbox.")
+
+
+def reply(kind: str, message: str, context: Dict[str, Any]) -> Dict[str, Any]:
+    # Boundary refusal stays at the gate so the LLM cannot violate it.
+    if _is_calculation_request(message):
+        if kind == "results":
+            return _msg(REFUSE_RESULT_CHANGE)
+        return _msg(REFUSE_CALCULATION)
+
+    gemini = _try_gemini(kind, message, context)
+    if gemini is not None:
+        return gemini
+
+    return _rule_based_reply(kind, message, context)
