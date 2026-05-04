@@ -10,7 +10,7 @@
     />
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%232f6fed'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-family='Inter,sans-serif' font-size='18' font-weight='700' fill='white'%3EM%3C/text%3E%3C/svg%3E" />
     <link rel="stylesheet" href="/css/style.css" />
-    <link rel="stylesheet" href="/css/analysis.css?v=2026050402" />
+    <link rel="stylesheet" href="/css/analysis.css?v=2026050403" />
   </head>
   <body>
     <header class="site-header" data-testid="site-header">
@@ -417,7 +417,7 @@
       <section class="se-screen se-screen-narrow is-hidden" id="screen-3" data-testid="screen-3">
         <header class="se-screen-head">
           <h2>Step 3 · Variables</h2>
-          <p>We've classified every column. Review the table, fix anything that looks off, and use the assistant on the right if a column needs cleaning.</p>
+          <p>We've classified every column for you. Tick <strong>Change</strong> in the last column only if a type looks wrong — otherwise just continue. Use the assistant below if a column needs cleaning.</p>
         </header>
 
         <!-- Zone 0 · Confirmation card (auto-assigned outcome / group from wizard) -->
@@ -447,10 +447,10 @@
             <thead>
               <tr>
                 <th>Column</th>
-                <th>Type</th>
+                <th>Type <span class="se-vars-th-sub">(auto-detected)</span></th>
                 <th>Sample values</th>
                 <th>Missing</th>
-                <th class="se-vars-table-action">Change type</th>
+                <th class="se-vars-table-action">Correct?</th>
               </tr>
             </thead>
             <tbody></tbody>
@@ -752,6 +752,6 @@
       </div>
     </footer>
 
-    <script src="/js/analysis.js?v=2026050402" defer></script>
+    <script src="/js/analysis.js?v=2026050403" defer></script>
   </body>
 </html>

@@ -1132,6 +1132,51 @@
   border-radius: 5px;
   background: #ffffff;
 }
+/* The dropdown is hidden until the user ticks the "Change" checkbox.
+   Keeping it in the DOM (rather than re-rendering) preserves event
+   listeners and the currently-selected value. */
+.se-type-select.is-collapsed { display: none; }
+
+/* "Correct?" column control. The system's classification is the primary
+   display in the Type column; this checkbox is a quiet opt-in for the
+   user to override only if they disagree. Once checked, the dropdown
+   appears next to the checkbox. */
+.se-type-override {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: #5b6675;
+  cursor: pointer;
+  user-select: none;
+  padding: 3px 7px;
+  border-radius: 5px;
+  border: 1px solid transparent;
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+  margin-right: 6px;
+}
+.se-type-override:hover {
+  background: rgba(47, 111, 237, 0.06);
+  border-color: rgba(47, 111, 237, 0.20);
+  color: var(--color-accent, #2f6fed);
+}
+.se-type-override input {
+  accent-color: var(--color-accent, #2f6fed);
+  cursor: pointer;
+  margin: 0;
+}
+.se-type-override:has(input:checked) {
+  color: var(--color-accent, #2f6fed);
+  background: rgba(47, 111, 237, 0.08);
+  border-color: rgba(47, 111, 237, 0.25);
+  font-weight: 600;
+}
+.se-vars-th-sub {
+  font-size: 11px;
+  font-weight: 400;
+  color: #94a3b8;
+  letter-spacing: 0.01em;
+}
 
 /* ---------- Callout / banners ---------- */
 

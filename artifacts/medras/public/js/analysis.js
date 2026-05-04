@@ -1913,7 +1913,17 @@ function renderClassifyTable() {
       <td>${samples}</td>
       <td>${missing}</td>
       <td class="se-vars-table-action">
-        <select class="se-type-select" data-col="${escapeHtml(c.column)}" data-testid="select-type-${escapeHtml(c.column)}">${opts}</select>
+        <label class="se-type-override" data-testid="override-wrap-${escapeHtml(c.column)}">
+          <input type="checkbox"
+                 data-override-toggle="${escapeHtml(c.column)}"
+                 data-testid="check-override-${escapeHtml(c.column)}"
+                 aria-label="Correct the type for ${escapeHtml(c.column)}" />
+          <span>Change</span>
+        </label>
+        <select class="se-type-select is-collapsed"
+                data-col="${escapeHtml(c.column)}"
+                data-testid="select-type-${escapeHtml(c.column)}"
+                aria-label="Pick a different type for ${escapeHtml(c.column)}">${opts}</select>
       </td>
     </tr>`;
   }).join("");
@@ -1941,6 +1951,21 @@ function renderClassifyTable() {
         btn.textContent = "Undo";
         alert(`Couldn't undo: ${err.message}`);
       }
+    });
+  });
+
+  // The dropdown is hidden behind a "Change" checkbox so the system's
+  // auto-decision is the primary display. Users only see the dropdown
+  // when they explicitly opt-in to override.
+  $$("[data-override-toggle]", tbody).forEach((cb) => {
+    cb.addEventListener("change", () => {
+      const col = cb.dataset.overrideToggle;
+      const sel = tbody.querySelector(
+        `select.se-type-select[data-col="${CSS.escape(col)}"]`,
+      );
+      if (!sel) return;
+      sel.classList.toggle("is-collapsed", !cb.checked);
+      if (cb.checked) sel.focus();
     });
   });
 
