@@ -1,0 +1,477 @@
+Before building anything new, apply these 
+7 safety fixes to the existing code.
+These prevent specific failures that will 
+break the analysis for real medical datasets.
+Do all 7 fixes now. Checkpoint after each.
+
+════════════════════════════════════
+FIX R3 — Cox regression PH test 
+safe import
+════════════════════════════════════
+
+In results.py, find where Cox regression runs.
+Replace the Schoenfeld residuals import with this:
+
+try:
+    from lifelines.statistics import 
+        proportional_hazard_test
+    PH_TEST_AVAILABLE = True
+except ImportError:
+    try:
+        from lifelines.statistics import 
+            check_assumptions
+        PH_TEST_AVAILABLE = True
+    except ImportError:
+        PH_TEST_AVAILABLE = False
+
+After running CoxPHFitter:
+
+if PH_TEST_AVAILABLE:
+    try:
+        results_df = proportional_hazard_test(
+            cph, df, time_transform='rank')
+        ph_violated = any(
+            results_df['p'] < 0.05)
+        ph_note = results_df.to_dict()
+    except Exception as e:
+        ph_violated = False
+        ph_note = "PH test could not run: " + str(e)
+else:
+    ph_violated = False
+    ph_note = ("Proportional hazards assumption "
+               "test unavailable in this version "
+               "of lifelines. Verify PH assumption "
+               "manually by checking if survival "
+               "curves cross.")
+
+Always include ph_note in the Cox result object.
+Always show ph_note to the user in the results tab.
+Never crash if the import fails.
+
+════════════════════════════════════
+FIX R4 — Wilson CI for diagnostic 
+accuracy — explicit method
+════════════════════════════════════
+
+In results.py, find every call to 
+proportion_confint.
+Replace every call with the explicit 
+Wilson method:
+
+from statsmodels.stats.proportion import (
+    proportion_confint)
+
+def wilson_ci(count, nobs):
+    if nobs == 0:
+        return (0.0, 1.0)
+    lo, hi = proportion_confint(
+        count=int(count),
+        nobs=int(nobs),
+        alpha=0.05,
+        method='wilson'
+    )
+    return (round(lo, 4), round(hi, 4))
+
+Replace every existing proportion_confint 
+call with wilson_ci(count, nobs).
+
+This applies to:
+    sensitivity CI
+    specificity CI
+    PPV CI
+    NPV CI
+    accuracy CI
+
+Test with known values:
+    wilson_ci(90, 100) should give 
+    approximately (0.823, 0.943)
+    If result is different: fix before continuing.
+
+════════════════════════════════════
+FIX R5 — Ordinal logistic regression 
+convergence check
+════════════════════════════════════
+
+In results.py, find where OrderedModel runs.
+Add this convergence check immediately after 
+fitting:
+
+from statsmodels.miscmodels.ordinal_model import (
+    OrderedModel)
+
+try:
+    mod = OrderedModel(
+        df[outcome], 
+        df[predictors], 
+        distr='logit')
+    res = mod.fit(
+        method='bfgs', 
+        maxiter=500, 
+        disp=False)
+    
+    # Check convergence
+    converged = getattr(
+        res, 'mle_retvals', {}
+    ).get('converged', False)
+    
+    if not converged:
+        ordinal_warning = (
+            "Ordinal regression did not converge. "
+            "Results may be unreliable. "
+            "Consider: reducing number of predictors, "
+            "checking for multicollinearity, "
+            "or using binary logistic regression instead."
+        )
+    else:
+        ordinal_warning = None
+        
+except Exception as e:
+    res = None
+    ordinal_warning = (
+        "Ordinal regression could not run: " 
+        + str(e)
+        + ". Try with fewer predictors."
+    )
+
+Always show ordinal_warning to user 
+if it is not None.
+If res is None: do not show any 
+ordinal regression result.
+Show the warning prominently in amber 
+above the result table.
+
+════════════════════════════════════
+FIX R6 — Word table border removal
+that works across all Word versions
+════════════════════════════════════
+
+In export.py, replace the current 
+border removal code with this 
+version that works in Word 2010 onwards:
+
+from docx.oxml.ns import qn
+from docx.oxml import OxmlElement
+
+def set_cell_border(cell, **kwargs):
+    tc = cell._tc
+    tcPr = tc.get_or_add_tcPr()
+    tcBorders = OxmlElement('w:tcBorders')
+    for edge in ('left', 'right', 
+                 'insideH', 'insideV'):
+        tag = OxmlElement(f'w:{edge}')
+        tag.set(qn('w:val'), 'nil')
+        tag.set(qn('w:sz'), '0')
+        tag.set(qn('w:space'), '0')
+        tag.set(qn('w:color'), 'auto')
+        tcBorders.append(tag)
+    tcPr.append(tcBorders)
+
+def set_table_borders(table):
+    # Top border on first row
+    # Bottom border on last row  
+    # Below-header border on row index 1
+    # No vertical borders anywhere
+    
+    tbl = table._tbl
+    tblPr = tbl.get_or_add_tblPr()
+    tblBorders = OxmlElement('w:tblBorders')
+    
+    for edge in ['left', 'right', 
+                 'insideV']:
+        tag = OxmlElement(f'w:{edge}')
+        tag.set(qn('w:val'), 'nil')
+        tblBorders.append(tag)
+    
+    for edge in ['top', 'bottom']:
+        tag = OxmlElement(f'w:{edge}')
+        tag.set(qn('w:val'), 'single')
+        tag.set(qn('w:sz'), '8')
+        tag.set(qn('w:color'), '000000')
+        tblBorders.append(tag)
+    
+    tblPr.append(tblBorders)
+    
+    # Remove vertical borders from 
+    # every cell individually
+    for row in table.rows:
+        for cell in row.cells:
+            set_cell_border(cell)
+    
+    # Add border below header row
+    header_row = table.rows[0]
+    for cell in header_row.cells:
+        tc = cell._tc
+        tcPr = tc.get_or_add_tcPr()
+        tcBorders = OxmlElement('w:tcBorders')
+        bottom = OxmlElement('w:bottom')
+        bottom.set(qn('w:val'), 'single')
+        bottom.set(qn('w:sz'), '8')
+        bottom.set(qn('w:color'), '000000')
+        tcBorders.append(bottom)
+        tcPr.append(tcBorders)
+
+Call set_table_borders(table) on 
+every table in the Word document.
+Also add this note to the export screen UI:
+"Best viewed in Microsoft Word 2016 
+or later. Google Docs compatible."
+
+════════════════════════════════════
+FIX R7 — Display names vs column names
+in auto-written Results section
+════════════════════════════════════
+
+In the session object, change how 
+variable names are stored.
+
+Currently: session stores raw column names
+Fix: store both raw and display name
+
+Update the session schema to include:
+
+session['variables'] = {
+    'raw_column_name': {
+        'display_name': 'human readable name',
+        'type': 'Scale/Nominal/Ordinal',
+        'unit': 'weeks/g/dL/etc or empty string'
+    }
+}
+
+Where display_name comes from:
+    First choice: the label the user 
+    typed in the variable assistant 
+    (if they renamed it)
+    Second choice: the original column 
+    name cleaned up:
+        Replace underscores with spaces
+        Title case the result
+        Example: "time_to_union_weeks" 
+        becomes "Time to Union (Weeks)"
+
+Cleaning function:
+    def clean_display_name(col_name):
+        name = col_name.replace('_', ' ')
+        name = name.strip()
+        name = name.title()
+        return name
+
+In the auto-written Results section:
+    Always use display_name
+    Never use the raw column name
+    
+    Example output:
+    "Time to Union (Weeks) was significantly 
+    longer in Group A..."
+    
+    NOT:
+    "time_to_union_weeks was significantly..."
+
+In the Word document tables:
+    Use display_name as the row/column header
+    Never show raw column names in any 
+    user-facing output
+
+Apply this fix to:
+    results.py — all interpretation paragraphs
+    export.py — all table headers and 
+    Results/Methods sections
+
+════════════════════════════════════
+FIX R8 — Multiple testing correction
+applied only to inferential tests
+════════════════════════════════════
+
+In results.py, find the 
+apply_multiple_testing_correction function.
+Replace the test counter with this:
+
+INFERENTIAL_TEST_TYPES = [
+    't_test_independent',
+    't_test_paired',
+    'welch_t_test',
+    'mann_whitney',
+    'wilcoxon',
+    'anova_oneway',
+    'kruskal_wallis',
+    'friedman',
+    'rm_anova',
+    'mixed_anova',
+    'chi_square',
+    'fisher_exact',
+    'mcnemar',
+    'pearson',
+    'spearman',
+    'logistic_regression',
+    'linear_regression',
+    'cox_regression',
+    'log_rank',
+    'kappa',
+    'icc'
+]
+
+NON_INFERENTIAL_TEST_TYPES = [
+    'descriptive_statistics',
+    'normality_shapiro',
+    'normality_ks',
+    'table_1',
+    'frequency_table',
+    'crosstabulation'
+]
+
+When counting tests for correction:
+    
+    inferential_results = [
+        r for r in session['results']
+        if r['test_type'] in 
+        INFERENTIAL_TEST_TYPES
+    ]
+    
+    n_inferential = len(inferential_results)
+    
+    if n_inferential >= 3:
+        p_values = [
+            r['p_value'] 
+            for r in inferential_results
+        ]
+        apply correction to p_values only
+    else:
+        no correction needed
+
+Descriptive statistics and normality 
+tests are NEVER included in the 
+correction count.
+Table 1 p-values are NEVER corrected.
+Only primary and secondary analysis 
+hypothesis tests are corrected.
+
+════════════════════════════════════
+FIX R9 — Chatbox JSON parsing with 
+regex safety net
+════════════════════════════════════
+
+In the frontend JavaScript for 
+chatbox 3 (Plan and Run screen):
+
+Replace the current JSON.parse call 
+with this safer version:
+
+function parseAIAction(responseText) {
+    // First try direct parse
+    try {
+        return JSON.parse(responseText);
+    } catch (e) {
+        // Try extracting JSON from text
+        // AI sometimes wraps in markdown
+        const jsonMatch = responseText.match(
+            /\{[\s\S]*"action"[\s\S]*\}/
+        );
+        if (jsonMatch) {
+            try {
+                return JSON.parse(jsonMatch[0]);
+            } catch (e2) {
+                return null;
+            }
+        }
+        return null;
+    }
+}
+
+function handleAIResponse(responseText) {
+    const action = parseAIAction(responseText);
+    
+    if (action && action.action) {
+        // Valid action found
+        if (action.action === 'add_test') {
+            addTestToPlan(action.test_id, 
+                         action.reason);
+            showChatMessage(
+                `Added: ${action.test_id}. 
+                ${action.reason}`, 
+                'action');
+        } else if (action.action === 
+                   'remove_test') {
+            removeTestFromPlan(action.test_id);
+            showChatMessage(
+                `Removed: ${action.test_id}.`,
+                'action');
+        }
+    } else {
+        // No JSON action found
+        // Just show the text response as is
+        // Extract text before any JSON block
+        const textPart = responseText
+            .replace(/```[\s\S]*?```/g, '')
+            .replace(/\{[\s\S]*\}/g, '')
+            .trim();
+        
+        if (textPart.length > 0) {
+            showChatMessage(textPart, 'ai');
+        } else {
+            // Fallback if response is 
+            // only JSON with no text
+            showChatMessage(
+                "I understood your request. " +
+                "If you want to add or remove " +
+                "a test, use the tick buttons " +
+                "on the test cards above.",
+                'ai');
+        }
+    }
+}
+
+Replace all chatbox 3 AI response 
+handling with handleAIResponse().
+
+════════════════════════════════════
+VERIFY ALL 7 FIXES AFTER APPLYING
+════════════════════════════════════
+
+Test R3: Run Cox regression on any 
+survival dataset.
+Expected: no crash if lifelines 
+version is old. PH note always present 
+in results.
+
+Test R4: Run diagnostic accuracy on 
+a dataset where sensitivity = 1.0 (all TP).
+Expected: CI does not give (1.0, 1.0).
+Wilson CI gives approximately (0.94, 1.0).
+
+Test R5: Run ordinal logistic regression 
+on a dataset with 3 ordinal outcome groups 
+and n=15.
+Expected: convergence warning shown.
+No crash. Amber warning visible above table.
+
+Test R6: Export Word document. Open in 
+both Word 2013 and Word 2016.
+Expected: no vertical lines in either version.
+Horizontal lines at top, below header, bottom.
+
+Test R7: Rename a variable in chatbox 1
+from "time_to_union_weeks" to 
+"Time to Union".
+Run analysis. Export Word document.
+Expected: Word document says 
+"Time to Union" everywhere.
+No raw column name visible anywhere.
+
+Test R8: Run descriptive stats + 
+t-test + correlation + chi-square.
+That is 3 inferential tests.
+Expected: Bonferroni correction applied 
+to t-test, correlation, and chi-square.
+Descriptive statistics NOT corrected.
+Table 1 p-values NOT corrected.
+
+Test R9: Simulate a chatbox 3 AI response 
+that contains: "Sure! {"action": "add_test", 
+"test_id": "survival", "reason": "You asked"}
+Here is what I will do."
+Expected: JSON extracted correctly.
+Survival analysis added to plan.
+Extra text shown as normal message.
+
+When all 7 tests pass: checkpoint.
+Print: "All safety fixes applied and verified."
+Then stop and wait for next instruction.
