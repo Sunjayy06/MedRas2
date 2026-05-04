@@ -607,6 +607,8 @@ def run_plan(
 
     # Multiple-testing correction (R8) — applied only to inferential tests
     test_results, correction_info = apply_correction_if_needed(test_results)
+    if session is not None and correction_info is not None:
+        session['correction_info'] = correction_info
 
     # Run graphs -------------------------------------------------------------
     graph_results: List[Dict[str, Any]] = []
@@ -660,6 +662,7 @@ def run_plan(
         "forest_plot": _forest_plot(test_results),
         "methods_md": methods_md,
         "results_md": results_md,
+        "correction_info": correction_info,
         "summary": {
             "outcome": outcome,
             "group": group,

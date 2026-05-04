@@ -2800,11 +2800,31 @@ function renderResultsPane(tabId) {
   // Per-test tab.
   const test = (r.tests || []).find((t) => `tab-${t.id}` === tabId);
   if (!test) { pane.innerHTML = ""; return; }
+  let correctionBlock = "";
+  if (test.p_corrected !== undefined && test.p_corrected !== null) {
+    const origP = (test.p !== undefined && test.p !== null) ? test.p : test.p_value;
+    const method = test.correction_method || "corrected";
+    const ci = r.correction_info || {};
+    correctionBlock = `<div class="se-correction-block" data-testid="correction-${test.id}">
+      <div><strong>p (uncorrected)</strong> = ${escapeHtml(fmtPValue(origP))}</div>
+      <div><strong>p (${escapeHtml(method)} corrected)</strong> = ${escapeHtml(fmtPValue(test.p_corrected))}</div>
+      <p class="se-correction-note"><em>Multiple comparisons correction applied (${escapeHtml(method)}, ${ci.n_tests || ''} tests)</em></p>
+    </div>`;
+  }
   pane.innerHTML = `<h3>${test.title}</h3>
     ${tableHtml(["Statistic", "Value"], (test.rows || []).map((row) => [row.label, row.value]))}
+    ${correctionBlock}
     <p>${escapeHtml(test.narrative || '')}</p>
     <button type="button" class="btn btn-tertiary" data-action="copy-table" data-testid="button-copy-${test.id}">Copy table</button>`;
   bindCopyTable();
+}
+
+function fmtPValue(p) {
+  if (p === null || p === undefined) return "—";
+  const n = Number(p);
+  if (!isFinite(n) || isNaN(n)) return "—";
+  if (n < 0.001) return "< 0.001";
+  return n.toFixed(3);
 }
 
 function tableHtml(headers, rows) {
