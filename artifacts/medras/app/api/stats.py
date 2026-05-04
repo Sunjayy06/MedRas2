@@ -956,7 +956,7 @@ async def export(job_id: str, fmt: str) -> Response:
     if not res:
         raise HTTPException(status_code=400, detail="No results available — run the analysis on Step 7 first.")
     fn, mime, ext = exporter
-    payload_bytes = fn(res, entry.meta.get("assignment") or {})
+    payload_bytes = fn(entry, res, entry.meta.get("assignment") or {})
     filename = f"medras_results_{job_id[:8]}.{ext}"
     return Response(
         content=payload_bytes,
