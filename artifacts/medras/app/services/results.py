@@ -576,3 +576,969 @@ def run_plan(
             "n_graphs": len(graph_results),
         },
     }
+
+
+# ===========================================================================
+# Phase A — Missing tests (Cox / KM / ROC / Kappa / ICC / Ordinal / Poisson /
+# Paired-t / Wilcoxon / McNemar / RM-ANOVA / Friedman / Fisher-or-Chi)
+# Added wholesale per spec — every function has its safety check baked in.
+# ===========================================================================
+
+import scipy.stats as _phase_a_stats  # noqa: E402  (alias to keep spec verbatim)
+from statsmodels.stats.proportion import proportion_confint  # noqa: E402
+
+
+def fmt_p(p):
+    if p is None or not isinstance(p, float):
+        return '-'
+    if p != p:  # nan check
+        return '-'
+    if p < 0.001:
+        return '< 0.001'
+    return f'{p:.3f}'
+
+
+def wilson_ci(count, nobs):
+    if nobs == 0:
+        return (0.0, 1.0)
+    try:
+        lo, hi = proportion_confint(
+            count=int(count),
+            nobs=int(nobs),
+            alpha=0.05,
+            method='wilson'
+        )
+        return (round(float(lo), 4),
+                round(float(hi), 4))
+    except Exception:
+        return (0.0, 1.0)
+
+
+def validate_result(test_name, stat, p, effect_size=None):
+    errors = []
+    import math
+    if p is None or math.isnan(p):
+        errors.append(f"{test_name}: p-value is missing")
+    elif p < 0 or p > 1:
+        errors.append(f"{test_name}: p-value {p} is out of range")
+    if stat is None or math.isinf(stat):
+        errors.append(f"{test_name}: test statistic is invalid")
+    if errors:
+        return False, '; '.join(errors)
+    return True, None
+
+
+def get_display_name(col_name, session):
+    variables = (session or {}).get('variables', {}) if session else {}
+    var_info = variables.get(col_name, {}) if isinstance(variables, dict) else {}
+    display = var_info.get('display_name', '') if isinstance(var_info, dict) else ''
+    if display:
+        return display
+    name = str(col_name).replace('_', ' ').strip()
+    return name.title()
+
+
+def clean_display_name(col_name):
+    name = str(col_name)
+    name = name.replace('_', ' ')
+    name = name.replace('-', ' ')
+    name = name.strip()
+    acronyms = ['VAS', 'NRS', 'BMI', 'HHS',
+                'ICC', 'AUC', 'OR', 'HR',
+                'SD', 'IQR', 'CI']
+    words = name.split()
+    result = []
+    for w in words:
+        if w.upper() in acronyms:
+            result.append(w.upper())
+        else:
+            result.append(w.capitalize())
+    return ' '.join(result)
+
+
+# --- TEST 1: Paired t-test --------------------------------------------------
+def run_paired_ttest(col1, col2, session, df):
+    data = df[[col1, col2]].dropna()
+    n = len(data)
+    if n < 5:
+        return {'error': f'Sample too small (n={n}). Minimum 5 pairs.'}
+
+    t, p = _phase_a_stats.ttest_rel(
+        data[col1], data[col2], alternative='two-sided'
+    )
+
+    valid, err = validate_result('Paired t-test', float(t), float(p))
+    if not valid:
+        return {'error': err}
+
+    diff = data[col1] - data[col2]
+    mean_diff = float(diff.mean())
+    sd_diff = float(diff.std(ddof=1))
+    se_diff = sd_diff / (n ** 0.5) if n > 0 else 0.0
+    df_val = n - 1
+    t_crit = _phase_a_stats.t.ppf(0.975, df=df_val)
+    ci_lo = mean_diff - t_crit * se_diff
+    ci_hi = mean_diff + t_crit * se_diff
+    cohens_d = mean_diff / sd_diff if sd_diff > 0 else 0
+
+    d1 = get_display_name(col1, session)
+    d2 = get_display_name(col2, session)
+    eff = ('small' if abs(cohens_d) < 0.5
+           else 'medium' if abs(cohens_d) < 0.8
+           else 'large')
+
+    return {
+        'test': 'Paired samples t-test',
+        'test_type': 't_test_paired',
+        'n': n,
+        't': round(float(t), 3),
+        'df': df_val,
+        'p': float(p),
+        'p_display': fmt_p(float(p)),
+        'mean_diff': round(mean_diff, 3),
+        'ci': (round(ci_lo, 3), round(ci_hi, 3)),
+        'cohens_d': round(cohens_d, 3),
+        'effect_interpretation': eff,
+        'interpretation': (
+            f'{d1} and {d2} were compared in {n} paired observations. '
+            f'The mean difference was {mean_diff:.2f} '
+            f'(95% CI: {ci_lo:.2f} to {ci_hi:.2f}). '
+            f'Paired t-test: t({df_val}) = {float(t):.3f}, '
+            f'p = {fmt_p(float(p))}, '
+            f"Cohen's d = {cohens_d:.3f} ({eff} effect)."),
+    }
+
+
+# --- TEST 2: Wilcoxon signed-rank ------------------------------------------
+def run_wilcoxon(col1, col2, session, df):
+    data = df[[col1, col2]].dropna()
+    n = len(data)
+    if n < 5:
+        return {'error': f'Sample too small (n={n}).'}
+
+    try:
+        stat, p = _phase_a_stats.wilcoxon(
+            data[col1], data[col2],
+            alternative='two-sided',
+            correction=True,
+            zero_method='wilcox',
+        )
+    except ValueError as e:
+        return {'error': f'Wilcoxon failed: {str(e)}'}
+
+    valid, err = validate_result('Wilcoxon', float(stat), float(p))
+    if not valid:
+        return {'error': err}
+
+    import math
+    z = _phase_a_stats.norm.ppf(p / 2)
+    r = abs(float(z)) / math.sqrt(n)
+    d1 = get_display_name(col1, session)
+    d2 = get_display_name(col2, session)
+    eff = ('small' if r < 0.3 else 'medium' if r < 0.5 else 'large')
+
+    return {
+        'test': 'Wilcoxon signed-rank test',
+        'test_type': 'wilcoxon',
+        'n': n,
+        'W': round(float(stat), 3),
+        'p': float(p),
+        'p_display': fmt_p(float(p)),
+        'effect_r': round(r, 3),
+        'effect_interpretation': eff,
+        'interpretation': (
+            f'Wilcoxon signed-rank test comparing {d1} and {d2} '
+            f'(n={n}): W = {float(stat):.1f}, p = {fmt_p(float(p))}, r = {r:.3f}.'),
+    }
+
+
+# --- TEST 3: McNemar -------------------------------------------------------
+def run_mcnemar(col1, col2, session, df):
+    from statsmodels.stats.contingency_tables import mcnemar
+    data = df[[col1, col2]].dropna()
+    n = len(data)
+    if n < 10:
+        return {'error': f'Sample too small (n={n}).'}
+
+    try:
+        table = pd.crosstab(data[col1], data[col2])
+        if table.shape != (2, 2):
+            return {'error': 'McNemar requires two binary variables.'}
+        result = mcnemar(table, exact=True)
+        p = float(result.pvalue)
+        stat = float(result.statistic)
+    except Exception as e:
+        return {'error': f'McNemar failed: {str(e)}'}
+
+    valid, err = validate_result('McNemar', stat, p)
+    if not valid:
+        return {'error': err}
+
+    b = int(table.iloc[0, 1])
+    c = int(table.iloc[1, 0])
+
+    return {
+        'test': 'McNemar test',
+        'test_type': 'mcnemar',
+        'n': n,
+        'statistic': round(stat, 3),
+        'p': p,
+        'p_display': fmt_p(p),
+        'b_c_counts': (b, c),
+        'interpretation': (
+            f'McNemar test (n={n}): statistic = {stat:.3f}, p = {fmt_p(p)}. '
+            f'Discordant pairs: b={b}, c={c}.'),
+    }
+
+
+# --- TEST 4: Repeated Measures ANOVA ---------------------------------------
+def run_rm_anova(dv, within, subject, session, df):
+    import pingouin as pg
+    data = df[[dv, within, subject]].dropna()
+    if len(data) < 10:
+        return {'error': 'Minimum 10 observations needed.'}
+
+    try:
+        spher = pg.sphericity(data, dv=dv, within=within, subject=subject)
+        try:
+            sphericity_ok = bool(spher.pval > 0.05)
+        except AttributeError:
+            sphericity_ok = bool(spher[1] > 0.05)
+        correction = 'none' if sphericity_ok else 'GG'
+
+        result = pg.rm_anova(
+            data=data, dv=dv, within=within, subject=subject,
+            correction=not sphericity_ok, detailed=True,
+        )
+        F = float(result.loc[0, 'F'])
+        p_col = 'p-unc' if sphericity_ok else 'p-GG-corr'
+        if p_col not in result.columns:
+            p_col = 'p-unc'
+        p = float(result.loc[0, p_col])
+        eta2 = float(result.loc[0, 'np2'])
+        df1 = int(result.loc[0, 'ddof1'])
+        df2 = int(result.loc[0, 'ddof2'])
+    except Exception as e:
+        return {'error': f'RM-ANOVA failed: {str(e)}'}
+
+    valid, err = validate_result('RM-ANOVA', F, p)
+    if not valid:
+        return {'error': err}
+
+    dv_name = get_display_name(dv, session)
+    note = '' if sphericity_ok else (
+        ' Greenhouse-Geisser correction applied (sphericity violated).')
+
+    return {
+        'test': 'Repeated Measures ANOVA',
+        'test_type': 'rm_anova',
+        'F': round(F, 3),
+        'df1': df1, 'df2': df2,
+        'p': p, 'p_display': fmt_p(p),
+        'eta_squared': round(eta2, 3),
+        'sphericity_ok': sphericity_ok,
+        'correction_applied': correction,
+        'interpretation': (
+            f'Repeated measures ANOVA for {dv_name}: '
+            f'F({df1},{df2}) = {F:.3f}, p = {fmt_p(p)}, η² = {eta2:.3f}.{note}'),
+    }
+
+
+# --- TEST 5: Friedman ------------------------------------------------------
+def run_friedman(cols, session, df):
+    data = df[cols].dropna()
+    n = len(data)
+    k = len(cols)
+    if n < 5:
+        return {'error': f'Sample too small (n={n}).'}
+    if k < 3:
+        return {'error': 'Need at least 3 columns.'}
+
+    try:
+        arrays = [data[c].values for c in cols]
+        stat, p = _phase_a_stats.friedmanchisquare(*arrays)
+    except Exception as e:
+        return {'error': f'Friedman failed: {str(e)}'}
+
+    valid, err = validate_result('Friedman', float(stat), float(p))
+    if not valid:
+        return {'error': err}
+
+    W = float(stat) / (n * (k - 1)) if (n * (k - 1)) > 0 else 0
+
+    return {
+        'test': 'Friedman test',
+        'test_type': 'friedman',
+        'n': n, 'k': k,
+        'chi2': round(float(stat), 3),
+        'p': float(p),
+        'p_display': fmt_p(float(p)),
+        'kendalls_W': round(W, 3),
+        'interpretation': (
+            f'Friedman test across {k} conditions (n={n}): '
+            f'χ²({k-1}) = {float(stat):.3f}, p = {fmt_p(float(p))}, W = {W:.3f}.'),
+    }
+
+
+# --- TEST 6: Chi-square OR Fisher exact -----------------------------------
+def run_chi_or_fisher(col1, col2, session, df):
+    from scipy.stats import chi2_contingency, fisher_exact
+    import math
+
+    data = df[[col1, col2]].dropna()
+    table = pd.crosstab(data[col1], data[col2])
+
+    chi2, p_chi, dof, expected = chi2_contingency(table, correction=False)
+    min_expected = float(expected.min())
+    is_2x2 = (table.shape == (2, 2))
+    use_fisher = min_expected < 5
+
+    if use_fisher and is_2x2:
+        odds_ratio, p = fisher_exact(table, alternative='two-sided')
+        test_name = "Fisher's exact test"
+        test_type = 'fisher_exact'
+        stat = float(odds_ratio)
+        note = (f'Fisher exact used: minimum expected count = '
+                f'{min_expected:.1f} < 5')
+    else:
+        correction = (True if is_2x2 and min_expected < 5 else False)
+        chi2, p, dof, expected = chi2_contingency(table, correction=correction)
+        stat = float(chi2)
+        test_name = 'Chi-square test'
+        test_type = 'chi_square'
+        note = f'Chi-square used: minimum expected count = {min_expected:.1f}'
+        if not is_2x2 and min_expected < 5:
+            note += ('. Warning: some expected counts below 5. '
+                     'Interpret with caution.')
+
+    valid, err = validate_result(test_name, stat, float(p))
+    if not valid:
+        return {'error': err}
+
+    r, c = table.shape
+    n = len(data)
+    cramers_v = (math.sqrt(
+        chi2_contingency(table, correction=False)[0] / (n * (min(r, c) - 1))
+    ) if min(r, c) > 1 else 0)
+
+    return {
+        'test': test_name,
+        'test_type': test_type,
+        'n': n,
+        'statistic': round(stat, 3),
+        'p': float(p),
+        'p_display': fmt_p(float(p)),
+        'dof': int(dof) if test_name != "Fisher's exact test" else None,
+        'cramers_v': round(cramers_v, 3),
+        'min_expected': round(min_expected, 2),
+        'note': note,
+        'expected_table': expected.tolist(),
+        'observed_table': table.values.tolist(),
+        'interpretation': (
+            f'{test_name}: statistic = {stat:.3f}, '
+            f'p = {fmt_p(float(p))}, '
+            f"Cramér's V = {cramers_v:.3f}. {note}"),
+    }
+
+
+# --- TEST 7: Cohen / Weighted / Fleiss Kappa -------------------------------
+def run_kappa(rater_cols, session, df, weighted=False):
+    data = df[rater_cols].dropna()
+    n = len(data)
+
+    if len(rater_cols) == 2:
+        from sklearn.metrics import cohen_kappa_score
+        weights = 'linear' if weighted else None
+        try:
+            k = cohen_kappa_score(
+                data[rater_cols[0]], data[rater_cols[1]], weights=weights)
+        except Exception as e:
+            return {'error': f'Kappa failed: {str(e)}'}
+
+        boot_k = []
+        rng = np.random.default_rng(42)
+        for _ in range(1000):
+            idx = rng.choice(n, n, replace=True)
+            try:
+                bk = cohen_kappa_score(
+                    data[rater_cols[0]].iloc[idx],
+                    data[rater_cols[1]].iloc[idx],
+                    weights=weights)
+                boot_k.append(bk)
+            except Exception:
+                pass
+        if boot_k:
+            ci = (round(float(np.percentile(boot_k, 2.5)), 3),
+                  round(float(np.percentile(boot_k, 97.5)), 3))
+        else:
+            ci = (None, None)
+
+        interp = ('poor' if k < 0.20 else
+                  'fair' if k < 0.40 else
+                  'moderate' if k < 0.60 else
+                  'substantial' if k < 0.80 else
+                  'almost perfect')
+        test_name = 'Weighted Kappa' if weighted else "Cohen's Kappa"
+        return {
+            'test': test_name,
+            'test_type': 'kappa',
+            'kappa': round(float(k), 3),
+            'ci': ci,
+            'n': n,
+            'interpretation': interp,
+            'p_display': fmt_p(None),
+            'result_text': (
+                f'{test_name}: κ = {k:.3f} '
+                f'(95% CI: {ci[0]} to {ci[1]}), '
+                f'{interp} agreement (n={n}).'),
+        }
+    else:
+        from statsmodels.stats.inter_rater import (
+            fleiss_kappa, aggregate_raters)
+        try:
+            agg, cats = aggregate_raters(data[rater_cols].values)
+            k = float(fleiss_kappa(agg))
+            interp = ('poor' if k < 0.20 else
+                      'fair' if k < 0.40 else
+                      'moderate' if k < 0.60 else
+                      'substantial' if k < 0.80 else
+                      'almost perfect')
+            return {
+                'test': "Fleiss' Kappa",
+                'test_type': 'kappa',
+                'kappa': round(k, 3),
+                'n': n,
+                'n_raters': len(rater_cols),
+                'interpretation': interp,
+                'result_text': (
+                    f"Fleiss' Kappa for {len(rater_cols)} raters "
+                    f'(n={n}): κ = {k:.3f}, {interp} agreement.'),
+            }
+        except Exception as e:
+            return {'error': f'Fleiss kappa failed: {str(e)}'}
+
+
+# --- TEST 8: ICC + Bland-Altman --------------------------------------------
+def run_icc_bland_altman(col1, col2, session, df):
+    import pingouin as pg
+    data = df[[col1, col2]].dropna()
+    n = len(data)
+    if n < 10:
+        return {'error': 'Minimum 10 pairs needed for ICC.'}
+
+    long_df = pd.melt(
+        data.reset_index(), id_vars='index',
+        value_vars=[col1, col2],
+        var_name='rater', value_name='score')
+
+    try:
+        icc_result = pg.intraclass_corr(
+            data=long_df, targets='index',
+            raters='rater', ratings='score')
+        icc_row = icc_result[icc_result['Type'] == 'ICC3']
+        icc_val = float(icc_row['ICC'].values[0])
+        ci_arr = icc_row['CI95%'].values[0]
+        icc_lo = float(ci_arr[0])
+        icc_hi = float(ci_arr[1])
+        F_val = float(icc_row['F'].values[0])
+        p_val = float(icc_row['pval'].values[0])
+    except Exception as e:
+        return {'error': f'ICC failed: {str(e)}'}
+
+    icc_interp = ('poor' if icc_val < 0.50 else
+                  'moderate' if icc_val < 0.75 else
+                  'good' if icc_val < 0.90 else
+                  'excellent')
+
+    diffs = data[col1] - data[col2]
+    mean_diff = float(diffs.mean())
+    sd_diff = float(diffs.std())
+    loa_lo = mean_diff - 1.96 * sd_diff
+    loa_hi = mean_diff + 1.96 * sd_diff
+    se_mean = sd_diff / np.sqrt(n) if n > 0 else 0
+    t_crit = _phase_a_stats.t.ppf(0.975, df=n - 1)
+    bias_ci = (round(mean_diff - t_crit * se_mean, 3),
+               round(mean_diff + t_crit * se_mean, 3))
+
+    d1 = get_display_name(col1, session)
+    d2 = get_display_name(col2, session)
+
+    return {
+        'test': 'ICC and Bland-Altman',
+        'test_type': 'icc',
+        'icc': round(icc_val, 3),
+        'icc_ci': (round(icc_lo, 3), round(icc_hi, 3)),
+        'icc_F': round(F_val, 3),
+        'icc_p': p_val,
+        'icc_p_display': fmt_p(p_val),
+        'icc_interpretation': icc_interp,
+        'bland_altman': {
+            'mean_bias': round(mean_diff, 3),
+            'bias_ci': bias_ci,
+            'loa_lower': round(loa_lo, 3),
+            'loa_upper': round(loa_hi, 3),
+            'sd_diff': round(sd_diff, 3),
+        },
+        'n': n,
+        'interpretation': (
+            f'ICC between {d1} and {d2} (n={n}): ICC(3,1) = {icc_val:.3f} '
+            f'(95% CI: {icc_lo:.3f}–{icc_hi:.3f}), {icc_interp} reliability. '
+            f'Bland-Altman: mean bias = {mean_diff:.3f} '
+            f'(95% LoA: {loa_lo:.3f} to {loa_hi:.3f}).'),
+    }
+
+
+# --- TEST 9: Kaplan-Meier + Log-rank --------------------------------------
+def run_kaplan_meier(time_col, event_col, group_col, session, df):
+    from lifelines import KaplanMeierFitter
+    from lifelines.statistics import logrank_test, multivariate_logrank_test
+
+    data = df[[time_col, event_col, group_col]].dropna()
+    groups = data[group_col].unique()
+    if len(groups) < 2:
+        return {'error': 'Need at least 2 groups for survival analysis.'}
+
+    kmf_results = {}
+    for g in groups:
+        mask = data[group_col] == g
+        kmf = KaplanMeierFitter()
+        try:
+            kmf.fit(
+                data.loc[mask, time_col],
+                event_observed=data.loc[mask, event_col],
+                label=str(g))
+            median_surv = kmf.median_survival_time_
+            kmf_results[str(g)] = {
+                'kmf': kmf,
+                'median': float(median_surv) if not pd.isna(median_surv) else None,
+                'n': int(mask.sum()),
+            }
+        except Exception as e:
+            return {'error': f'KM fit failed for group {g}: {str(e)}'}
+
+    try:
+        if len(groups) == 2:
+            g1, g2 = groups
+            lr = logrank_test(
+                data.loc[data[group_col] == g1, time_col],
+                data.loc[data[group_col] == g2, time_col],
+                event_observed_A=data.loc[data[group_col] == g1, event_col],
+                event_observed_B=data.loc[data[group_col] == g2, event_col])
+            p_logrank = float(lr.p_value)
+            stat_logrank = float(lr.test_statistic)
+        else:
+            mlr = multivariate_logrank_test(
+                data[time_col], data[group_col], event_col=data[event_col])
+            p_logrank = float(mlr.p_value)
+            stat_logrank = float(mlr.test_statistic)
+    except Exception as e:
+        return {'error': f'Log-rank failed: {str(e)}'}
+
+    valid, err = validate_result('Log-rank', stat_logrank, p_logrank)
+    if not valid:
+        return {'error': err}
+
+    t_name = get_display_name(time_col, session)
+    g_name = get_display_name(group_col, session)
+    group_summaries = {
+        g: {'n': kmf_results[g]['n'], 'median': kmf_results[g]['median']}
+        for g in kmf_results
+    }
+
+    return {
+        'test': 'Kaplan-Meier survival analysis',
+        'test_type': 'log_rank',
+        'log_rank_stat': round(stat_logrank, 3),
+        'log_rank_p': p_logrank,
+        'p': p_logrank,
+        'p_display': fmt_p(p_logrank),
+        'groups': group_summaries,
+        'kmf_objects': {g: kmf_results[g]['kmf'] for g in kmf_results},
+        'interpretation': (
+            f'Kaplan-Meier analysis of {t_name} by {g_name}: '
+            f'Log-rank test: χ² = {stat_logrank:.3f}, p = {fmt_p(p_logrank)}. '
+            f'Median survival: ' +
+            ', '.join([
+                f'{g} = {kmf_results[g]["median"]} (n={kmf_results[g]["n"]})'
+                for g in kmf_results]) + '.'),
+    }
+
+
+# --- TEST 10: Cox proportional hazards (R3 baked in) -----------------------
+def run_cox_regression(time_col, event_col, predictors, session, df):
+    from lifelines import CoxPHFitter
+    try:
+        from lifelines.statistics import proportional_hazard_test
+        PH_TEST_AVAILABLE = True
+    except ImportError:
+        PH_TEST_AVAILABLE = False
+
+    data = df[[time_col, event_col] + list(predictors)].dropna()
+    n = len(data)
+    n_events = int(data[event_col].sum())
+
+    if n_events < 10 * len(predictors):
+        warning = (
+            f'Low events-per-variable ratio: {n_events} events, '
+            f'{len(predictors)} predictors. Minimum recommended: '
+            f'{10 * len(predictors)} events. Interpret with caution.')
+    else:
+        warning = None
+
+    try:
+        cph = CoxPHFitter(baseline_estimation_method='breslow')
+        cph.fit(
+            data, duration_col=time_col, event_col=event_col,
+            formula=' + '.join(predictors))
+    except Exception as e:
+        return {'error': f'Cox regression failed: {str(e)}'}
+
+    ph_note = None
+    ph_violated = False
+    if PH_TEST_AVAILABLE:
+        try:
+            ph_results = proportional_hazard_test(cph, data, time_transform='rank')
+            ph_violated = bool(any(ph_results.summary['p'] < 0.05))
+            if ph_violated:
+                violated_vars = ph_results.summary[
+                    ph_results.summary['p'] < 0.05].index.tolist()
+                ph_note = (
+                    f'Proportional hazards assumption violated for: '
+                    f'{", ".join(str(v) for v in violated_vars)}. '
+                    f'Interpret HR with caution. Consider stratified Cox model.')
+        except Exception as e:
+            ph_note = (f'PH assumption test could not complete ({str(e)}). '
+                       f'Verify manually.')
+    else:
+        ph_note = ('PH assumption test unavailable in this lifelines version. '
+                   'Check survival curves do not cross.')
+
+    summary = cph.summary.copy()
+    t_name = get_display_name(time_col, session)
+    rows = []
+    for pred in predictors:
+        if pred in summary.index:
+            hr = float(summary.loc[pred, 'exp(coef)'])
+            lo = float(summary.loc[pred, 'exp(coef) lower 95%'])
+            hi = float(summary.loc[pred, 'exp(coef) upper 95%'])
+            p_v = float(summary.loc[pred, 'p'])
+            rows.append({
+                'variable': get_display_name(pred, session),
+                'HR': round(hr, 3),
+                'CI_lo': round(lo, 3),
+                'CI_hi': round(hi, 3),
+                'p': p_v,
+                'p_display': fmt_p(p_v),
+            })
+
+    return {
+        'test': 'Cox proportional hazards regression',
+        'test_type': 'cox_regression',
+        'n': n,
+        'n_events': n_events,
+        'rows': rows,
+        'ph_note': ph_note,
+        'ph_violated': ph_violated,
+        'warning': warning,
+        'interpretation': (
+            f'Cox regression for {t_name} (n={n}, events={n_events}). '
+            f'See HR table for results.' +
+            (f' {ph_note}' if ph_note else '') +
+            (f' {warning}' if warning else '')),
+    }
+
+
+# --- TEST 11: ROC + diagnostic accuracy (R4 baked in) ----------------------
+def run_diagnostic_accuracy(disease_col, test_col, session, df, positive_class=1):
+    from sklearn.metrics import roc_curve, roc_auc_score
+    data = df[[disease_col, test_col]].dropna()
+    n = len(data)
+    if n < 20:
+        return {'error': f'Sample too small (n={n}). Minimum 20 needed.'}
+
+    y_true = (data[disease_col] == positive_class).astype(int)
+    y_score = data[test_col]
+
+    fpr, tpr, thresholds = roc_curve(y_true, y_score)
+    auc = float(roc_auc_score(y_true, y_score))
+
+    youden_idx = int(np.argmax(tpr - fpr))
+    optimal_threshold = float(thresholds[youden_idx])
+
+    y_pred = (y_score >= optimal_threshold).astype(int)
+    TP = int(((y_pred == 1) & (y_true == 1)).sum())
+    TN = int(((y_pred == 0) & (y_true == 0)).sum())
+    FP = int(((y_pred == 1) & (y_true == 0)).sum())
+    FN = int(((y_pred == 0) & (y_true == 1)).sum())
+
+    sens = TP / (TP + FN) if (TP + FN) > 0 else 0
+    spec = TN / (TN + FP) if (TN + FP) > 0 else 0
+    ppv = TP / (TP + FP) if (TP + FP) > 0 else 0
+    npv = TN / (TN + FN) if (TN + FN) > 0 else 0
+    acc = (TP + TN) / n
+    lr_pos = (sens / (1 - spec)) if (1 - spec) > 0 else float('inf')
+    lr_neg = ((1 - sens) / spec) if spec > 0 else float('inf')
+    dor = (lr_pos / lr_neg) if lr_neg not in (0, float('inf')) else float('inf')
+
+    d_name = get_display_name(disease_col, session)
+    t_name = get_display_name(test_col, session)
+    auc_interp = ('no discrimination' if auc < 0.60 else
+                  'poor' if auc < 0.70 else
+                  'acceptable' if auc < 0.80 else
+                  'good' if auc < 0.90 else
+                  'excellent')
+
+    return {
+        'test': 'Diagnostic accuracy analysis',
+        'test_type': 'diagnostic_accuracy',
+        'n': n,
+        'auc': round(auc, 3),
+        'auc_ci': wilson_ci(int(auc * n), n),
+        'auc_interpretation': auc_interp,
+        'optimal_threshold': round(optimal_threshold, 3),
+        'sensitivity': round(sens, 3),
+        'sensitivity_ci': wilson_ci(TP, TP + FN),
+        'specificity': round(spec, 3),
+        'specificity_ci': wilson_ci(TN, TN + FP),
+        'ppv': round(ppv, 3),
+        'ppv_ci': wilson_ci(TP, TP + FP),
+        'npv': round(npv, 3),
+        'npv_ci': wilson_ci(TN, TN + FN),
+        'accuracy': round(acc, 3),
+        'accuracy_ci': wilson_ci(TP + TN, n),
+        'lr_positive': round(lr_pos, 3),
+        'lr_negative': round(lr_neg, 3),
+        'dor': round(dor, 3),
+        'confusion_matrix': {'TP': TP, 'TN': TN, 'FP': FP, 'FN': FN},
+        'roc_data': {
+            'fpr': fpr.tolist(),
+            'tpr': tpr.tolist(),
+            'thresholds': thresholds.tolist(),
+        },
+        'interpretation': (
+            f'Diagnostic accuracy of {t_name} for {d_name} (n={n}): '
+            f'AUC = {auc:.3f} ({auc_interp}). '
+            f'At optimal cutoff ({optimal_threshold:.3f}): '
+            f'Sensitivity = {sens*100:.1f}%, Specificity = {spec*100:.1f}%.'),
+    }
+
+
+# --- TEST 12: Ordinal logistic regression (R5 baked in) --------------------
+def run_ordinal_logistic(outcome, predictors, session, df):
+    from statsmodels.miscmodels.ordinal_model import OrderedModel
+    data = df[[outcome] + list(predictors)].dropna()
+    n = len(data)
+    if n < 30:
+        return {'error': f'Sample too small (n={n}). Ordinal regression needs n≥30.'}
+
+    try:
+        mod = OrderedModel(data[outcome], data[predictors], distr='logit')
+        res = mod.fit(method='bfgs', maxiter=500, disp=False)
+
+        converged = getattr(res, 'mle_retvals', {}).get('converged', False)
+        if not converged:
+            return {
+                'test': 'Ordinal logistic regression',
+                'test_type': 'ordinal_logistic',
+                'warning': (
+                    'Ordinal regression did not converge. Results may be '
+                    'unreliable. Consider reducing predictors or using '
+                    'binary logistic regression.'),
+                'converged': False,
+                'partial_result': True,
+            }
+
+        rows = []
+        for pred in predictors:
+            if pred in res.params.index:
+                coef = float(res.params[pred])
+                se = float(res.bse[pred])
+                p = float(res.pvalues[pred])
+                or_val = float(np.exp(coef))
+                ci_lo = float(np.exp(coef - 1.96 * se))
+                ci_hi = float(np.exp(coef + 1.96 * se))
+                rows.append({
+                    'variable': get_display_name(pred, session),
+                    'OR': round(or_val, 3),
+                    'CI_lo': round(ci_lo, 3),
+                    'CI_hi': round(ci_hi, 3),
+                    'p': p,
+                    'p_display': fmt_p(p),
+                })
+
+        return {
+            'test': 'Ordinal logistic regression',
+            'test_type': 'ordinal_logistic',
+            'n': n,
+            'converged': True,
+            'rows': rows,
+            'aic': round(float(res.aic), 2),
+            'interpretation': (
+                f'Ordinal logistic regression (n={n}). Model converged. '
+                f'See OR table for results.'),
+        }
+    except Exception as e:
+        return {'error': f'Ordinal regression failed: {str(e)}'}
+
+
+# --- TEST 13: Poisson / Negative Binomial ----------------------------------
+def run_count_regression(outcome, predictors, session, df):
+    import statsmodels.formula.api as smf
+    data = df[[outcome] + list(predictors)].dropna()
+    n = len(data)
+
+    if data[outcome].min() < 0:
+        return {'error': 'Count outcome cannot have negative values.'}
+
+    mean_val = float(data[outcome].mean())
+    var_val = float(data[outcome].var())
+    dispersion_ratio = (var_val / mean_val) if mean_val > 0 else 1.0
+
+    formula = outcome + ' ~ ' + ' + '.join(predictors)
+
+    if dispersion_ratio > 2:
+        try:
+            res = smf.negativebinomial(formula, data).fit(disp=False)
+            model_name = 'Negative binomial regression'
+            test_type = 'negative_binomial'
+            overdispersion_note = (
+                f'Negative binomial used: variance/mean ratio = '
+                f'{dispersion_ratio:.2f} > 2 (overdispersed data).')
+        except Exception as e:
+            return {'error': f'Negative binomial failed: {str(e)}'}
+    else:
+        try:
+            res = smf.poisson(formula, data).fit(disp=False)
+            model_name = 'Poisson regression'
+            test_type = 'poisson'
+            overdispersion_note = (
+                f'Poisson used: variance/mean ratio = '
+                f'{dispersion_ratio:.2f} ≤ 2.')
+        except Exception as e:
+            return {'error': f'Poisson failed: {str(e)}'}
+
+    rows = []
+    for pred in predictors:
+        if pred in res.params.index:
+            coef = float(res.params[pred])
+            se = float(res.bse[pred])
+            p = float(res.pvalues[pred])
+            irr = float(np.exp(coef))
+            ci_lo = float(np.exp(coef - 1.96 * se))
+            ci_hi = float(np.exp(coef + 1.96 * se))
+            rows.append({
+                'variable': get_display_name(pred, session),
+                'IRR': round(irr, 3),
+                'CI_lo': round(ci_lo, 3),
+                'CI_hi': round(ci_hi, 3),
+                'p': p,
+                'p_display': fmt_p(p),
+            })
+
+    return {
+        'test': model_name,
+        'test_type': test_type,
+        'n': n,
+        'dispersion_ratio': round(dispersion_ratio, 2),
+        'overdispersion_note': overdispersion_note,
+        'rows': rows,
+        'aic': round(float(res.aic), 2),
+        'interpretation': (
+            f'{model_name} (n={n}). {overdispersion_note} '
+            f'See IRR table for results.'),
+    }
+
+
+# --- Logistic regression add-ons (Hosmer-Lemeshow + Nagelkerke R²) ---------
+def hosmer_lemeshow(y_true, y_pred_prob, groups=10):
+    from scipy.stats import chi2 as _chi2_dist
+    data = pd.DataFrame({'true': y_true, 'prob': y_pred_prob})
+    data['decile'] = pd.qcut(
+        data['prob'], q=groups, labels=False, duplicates='drop')
+    obs = data.groupby('decile')['true'].sum()
+    exp = data.groupby('decile')['prob'].sum()
+    n_g = data.groupby('decile').size()
+    hl_stat = float(np.sum(
+        (obs - exp) ** 2 / (exp * (1 - exp / n_g) + 1e-10)))
+    df_hl = max(len(obs) - 2, 1)
+    p_hl = float(1 - _chi2_dist.cdf(hl_stat, df=df_hl))
+    return round(hl_stat, 3), df_hl, p_hl
+
+
+def nagelkerke_r2(result, n):
+    ll_null = result.llnull
+    ll_model = result.llf
+    r2_cs = 1 - np.exp((2 / n) * (ll_null - ll_model))
+    r2_max = 1 - np.exp((2 / n) * ll_null)
+    r2_nag = r2_cs / r2_max if r2_max > 0 else 0
+    return round(float(r2_nag), 3)
+
+
+# --- Multiple-testing correction (R8 baked in) -----------------------------
+INFERENTIAL_TEST_TYPES = {
+    't_test_independent', 't_test_paired',
+    'welch_t_test', 'mann_whitney',
+    'wilcoxon', 'anova_oneway',
+    'kruskal_wallis', 'friedman',
+    'rm_anova', 'mixed_anova',
+    'chi_square', 'fisher_exact',
+    'mcnemar', 'pearson', 'spearman',
+    'logistic_regression', 'linear_regression',
+    'cox_regression', 'log_rank',
+    'kappa', 'icc',
+}
+
+
+def apply_correction_if_needed(results_list):
+    from statsmodels.stats.multitest import multipletests
+    inferential = [
+        r for r in results_list
+        if r.get('test_type') in INFERENTIAL_TEST_TYPES
+        and r.get('p') is not None
+    ]
+    n = len(inferential)
+    if n < 3:
+        return results_list, None
+
+    method = 'bonferroni' if n <= 5 else 'fdr_bh'
+    label = 'Bonferroni' if n <= 5 else 'Benjamini-Hochberg FDR'
+    p_vals = [r['p'] for r in inferential]
+    _, corrected, _, _ = multipletests(p_vals, alpha=0.05, method=method)
+    for i, r in enumerate(inferential):
+        r['p_corrected'] = float(corrected[i])
+        r['p_corrected_display'] = fmt_p(float(corrected[i]))
+        r['correction_method'] = label
+    return results_list, {'method': label, 'n_tests': n}
+
+
+# ---------------------------------------------------------------------------
+# Reference accuracy check — invoked only via `python results.py`
+# ---------------------------------------------------------------------------
+if __name__ == '__main__':
+    GroupA = [14, 16, 18, 20, 22, 24, 19, 21, 17, 23,
+              15, 25, 18, 20, 22, 16, 19, 21, 23, 17]
+    GroupB = [10, 12, 14, 16, 18, 20, 15, 17, 13, 19,
+              11, 21, 14, 16, 18, 12, 15, 17, 19, 13]
+    df_test = pd.DataFrame({
+        'value': GroupA + GroupB,
+        'group': ['A'] * 20 + ['B'] * 20,
+    })
+
+    from scipy.stats import ttest_ind
+    t_val, p_val = ttest_ind(GroupA, GroupB, equal_var=True, alternative='two-sided')
+    assert abs(t_val - 4.47) < 0.1, f"t-test FAIL: got {t_val}, expected ~4.47"
+    assert p_val < 0.001, f"t-test p FAIL: got {p_val}"
+    print("t-test accuracy: PASS")
+
+    from scipy.stats import pearsonr
+    r_val, _ = pearsonr([1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+                        [2, 4, 5, 4, 5, 7, 8, 9, 10, 12])
+    assert abs(r_val - 0.971) < 0.01, f"Pearson FAIL: got {r_val}"
+    print("Pearson accuracy: PASS")
+
+    lo, hi = wilson_ci(90, 100)
+    assert 0.82 < lo < 0.84, f"Wilson CI FAIL: lower = {lo}"
+    print(f"Wilson CI accuracy: PASS  (lo={lo}, hi={hi})")
+
+    print("All accuracy checks PASSED.")
+    print("Phase A complete — all tests built with safety rules baked in.")
