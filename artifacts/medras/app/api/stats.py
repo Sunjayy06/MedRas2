@@ -25,6 +25,7 @@ from pydantic import BaseModel, Field
 from app.core.limiter import limiter
 from app.core.logging import get_logger
 from app.services import (
+    chatboxes,
     data_quality,
     dataset_store,
     dummy_data,
@@ -734,6 +735,48 @@ async def variable_assistant_endpoint(
         "auto_coding_plan": coding,
         "blocking_issues": variable_issues.has_blocking_issues(issues),
     }
+
+
+# ---------------------------------------------------------------------------
+# Chatboxes 2/3/4 — Normality / Plan / Results explainers
+# ---------------------------------------------------------------------------
+
+
+class ChatboxRequest(BaseModel):
+    job_id: str = Field(..., min_length=1, max_length=64)
+    message: str = Field(..., min_length=1, max_length=600)
+
+
+def _chatbox_context(job_id: str, kind: str) -> Dict[str, Any]:
+    entry = dataset_store.get(job_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Dataset expired or not found.")
+    if kind == "normality":
+        return {"columns": (entry.meta.get("normality") or {}).get("columns") or []}
+    if kind == "plan":
+        return {"plan": entry.meta.get("plan") or {}}
+    if kind == "results":
+        return {"results": entry.meta.get("results") or {}}
+    return {}
+
+
+@router.get("/chat/{kind}/opening/{job_id}")
+async def chatbox_opening(kind: str, job_id: str) -> Dict[str, Any]:
+    if kind not in ("normality", "plan", "results"):
+        raise HTTPException(status_code=404, detail="Unknown chatbox kind.")
+    ctx = _chatbox_context(job_id, kind)
+    return {"role": "system", "text": chatboxes.opening_message(kind, ctx)}
+
+
+@router.post("/chat/{kind}")
+@limiter.limit("60/minute")
+async def chatbox_reply(
+    request: Request, kind: str, payload: ChatboxRequest,
+) -> Dict[str, Any]:
+    if kind not in ("normality", "plan", "results"):
+        raise HTTPException(status_code=404, detail="Unknown chatbox kind.")
+    ctx = _chatbox_context(payload.job_id, kind)
+    return chatboxes.reply(kind, payload.message, ctx)
 
 
 # ---------------------------------------------------------------------------

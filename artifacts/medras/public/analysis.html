@@ -587,6 +587,19 @@
           <button type="button" class="btn btn-secondary" data-action="back-to-review" data-testid="button-normality-back">&larr; Back to Review data</button>
           <button type="button" class="btn btn-primary" data-action="continue-to-plan" data-testid="button-normality-continue">Continue to Plan &rarr;</button>
         </div>
+
+        <!-- Chatbox 2 — Normality assistant -->
+        <div class="se-section-label">NORMALITY ASSISTANT</div>
+        <p class="se-chat-blurb">Ask me anything about normality. I explain — the statistical engine calculates.</p>
+        <div class="se-assistant-panel" data-testid="chatbox-normality-panel">
+          <div class="se-chat-thread" id="cb-normality-thread" data-testid="chatbox-normality-thread"></div>
+          <div class="se-chip-row" id="cb-normality-chips" data-testid="chatbox-normality-chips"></div>
+          <form class="se-chat-form" id="cb-normality-form" data-testid="chatbox-normality-form" autocomplete="off">
+            <input type="text" id="cb-normality-input" data-testid="chatbox-normality-input"
+              placeholder="Ask: e.g. ‘what does non-normal mean?’" maxlength="500" />
+            <button type="submit" class="btn btn-primary" data-testid="button-chatbox-normality-send">Send</button>
+          </form>
+        </div>
       </section>
 
       <!-- ===========================================================
@@ -631,6 +644,19 @@
           <button type="button" class="btn btn-secondary" data-action="back-to-normality" data-testid="button-plan-back">&larr; Back to Normality</button>
           <button type="button" class="btn btn-primary" data-action="run-analysis" disabled data-testid="button-run-analysis">Run analysis &rarr;</button>
         </div>
+
+        <!-- Chatbox 3 — Plan assistant (with FIX R9 add/remove actions) -->
+        <div class="se-section-label">PLAN ASSISTANT</div>
+        <p class="se-chat-blurb">Ask me about your plan. I explain and can add or remove tests — the statistical engine calculates.</p>
+        <div class="se-assistant-panel" data-testid="chatbox-plan-panel">
+          <div class="se-chat-thread" id="cb-plan-thread" data-testid="chatbox-plan-thread"></div>
+          <div class="se-chip-row" id="cb-plan-chips" data-testid="chatbox-plan-chips"></div>
+          <form class="se-chat-form" id="cb-plan-form" data-testid="chatbox-plan-form" autocomplete="off">
+            <input type="text" id="cb-plan-input" data-testid="chatbox-plan-input"
+              placeholder="Ask: e.g. ‘also run survival analysis’" maxlength="500" />
+            <button type="submit" class="btn btn-primary" data-testid="button-chatbox-plan-send">Send</button>
+          </form>
+        </div>
       </section>
 
       <!-- ===========================================================
@@ -648,6 +674,19 @@
         <div class="se-actions">
           <button type="button" class="btn btn-secondary" data-action="back-to-plan" data-testid="button-results-back">&larr; Back to Plan</button>
           <button type="button" class="btn btn-primary" data-action="continue-to-export" data-testid="button-results-continue">Continue to Export &rarr;</button>
+        </div>
+
+        <!-- Chatbox 4 — Results assistant -->
+        <div class="se-section-label">RESULTS ASSISTANT</div>
+        <p class="se-chat-blurb">Ask me what your results mean. I explain — the statistical engine calculates.</p>
+        <div class="se-assistant-panel" data-testid="chatbox-results-panel">
+          <div class="se-chat-thread" id="cb-results-thread" data-testid="chatbox-results-thread"></div>
+          <div class="se-chip-row" id="cb-results-chips" data-testid="chatbox-results-chips"></div>
+          <form class="se-chat-form" id="cb-results-form" data-testid="chatbox-results-form" autocomplete="off">
+            <input type="text" id="cb-results-input" data-testid="chatbox-results-input"
+              placeholder="Ask: e.g. ‘what does p = 0.023 mean?’" maxlength="500" />
+            <button type="submit" class="btn btn-primary" data-testid="button-chatbox-results-send">Send</button>
+          </form>
         </div>
       </section>
 

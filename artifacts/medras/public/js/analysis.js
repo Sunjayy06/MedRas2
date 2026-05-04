@@ -49,6 +49,10 @@ const state = {
   confirmedTests: null,    // Set<string>
   confirmedGraphs: null,   // Set<string>
   results: null,           // results-payload from /run-analysis
+
+  // --- Chatboxes 2/3/4 (PART 5) ---
+  chatThreads: { normality: [], plan: [], results: [] },
+  chatOpened:  { normality: false, plan: false, results: false },
 };
 
 /* ------------------------------------------------------------------ */
@@ -771,6 +775,8 @@ function ingestDataset(data) {
     state.confirmedTests = null;
     state.confirmedGraphs = null;
     state.results = null;
+    state.chatThreads = { normality: [], plan: [], results: [] };
+    state.chatOpened  = { normality: false, plan: false, results: false };
   }
   state.jobId = data.job_id;
   state.summary = data.summary;
@@ -2549,6 +2555,7 @@ async function loadNormality() {
     const data = await api(`/normality/${state.jobId}`);
     state.normality = data;
     renderNormality();
+    openChatbox("normality");
     setStatus(status, `Tested ${data.columns.length} scale variable(s).`, "success");
   } catch (err) {
     setStatus(status, `Could not load: ${err.message}`, "error");
@@ -2643,6 +2650,7 @@ async function loadPlan() {
     state.confirmedTests = new Set((data.plan.tests || []).map((t) => t.id));
     state.confirmedGraphs = new Set((data.plan.graphs || []).map((g) => g.id));
     renderPlan();
+    openChatbox("plan");
     setStatus(status, "", "");
   } catch (err) {
     setStatus(status, `Could not build plan: ${err.message}`, "error");
@@ -2729,6 +2737,7 @@ async function runAnalysis() {
     setStatus(status, "Done.", "success");
     showScreen("results");
     renderResults();
+    openChatbox("results");
   } catch (err) {
     setStatus(status, `Run failed: ${err.message}`, "error");
   }
@@ -2860,6 +2869,185 @@ function bindResults() {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Chatboxes 2/3/4 — Normality / Plan / Results explainers           */
+/*  (PART 5 of master spec; FIX R9 safety net for chatbox 3)          */
+/* ------------------------------------------------------------------ */
+
+const CHATBOX_CHIPS = {
+  normality: [
+    "What does non-normal mean?",
+    "What does a QQ plot show?",
+    "Explain skewness in plain terms",
+    "Why does normality matter?",
+  ],
+  plan: [
+    "Also run survival analysis",
+    "I don't need regression",
+    "What is the difference between t-test and Mann-Whitney?",
+    "Explain ANOVA",
+  ],
+  results: [
+    "What does p = 0.023 mean?",
+    "What does the OR mean clinically?",
+    "Help me write a sentence for the paper",
+    "Explain a limitation of this analysis",
+  ],
+};
+
+// FIX R9 — safe parser for chatbox 3 action JSON.
+function parseAIAction(responseText) {
+  try { return JSON.parse(responseText); } catch (e) {
+    const m = responseText.match(/\{[\s\S]*"action"[\s\S]*\}/);
+    if (m) { try { return JSON.parse(m[0]); } catch (e2) { return null; } }
+    return null;
+  }
+}
+
+function renderChatThread(kind) {
+  const out = document.getElementById(`cb-${kind}-thread`);
+  if (!out) return;
+  const thread = state.chatThreads[kind] || [];
+  out.innerHTML = thread.map((m, i) => {
+    const cls = ({ system: "is-system", user: "is-user", action: "is-action",
+                   ai: "is-system", clarify: "is-clarify" })[m.role] || "is-system";
+    return `<div class="se-chat-msg ${cls}" data-testid="cb-${kind}-msg-${i}-${m.role}">${escapeHtml(m.text)}</div>`;
+  }).join("");
+  out.scrollTop = out.scrollHeight;
+}
+
+function renderChatChips(kind) {
+  const out = document.getElementById(`cb-${kind}-chips`);
+  if (!out) return;
+  const chips = CHATBOX_CHIPS[kind] || [];
+  out.innerHTML = chips.map((c, i) =>
+    `<button type="button" class="se-chip" data-testid="cb-${kind}-chip-${i}">${escapeHtml(c)}</button>`
+  ).join("");
+  Array.from(out.querySelectorAll(".se-chip")).forEach((btn, i) => {
+    btn.addEventListener("click", () => sendChatMessage(kind, chips[i]));
+  });
+}
+
+async function openChatbox(kind) {
+  if (state.chatOpened[kind] || !state.jobId) return;
+  state.chatOpened[kind] = true;
+  renderChatChips(kind);
+  try {
+    const res = await api(`/chat/${kind}/opening/${state.jobId}`);
+    state.chatThreads[kind].push({ role: "system", text: res.text || "" });
+  } catch (err) {
+    state.chatThreads[kind].push({
+      role: "system",
+      text: "Ask me anything about this screen. I explain — the statistical engine calculates.",
+    });
+  }
+  renderChatThread(kind);
+}
+
+async function sendChatMessage(kind, message) {
+  const text = (message || "").trim();
+  if (!text || !state.jobId) return;
+  state.chatThreads[kind].push({ role: "user", text });
+  renderChatThread(kind);
+  const input = document.getElementById(`cb-${kind}-input`);
+  if (input) input.value = "";
+
+  try {
+    const res = await api(`/chat/${kind}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ job_id: state.jobId, message: text }),
+    });
+    if (kind === "plan") {
+      handlePlanChatResponse(res);
+    } else {
+      state.chatThreads[kind].push({
+        role: res.role || "ai",
+        text: res.text || "",
+      });
+    }
+  } catch (err) {
+    state.chatThreads[kind].push({ role: "clarify", text: `Could not answer: ${err.message}` });
+  }
+  renderChatThread(kind);
+}
+
+// FIX R9 handler — parses ACTION JSON, mutates the plan, falls back to text.
+function handlePlanChatResponse(res) {
+  const raw = res && res.text ? res.text : "";
+  const action = parseAIAction(raw);
+  if (action && action.action && action.test_id) {
+    if (action.action === "add_test") {
+      addTestToPlanLocal(action.test_id, action.reason || "");
+      state.chatThreads.plan.push({
+        role: "action",
+        text: `Added: ${action.test_id}. ${action.reason || ""}`.trim(),
+      });
+      return;
+    }
+    if (action.action === "remove_test") {
+      removeTestFromPlanLocal(action.test_id);
+      state.chatThreads.plan.push({
+        role: "action",
+        text: `Removed: ${action.test_id}.`,
+      });
+      return;
+    }
+  }
+  // No actionable JSON — strip any code fences / json blocks then show prose.
+  const textPart = raw
+    .replace(/```[\s\S]*?```/g, "")
+    .replace(/\{[\s\S]*\}/g, "")
+    .trim();
+  if (textPart.length > 0) {
+    state.chatThreads.plan.push({ role: res.role || "ai", text: textPart });
+  } else {
+    state.chatThreads.plan.push({
+      role: "ai",
+      text: "I understood your request. To add or remove a test, you can also "
+          + "use the tick buttons on the test cards above.",
+    });
+  }
+}
+
+function addTestToPlanLocal(testId, reason) {
+  if (!state.plan) return;
+  state.plan.tests = state.plan.tests || [];
+  if (!state.plan.tests.some((t) => t.id === testId)) {
+    state.plan.tests.push({
+      id: testId,
+      title: testId,
+      why: reason || "Added from the assistant.",
+    });
+  }
+  if (!state.confirmedTests) state.confirmedTests = new Set();
+  state.confirmedTests.add(testId);
+  renderPlan();
+}
+
+function removeTestFromPlanLocal(testId) {
+  if (state.confirmedTests) state.confirmedTests.delete(testId);
+  if (state.plan && state.plan.tests) {
+    // Mark removed (greyed) by unchecking confirmedTests; renderPlan
+    // applies is-removed class via the toggle state.
+    renderPlan();
+  }
+}
+
+function bindChatbox(kind) {
+  const form = document.getElementById(`cb-${kind}-form`);
+  if (!form) return;
+  form.addEventListener("submit", (ev) => {
+    ev.preventDefault();
+    const input = document.getElementById(`cb-${kind}-input`);
+    if (input && input.value.trim()) sendChatMessage(kind, input.value);
+  });
+}
+
+function bindChatboxes() {
+  ["normality", "plan", "results"].forEach(bindChatbox);
+}
+
+/* ------------------------------------------------------------------ */
 /*  Step 8 — Export                                                    */
 /* ------------------------------------------------------------------ */
 
@@ -2922,6 +3110,14 @@ function restart() {
   state.confirmedTests = null;
   state.confirmedGraphs = null;
   state.results = null;
+  state.chatThreads = { normality: [], plan: [], results: [] };
+  state.chatOpened  = { normality: false, plan: false, results: false };
+  ["normality", "plan", "results"].forEach((k) => {
+    const t = document.getElementById(`cb-${k}-thread`);
+    if (t) t.innerHTML = "";
+    const c = document.getElementById(`cb-${k}-chips`);
+    if (c) c.innerHTML = "";
+  });
   setStatus($("#upload-status"), "");
   setStatus($("#practice-status"), "");
   setStatus($("#quality-status"), "");
@@ -2971,6 +3167,7 @@ function initApp() {
     bindPlan();
     bindResults();
     bindExport();
+    bindChatboxes();
     bindPassBadgeTooltip();
     bindStepNavBack();
     showScreen("1");

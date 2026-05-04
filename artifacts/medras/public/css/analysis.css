@@ -1758,6 +1758,14 @@ html[data-medras-init="ok"] .se-actions-fallback { display: none; }
 }
 .se-chat-form .btn { min-height: 40px; }
 
+/* Chatboxes 2/3/4 — always-visible blurb above the panel */
+.se-chat-blurb {
+  margin: 6px 0 10px;
+  font-size: 12.5px;
+  color: var(--color-text-muted, #5b6677);
+  font-style: italic;
+}
+
 /* Confirm validation banner */
 .se-validation {
   margin-top: 16px;
