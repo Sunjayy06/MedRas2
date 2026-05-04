@@ -1,0 +1,221 @@
+Add a Practice Data Generator and Excel Download feature to MedRAS.
+
+IMPORTANT RULES:
+- Do NOT modify existing analysis logic
+- Do NOT edit results.py or plan.py
+- Only ADD new files, routes, and UI
+- Keep current workflow unchanged
+
+--------------------------------------------------
+PART 1 — START SCREEN (HOMEPAGE)
+--------------------------------------------------
+
+Replace current start screen with ONLY TWO CARDS:
+
+1. CARD A — "I have my data"
+- White background
+- Icon: 📂
+- Title: I have my data
+- Description: Upload Excel and run analysis
+- Button: Start with my data →
+- Action: Go to existing workflow (no changes)
+
+2. CARD B — "Generate practice data"
+- Same style
+- Icon: 🔬
+- Purple button (#7C3AED)
+- Button: Generate practice data →
+- Small note: "No real patient data needed"
+- Action: Open new Practice Data Wizard
+
+Layout:
+- Desktop: 2 cards side by side
+- Mobile: stacked
+
+--------------------------------------------------
+PART 2 — PRACTICE DATA WIZARD (6 STEPS)
+--------------------------------------------------
+
+Create a step-by-step wizard (same UI style as existing flow)
+
+Step 1:
+Ask: Study objective (text area, required)
+
+Step 2:
+Ask: Outcome variable (text, required)
+
+Step 3:
+Ask: Variables (multi-line text)
+Example:
+Age
+Gender
+HbA1c
+BMI
+
+After user enters:
+- Detect type automatically:
+  Age → Scale
+  Gender → Nominal
+  HbA1c → Scale
+  Status/Outcome → Binary
+- Show table:
+  Variable | Type | Dropdown to edit
+
+Step 4:
+Ask: Sample size
+- Default: 60
+- Range: 20–500
+
+Step 5:
+Show dynamic inputs based on variables:
+- Gender → Male %
+- Disease → % with condition
+- Age → Min / Max
+- Outcome → % good outcome
+- Optional notes field
+
+Step 6:
+Ask expected result (optional)
+Example: "HbA1c higher in diabetics"
+
+Next → Show summary screen
+
+--------------------------------------------------
+SUMMARY SCREEN
+--------------------------------------------------
+
+Show:
+- Study
+- Outcome
+- Variables
+- Sample size
+- Requirements
+- Expected result (if given)
+
+Buttons:
+- Edit answers
+- Generate data →
+
+--------------------------------------------------
+LOADING SCREEN
+--------------------------------------------------
+
+Show spinner with changing messages:
+- Creating variables
+- Applying medical ranges
+- Adding variation
+- Preparing Excel
+
+--------------------------------------------------
+RESULT SCREEN
+--------------------------------------------------
+
+Show:
+- Number of patients
+- Number of variables
+- Realistic data applied
+- 5% missing data added
+
+Buttons:
+1. Use this data for analysis →
+2. Download Excel
+
+--------------------------------------------------
+PART 3 — DATA GENERATION ENGINE
+--------------------------------------------------
+
+Create new file:
+
+app/services/data_generator.py
+
+It should:
+- Generate realistic medical datasets
+- Use normal distributions
+- Apply medical ranges (HbA1c, BMI, etc.)
+- Create categorical variables (Gender, Yes/No)
+- Add 5% missing values
+- Apply expected effect if user specified
+  (e.g. HbA1c higher in diabetics)
+
+Also create function:
+save_to_excel()
+
+Excel format:
+- Row 1: RED disclaimer (practice data)
+- Row 2: Blue header
+- Alternating row shading
+- Auto column width
+
+--------------------------------------------------
+PART 4 — BACKEND ROUTES
+--------------------------------------------------
+
+Add these APIs:
+
+1. POST /api/generate-practice-data
+- Generate dataset
+- Save temporary Excel file
+- Return file for download
+- Store session info
+
+2. POST /api/use-practice-for-analysis
+- Load generated dataset
+- Push into analysis pipeline
+
+3. GET /export/<id>/excel-original
+- Download original dataset
+
+4. GET /export/<id>/excel-cleaned
+- Download cleaned dataset
+
+--------------------------------------------------
+PART 5 — EXPORT SCREEN
+--------------------------------------------------
+
+Add Excel download cards:
+
+If cleaning was done:
+- Download Original Excel
+- Download Cleaned Excel
+
+If not:
+- Only one Download Excel button
+
+Also add:
+- "Download everything (Word + Excel)"
+
+--------------------------------------------------
+PART 6 — PRACTICE DATA WARNING
+--------------------------------------------------
+
+If practice data is used:
+
+1. Show banner on all steps:
+"⚠ Practice data — for learning only"
+
+2. Add RED disclaimer in Word report:
+"NOT REAL PATIENT DATA — DO NOT PUBLISH"
+
+--------------------------------------------------
+FINAL TESTING REQUIREMENTS
+--------------------------------------------------
+
+Must work:
+
+1. Start screen shows 2 cards
+2. Wizard completes all 6 steps
+3. Excel file downloads correctly
+4. Data looks realistic
+5. Expected effect visible (if given)
+6. "Use for analysis" works
+7. Export screen shows Excel options
+8. Real data workflow remains unchanged
+
+--------------------------------------------------
+
+When everything works:
+Print:
+
+"Practice data generator complete"
+"Excel export working"
+"System ready"
