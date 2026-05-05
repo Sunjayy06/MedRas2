@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Plagiarism check results · MedRAS</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23ffc857'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-family='Inter,sans-serif' font-size='17' font-weight='800' fill='%23071430'%3EP%3C/text%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="/plagiarism-module/css/style.css?v=2026050501" />
+  </head>
+  <body data-testid="page-pm-results">
+    <header class="pm-header">
+      <a href="/plagiarism-module/" class="pm-brand" data-testid="link-pm-home">
+        <span class="pm-brand-mark">P</span>
+        <span>Plagiarism &amp; AI Reduction</span>
+      </a>
+      <nav class="pm-nav" aria-label="Primary">
+        <a href="/plagiarism-module/checker.html" data-testid="link-new-check">Run another check</a>
+        <a href="/" data-testid="link-back-medras">MedRAS</a>
+      </nav>
+    </header>
+
+    <main class="pm-shell">
+      <span class="pm-eyebrow">Results</span>
+      <h1 class="pm-h1" data-testid="text-results-title">Your originality report.</h1>
+      <p class="pm-lede" data-testid="text-results-lede">
+        Two scores, a plain-language summary, and the passages that looked
+        risky. Lower scores mean safer writing.
+      </p>
+
+      <!-- Empty state -->
+      <div class="pm-surface-card pm-empty is-hidden" id="pm-empty" data-testid="state-empty">
+        <div class="pm-empty-icon">📄</div>
+        <h3>No results to show yet</h3>
+        <p>Run a check first to see scores and flagged passages here.</p>
+        <p style="margin-top: 18px;">
+          <a class="pm-btn pm-btn--primary" href="/plagiarism-module/checker.html" data-testid="button-empty-go">Open the checker</a>
+        </p>
+      </div>
+
+      <!-- Results -->
+      <div id="pm-results" data-testid="state-results">
+        <div class="pm-surface-card">
+          <div class="pm-score-grid">
+            <div class="pm-score-card" data-testid="card-score-overall">
+              <div class="pm-score-label">Originality risk</div>
+              <div class="pm-score-value">
+                <span id="pm-score-overall">—</span><span class="pm-score-unit">/ 100</span>
+              </div>
+              <div class="pm-score-bar"><div class="pm-score-bar-fill" id="pm-score-overall-bar" style="width:0"></div></div>
+              <div class="pm-score-verdict" id="pm-score-overall-verdict" data-testid="text-verdict-overall">—</div>
+            </div>
+            <div class="pm-score-card" data-testid="card-score-ai">
+              <div class="pm-score-label">AI-likelihood</div>
+              <div class="pm-score-value">
+                <span id="pm-score-ai">—</span><span class="pm-score-unit">/ 100</span>
+              </div>
+              <div class="pm-score-bar"><div class="pm-score-bar-fill" id="pm-score-ai-bar" style="width:0"></div></div>
+              <div class="pm-score-verdict" id="pm-score-ai-verdict" data-testid="text-verdict-ai">—</div>
+            </div>
+            <div class="pm-score-card" data-testid="card-score-words">
+              <div class="pm-score-label">Words analysed</div>
+              <div class="pm-score-value"><span id="pm-score-words">—</span></div>
+              <div class="pm-score-verdict" style="color: var(--pm-text-soft);" id="pm-score-flagcount" data-testid="text-flagcount"></div>
+            </div>
+          </div>
+
+          <div class="pm-summary" id="pm-summary" data-testid="text-summary">
+            Generating summary…
+          </div>
+
+          <h2 style="margin: 28px 0 6px; font-size: 18px; color: var(--pm-navy-900);">Flagged passages</h2>
+          <p class="pm-help" style="margin-bottom: 14px;">
+            Each item points to a specific excerpt the analyser thought was templated, AI-typical, or otherwise risky — and offers a one-line rewrite.
+          </p>
+          <div class="pm-flag-list" id="pm-flag-list" data-testid="list-flags"></div>
+
+          <div class="pm-meta" data-testid="text-meta">
+            <span>Engine: <strong id="pm-meta-model">—</strong></span>
+            <span>Checked: <strong id="pm-meta-time">—</strong></span>
+            <span id="pm-meta-filename" class="is-hidden"></span>
+          </div>
+
+          <div class="pm-actions" style="margin-top: 24px;">
+            <a href="/plagiarism-module/checker.html" class="pm-btn pm-btn--primary" data-testid="button-new-check">Run another check</a>
+            <a href="/plagiarism-module/checker.html?mode=reduce" class="pm-btn pm-btn--accent" data-testid="button-reduce">Reduce plagiarism →</a>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <footer class="pm-footer">© MedRAS — Plagiarism &amp; AI Reduction module</footer>
+
+    <script src="/plagiarism-module/js/results.js?v=2026050501" defer></script>
+  </body>
+</html>

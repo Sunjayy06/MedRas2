@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Check plagiarism score · MedRAS</title>
+    <meta name="description" content="Paste or upload text and get an originality score, AI-likelihood score, and flagged passages." />
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23ffc857'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-family='Inter,sans-serif' font-size='17' font-weight='800' fill='%23071430'%3EP%3C/text%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="/plagiarism-module/css/style.css?v=2026050501" />
+  </head>
+  <body data-testid="page-pm-checker">
+    <header class="pm-header">
+      <a href="/plagiarism-module/" class="pm-brand" data-testid="link-pm-home">
+        <span class="pm-brand-mark">P</span>
+        <span>Plagiarism &amp; AI Reduction</span>
+      </a>
+      <nav class="pm-nav" aria-label="Primary">
+        <a href="/plagiarism-module/" data-testid="link-nav-back">← Home</a>
+        <a href="/" data-testid="link-back-medras">MedRAS</a>
+      </nav>
+    </header>
+
+    <main class="pm-shell">
+      <span class="pm-eyebrow" data-testid="text-mode-eyebrow">Plagiarism checker</span>
+      <h1 class="pm-h1" data-testid="text-mode-title">Check your text in seconds.</h1>
+      <p class="pm-lede" data-testid="text-mode-lede">
+        Paste a passage or upload a document. We'll send it to OpenAI (with
+        Gemini as a fallback) and return an originality score, an
+        AI-likelihood score, and the specific passages that look risky.
+      </p>
+
+      <div class="pm-surface-card">
+        <h2 data-testid="text-input-title">1. Provide your text</h2>
+        <p class="pm-help">Up to ~5,000 words per check. Files are read in your browser session and sent over HTTPS.</p>
+
+        <div class="pm-tabs" role="tablist" aria-label="Input mode">
+          <button type="button" class="pm-tab is-active" data-tab="paste" role="tab" aria-selected="true" data-testid="tab-paste">Paste text</button>
+          <button type="button" class="pm-tab" data-tab="upload" role="tab" aria-selected="false" data-testid="tab-upload">Upload file</button>
+        </div>
+
+        <!-- Paste pane -->
+        <div class="pm-pane" data-pane="paste" data-testid="pane-paste">
+          <textarea
+            class="pm-textarea"
+            id="pm-text"
+            placeholder="Paste your draft here — abstract, paragraph, chapter section…"
+            data-testid="textarea-pm-text"
+          ></textarea>
+          <div class="pm-counter" id="pm-counter" data-testid="text-counter">
+            <span><span id="pm-count-chars">0</span> chars · <span id="pm-count-words">0</span> words</span>
+            <span>Limit: 30,000 chars</span>
+          </div>
+        </div>
+
+        <!-- Upload pane -->
+        <div class="pm-pane is-hidden" data-pane="upload" data-testid="pane-upload">
+          <div class="pm-dropzone" id="pm-dropzone" data-testid="dropzone-pm" tabindex="0" role="button" aria-label="Choose a file">
+            <div class="pm-dropzone-icon">⬆</div>
+            <div class="pm-dropzone-title">Click to choose a file or drop one here</div>
+            <div class="pm-dropzone-hint">Accepts .pdf, .docx, .txt, .md — up to 5 MB</div>
+            <div class="pm-dropzone-file is-hidden" id="pm-dropzone-filename" data-testid="text-filename"></div>
+            <input type="file" id="pm-file" accept=".pdf,.docx,.txt,.md" hidden data-testid="input-pm-file" />
+          </div>
+        </div>
+
+        <div class="pm-actions">
+          <button type="button" class="pm-btn pm-btn--primary" id="pm-run" data-testid="button-pm-run">
+            Check plagiarism score
+          </button>
+          <button type="button" class="pm-btn pm-btn--secondary" id="pm-clear" data-testid="button-pm-clear">
+            Clear
+          </button>
+          <span style="margin-left:auto; font-size:13px; color: var(--pm-text-soft);">
+            Engine:
+            <select id="pm-provider" data-testid="select-pm-provider" style="margin-left:6px; padding:5px 8px; border-radius:6px; border:1px solid var(--pm-border); background:#fff; font: inherit;">
+              <option value="auto" selected>Auto (OpenAI → Gemini)</option>
+              <option value="openai">OpenAI only</option>
+              <option value="gemini">Gemini only</option>
+            </select>
+          </span>
+        </div>
+
+        <div class="pm-status" id="pm-status" data-testid="status-pm" role="status" aria-live="polite"></div>
+      </div>
+    </main>
+
+    <footer class="pm-footer">© MedRAS — Plagiarism &amp; AI Reduction module</footer>
+
+    <script src="/plagiarism-module/js/checker.js?v=2026050501" defer></script>
+  </body>
+</html>

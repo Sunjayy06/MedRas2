@@ -10,6 +10,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from .health import router as health_router
+from .plagiarism import router as plagiarism_router
 from .practice import router as practice_router
 from .sample_size import router as sample_size_router
 from .stats import router as stats_router
@@ -19,3 +20,4 @@ router.include_router(health_router, tags=["system"])
 router.include_router(sample_size_router)
 router.include_router(stats_router)
 router.include_router(practice_router)
+router.include_router(plagiarism_router)

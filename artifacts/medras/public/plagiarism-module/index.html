@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Plagiarism & AI Reduction · MedRAS</title>
+    <meta name="description" content="Check writing for plagiarism and AI-generated phrasing, or rewrite text to read more original — powered by OpenAI and Google Gemini." />
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23ffc857'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-family='Inter,sans-serif' font-size='17' font-weight='800' fill='%23071430'%3EP%3C/text%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="/plagiarism-module/css/style.css?v=2026050501" />
+  </head>
+  <body data-testid="page-pm-home">
+    <header class="pm-header">
+      <a href="/plagiarism-module/" class="pm-brand" data-testid="link-pm-home">
+        <span class="pm-brand-mark">P</span>
+        <span>Plagiarism &amp; AI Reduction</span>
+      </a>
+      <nav class="pm-nav" aria-label="Primary">
+        <a href="/plagiarism-module/checker.html" data-testid="link-nav-checker">Check score</a>
+        <a href="/plagiarism-module/checker.html?mode=reduce" data-testid="link-nav-reduce">Reduce plagiarism</a>
+        <a href="/" data-testid="link-back-medras">← Back to MedRAS</a>
+      </nav>
+    </header>
+
+    <main class="pm-shell">
+      <span class="pm-eyebrow">A MedRAS module</span>
+      <h1 class="pm-h1">Write with confidence.<br/><span class="pm-grad">Originality, verified.</span></h1>
+      <p class="pm-lede">
+        Paste or upload your draft. We'll score how original it reads and how
+        AI-generated it sounds, flag specific passages with rewrite
+        suggestions, and — when you want — produce a more human-sounding
+        version automatically.
+      </p>
+
+      <section class="pm-cards" aria-label="Pick a tool">
+        <a class="pm-card pm-card--reduce" href="/plagiarism-module/checker.html?mode=reduce" data-testid="card-reduce">
+          <div class="pm-card-icon" aria-hidden="true">✎</div>
+          <h2 class="pm-card-title">Reduce plagiarism</h2>
+          <p class="pm-card-body">
+            Upload a document or paste your text. Our editor rewrites
+            templated phrasing into more natural prose while keeping every
+            number, citation, and technical term intact.
+          </p>
+          <span class="pm-card-cta" data-testid="link-card-reduce">Open the editor →</span>
+        </a>
+
+        <a class="pm-card pm-card--check" href="/plagiarism-module/checker.html" data-testid="card-check">
+          <div class="pm-card-icon" aria-hidden="true">⚖</div>
+          <h2 class="pm-card-title">Check plagiarism score</h2>
+          <p class="pm-card-body">
+            Get an originality score, an AI-likelihood score, and a list of
+            flagged passages with severity and suggested rewrites — in
+            seconds.
+          </p>
+          <span class="pm-card-cta" data-testid="link-card-check">Run a check →</span>
+        </a>
+      </section>
+
+      <p class="pm-footer" style="text-align:left; padding: 28px 0 0; color: rgba(255,255,255,0.55); font-size: 13px;">
+        Powered by OpenAI &amp; Google Gemini. Heuristic scoring — not a
+        match against a copyrighted database.
+      </p>
+    </main>
+
+    <footer class="pm-footer">© MedRAS — Medical Research Acceleration System</footer>
+  </body>
+</html>

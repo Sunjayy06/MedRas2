@@ -27,6 +27,7 @@ The backend is powered by Python 3.11 with FastAPI, served by Uvicorn. Static fi
 *   **Proposal Generator:** Facilitates drafting research proposals for various institutions.
 *   **Thesis & Article Writer:** Assists in compiling structured manuscripts and dissertation chapters.
 *   **Plagiarism & Compliance:** Offers originality scoring and citation verification.
+*   **Plagiarism & AI Reduction module** (`public/plagiarism-module/`): A self-contained module with three pages — `index.html` (navy-blue homepage with two cards: "Reduce plagiarism" and "Check plagiarism score"), `checker.html` (paste/upload + provider selector for the check or reduce flows), and `results.html` (originality + AI-likelihood score cards, plain-language summary, flagged-passage list with severity badges and rewrite suggestions). Backend lives in `app/api/plagiarism.py` exposing `POST /api/plagiarism/check` (JSON), `POST /api/plagiarism/check-file` (multipart for .pdf/.docx/.txt up to 5 MB), and `POST /api/plagiarism/reduce`. The service `app/services/plagiarism_analyzer.py` wraps both the OpenAI Python SDK (gpt-4o-mini) and the google-genai SDK (gemini-2.5-flash) with JSON-mode structured output; the default `provider="auto"` tries OpenAI first and falls back to Gemini on any failure (e.g. quota errors). Both providers use the existing `OPENAI_API_KEY` and `GEMINI_API_KEY` secrets — no integration setup needed. Scoring is heuristic (templated-phrasing + AI-cadence detection), not a database match — the UI is explicit about this.
 
 **System Design Choices:**
 Each module is designed with its own API router and UI components for modularity. An in-memory LRU cache is used for dataset storage in the Statistical Analysis Engine, ensuring efficient processing without disk I/O. Configuration is managed via environment variables for flexibility.
@@ -40,4 +41,6 @@ Each module is designed with its own API router and UI components for modularity
     *   `pandas`, `numpy`, `scipy`, `statsmodels`, `scikit-learn`, `lifelines`, `pingouin`, `scikit-posthocs`, `missingno`: Core statistical and data manipulation libraries.
     *   `reportlab`, `xlrd`: For report generation and Excel file handling.
     *   `slowapi`: For rate limiting API requests.
+    *   `openai`, `google-genai`: Python SDKs powering the Plagiarism & AI Reduction module (auto-fallback between providers).
+    *   `pypdf`, `python-docx`: Used for plain-text extraction from uploaded PDF and DOCX files in the plagiarism checker.
 *   **Frontend Libraries:** No external JavaScript frameworks are used; utilizes standard browser APIs.
