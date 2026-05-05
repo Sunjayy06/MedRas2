@@ -63,6 +63,7 @@ const state = {
     variables: [],   // [{name, type, min, max, percent, levels[]}]
     n: 60,
     effect: "",
+    instructions: "",   // Q5 — free-form notes for the Excel sheet
   },
   dataSource: null,  // "upload" | "template" | "custom"
 };
@@ -895,13 +896,20 @@ async function customWizardNext(from) {
     showCustomQ(3);
   } else if (from === 3) {
     showCustomQ(4);
+  } else if (from === 4) {
+    // Stash Q4 before moving on — Q5 → Generate also reads it back, but
+    // saving here means a Back-trip preserves what the user typed.
+    state.customWizard.effect = ($("#cw-q4-effect").value || "").trim();
+    showCustomQ(5);
   }
 }
 
 async function customWizardGenerate() {
   const status = $("#cw-status");
   const cw = state.customWizard;
+  // Re-read Q4 in case the user edited it without clicking Next, plus Q5.
   cw.effect = ($("#cw-q4-effect").value || "").trim();
+  cw.instructions = ($("#cw-q5-instructions").value || "").trim();
   if (!cw.variables.length) {
     setStatus(status, "No variables to generate — go back to question 1.", "error");
     return;
@@ -925,7 +933,7 @@ async function customWizardGenerate() {
       })),
       n: cw.n,
       expected_effect: cw.effect,
-      instructions: "",
+      instructions: cw.instructions,
       missing_pct: 5.0,
     });
     const data = await api(`/dataset/${created.job_id}`);
@@ -3399,7 +3407,7 @@ function restart() {
   // after a prior practice run doesn't inherit Regenerate / Download Excel
   // buttons or stale Q1-Q3 selections.
   state.dataSource = null;
-  state.customWizard = { activeQ: 1, variables: [], n: 60, effect: "" };
+  state.customWizard = { activeQ: 1, variables: [], n: 60, effect: "", instructions: "" };
   // restart() doesn't go through ingestDataset, so hide the practice banner
   // here too — otherwise it persists across "← Change file" → upload flows.
   try {

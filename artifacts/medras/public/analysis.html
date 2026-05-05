@@ -10,7 +10,7 @@
     />
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%232f6fed'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-family='Inter,sans-serif' font-size='18' font-weight='700' fill='white'%3EM%3C/text%3E%3C/svg%3E" />
     <link rel="stylesheet" href="/css/style.css" />
-    <link rel="stylesheet" href="/css/analysis.css?v=2026050502" />
+    <link rel="stylesheet" href="/css/analysis.css?v=2026050503" />
   </head>
   <body>
     <header class="site-header" data-testid="site-header">
@@ -296,7 +296,7 @@
       <section class="se-screen se-screen-narrow is-hidden" id="screen-2c-custom" data-testid="screen-2c-custom">
         <header class="se-screen-head">
           <h2>Build your own practice dataset</h2>
-          <p>Answer 4 quick questions. We'll generate fake patient data with the variables you describe — nothing is uploaded.</p>
+          <p>Answer 5 quick questions. We'll generate fake patient data with the variables you describe — nothing is uploaded.</p>
         </header>
 
         <div class="se-cw-progress" aria-label="Question progress">
@@ -307,6 +307,8 @@
           <span class="se-cw-dot" data-q="3">3</span>
           <span class="se-cw-rule"></span>
           <span class="se-cw-dot" data-q="4">4</span>
+          <span class="se-cw-rule"></span>
+          <span class="se-cw-dot" data-q="5">5</span>
         </div>
 
         <!-- Q1 -->
@@ -323,10 +325,10 @@
 
         <!-- Q2 -->
         <div class="se-cw-panel is-hidden" data-q="2" data-testid="panel-cw-q2">
-          <h3>2. How many patients?</h3>
-          <p class="se-hint">Pick a sample size between 20 and 500. Around 60 is a comfortable default for practice.</p>
+          <h3>2. What's the sample size?</h3>
+          <p class="se-hint">How many patients should we generate? Pick a number between 20 and 500. Around 60 is a comfortable default for practice.</p>
           <label class="se-field" style="max-width:240px;">
-            <span class="se-visually-hidden">Number of patients</span>
+            <span class="se-visually-hidden">Sample size (number of patients)</span>
             <input type="number" id="cw-q2-n" min="20" max="500" step="1" value="60" data-testid="input-cw-n" />
           </label>
           <div class="se-actions">
@@ -353,6 +355,17 @@
           <textarea id="cw-q4-effect" rows="4" placeholder="e.g. mean Harris Hip Score is about 8 points higher in the treatment group" data-testid="textarea-cw-effect"></textarea>
           <div class="se-actions">
             <button type="button" class="btn btn-secondary" data-cw-action="prev" data-from="4" data-testid="button-cw-q4-prev">← Back</button>
+            <button type="button" class="btn btn-primary" data-cw-action="next" data-from="4" data-testid="button-cw-q4-next">Next →</button>
+          </div>
+        </div>
+
+        <!-- Q5 -->
+        <div class="se-cw-panel is-hidden" data-q="5" data-testid="panel-cw-q5">
+          <h3>5. Any specific instructions for the Excel sheet? <span class="se-optional">(optional)</span></h3>
+          <p class="se-hint">Free-form notes — write anything you'd like the data to reflect. We'll do our best to honour it. Examples: <em>"male population should be higher than female"</em>, <em>"include some missing values in BMI"</em>, <em>"results should favour the treatment group"</em>, <em>"keep ages between 50 and 80"</em>.</p>
+          <textarea id="cw-q5-instructions" rows="5" placeholder="e.g. male patients should outnumber females 60/40, and include a few outliers in hemoglobin" data-testid="textarea-cw-instructions"></textarea>
+          <div class="se-actions">
+            <button type="button" class="btn btn-secondary" data-cw-action="prev" data-from="5" data-testid="button-cw-q5-prev">← Back</button>
             <button type="button" class="btn btn-primary" data-cw-action="generate" data-testid="button-cw-generate">Generate dataset</button>
           </div>
           <div id="cw-status" class="se-status" role="status" aria-live="polite" data-testid="status-cw"></div>
@@ -830,6 +843,6 @@
       </div>
     </footer>
 
-    <script src="/js/analysis.js?v=2026050502" defer></script>
+    <script src="/js/analysis.js?v=2026050503" defer></script>
   </body>
 </html>
