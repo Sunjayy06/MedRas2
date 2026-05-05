@@ -1,0 +1,96 @@
+Do not change anything that already works.
+Do not modify existing files unless 
+absolutely necessary.
+Keep all existing practice datasets 
+exactly as they are.
+
+Add only these two things:
+
+THING 1 — Custom dataset builder 
+in Step 2
+
+In Step 2 where the existing practice 
+datasets are shown, add one more option 
+at the end of that list:
+
+A card or button that says:
+"Build your own practice dataset"
+or similar wording
+
+When clicked, show a simple wizard 
+with 4 questions one at a time:
+
+Question 1: What variables do you want?
+Type each on a new line like Age, 
+Gender, HbA1c etc
+
+Question 2: How many patients?
+Number field, default 60
+
+Question 3: Any specific requirements?
+Show smart fields based on what 
+variables were typed — like gender 
+split percentage, disease percentage, 
+age range. All optional with 
+sensible defaults.
+
+Question 4: What result are you 
+expecting? Optional. Example: HbA1c 
+higher in diabetics. Leave blank 
+for random realistic data.
+
+After question 4 the system generates 
+the Excel using the existing 
+data_generator.py that is already built.
+
+THING 2 — Preview screen before 
+loading into analysis
+
+After generating the custom dataset 
+AND also after clicking any of the 
+existing ready-made datasets, show 
+a preview screen before loading 
+into the analysis.
+
+The preview shows:
+- First 10 rows of the data in a table
+- Column names and sample values
+- Total patients and variables count
+- A note saying variable types will 
+  be confirmed in Step 3
+
+Three buttons on the preview screen:
+1. "Use this data for analysis" — 
+   loads into analysis and continues
+2. "Regenerate with changes" — 
+   only for custom datasets, goes 
+   back to question 3 to adjust 
+   and regenerate
+3. "Download Excel" — downloads 
+   the file
+
+After clicking Use this data, the 
+flow continues exactly as normal 
+into Step 3, Step 4, Step 5, Step 6, 
+Step 7 with no changes to anything.
+
+The amber practice data banner should 
+show on every step when practice 
+data is being used.
+
+IMPORTANT RULES:
+Do not change the existing ready-made 
+datasets or how they work today.
+Do not change any analysis logic.
+Do not change results, export, 
+normality, or plan files.
+Use the existing data_generator.py 
+for generating custom data.
+Use the existing session handling.
+Build the simplest version that works.
+Make your own decisions on layout 
+and implementation details.
+
+When done run through all paths once 
+to confirm everything works then 
+checkpoint and stop.
