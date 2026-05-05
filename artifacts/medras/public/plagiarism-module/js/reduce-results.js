@@ -1,7 +1,10 @@
-/* Reduce-results page — streams the 3-stage rewrite pipeline progress
- * via NDJSON, renders a section-by-section progress bar, then shows
- * colour-coded cards with side-by-side original / rewritten text and
- * a download button that POSTs back to /api/plagiarism/export-docx.
+/* Reduce-results page — kicks off a background job, polls progress
+ * every 5 s, and renders each section card the moment it lands so a
+ * 200-page document feels live instead of waiting for one big payload.
+ *
+ * Replaces the previous NDJSON streaming approach: long-lived
+ * connections drop on mobile sleep, proxy timeouts, etc. Polling is
+ * boring and reliable.
  *
  * Input is read from sessionStorage key "pm:reduceInput", set by
  * checker.js when the user clicks "Reduce plagiarism".
@@ -11,9 +14,12 @@
 
   const INPUT_KEY = "pm:reduceInput";
   const RESULT_KEY = "pm:reduceResult";
+  const JOB_KEY = "pm:reduceJobId";
+  const POLL_INTERVAL_MS = 5000;
 
   const $ = (s) => document.querySelector(s);
 
+  // ---------- HTML / regex helpers ----------
   function escapeHtml(s) {
     return String(s == null ? "" : s)
       .replace(/&/g, "&amp;")
@@ -22,15 +28,9 @@
       .replace(/"/g, "&quot;")
       .replace(/'/g, "&#39;");
   }
-
   function escapeRegex(s) {
     return String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   }
-
-  // Build a single case-insensitive regex matching any protected term, with
-  // longest-first ordering so e.g. "p < 0.001" wins over "0.001". Returns
-  // ``null`` when no terms are supplied. The regex is recreated once per
-  // page render rather than once per card.
   let _termRegex = null;
   function buildTermRegex(terms) {
     if (!terms || !terms.length) return null;
@@ -40,25 +40,14 @@
     if (!cleaned.length) return null;
     cleaned.sort((a, b) => b.length - a.length);
     const pat = cleaned.map(escapeRegex).join("|");
-    try {
-      return new RegExp("(" + pat + ")", "g");
-    } catch (_) {
-      return null;
-    }
+    try { return new RegExp("(" + pat + ")", "g"); } catch (_) { return null; }
   }
-
-  // Escape ``text`` and wrap any matches of ``rx`` in <mark>. Done in a
-  // single pass so HTML in the protected terms (e.g. "<5%") is escaped
-  // BEFORE being injected — the input is treated as plain text throughout.
+  // XSS-safe: escape THEN inject. Protected terms can contain <, >, &.
   function highlightTerms(text, rx) {
     const safe = String(text == null ? "" : text);
-    if (!rx) return escapeHtml(safe);
-    let out = "";
-    let lastIdx = 0;
-    rx.lastIndex = 0;
-    let m;
+    if (!rx) return escapeHtml(safe) || '<span class="pm-compare-empty">—</span>';
+    let out = ""; let lastIdx = 0; rx.lastIndex = 0; let m;
     while ((m = rx.exec(safe)) !== null) {
-      // Defensive against zero-width matches.
       if (m.index === rx.lastIndex) { rx.lastIndex++; continue; }
       out += escapeHtml(safe.slice(lastIdx, m.index));
       out += '<mark class="pm-protected-term">' + escapeHtml(m[0]) + '</mark>';
@@ -66,6 +55,17 @@
     }
     out += escapeHtml(safe.slice(lastIdx));
     return out || '<span class="pm-compare-empty">—</span>';
+  }
+  function fmtDuration(seconds) {
+    if (seconds == null || !isFinite(seconds) || seconds < 0) return "—";
+    const s = Math.round(seconds);
+    if (s < 60) return s + "s";
+    const m = Math.floor(s / 60);
+    const r = s % 60;
+    if (m < 60) return r ? `${m}m ${r}s` : `${m}m`;
+    const h = Math.floor(m / 60);
+    const rm = m % 60;
+    return rm ? `${h}h ${rm}m` : `${h}h`;
   }
 
   // ---------- DOM refs ----------
@@ -78,6 +78,9 @@
   const progressPct = $("#pm-progress-pct");
   const progressCurrent = $("#pm-progress-current");
   const progressList = $("#pm-progress-list");
+  const progressPass = $("#pm-progress-pass");
+  const progressEta = $("#pm-progress-eta");
+  const progressCounts = $("#pm-progress-counts");
   const sectionCards = $("#pm-section-cards");
   const errorMessage = $("#pm-error-message");
   const downloadBtn = $("#pm-download");
@@ -85,19 +88,25 @@
   const statSections = $("#pm-stat-sections");
   const statEdits = $("#pm-stat-edits");
   const statTerms = $("#pm-stat-terms");
+  const retryBanner = $("#pm-retry-banner");
+  const retryBtn = $("#pm-retry-btn");
+  const retryMsg = $("#pm-retry-message");
 
   // ---------- State ----------
-  let totalSections = 0;     // non-skipped count (the units of progress)
-  let totalSteps = 0;        // totalSections * 3 stages + skipped sections
-  let completedSteps = 0;
   let docFilename = null;
   let docTitle = "Rewritten document";
+  let jobId = null;
+  let pollTimer = null;
+  let pollingTerminated = false;     // once true, no more polls scheduled
+  let renderedIndices = new Set();   // section indices we've already drawn a card for
+  let sectionListBuilt = false;      // progress list built once on first poll
+  let lastSnapshot = null;           // most recent /jobs/{id} response
+  let inputProtectedTerms = [];
 
   // ---------- Boot ----------
   let input;
-  try {
-    input = JSON.parse(sessionStorage.getItem(INPUT_KEY) || "null");
-  } catch (_) { input = null; }
+  try { input = JSON.parse(sessionStorage.getItem(INPUT_KEY) || "null"); }
+  catch (_) { input = null; }
 
   if (!input || (!input.text && !(input.sections && input.sections.length))) {
     progressCard.classList.add("is-hidden");
@@ -106,15 +115,28 @@
   }
   docFilename = input.filename || null;
   docTitle = input.title || "Rewritten document";
+  inputProtectedTerms = Array.isArray(input.protected_terms) ? input.protected_terms : [];
+  _termRegex = buildTermRegex(inputProtectedTerms);
 
-  startStream(input).catch((err) => {
+  // The summary card and section-cards container live inside #pm-results.
+  // For incremental rendering we reveal #pm-results immediately, but
+  // keep the summary stats showing "—" until completion. The user sees
+  // section cards stream in below the (initially placeholder) stats.
+  // Reveal results container so cards can fade in as they arrive.
+  resultsBlock.classList.remove("is-hidden");
+  // Hide download until everything finished — partial download could mislead.
+  downloadBtn.disabled = true;
+
+  startJob(input).catch((err) => {
     showError(err && err.message ? err.message : "Network error.");
   });
 
-  // ---------- Streaming ----------
-  async function startStream(payload) {
+  // ---------- Job lifecycle ----------
+  async function startJob(payload) {
     const body = {
       protected_terms: payload.protected_terms || [],
+      title: docTitle,
+      filename: docFilename,
     };
     if (payload.sections && payload.sections.length) {
       body.sections = payload.sections;
@@ -122,229 +144,356 @@
       body.text = payload.text;
     }
 
-    const res = await fetch("/api/plagiarism/reduce-stream", {
+    const res = await fetch("/api/plagiarism/jobs", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-
+    const json = await res.json().catch(() => ({}));
     if (!res.ok) {
-      let detail = `HTTP ${res.status}`;
-      try {
-        const j = await res.json();
-        detail = j.detail || detail;
-      } catch (_) { /* keep default */ }
-      throw new Error(detail);
+      throw new Error(json.detail || `Failed to start job (HTTP ${res.status})`);
     }
-    if (!res.body) throw new Error("Streaming not supported by this browser.");
+    jobId = json.job_id;
+    try { sessionStorage.setItem(JOB_KEY, jobId); } catch (_) { /* quota */ }
+    progressCurrent.textContent = `Queued ${json.total_sections} section${json.total_sections === 1 ? "" : "s"}…`;
 
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buf = "";
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      buf += decoder.decode(value, { stream: true });
-      let nl;
-      while ((nl = buf.indexOf("\n")) !== -1) {
-        const line = buf.slice(0, nl).trim();
-        buf = buf.slice(nl + 1);
-        if (!line) continue;
-        let evt;
-        try { evt = JSON.parse(line); } catch (_) { continue; }
-        handleEvent(evt);
-      }
-    }
-    // Flush any trailing line.
-    const trailing = buf.trim();
-    if (trailing) {
-      try { handleEvent(JSON.parse(trailing)); } catch (_) { /* ignore */ }
-    }
+    // Poll once immediately, then every POLL_INTERVAL_MS.
+    await pollOnce();
+    schedulePoll();
   }
 
-  function handleEvent(evt) {
-    switch (evt.type) {
-      case "init": return onInit(evt);
-      case "section_start": return onSectionStart(evt);
-      case "stage_done": return onStageDone(evt);
-      case "section_done": return onSectionDone(evt);
-      case "complete": return onComplete(evt);
-      case "error": return onErrorEvent(evt);
-    }
-  }
-
-  function onInit(evt) {
-    const secs = Array.isArray(evt.sections) ? evt.sections : [];
-    totalSections = secs.filter((s) => !s.skipped).length;
-    totalSteps = totalSections * 3 + secs.filter((s) => s.skipped).length;
-    if (totalSteps === 0) totalSteps = 1; // avoid /0
-    progressList.innerHTML = secs.map((s) => {
-      const cls = s.skipped ? "is-skipped" : "";
-      const sub = s.skipped
-        ? (s.skip_reason === "references" ? "Kept verbatim" : "Empty — skipped")
-        : "Queued";
-      return `<li class="pm-progress-item ${cls}" data-index="${s.index}" data-testid="progress-item-${s.index}">
-        <span class="pm-progress-item-label">${escapeHtml(s.label)}</span>
-        <span class="pm-progress-item-state" data-testid="progress-item-state-${s.index}">${escapeHtml(sub)}</span>
-      </li>`;
-    }).join("");
-    progressCurrent.textContent = totalSections > 0
-      ? `Preparing ${totalSections} section${totalSections === 1 ? "" : "s"}…`
-      : "Nothing to rewrite.";
-    // Skipped sections count toward progress too (instant work).
-    const skipped = secs.filter((s) => s.skipped).length;
-    completedSteps += skipped;
-    updateProgress();
-  }
-
-  function onSectionStart(evt) {
-    const item = progressList.querySelector(`[data-index="${evt.index}"]`);
-    if (item) {
-      item.classList.add("is-active");
-      const state = item.querySelector(".pm-progress-item-state");
-      if (state) state.textContent = "Stage A: paraphrase…";
-    }
-    progressCurrent.textContent = `Section ${evt.index + 1}: ${evt.label}`;
-  }
-
-  function onStageDone(evt) {
-    completedSteps += 1;
-    updateProgress();
-    const item = progressList.querySelector(`[data-index="${evt.index}"]`);
-    if (item) {
-      const state = item.querySelector(".pm-progress-item-state");
-      if (state) {
-        if (evt.stage === "a") state.textContent = "Stage B: humanise…";
-        else if (evt.stage === "b") state.textContent = "Stage C: polish…";
-        else if (evt.stage === "c") state.textContent = "Finalising…";
-      }
-    }
-  }
-
-  function onSectionDone(evt) {
-    const sec = evt.section || {};
-    const item = progressList.querySelector(`[data-index="${sec.index}"]`);
-    if (item) {
-      item.classList.remove("is-active");
-      item.classList.add("is-done");
-      const state = item.querySelector(".pm-progress-item-state");
-      if (state) {
-        if (sec.skipped) {
-          state.textContent = sec.skip_reason === "references" ? "Kept verbatim ✓" : "Skipped ✓";
+  function schedulePoll() {
+    if (pollingTerminated) return;
+    if (pollTimer) clearTimeout(pollTimer);
+    pollTimer = setTimeout(async () => {
+      let fatal = false;
+      try { await pollOnce(); }
+      catch (err) {
+        // 404 (or any sentinel-flagged error) is fatal — stop polling
+        // immediately or we'd hammer the server forever. Other network
+        // blips are transient; we keep going.
+        if (err && err.fatal) {
+          fatal = true;
+          showError(err.message || "Job no longer available.");
         } else {
-          state.textContent = "Done ✓";
+          console.warn("plagiarism poll failed:", err);
         }
       }
+      if (fatal) return;
+      const status = lastSnapshot && lastSnapshot.status;
+      if (status !== "complete" && status !== "failed" && status !== "cancelled") {
+        schedulePoll();
+      }
+    }, POLL_INTERVAL_MS);
+  }
+
+  async function pollOnce() {
+    if (!jobId || pollingTerminated) return;
+    const res = await fetch(`/api/plagiarism/jobs/${encodeURIComponent(jobId)}`);
+    if (res.status === 404) {
+      // Stop polling — the server has no record of this job and never
+      // will. Without this guard the schedulePoll loop would treat it
+      // as a transient error and hammer the endpoint forever.
+      pollingTerminated = true;
+      const err = new Error("This job has expired. Please start a new rewrite.");
+      err.fatal = true;
+      throw err;
+    }
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      throw new Error(j.detail || `HTTP ${res.status}`);
+    }
+    const snap = await res.json();
+    lastSnapshot = snap;
+    applySnapshot(snap);
+  }
+
+  // ---------- Snapshot → DOM ----------
+  function applySnapshot(snap) {
+    // First snapshot: build the progress list with all section labels.
+    if (!sectionListBuilt) {
+      buildProgressList(snap);
+      sectionListBuilt = true;
+    }
+    updateProgressMeta(snap);
+    renderNewSections(snap);
+    if (snap.status === "complete" || snap.status === "failed" || snap.status === "cancelled") {
+      finalize(snap);
     }
   }
 
-  function onComplete(evt) {
-    completedSteps = totalSteps;
-    updateProgress();
-    progressCurrent.textContent = "Done.";
-    try {
-      sessionStorage.setItem(RESULT_KEY, JSON.stringify(evt.result));
-    } catch (_) { /* quota — ok to skip cache */ }
-    renderResult(evt.result);
+  function buildProgressList(snap) {
+    progressList.innerHTML = (snap.sections || []).map((s) => {
+      return `<li class="pm-progress-item" data-index="${s.index}" data-testid="progress-item-${s.index}">
+        <span class="pm-progress-item-label">${escapeHtml(s.label || "Section")}</span>
+        <span class="pm-progress-item-state" data-testid="progress-item-state-${s.index}">Queued</span>
+      </li>`;
+    }).join("");
   }
 
-  function onErrorEvent(evt) {
-    showError(evt.message || "Rewrite failed.");
-  }
-
-  function updateProgress() {
-    const pct = Math.min(100, Math.round((completedSteps / totalSteps) * 100));
+  function updateProgressMeta(snap) {
+    const pct = snap.percent || 0;
     progressFill.style.width = pct + "%";
     progressPct.textContent = pct + "%";
     progressBar.setAttribute("aria-valuenow", String(pct));
-  }
 
-  function showError(msg) {
-    progressCard.classList.add("is-hidden");
-    errorCard.classList.remove("is-hidden");
-    errorMessage.textContent = msg;
-  }
-
-  // ---------- Render results ----------
-  function renderResult(result) {
-    if (!result || !result.pipeline) {
-      showError("Rewrite returned no usable output.");
-      return;
+    if (snap.current_section) {
+      progressCurrent.textContent = `Rewriting ${snap.current_section}…`;
+    } else if (snap.status === "queued") {
+      progressCurrent.textContent = "Queued…";
+    } else if (snap.status === "processing") {
+      progressCurrent.textContent = "Processing…";
     }
-    const sections = result.pipeline.sections || [];
-    const nonSkipped = sections.filter((s) => !s.skipped);
-    const totalEdits = result.changes_made || 0;
-    const protectedTotal = result.protected_terms_count || 0;
-    const missing = Array.isArray(result.preserved_terms_missing) ? result.preserved_terms_missing : [];
+
+    if (progressPass) {
+      progressPass.textContent = snap.current_pass_label || "";
+    }
+    if (progressCounts) {
+      const totalNonSkipped = (snap.sections || []).filter((s) => s.status !== "skipped" || s.status === "skipped").length;
+      progressCounts.textContent = `${snap.completed_count} of ${snap.total_sections} sections complete${snap.failed_count ? ` · ${snap.failed_count} failed` : ""}`;
+    }
+    if (progressEta) {
+      if (snap.status === "processing" && snap.eta_seconds != null) {
+        progressEta.textContent = `≈ ${fmtDuration(snap.eta_seconds)} remaining`;
+      } else if (snap.status === "complete") {
+        progressEta.textContent = `Done in ${fmtDuration(snap.elapsed_seconds)}.`;
+      } else {
+        progressEta.textContent = "";
+      }
+    }
+
+    // Per-row state in the list.
+    (snap.sections || []).forEach((s) => {
+      const item = progressList.querySelector(`[data-index="${s.index}"]`);
+      if (!item) return;
+      item.classList.remove("is-active", "is-done", "is-failed", "is-skipped");
+      const state = item.querySelector(".pm-progress-item-state");
+      switch (s.status) {
+        case "pending":
+          if (state) state.textContent = "Queued";
+          break;
+        case "processing":
+          item.classList.add("is-active");
+          if (state) state.textContent = snap.current_pass_label || "Processing…";
+          break;
+        case "complete":
+          item.classList.add("is-done");
+          if (state) state.textContent = "Done ✓";
+          break;
+        case "skipped":
+          item.classList.add("is-skipped", "is-done");
+          if (state) state.textContent = (s.skip_reason === "references") ? "Kept verbatim ✓" : "Skipped ✓";
+          break;
+        case "failed":
+          item.classList.add("is-failed");
+          if (state) state.textContent = "Failed ✗";
+          break;
+        case "timed_out":
+          item.classList.add("is-failed");
+          if (state) state.textContent = "Timed out ✗";
+          break;
+      }
+    });
+  }
+
+  function renderNewSections(snap) {
+    const sections = snap.sections || [];
+    for (const sec of sections) {
+      // Render once a section reaches a terminal status (complete, skipped,
+      // failed, timed_out). Pending / processing are left to the progress
+      // list above.
+      const isTerminal = ["complete", "skipped", "failed", "timed_out"].indexOf(sec.status) !== -1;
+      if (!isTerminal) continue;
+      if (renderedIndices.has(sec.index)) continue;
+      const html = renderCard(sec);
+      const wrap = document.createElement("div");
+      wrap.innerHTML = html;
+      const node = wrap.firstElementChild;
+      if (node) {
+        node.classList.add("pm-section-card--fadein");
+        sectionCards.appendChild(node);
+        wireCard(node);
+      }
+      renderedIndices.add(sec.index);
+    }
+  }
+
+  function wireCard(card) {
+    const t = card.querySelector(".pm-section-card-toggle");
+    if (t) t.addEventListener("click", () => card.classList.toggle("is-expanded"));
+    const sToggle = card.querySelector(".pm-stage-toggle");
+    if (sToggle) sToggle.addEventListener("click", () => {
+      const wrap = sToggle.closest(".pm-section-card-stages");
+      if (wrap) wrap.classList.toggle("is-open");
+    });
+  }
+
+  function finalize(snap) {
+    if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
+    pollingTerminated = true;
+    // Stop the spinner / pass label, keep the bar at its terminal value.
+    if (progressPass) progressPass.textContent = "";
+    if (snap.status === "complete") {
+      progressCurrent.textContent = "Done.";
+    } else if (snap.status === "cancelled") {
+      progressCurrent.textContent = "Cancelled.";
+    } else {
+      progressCurrent.textContent = "Stopped.";
+    }
+
+    // Build the summary card from settled sections.
+    populateSummary(snap);
+    showRetryBannerIfNeeded(snap);
+
+    // Persist to sessionStorage as a result for back-button / refresh.
+    try {
+      sessionStorage.setItem(RESULT_KEY, JSON.stringify(buildLegacyResultShape(snap)));
+    } catch (_) { /* quota — ok */ }
+
+    // Job is done — collapse the progress card so the cards take focus.
+    // We keep it visible (not hidden) so the user can still see the
+    // per-section list with green ticks.
+    progressCard.classList.add("is-finished");
+
+    // If everything succeeded, enable download. If anything failed, the
+    // user can still download what we have, but the warning banner
+    // explains it's partial.
+    downloadBtn.disabled = false;
+  }
+
+  function populateSummary(snap) {
+    const sections = snap.sections || [];
+    const succeeded = sections.filter((s) => s.status === "complete" || s.status === "skipped");
+    const nonSkipped = succeeded.filter((s) => !s.skipped);
+    const totalEdits = nonSkipped.reduce((acc, s) => acc + (s.edits || 0), 0);
+    const protectedTotal = (snap.protected_terms || []).length;
+
+    // Count missing terms across all completed sections (de-duplicated).
+    const missingSet = new Set();
+    for (const s of nonSkipped) {
+      (s.missing_terms || []).forEach((t) => missingSet.add(t));
+    }
+    const missing = Array.from(missingSet);
     const preserved = Math.max(0, protectedTotal - missing.length);
 
     statSections.textContent = String(nonSkipped.length);
     statEdits.textContent = totalEdits.toLocaleString();
-    statTerms.textContent = protectedTotal === 0
-      ? "0 / 0"
-      : `${preserved} / ${protectedTotal}`;
+    statTerms.textContent = protectedTotal === 0 ? "0 / 0" : `${preserved} / ${protectedTotal}`;
 
-    // Build the highlight regex from whatever protected terms we sent to
-    // the pipeline (plus any that came back). Terms that the LLM dropped
-    // are still highlighted in the original column so the user can find
-    // and reinsert them.
-    const termsForHighlight = (input && Array.isArray(input.protected_terms))
-      ? input.protected_terms
-      : [];
-    _termRegex = buildTermRegex(termsForHighlight);
-
-    // Surface warnings (missing terms, fallbacks)
     const warnings = [];
+    if (snap.status === "failed" && snap.error === "providers_exhausted") {
+      warnings.push("<strong>Both AI providers ran out of quota mid-job.</strong> Try again later, or top up one of the provider accounts.");
+    }
     if (missing.length > 0) {
       const sample = missing.slice(0, 6).map(escapeHtml).join(", ");
       const more = missing.length > 6 ? ` (+${missing.length - 6} more)` : "";
       warnings.push(`<strong>Heads up:</strong> ${missing.length} protected term${missing.length === 1 ? " did" : "s did"} not survive the rewrite — ${sample}${more}. Restore manually before submitting.`);
     }
-    if (result.pipeline.any_fallback) {
+    const fallbackUsed = nonSkipped.some((s) => s.fallback_used);
+    if (fallbackUsed) {
       warnings.push("One or more stages used the <strong>fallback provider</strong>. Sections affected are flagged orange below.");
     }
     if (warnings.length) {
       summaryWarnings.innerHTML = warnings.map((w) => `<div class="pm-summary-warning">${w}</div>`).join("");
       summaryWarnings.classList.remove("is-hidden");
+    } else {
+      summaryWarnings.classList.add("is-hidden");
     }
 
-    // Render per-section cards
-    sectionCards.innerHTML = sections.map(renderCard).join("");
-    sectionCards.querySelectorAll(".pm-section-card-toggle").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const card = btn.closest(".pm-section-card");
-        if (card) card.classList.toggle("is-expanded");
-      });
-    });
-    sectionCards.querySelectorAll(".pm-stage-toggle").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const wrap = btn.closest(".pm-section-card-stages");
-        if (wrap) wrap.classList.toggle("is-open");
-      });
-    });
-
-    // Wire download
-    downloadBtn.addEventListener("click", () => downloadDocx(result));
-
-    // Reveal results, hide progress
-    progressCard.classList.add("is-hidden");
-    resultsBlock.classList.remove("is-hidden");
+    // Wire the download button (idempotent — finalize may run more than
+    // once if the user retries, so we replace the listener).
+    const fresh = downloadBtn.cloneNode(true);
+    downloadBtn.parentNode.replaceChild(fresh, downloadBtn);
+    fresh.disabled = false;
+    fresh.addEventListener("click", () => downloadDocx(snap));
+    // Update our reference so future finalize() calls see the new node.
+    Object.defineProperty(window, "_pmDownloadBtn", { value: fresh, configurable: true });
   }
 
+  function showRetryBannerIfNeeded(snap) {
+    if (!retryBanner) return;
+    const failed = (snap.sections || []).filter((s) => s.status === "failed" || s.status === "timed_out");
+    if (!failed.length) {
+      retryBanner.classList.add("is-hidden");
+      return;
+    }
+    if (retryMsg) {
+      retryMsg.textContent = `${failed.length} section${failed.length === 1 ? "" : "s"} could not be processed. Click below to retry just ${failed.length === 1 ? "that one" : "those"}.`;
+    }
+    retryBanner.classList.remove("is-hidden");
+    if (retryBtn) {
+      retryBtn.disabled = false;
+      // Replace listener on each finalize so we always have one binding.
+      const fresh = retryBtn.cloneNode(true);
+      retryBtn.parentNode.replaceChild(fresh, retryBtn);
+      fresh.addEventListener("click", () => retryFailed(failed.map((s) => s.index)));
+    }
+  }
+
+  async function retryFailed(indices) {
+    if (!jobId || !indices.length) return;
+    // Clear cards we're about to re-render so we don't end up with
+    // duplicate entries when the next snapshot brings new results.
+    // Also reset the matching progress-list rows so the user sees
+    // them go from "Failed ✗" back to "Queued" instead of stale.
+    for (const idx of indices) {
+      const card = sectionCards.querySelector(`[data-section-index="${idx}"]`);
+      if (card) card.remove();
+      renderedIndices.delete(idx);
+      const item = progressList.querySelector(`[data-index="${idx}"]`);
+      if (item) {
+        item.classList.remove("is-failed", "is-done", "is-active");
+        const state = item.querySelector(".pm-progress-item-state");
+        if (state) state.textContent = "Queued";
+      }
+    }
+    if (retryBanner) retryBanner.classList.add("is-hidden");
+    progressCard.classList.remove("is-finished");
+    const dlNow = document.getElementById("pm-download");
+    if (dlNow) dlNow.disabled = true;
+    pollingTerminated = false;  // re-arm polling for the retry run
+
+    try {
+      const res = await fetch(`/api/plagiarism/jobs/${encodeURIComponent(jobId)}/retry`, { method: "POST" });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j.detail || `HTTP ${res.status}`);
+      lastSnapshot = j;
+      applySnapshot(j);
+      schedulePoll();
+    } catch (err) {
+      pollingTerminated = true;
+      alert("Retry failed: " + (err && err.message ? err.message : err));
+    }
+  }
+
+  function showError(msg) {
+    if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
+    progressCard.classList.add("is-hidden");
+    errorCard.classList.remove("is-hidden");
+    errorMessage.textContent = msg;
+  }
+
+  // ---------- Per-section card ----------
   function renderCard(sec) {
     const q = sec.quality || { key: "gray", label: "—", hint: "" };
     const skipped = !!sec.skipped;
+    const failed = sec.status === "failed" || sec.status === "timed_out";
     const skipReason = sec.skip_reason || "";
     const original = sec.original || "";
     const finalText = sec.final_text || "";
     const wordCount = (original.match(/\S+/g) || []).length;
-    const editsTxt = skipped ? "0 edits" : `${(sec.edits || 0).toLocaleString()} edits`;
-    const labelChip = skipped
-      ? (skipReason === "references" ? "Kept verbatim" : "Empty")
-      : `${wordCount.toLocaleString()} words · ${editsTxt}`;
+    const editsTxt = (skipped || failed) ? "" : `${(sec.edits || 0).toLocaleString()} edits`;
+    let labelChip;
+    if (failed) {
+      labelChip = sec.status === "timed_out" ? "Timed out" : "Failed";
+    } else if (skipped) {
+      labelChip = (skipReason === "references") ? "Kept verbatim" : "Empty";
+    } else {
+      labelChip = `${wordCount.toLocaleString()} words · ${editsTxt}`;
+    }
 
     const stageModels = sec.stage_models || {};
-    const stagesHtml = skipped ? "" : `
+    const stagesHtml = (skipped || failed) ? "" : `
       <div class="pm-section-card-stages">
         <button type="button" class="pm-stage-toggle" data-testid="toggle-stages-${sec.index}">
           <span>Show pipeline stages (A → B → C)</span>
@@ -369,50 +518,80 @@
         </div>
       </div>`;
 
-    return `<article class="pm-section-card pm-section-card--${escapeHtml(q.key)}" data-testid="card-section-${sec.index}">
+    const compareHtml = failed
+      ? `<div class="pm-section-card-failed" data-testid="text-section-failed-${sec.index}">
+           <p><strong>${sec.status === "timed_out" ? "This section timed out." : "This section failed."}</strong> ${escapeHtml(sec.error || "")}</p>
+           <p>Use the <em>Retry Failed Sections</em> button at the top of the results to try again. Your other sections are unaffected.</p>
+         </div>`
+      : `<div class="pm-section-card-compare" data-testid="compare-${sec.index}">
+          <div class="pm-compare-col">
+            <div class="pm-compare-head">Original</div>
+            <div class="pm-compare-text" data-testid="text-original-${sec.index}">${highlightTerms(original, _termRegex)}</div>
+          </div>
+          <div class="pm-compare-col">
+            <div class="pm-compare-head">Rewritten${skipped && skipReason === "references" ? " (verbatim)" : ""}</div>
+            <div class="pm-compare-text" data-testid="text-rewritten-${sec.index}">${highlightTerms(finalText, _termRegex)}</div>
+          </div>
+        </div>`;
+
+    const qKey = failed ? "orange" : (q.key || "gray");
+    const qLabel = failed ? labelChip : (q.label || "—");
+    const qHint = failed ? (sec.error || "") : (q.hint || "");
+
+    return `<article class="pm-section-card pm-section-card--${escapeHtml(qKey)}" data-section-index="${sec.index}" data-testid="card-section-${sec.index}">
       <header class="pm-section-card-head">
         <div class="pm-section-card-title">
           <h3 data-testid="text-section-label-${sec.index}">${escapeHtml(sec.label || "Section")}</h3>
           <span class="pm-section-card-meta" data-testid="text-section-meta-${sec.index}">${escapeHtml(labelChip)}</span>
         </div>
-        <span class="pm-quality-chip pm-quality-chip--${escapeHtml(q.key)}" data-testid="chip-quality-${sec.index}" title="${escapeHtml(q.hint || "")}">
-          ${escapeHtml(q.label)}
+        <span class="pm-quality-chip pm-quality-chip--${escapeHtml(qKey)}" data-testid="chip-quality-${sec.index}" title="${escapeHtml(qHint)}">
+          ${escapeHtml(qLabel)}
         </span>
       </header>
-      ${q.hint ? `<p class="pm-section-card-hint">${escapeHtml(q.hint)}</p>` : ""}
-      <div class="pm-section-card-compare" data-testid="compare-${sec.index}">
-        <div class="pm-compare-col">
-          <div class="pm-compare-head">Original</div>
-          <div class="pm-compare-text" data-testid="text-original-${sec.index}">${highlightTerms(original, _termRegex)}</div>
-        </div>
-        <div class="pm-compare-col">
-          <div class="pm-compare-head">Rewritten${skipped && skipReason === "references" ? " (verbatim)" : ""}</div>
-          <div class="pm-compare-text" data-testid="text-rewritten-${sec.index}">${highlightTerms(finalText, _termRegex)}</div>
-        </div>
-      </div>
+      ${qHint ? `<p class="pm-section-card-hint">${escapeHtml(qHint)}</p>` : ""}
+      ${compareHtml}
       ${stagesHtml}
     </article>`;
   }
 
   // ---------- DOCX download ----------
-  async function downloadDocx(result) {
-    const sections = (result.pipeline && result.pipeline.sections) || [];
-    const payload = {
-      title: docTitle,
-      filename: docFilename || docTitle,
-      notes: result.notes || null,
-      sections: sections.map((s) => ({
+  function buildLegacyResultShape(snap) {
+    // Keeps RESULT_KEY backward compatible with anything else that
+    // might read it.
+    return {
+      original_text: "",
+      rewritten_text: (snap.sections || []).filter((s) => s.status === "complete" || s.status === "skipped").map((s) => s.final_text || "").join("\n\n"),
+      changes_made: (snap.sections || []).reduce((a, s) => a + (s.edits || 0), 0),
+      protected_terms_count: (snap.protected_terms || []).length,
+      preserved_terms_missing: [],
+      pipeline: { sections: snap.sections || [] },
+    };
+  }
+
+  async function downloadDocx(snap) {
+    const sections = (snap.sections || [])
+      .filter((s) => s.status === "complete" || s.status === "skipped")
+      .map((s) => ({
         label: s.label || "Section",
         text: s.final_text || "",
         skipped: !!s.skipped,
         skip_reason: s.skip_reason || null,
-      })),
+      }));
+    if (!sections.length) {
+      alert("Nothing to download yet — all sections are either failed or pending.");
+      return;
+    }
+    const payload = {
+      title: docTitle,
+      filename: docFilename || docTitle,
+      sections,
     };
 
-    downloadBtn.disabled = true;
-    const orig = downloadBtn.innerHTML;
-    downloadBtn.innerHTML = '<span class="pm-btn-icon" aria-hidden="true">⏳</span> Building Word document…';
-
+    const btn = document.getElementById("pm-download");
+    if (!btn) return;
+    btn.disabled = true;
+    const orig = btn.innerHTML;
+    btn.innerHTML = '<span class="pm-btn-icon" aria-hidden="true">⏳</span> Building Word document…';
     try {
       const res = await fetch("/api/plagiarism/export-docx", {
         method: "POST",
@@ -425,25 +604,20 @@
         throw new Error(detail);
       }
       const blob = await res.blob();
-      // Try to pull filename from Content-Disposition.
       let dlName = "rewritten.docx";
       const cd = res.headers.get("Content-Disposition") || "";
       const m = /filename="([^"]+)"/i.exec(cd);
       if (m) dlName = m[1];
-
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
-      a.href = url;
-      a.download = dlName;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+      a.href = url; a.download = dlName;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
       setTimeout(() => URL.revokeObjectURL(url), 1500);
     } catch (err) {
       alert("Download failed: " + (err && err.message ? err.message : err));
     } finally {
-      downloadBtn.disabled = false;
-      downloadBtn.innerHTML = orig;
+      btn.disabled = false;
+      btn.innerHTML = orig;
     }
   }
 })();

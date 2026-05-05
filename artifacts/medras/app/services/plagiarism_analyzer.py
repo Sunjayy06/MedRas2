@@ -27,6 +27,7 @@ import difflib
 import json
 import os
 import re
+import time
 from typing import Any, Dict, List, Literal, Optional
 
 from app.core.logging import get_logger
@@ -268,10 +269,17 @@ def _call_openai_text(
     model: str = "gpt-4o",
     max_tokens: int = 4096,
     temperature: float = 0.4,
+    timeout: Optional[float] = None,
 ) -> str:
-    """Call OpenAI Chat Completions and return plain-text content."""
+    """Call OpenAI Chat Completions and return plain-text content.
+
+    ``timeout`` is forwarded to the SDK so the underlying socket
+    actually closes when we want to give up — without it, an outer
+    wall-clock timeout still leaves the LLM call running on the OpenAI
+    side, burning tokens.
+    """
     client = _get_openai()
-    resp = client.chat.completions.create(
+    kwargs: Dict[str, Any] = dict(
         model=model,
         messages=[
             {"role": "system", "content": system_prompt},
@@ -280,6 +288,9 @@ def _call_openai_text(
         max_tokens=max_tokens,
         temperature=temperature,
     )
+    if timeout is not None:
+        kwargs["timeout"] = float(timeout)
+    resp = client.chat.completions.create(**kwargs)
     return _strip_fences(resp.choices[0].message.content or "")
 
 
@@ -289,19 +300,30 @@ def _call_gemini_text(
     *,
     max_tokens: int = 8192,
     temperature: float = 0.4,
+    timeout: Optional[float] = None,
 ) -> str:
-    """Call Gemini generate_content and return plain-text content."""
+    """Call Gemini generate_content and return plain-text content.
+
+    ``timeout`` is forwarded via ``http_options`` so the underlying
+    httpx client honours it. Same rationale as ``_call_openai_text``:
+    we never want the network call outlasting the wall-clock budget
+    or we'll keep paying for tokens after we've already given up.
+    """
     from google.genai import types
 
     client = _get_gemini()
     contents = f"{system_prompt}\n\n--- TEXT ---\n{user_text}"
+    cfg_kwargs: Dict[str, Any] = dict(
+        max_output_tokens=max_tokens,
+        temperature=temperature,
+    )
+    if timeout is not None:
+        # google-genai accepts http_options.timeout in MILLISECONDS.
+        cfg_kwargs["http_options"] = types.HttpOptions(timeout=int(timeout * 1000))
     resp = client.models.generate_content(
         model="gemini-2.5-flash",
         contents=contents,
-        config=types.GenerateContentConfig(
-            max_output_tokens=max_tokens,
-            temperature=temperature,
-        ),
+        config=types.GenerateContentConfig(**cfg_kwargs),
     )
     return _strip_fences(resp.text or "")
 
@@ -569,8 +591,14 @@ def _run_stage(
     user_text: str,
     protected_terms: Optional[List[str]],
     stage_label: str,
+    sdk_timeout: Optional[float] = None,
 ) -> Dict[str, Any]:
     """Run one stage with primary-provider preference and other-provider fallback.
+
+    ``sdk_timeout`` (seconds), when supplied, is forwarded to the OpenAI
+    and Gemini SDKs so the network call itself closes when we time out
+    — important for the job-based pipeline so an abandoned future does
+    not keep burning tokens server-side.
 
     Returns a dict with keys:
       ``text``           — the stage output (non-empty),
@@ -582,10 +610,10 @@ def _run_stage(
     primary_err: Optional[str] = None
 
     def _openai_call() -> str:
-        return _with_retry(lambda: _call_openai_text(full_prompt, user_text, model="gpt-4o"))
+        return _with_retry(lambda: _call_openai_text(full_prompt, user_text, model="gpt-4o", timeout=sdk_timeout))
 
     def _gemini_call() -> str:
-        return _with_retry(lambda: _call_gemini_text(full_prompt, user_text))
+        return _with_retry(lambda: _call_gemini_text(full_prompt, user_text, timeout=sdk_timeout))
 
     def _try_fallback(
         other_call,
@@ -642,6 +670,233 @@ class PipelineCancelled(RuntimeError):
     error — it's just the worker thread cooperatively bailing out so we
     don't keep burning LLM credits on a request nobody is listening to.
     """
+
+
+class StageTimeoutError(RuntimeError):
+    """A single pipeline stage exceeded its hard wall-clock timeout.
+
+    Raised by ``process_one_section`` so the job manager can mark that
+    section as ``timed_out`` and proceed with the next section instead of
+    blocking the whole job on a slow provider.
+    """
+
+
+def _run_stage_with_timeout(
+    *,
+    primary: Literal["openai", "gemini"],
+    system_prompt: str,
+    user_text: str,
+    protected_terms: Optional[List[str]],
+    stage_label: str,
+    timeout_seconds: float,
+) -> Dict[str, Any]:
+    """Wrap ``_run_stage`` with a hard wall-clock timeout.
+
+    The provider SDKs run synchronous network I/O that can hang well past
+    their nominal timeouts (proxy stalls, server-side queueing). We submit
+    the call to a fresh worker thread and abandon it if it exceeds
+    ``timeout_seconds``. The orphaned thread will eventually finish or
+    error out — we just stop waiting on it. Cost: at most one in-flight
+    abandoned call per timed-out stage.
+    """
+    import concurrent.futures
+    # Give the SDK a slightly tighter budget than the wall-clock so the
+    # underlying socket closes BEFORE we abandon the future. This is
+    # what stops us from paying for tokens after we've given up.
+    sdk_timeout = max(5.0, timeout_seconds - 2.0)
+    # Use a non-context-managed executor so an orphaned thread doesn't
+    # block our return — context-managed executors join all threads on
+    # __exit__, which would re-introduce the very hang we're avoiding.
+    ex = concurrent.futures.ThreadPoolExecutor(
+        max_workers=1, thread_name_prefix=f"pm-stage-{stage_label}"
+    )
+    try:
+        fut = ex.submit(
+            _run_stage,
+            primary=primary,
+            system_prompt=system_prompt,
+            user_text=user_text,
+            protected_terms=protected_terms,
+            stage_label=stage_label,
+            sdk_timeout=sdk_timeout,
+        )
+        try:
+            return fut.result(timeout=timeout_seconds)
+        except concurrent.futures.TimeoutError as exc:
+            # The SDK timeout (sdk_timeout) should have already started
+            # tearing down the socket. We don't block waiting for it —
+            # we abandon the future and raise.
+            fut.cancel()
+            raise StageTimeoutError(
+                f"Stage {stage_label} timed out after {timeout_seconds:.0f}s"
+            ) from exc
+    finally:
+        # wait=False: do NOT block on any orphaned worker thread.
+        ex.shutdown(wait=False)
+
+
+def process_one_section(
+    *,
+    index: int,
+    label: str,
+    text: str,
+    protected_terms: Optional[List[str]] = None,
+    stage_timeout: float = 60.0,
+    progress_cb: Optional[Any] = None,
+) -> Dict[str, Any]:
+    """Run the 3-stage rewrite on ONE section with per-stage timeout.
+
+    Always returns a dict — never raises ordinary errors. The only thing
+    that propagates is :class:`ProviderQuotaExhausted`, which the caller
+    treats specially (no point retrying further sections when both
+    providers are out).
+
+    The returned dict has ``status`` set to one of:
+
+      * ``"complete"``  — rewrite succeeded
+      * ``"skipped"``   — empty section or References (kept verbatim)
+      * ``"timed_out"`` — at least one stage exceeded ``stage_timeout``
+      * ``"failed"``    — a non-quota error occurred (network, parse, etc.)
+
+    ``progress_cb`` (if supplied) is called as ``cb(pass_num, label)``
+    after each stage starts (1-indexed: 1=A, 2=B, 3=C).
+    """
+    label = (label or "").strip() or f"Section {index+1}"
+    body = (text or "").strip()
+
+    base_entry = {
+        "index": index,
+        "label": label,
+        "original": body,
+        "stage_a_text": "",
+        "stage_b_text": "",
+        "stage_c_text": "",
+        "final_text": "",
+        "stage_models": {},
+        "edits": 0,
+        "missing_terms": [],
+        "fallback_used": False,
+        "elapsed_seconds": 0.0,
+        "error": None,
+    }
+
+    if not body:
+        return {
+            **base_entry,
+            "status": "skipped",
+            "skipped": True,
+            "skip_reason": "empty",
+            "quality": {"key": "gray", "label": "Empty", "hint": "No content to rewrite."},
+        }
+
+    if _is_references_label(label):
+        return {
+            **base_entry,
+            "status": "skipped",
+            "skipped": True,
+            "skip_reason": "references",
+            "final_text": body,  # kept verbatim
+            "quality": {"key": "gray", "label": "Kept verbatim", "hint": "References are never paraphrased."},
+        }
+
+    section_terms = [t for t in (protected_terms or []) if t and t in body]
+    started = time.monotonic()
+
+    def _cb(num: int, lbl: str) -> None:
+        if progress_cb is None:
+            return
+        try:
+            progress_cb(num, lbl)
+        except Exception as cb_exc:  # noqa: BLE001
+            log.debug("process_one_section progress_cb raised: %s", cb_exc)
+
+    try:
+        _cb(1, "Pass 1 of 3 — GPT-4o paraphrase")
+        a = _run_stage_with_timeout(
+            primary="openai",
+            system_prompt=STAGE_A_PARAPHRASE_PROMPT,
+            user_text=body,
+            protected_terms=section_terms,
+            stage_label=f"A:{label}",
+            timeout_seconds=stage_timeout,
+        )
+        _cb(2, "Pass 2 of 3 — Gemini AI pattern removal")
+        b = _run_stage_with_timeout(
+            primary="gemini",
+            system_prompt=STAGE_B_HUMANIZE_PROMPT,
+            user_text=a["text"],
+            protected_terms=section_terms,
+            stage_label=f"B:{label}",
+            timeout_seconds=stage_timeout,
+        )
+        _cb(3, "Pass 3 of 3 — GPT-4o quality polish")
+        c = _run_stage_with_timeout(
+            primary="openai",
+            system_prompt=STAGE_C_POLISH_PROMPT,
+            user_text=b["text"],
+            protected_terms=section_terms,
+            stage_label=f"C:{label}",
+            timeout_seconds=stage_timeout,
+        )
+    except StageTimeoutError as exc:
+        return {
+            **base_entry,
+            "status": "timed_out",
+            "skipped": False,
+            "error": str(exc),
+            "elapsed_seconds": round(time.monotonic() - started, 1),
+            "quality": {
+                "key": "orange",
+                "label": "Timed out",
+                "hint": "This section did not finish within the per-section time budget. Use Retry to try again.",
+            },
+        }
+    except ProviderQuotaExhausted:
+        # Bubble up — the JobManager aborts the rest of the job because
+        # later sections will hit the same wall and waste compute.
+        raise
+    except Exception as exc:  # noqa: BLE001
+        log.exception("process_one_section %s failed", index)
+        return {
+            **base_entry,
+            "status": "failed",
+            "skipped": False,
+            "error": sanitize_error_message(exc),
+            "elapsed_seconds": round(time.monotonic() - started, 1),
+            "quality": {
+                "key": "orange",
+                "label": "Failed",
+                "hint": "An error prevented this section from being rewritten. Use Retry to try again.",
+            },
+        }
+
+    edits = _approx_word_edits(body, c["text"])
+    section_missing = [t for t in section_terms if t and t not in c["text"]]
+    fallback_used = bool(a.get("fallback_used") or b.get("fallback_used") or c.get("fallback_used"))
+    quality = _classify_section_quality(
+        original=body,
+        final=c["text"],
+        edits=edits,
+        missing_terms_count=len(section_missing),
+        protected_terms_in_section=len(section_terms),
+        fallback_used=fallback_used,
+    )
+
+    return {
+        **base_entry,
+        "status": "complete",
+        "skipped": False,
+        "stage_a_text": a["text"],
+        "stage_b_text": b["text"],
+        "stage_c_text": c["text"],
+        "final_text": c["text"],
+        "stage_models": {"a": a["model"], "b": b["model"], "c": c["model"]},
+        "edits": edits,
+        "fallback_used": fallback_used,
+        "missing_terms": section_missing,
+        "quality": quality,
+        "elapsed_seconds": round(time.monotonic() - started, 1),
+    }
 
 
 def _classify_section_quality(

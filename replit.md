@@ -1,46 +1,71 @@
-# MedRAS — Medical Research Acceleration System
+# MedRAS
 
-## Overview
-MedRAS is a structured Research Operating System designed to support medical, biomedical, and academic researchers throughout the entire research lifecycle. Its primary purpose is to guide users from initial research objectives to submission-ready manuscripts through a series of integrated modules. Key capabilities include study design, sample size determination, statistical analysis, proposal generation, manuscript writing, and plagiarism/compliance checks. The project aims to accelerate medical research by providing a comprehensive, user-friendly platform that streamlines complex processes and ensures scientific rigor.
+MedRAS is a structured Research Operating System that guides medical and academic researchers from objectives to submission-ready manuscripts.
 
-## User Preferences
+## Run & Operate
+
+*   `uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload`: Run the FastAPI application.
+*   `python -m pytest`: Run tests.
+*   **Required Env Vars:** `OPENAI_API_KEY`, `GEMINI_API_KEY`, `COPALEAKS_API_KEY` (for plagiarism checks).
+
+## Stack
+
+*   **Backend:** Python 3.11, FastAPI, Uvicorn
+*   **Frontend:** HTML, CSS, JavaScript (no frameworks)
+*   **ORM:** _Populate as you build_
+*   **Validation:** Pydantic (implicitly via FastAPI)
+*   **Build Tool:** _Populate as you build_
+*   **Key Libraries:** `pandas`, `numpy`, `scipy`, `statsmodels`, `scikit-learn`, `lifelines`, `pingouin`, `scikit-posthocs`, `pypdf`, `python-docx`.
+
+## Where things live
+
+*   `/app`: Backend Python source code.
+    *   `/app/api`: API endpoints (e.g., `plagiarism.py`).
+    *   `/app/services`: Core business logic and statistical services (e.g., `variable_classifier.py`, `data_quality.py`, `text_analyzer.py`, `plagiarism_analyzer.py`).
+*   `/public`: Frontend static files (HTML, CSS, JS).
+    *   `/public/index.html`: Main landing page.
+    *   `/public/analysis.html`: Statistical Analysis Engine UI.
+    *   `/public/plagiarism-module`: Plagiarism & AI Reduction module UI.
+*   `/artifacts/medras`: Files outside this directory should not be modified.
+*   **DB Schema:** _Populate as you build_
+*   **API Contracts:** Defined implicitly by FastAPI Pydantic models.
+*   **Theme Files:** `/public/css/style.css` (primary styling).
+
+## Architecture decisions
+
+*   **No Frontend Frameworks:** Intentional choice for simplicity, direct control, and robustness.
+*   **In-Memory Processing:** All uploaded files are processed in-memory and never written to disk for security and performance.
+*   **LLMs for Planning/Writing Only:** LLMs are strictly used for planning and textual tasks; numerical computations are library-backed.
+*   **Dual LLM Provider Fallback:** Plagiarism & AI Reduction module uses an `auto` provider strategy, falling back between OpenAI and Google Gemini for resilience and quota management.
+*   **Plagiarism Pipeline — Job + Polling (replaces NDJSON streaming):** The reducer now uses `POST /api/plagiarism/jobs` → `GET /api/plagiarism/jobs/{id}` (polled every 5s). A singleton `JobManager` (`app/services/plagiarism_jobs.py`) runs each job in a daemon thread, processing one section at a time. Per-stage 60s wall-clock timeout (with the SDK request timeout set 2s tighter so the socket actually closes — no orphaned token burn). Caps: 3 concurrent jobs, 500MB total in-memory across all jobs, 30-min TTL with lazy cleanup on every create/get. After each section completes, `original` and stage-A/B intermediates are dropped and `bytes_tracked` is recomputed from the actual retained strings. Circuit breaker: 2 consecutive timeouts abort the rest of the job. `POST /jobs/{id}/retry` re-queues only failed/timed-out sections without re-uploading. All error strings are sanitized at the serialize_job boundary defensively (never leak provider keys).
+*   **Robust File Upload Handling:** Comprehensive pre-processing and error handling for uploaded documents (size caps, PDF type checks, password protection).
+
+## Product
+
+*   **Study Builder:** Translates research objectives into methodologies.
+*   **Sample Size Calculator:** Provides formula-driven sample size estimations with advanced UX and reporting.
+*   **Statistical Analysis Engine:** Guided 12-screen wizard for data input, variable classification, quality checks, and statistical analysis with client-side state persistence.
+*   **Proposal Generator:** Facilitates drafting research proposals.
+*   **Thesis & Article Writer:** Assists in compiling structured manuscripts.
+*   **Plagiarism & AI Reduction:** Offers originality scoring, AI likelihood detection, and a 3-stage rewrite pipeline to reduce plagiarism while preserving academic integrity.
+
+## User preferences
+
 *   I want iterative development.
 *   Ask before making major changes.
 *   Do not make changes to files outside the `artifacts/medras/` directory.
 *   Do not make changes to `.replit-artifact/artifact.toml`.
 
-## System Architecture
+## Gotchas
 
-MedRAS employs a minimalist architecture for robustness and performance.
+*   Uploaded files are subject to 100 MB byte cap and 200-page PDF cap; ensure files meet these limits.
+*   Plagiarism module's rewrite pipeline automatically skips References/Bibliography sections; do not include them if you want them paraphrased.
+*   Quota exhaustion for LLM providers will lead to temporary service unavailability for plagiarism rewrites; a fallback mechanism is in place, but prolonged exhaustion will require topping up accounts or waiting.
 
-**UI/UX Decisions:**
-The frontend is built using plain HTML, CSS, and JavaScript, intentionally avoiding complex frameworks for simplicity and direct control. UI components are designed for clarity and ease of navigation, particularly in multi-step wizards. Design elements include structured forms, intuitive result displays, and clear calls to action for report generation. The landing page (`public/index.html`) features a premium product home with a warm off-white background, purple accent, and primary blue, with specific section flows for Hero, Modules, Lifecycle, Workspace, Testimonials, and About. It includes a polished 6-slide hero slider, a 6-card horizontal modules carousel with glass-effect cards, a 6-card horizontal lifecycle rail with `scroll-snap`, a Workspace section with 5 sample mockup cards, a testimonials marquee with 10 sample quotes, and a redesigned premium About section with a single-column editorial flow and a single-line tagline. Responsive design principles are applied for various screen sizes.
+## Pointers
 
-**Technical Implementations:**
-The backend is powered by Python 3.11 with FastAPI, served by Uvicorn. Static files are served directly by FastAPI. Routing distinguishes API endpoints (`/api/*`) from static content (`artifacts/medras/public/`). All numerical computations leverage validated Python statistical libraries. LLMs are strictly used for planning and writing tasks, not for quantitative analysis. Statistical computations are library-backed and never rely on LLMs for numerical results. In-memory processing is prioritized for all uploaded files, which are never written to disk. Logging is restricted to operational metadata only; document content is never logged. API keys are never exposed to the frontend.
-
-**Feature Specifications:**
-
-*   **Study Builder:** Translates research objectives into structured methodologies.
-*   **Sample Size Calculator:** Provides formula-driven sample size estimations with 14 supported formulas, featuring objective analysis, reverse mode calculations, client-side HTML report generation, advanced UX with a three-tier entry chooser, client-side objective parser, traffic-light verdict card, complex-trial layered pipeline adjustments, and a genetic study engine.
-*   **Statistical Analysis Engine:** A 12-screen guided wizard at `/analysis.html` covering data input, variable classification, quality checks, and statistical analysis. It supports Excel/CSV upload, sheet merging, detailed variable classification with issue detection and an AI-assisted Variable Assistant (no LLM). The classifier (`app/services/variable_classifier.py`) behaves like an expert biostatistician handling raw clinical data. Variables are classified based on `storage_type`, `statistical_nature`, `interpretation`, and `analytical_flexibility`, with clear reasoning. Manual or assistant overrides re-enrich these four axes. An optional recoding editor for variables like Age/BMI/Hb accepts natural-language ranges and renders live previews. The Variable Assistant supports dataset-aware recommendations. The backend supports parametric/non-parametric tests (t-test, Mann-Whitney U, ANOVA, Kruskal-Wallis, chi-square, correlation) returning descriptives, effect sizes, variance tests, achieved power, and plain-English interpretations. A quality check (`app/services/data_quality.py`) combines logical/date errors with categorical-consistency checks, and provides a composite quality score based on missingness, outliers, duplicate rows, and consistency errors. Session state is persisted to `localStorage` for resumable sessions. The workflow is structured into 8 steps: Start, Data input, Variables, Review data, Normality, Plan and Run, Results, Export. Step 2 offers two practice-data paths in addition to file upload: ready-made templates (anaemia/etc.) and an inline 4-question "Build your own practice dataset" wizard (Q1 variables list → Q2 patient count → Q3 smart per-variable types/ranges → Q4 optional expected effect). The preview screen (Step 2) tracks `state.dataSource` ("upload" | "template" | "custom") and renders practice-only extras when the dataset is dummy/wizard-built: 10-row preview, a Step-3 reassurance note, "Download as Excel" button, and (for custom only) a "Regenerate with changes" shortcut back into the inline wizard.
-*   **Proposal Generator:** Facilitates drafting research proposals for various institutions.
-*   **Thesis & Article Writer:** Assists in compiling structured manuscripts and dissertation chapters.
-*   **Plagiarism & Compliance:** Offers originality scoring and citation verification.
-*   **Plagiarism & AI Reduction module** (`public/plagiarism-module/`): The **rewrite** flow (`POST /api/plagiarism/reduce`) supports two paths. (1) **Legacy single-shot** — original behaviour, used when neither `sections` nor `pipeline=true` is passed. (2) **3-stage pipeline** — used whenever `sections=[{label,text}, …]` is supplied (uploads with a section breakdown) OR `pipeline=true` is set (paste-text flow). The pipeline runs each non-References section through three sequential LLM passes: Stage A paraphrase-for-originality (primary `gpt-4o`), Stage B humanise / de-AI (primary `gemini-2.5-flash`), Stage C quality polish (primary `gpt-4o`). Each stage automatically falls back to the OTHER provider if its primary fails, so the pipeline still completes when one provider is unavailable. Sections labelled References / Bibliography / Works Cited / Literature Cited are **skipped entirely** and kept byte-for-byte verbatim in the combined output (academic refs must never be paraphrased). Protected terms are passed as a hard "do not change" constraint to every stage AND verified post-hoc against the combined final. Provider calls are wrapped in `_with_retry()` with exponential backoff for transient errors (503/timeout/overloaded); quota-exhaustion errors (`insufficient_quota`, `RESOURCE_EXHAUSTED`) are detected as **permanent** and skip retry entirely so the fallback fires in seconds, not minutes. When BOTH providers are out of quota, a custom `ProviderQuotaExhausted` exception bubbles up to the route, which returns a clean 503 with an actionable message (try tomorrow / top up an account). The pipeline response includes a `pipeline.sections[]` breakdown with per-section `original`, `stage_a_text`, `stage_b_text`, `stage_c_text`, `final_text`, `stage_models`, `edits`, and a `quality` bucket (`{key,label,hint}` — green/yellow/orange/red). **Safety & cost protection (uploads):** All upload routes (`/check-file`, `/analyze-file`) enforce a 100 MB byte cap (streaming `_read_with_cap`) AND a 200-page PDF cap, and translate each known failure mode into a clean HTTP error with a user-actionable message — `UnsupportedFileError` (415, wrong extension), `PasswordProtectedError` (400, "remove the password and re-upload"), `ImageOnlyPdfError` (422, "run through OCR"), `DocumentTooLargeError` (413, "split into smaller documents"), `CorruptedFileError` (400, "re-export"). Any unexpected exception is passed through `sanitize_error_message()` which strips `sk-…`, `AIza…`, `Bearer …`, and `api_key=…` patterns before the string ever reaches the browser. Raw upload bytes (`content`) are explicitly `del`-ed immediately after extraction so 100 MB buffers don't sit in memory while LLMs run; uploads are never persisted to disk. **Reduce-results page** (`reduce-results.html` + `js/reduce-results.js`): clicking "Reduce plagiarism" stages the input in `sessionStorage["pm:reduceInput"]` and navigates to a dedicated results page that streams progress from `POST /api/plagiarism/reduce-stream` (NDJSON; events `init` / `section_start` / `stage_done` / `section_done` / `complete` / `error`). A live progress bar fills as each stage completes; the per-section list shows current state ("Stage A: paraphrase…" → "…humanise…" → "…polish…" → "Done ✓"); References sections show "Kept verbatim ✓". When `complete` fires, the page renders summary stats (sections rewritten, word-level edits, protected terms preserved) plus per-section colour-coded cards (left border + chip): **green** "Well rewritten", **yellow** "Moderate changes", **orange** "Review recommended" (also triggered by missing protected terms or fallback-provider use), **red** "Heavily technical" (high protected-term density — paraphrase potential is naturally limited). Each card shows Original vs Rewritten side-by-side, with an expandable drawer revealing all 3 intermediate stage outputs and their model chips. A big yellow "Download as Word document (.docx)" button POSTs the per-section data to `POST /api/plagiarism/export-docx`, which uses python-docx to build a TNR 12pt body / 16pt bold title / 12pt bold headings document with 1.5 line spacing, justified body, 1″ margins, first-line indent, and right-aligned PAGE field in the footer. Streaming uses `asyncio.Queue` + `asyncio.to_thread` to bridge the sync pipeline; client disconnects are detected via `request.is_disconnected()` and a 30-second blank-line heartbeat keeps proxies from buffering/dropping the connection during the long Stage-A LLM call. `X-Accel-Buffering: no` and `Cache-Control: no-cache` are set on the response. **Original module description below:** A self-contained module with three pages — `index.html` (navy-blue homepage with two cards: "Reduce plagiarism" and "Check plagiarism score"), `checker.html` (paste/upload + provider selector for the check or reduce flows; uploads trigger an automatic document-analysis panel), and `results.html` (originality + AI-likelihood score cards, plain-language summary, flagged-passage list with severity badges and rewrite suggestions). Backend lives in `app/api/plagiarism.py` exposing `POST /api/plagiarism/check` (JSON), `POST /api/plagiarism/check-file` (multipart .pdf/.docx/.txt/.md up to **100 MB**), `POST /api/plagiarism/reduce` (accepts an optional `protected_terms` list of substrings that must NOT be paraphrased), and `POST /api/plagiarism/analyze-file` (no-LLM endpoint that extracts text from an upload and returns IMRaD section breakdown + detected technical terms). Uploads are read in 64 KB chunks via a streaming `_read_with_cap()` helper so the 100 MB cap is enforced before the whole body is buffered. The new service `app/services/text_analyzer.py` regex-detects sections (Abstract, Introduction, Methods, Results, Discussion, Conclusion, Limitations, Acknowledgments, Funding, Conflicts, References, Appendix — supporting both standalone-line and inline `Heading: …` forms) and protected technical terms (p-values, confidence intervals, test statistics, percentages, dose+unit pairs, drug-name suffix heuristics, in-text citations, DOIs, PubMed IDs, gene symbols, ICD codes, and decimal numbers). Detected terms are surfaced in the checker UI as a per-type chip summary plus an expandable list, and are passed back to `/reduce` (filtered to only those present in the selected text) as hard "do not change" constraints; post-rewrite the service verifies each term still appears and returns any missing in `preserved_terms_missing` for the UI to flag. The service `app/services/plagiarism_analyzer.py` wraps both the OpenAI Python SDK (gpt-4o-mini) and the google-genai SDK (gemini-2.5-flash) with JSON-mode structured output; the default `provider="auto"` tries OpenAI first and falls back to Gemini on any failure (e.g. quota errors). Both providers use the existing `OPENAI_API_KEY` and `GEMINI_API_KEY` secrets — no integration setup needed. Scoring is heuristic (templated-phrasing + AI-cadence detection), not a database match — the UI is explicit about this.
-
-**System Design Choices:**
-Each module is designed with its own API router and UI components for modularity. An in-memory LRU cache is used for dataset storage in the Statistical Analysis Engine, ensuring efficient processing without disk I/O. Configuration is managed via environment variables for flexibility.
-
-## External Dependencies
-
-*   **OpenAI API:** Used for LLM-driven planning and writing tasks in Study Builder, Thesis & Article Writer, Proposal Generator, and for objective analysis in the Sample Size Calculator.
-*   **Copyleaks API:** Integrated for plagiarism scoring in Plagiarism & Compliance module.
-*   **Python Libraries:**
-    *   `FastAPI`, `Uvicorn`: Backend web framework and server.
-    *   `pandas`, `numpy`, `scipy`, `statsmodels`, `scikit-learn`, `lifelines`, `pingouin`, `scikit-posthocs`, `missingno`: Core statistical and data manipulation libraries.
-    *   `reportlab`, `xlrd`: For report generation and Excel file handling.
-    *   `slowapi`: For rate limiting API requests.
-    *   `openai`, `google-genai`: Python SDKs powering the Plagiarism & AI Reduction module (auto-fallback between providers).
-    *   `pypdf`, `python-docx`: Used for plain-text extraction from uploaded PDF and DOCX files in the plagiarism checker.
-*   **Frontend Libraries:** No external JavaScript frameworks are used; utilizes standard browser APIs.
+*   [FastAPI Documentation](https://fastapi.tiangolo.com/){:target="_blank"}
+*   [Pandas Documentation](https://pandas.pydata.org/docs/){:target="_blank"}
+*   [OpenAI API Documentation](https://platform.openai.com/docs/){:target="_blank"}
+*   [Google Gemini API Documentation](https://ai.google.dev/docs){:target="_blank"}
+*   [Uvicorn Documentation](https://www.uvicorn.org/){:target="_blank"}

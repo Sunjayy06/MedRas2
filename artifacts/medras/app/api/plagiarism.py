@@ -30,7 +30,7 @@ from pydantic import BaseModel, Field
 
 from app.core.limiter import limiter
 from app.core.logging import get_logger
-from app.services import plagiarism_analyzer, text_analyzer
+from app.services import plagiarism_analyzer, plagiarism_jobs, text_analyzer
 
 log = get_logger(__name__)
 
@@ -545,6 +545,127 @@ async def reduce_stream(request: Request, payload: ReduceStreamRequest):
             "X-Accel-Buffering": "no",  # disable proxy buffering
         },
     )
+
+
+# ---------------------------------------------------------------------------
+# Job-based async pipeline (POST + poll, no long-lived connections)
+#
+# This replaces /reduce-stream for the frontend. The streaming endpoint
+# above is left in place for any direct/legacy consumer; both share the
+# same underlying analyzer functions.
+#
+# Lifecycle:
+#   1. POST /jobs              → returns {job_id, total_sections}
+#   2. GET  /jobs/{job_id}     → poll every ~5s; returns full snapshot
+#   3. POST /jobs/{job_id}/retry  → re-queues just the failed sections
+#   4. DELETE /jobs/{job_id}   → cancel a running job or evict a finished one
+# ---------------------------------------------------------------------------
+
+
+class JobCreateRequest(BaseModel):
+    """Body for POST /jobs.
+
+    Either ``sections`` (preferred — IMRaD breakdown from /analyze-file)
+    or a single ``text`` blob can be supplied. ``text`` is wrapped in a
+    one-section list so the pipeline always sees a list.
+    """
+    sections: Optional[List[PipelineSectionIn]] = None
+    text: Optional[str] = None
+    protected_terms: List[str] = Field(default_factory=list)
+    title: str = Field(default="Rewritten document", max_length=200)
+    filename: Optional[str] = Field(default=None, max_length=200)
+
+
+@router.post("/jobs")
+@limiter.limit("10/minute")
+async def create_job(request: Request, payload: JobCreateRequest) -> dict:
+    """Register a new background rewrite job and return immediately.
+
+    Does NOT wait for any sections to complete. The browser polls
+    GET /jobs/{job_id} every few seconds to learn how it's going.
+    """
+    if payload.sections:
+        sections = [{"label": s.label, "text": s.text} for s in payload.sections]
+    elif payload.text and payload.text.strip():
+        sections = [{"label": "Body", "text": payload.text}]
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail="Provide either 'sections' (preferred) or 'text'.",
+        )
+
+    # Cap input size — prevents a single huge upload from monopolising
+    # the in-memory budget. The 200-page PDF cap upstream already bounds
+    # this, but a hand-crafted JSON request could bypass that path.
+    total_chars = sum(len(s.get("text") or "") for s in sections)
+    if total_chars > ANALYZE_TEXT_CHARS:
+        raise HTTPException(
+            status_code=413,
+            detail=(
+                f"Combined section text is {total_chars:,} characters, exceeding "
+                f"the {ANALYZE_TEXT_CHARS:,}-character per-job cap. Please split "
+                "into smaller documents."
+            ),
+        )
+
+    try:
+        state = plagiarism_jobs.job_manager.create_job(
+            sections=sections,
+            protected_terms=payload.protected_terms,
+            title=payload.title,
+            filename=payload.filename,
+        )
+    except plagiarism_jobs.CapacityError as exc:
+        # 429 = Too Many Requests — the request is well-formed but the
+        # server is at its concurrent-job ceiling.
+        raise HTTPException(status_code=429, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=plagiarism_analyzer.sanitize_error_message(exc),
+        ) from exc
+
+    return {
+        "job_id": state.job_id,
+        "total_sections": len(state.sections),
+        "status": state.status,
+    }
+
+
+@router.get("/jobs/{job_id}")
+@limiter.limit("120/minute")  # 2/sec is generous vs. the 5s spec
+async def get_job(request: Request, job_id: str) -> dict:
+    """Return the current snapshot of a job. Safe to poll every ~5s."""
+    j = plagiarism_jobs.job_manager.get_job(job_id)
+    if not j:
+        raise HTTPException(
+            status_code=404,
+            detail="Job not found or expired (jobs are kept for 30 minutes).",
+        )
+    return plagiarism_jobs.serialize_job(j)
+
+
+@router.post("/jobs/{job_id}/retry")
+@limiter.limit("10/minute")
+async def retry_job(request: Request, job_id: str) -> dict:
+    """Re-queue only the failed/timed-out sections of a finished job."""
+    try:
+        j = plagiarism_jobs.job_manager.retry_failed(job_id)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if j is None:
+        raise HTTPException(status_code=404, detail="Job not found or expired.")
+    return plagiarism_jobs.serialize_job(j)
+
+
+@router.delete("/jobs/{job_id}")
+@limiter.limit("30/minute")
+async def cancel_job(request: Request, job_id: str) -> dict:
+    """Signal cancellation. The worker stops at the next section boundary."""
+    ok = plagiarism_jobs.job_manager.cancel_job(job_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Job not found.")
+    return {"ok": True}
 
 
 # ---------------------------------------------------------------------------

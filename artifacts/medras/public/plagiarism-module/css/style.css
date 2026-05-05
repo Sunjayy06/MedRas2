@@ -1022,3 +1022,54 @@ a:hover { text-decoration: underline; }
 @media (max-width: 720px) {
   .pm-stage-grid { grid-template-columns: 1fr; }
 }
+
+/* ===== Job-polling progress UI (added 2026-05-05) ===== */
+.pm-progress-detail {
+  display: flex; flex-wrap: wrap; gap: 12px 22px; align-items: baseline;
+  margin-top: 8px; font-size: 13px; color: var(--pm-text-soft);
+}
+.pm-progress-pass { color: #2a2a2a; font-weight: 600; }
+.pm-progress-counts { font-variant-numeric: tabular-nums; }
+.pm-progress-eta { font-variant-numeric: tabular-nums; color: #5a5a5a; }
+.pm-progress-reassure {
+  margin: 10px 0 0; font-size: 13px; color: var(--pm-text-soft); font-style: italic;
+}
+.pm-progress-card.is-finished .pm-progress-fill { background: #4caf50; }
+.pm-progress-item.is-failed { color: #b8312f; }
+.pm-progress-item.is-failed .pm-progress-item-state { font-weight: 600; }
+
+/* Retry banner */
+.pm-retry-banner {
+  display: flex; flex-wrap: wrap; gap: 14px; align-items: center; justify-content: space-between;
+  padding: 14px 18px; margin: 16px 0; border-radius: 10px;
+  background: #fff8db; border: 1px solid #f0d97a; color: #5a4500;
+}
+.pm-retry-banner-text { display: flex; flex-direction: column; gap: 2px; flex: 1 1 240px; }
+.pm-retry-banner-text strong { color: #4a3700; }
+.pm-retry-banner.is-hidden { display: none; }
+
+/* Failed-section card body */
+.pm-section-card-failed {
+  padding: 14px 16px; background: #fff5f4; border-radius: 8px;
+  border: 1px solid #f3c6c4; color: #8a2a28; font-size: 14px; line-height: 1.5;
+}
+.pm-section-card-failed p { margin: 0 0 8px; }
+.pm-section-card-failed p:last-child { margin: 0; }
+
+/* Fade-in animation as each section card lands */
+@keyframes pm-card-fadein {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0);   }
+}
+.pm-section-card--fadein {
+  animation: pm-card-fadein 350ms ease-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .pm-section-card--fadein { animation: none; }
+}
+
+@media (max-width: 480px) {
+  .pm-retry-banner { flex-direction: column; align-items: stretch; }
+  .pm-retry-banner .pm-btn { width: 100%; }
+  .pm-progress-detail { flex-direction: column; gap: 4px; }
+}
