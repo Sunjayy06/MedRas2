@@ -176,7 +176,7 @@ def _build_session_view(entry, classifications, assignment) -> Dict[str, Any]:
 def _build_response(job_id: str, entry) -> Dict[str, Any]:
     classifications = entry.meta.get("classifications") or variable_classifier.classify_dataframe(entry.df)
     entry.meta["classifications"] = classifications
-    preview = excel_loader.preview_records(entry.df, n=5)
+    preview = excel_loader.preview_records(entry.df, n=10)
     columns = list(entry.df.columns)
     # Include columns whose NAME strongly suggests an identifier even if the
     # classifier flagged them otherwise (longitudinal/follow-up files have many

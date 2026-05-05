@@ -42,6 +42,203 @@
 }
 .se-practice-custom-link a:hover { text-decoration: underline; }
 
+/* "Build your own practice dataset" entry card (Step 2C) ------------------- */
+.se-custom-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 22px 0 0;
+  padding: 16px 18px;
+  background: #faf5ff;
+  border: 1px solid #e9d5ff;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: border-color .15s, background .15s, transform .05s;
+  text-align: left;
+}
+.se-custom-card:hover {
+  border-color: #a855f7;
+  background: #f3e8ff;
+}
+.se-custom-card:focus-visible {
+  outline: 2px solid #6d28d9;
+  outline-offset: 2px;
+}
+.se-custom-card-icon {
+  flex: 0 0 auto;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: #ede9fe;
+  color: #6d28d9;
+  display: grid;
+  place-items: center;
+}
+.se-custom-card-icon svg { width: 22px; height: 22px; }
+.se-custom-card-body {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.se-custom-card-body strong {
+  display: block;
+  color: #4c1d95;
+  font-weight: 700;
+  font-size: 15px;
+}
+.se-custom-card-body span {
+  color: #6b21a8;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.se-custom-card-arrow {
+  flex: 0 0 auto;
+  color: #6d28d9;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1;
+}
+@media (max-width: 540px) {
+  .se-custom-card { flex-wrap: wrap; }
+  .se-custom-card-arrow { display: none; }
+}
+
+/* Inline custom-wizard panels (Screen 2C-CUSTOM) -------------------------- */
+.se-cw-progress {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 4px 0 22px;
+}
+.se-cw-dot {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: #9ca3af;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  transition: background .15s, color .15s, border-color .15s;
+}
+.se-cw-dot.is-done {
+  background: #ddd6fe;
+  border-color: #c4b5fd;
+  color: #5b21b6;
+}
+.se-cw-dot.is-active {
+  background: #6d28d9;
+  border-color: #6d28d9;
+  color: #fff;
+  box-shadow: 0 0 0 4px rgba(109, 40, 217, .15);
+}
+.se-cw-rule {
+  width: 28px;
+  height: 2px;
+  background: #e5e7eb;
+  border-radius: 1px;
+}
+.se-cw-panel { margin-top: 4px; }
+.se-cw-panel.is-hidden { display: none; }
+.se-cw-panel h3 {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--color-text);
+  margin: 0 0 6px;
+}
+.se-cw-panel .se-hint { margin: 0 0 14px; }
+.se-cw-panel textarea,
+.se-cw-panel input[type="number"] {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font: inherit;
+  background: #fff;
+  color: var(--color-text);
+}
+.se-cw-panel textarea { min-height: 140px; resize: vertical; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.se-cw-panel input[type="number"]:focus,
+.se-cw-panel textarea:focus { outline: 2px solid #6d28d9; outline-offset: 1px; border-color: #6d28d9; }
+.se-cw-panel .se-actions { margin-top: 18px; }
+.se-optional { color: #9ca3af; font-weight: 400; font-size: 14px; margin-left: 6px; }
+
+.se-cw-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.se-cw-field-row {
+  display: grid;
+  grid-template-columns: minmax(160px, 1.2fr) minmax(160px, 1fr) minmax(220px, 1.6fr);
+  gap: 12px;
+  align-items: center;
+  padding: 10px 12px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+}
+.se-cw-field-name {
+  font-weight: 600;
+  color: var(--color-text);
+  word-break: break-word;
+}
+.se-cw-field-type select {
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #fff;
+  font: inherit;
+}
+.se-cw-field-extra {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.se-cw-mini {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #4b5563;
+}
+.se-cw-mini input {
+  width: 80px;
+  padding: 5px 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font: inherit;
+}
+.se-cw-mini-wide { flex: 1 1 100%; }
+.se-cw-mini-wide input { flex: 1 1 auto; min-width: 160px; width: auto; }
+@media (max-width: 720px) {
+  .se-cw-field-row { grid-template-columns: 1fr; }
+}
+
+/* Preview screen practice extras (Step 3 note + extra buttons) ------------ */
+.se-preview-step3-note {
+  margin: 6px 0 12px;
+  padding: 10px 14px;
+  background: #f5f3ff;
+  border: 1px solid #ddd6fe;
+  border-left: 3px solid #6d28d9;
+  border-radius: 8px;
+  color: #4c1d95;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.se-preview-step3-note strong { color: #5b21b6; }
+.se-preview-step3-note.is-hidden { display: none; }
+#btn-regenerate-custom.is-hidden,
+#btn-download-excel.is-hidden { display: none; }
+
 .se-main {
   max-width: var(--container-width);
   margin: 0 auto;

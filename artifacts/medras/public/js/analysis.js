@@ -53,6 +53,18 @@ const state = {
   // --- Chatboxes 2/3/4 (PART 5) ---
   chatThreads: { normality: [], plan: [], results: [] },
   chatOpened:  { normality: false, plan: false, results: false },
+
+  // --- Inline Custom Practice Wizard (Step 2C → 4-question card) ---
+  // Tracks the user's answers across the 4 question panels so "Regenerate
+  // with changes" can re-open the wizard pre-filled. `dataSource` lets the
+  // preview screen know whether to surface practice-only buttons.
+  customWizard: {
+    activeQ: 1,
+    variables: [],   // [{name, type, min, max, percent, levels[]}]
+    n: 60,
+    effect: "",
+  },
+  dataSource: null,  // "upload" | "template" | "custom"
 };
 
 /* ------------------------------------------------------------------ */
@@ -201,6 +213,9 @@ async function resumeFromSavedSession(saved) {
       // already; nothing extra needed here.
     } else if (resolved === "preview") {
       showScreen("preview");
+      // Without renderPreview() the zone label, conditional buttons, and
+      // Step-3 reassurance note never get rebuilt for the resumed dataset.
+      renderPreview();
     } else if (resolved === "normality") {
       showScreen("normality");
       loadNormality();
@@ -272,7 +287,7 @@ function renderResumeBanner(saved) {
 /* ------------------------------------------------------------------ */
 
 const SCREENS = [
-  "1", "intake", "2a", "2c", "preview",
+  "1", "intake", "2a", "2c", "2c-custom", "preview",
   "3", "4",
   "normality", "plan", "results", "export",
 ];
@@ -281,7 +296,7 @@ const SCREENS = [
 //               5 Normality, 6 Plan and Run, 7 Results, 8 Export.
 const SCREEN_TO_STEP = {
   "1": 1, "intake": 1,
-  "2a": 2, "2c": 2, "preview": 2,
+  "2a": 2, "2c": 2, "2c-custom": 2, "preview": 2,
   "3": 3,
   "4": 4,
   "normality": 5, "plan": 6, "results": 7, "export": 8,
@@ -668,6 +683,7 @@ async function handleUpload(file) {
   form.append("file", file);
   try {
     const data = await api("/upload", { method: "POST", body: form });
+    state.dataSource = "upload";
     ingestDataset(data);
     setStatus(status, `Loaded ${data.summary.rows} rows × ${data.summary.cols} columns.`, "success");
     showScreen("preview");
@@ -720,6 +736,16 @@ function bindScreen2C() {
     $('[data-testid="text-n-value"]').textContent = slider.value;
   });
   $('[data-action="generate"]').addEventListener("click", handleGenerate);
+  // The "Build your own practice dataset" card opens the inline 4-question
+  // wizard right here in Step 2 — no page navigation, no separate route.
+  const customCard = $('[data-action="open-custom-wizard"]');
+  if (customCard) {
+    const open = () => openCustomWizard(1);
+    customCard.addEventListener("click", open);
+    customCard.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); }
+    });
+  }
 }
 
 async function handleGenerate() {
@@ -740,6 +766,7 @@ async function handleGenerate() {
         intake: state.intake || null,
       }),
     });
+    state.dataSource = "template";
     ingestDataset(data);
     setStatus(status, `Generated ${data.summary.rows} patients × ${data.summary.cols} variables.`, "success");
     showScreen("preview");
@@ -747,6 +774,191 @@ async function handleGenerate() {
   } catch (err) {
     setStatus(status, `Could not generate: ${err.message}`, "error");
   }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Screen 2C-CUSTOM — inline 4-question custom wizard                  */
+/* ------------------------------------------------------------------ */
+
+// The custom wizard hits a different router (`/api/practice`) than the rest
+// of the analysis flow (`/api/stats`), so it goes through fetch() directly
+// instead of the api() helper which bakes in API_BASE.
+async function practiceApi(path, body) {
+  const res = await fetch(`/api/practice${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    let detail = `${res.status} ${res.statusText}`;
+    try { const b = await res.json(); if (b.detail) detail = b.detail; } catch (_) {}
+    throw new Error(detail);
+  }
+  return res.json();
+}
+
+function showCustomQ(n) {
+  state.customWizard.activeQ = n;
+  $$("#screen-2c-custom .se-cw-panel").forEach((p) => {
+    p.classList.toggle("is-hidden", Number(p.dataset.q) !== n);
+  });
+  $$("#screen-2c-custom .se-cw-dot").forEach((d) => {
+    const dn = Number(d.dataset.q);
+    d.classList.toggle("is-active", dn === n);
+    d.classList.toggle("is-done", dn < n);
+  });
+}
+
+function openCustomWizard(q) {
+  showScreen("2c-custom");
+  showCustomQ(q || 1);
+}
+
+function renderCustomQ3Fields() {
+  const wrap = $("#cw-q3-fields");
+  if (!wrap) return;
+  const vars = state.customWizard.variables;
+  if (!vars.length) {
+    wrap.innerHTML = `<p class="se-hint">No variables yet — go back and add some.</p>`;
+    return;
+  }
+  wrap.innerHTML = vars.map((v, i) => {
+    const typeSel = `
+      <select data-i="${i}" data-k="type" data-testid="select-cw-type-${i}">
+        <option value="scale"${v.type === "scale" ? " selected" : ""}>Scale (number)</option>
+        <option value="binary"${v.type === "binary" ? " selected" : ""}>Binary (yes/no)</option>
+        <option value="nominal"${v.type === "nominal" ? " selected" : ""}>Nominal (category)</option>
+      </select>`;
+    let extra = "";
+    if (v.type === "scale") {
+      extra = `
+        <label class="se-cw-mini">Min <input type="number" data-i="${i}" data-k="min" value="${v.min ?? ""}" placeholder="auto"></label>
+        <label class="se-cw-mini">Max <input type="number" data-i="${i}" data-k="max" value="${v.max ?? ""}" placeholder="auto"></label>`;
+    } else if (v.type === "binary") {
+      extra = `<label class="se-cw-mini">% positive <input type="number" data-i="${i}" data-k="percent" min="5" max="95" value="${v.percent ?? 50}"></label>`;
+    } else {
+      extra = `<label class="se-cw-mini se-cw-mini-wide">Levels (comma-separated) <input type="text" data-i="${i}" data-k="levels" value="${escapeHtml((v.levels || []).join(", "))}" placeholder="e.g. Group A, Group B"></label>`;
+    }
+    return `
+      <div class="se-cw-field-row">
+        <div class="se-cw-field-name">${escapeHtml(v.name)}</div>
+        <div class="se-cw-field-type">${typeSel}</div>
+        <div class="se-cw-field-extra">${extra}</div>
+      </div>`;
+  }).join("");
+  wrap.onchange = (e) => {
+    const t = e.target;
+    const i = Number(t.dataset.i);
+    const k = t.dataset.k;
+    if (Number.isNaN(i) || !k || !vars[i]) return;
+    if (k === "levels") {
+      vars[i].levels = String(t.value || "").split(",").map((s) => s.trim()).filter(Boolean);
+    } else if (k === "type") {
+      vars[i].type = t.value;
+      renderCustomQ3Fields();   // type change → re-render so extras match
+    } else {
+      vars[i][k] = t.value === "" ? null : Number(t.value);
+    }
+  };
+}
+
+async function customWizardNext(from) {
+  if (from === 1) {
+    const text = ($("#cw-q1-vars").value || "").trim();
+    const status = $("#cw-q1-status");
+    if (!text) { setStatus(status, "Add at least one variable name.", "error"); return; }
+    setStatus(status, "Detecting types…", "loading");
+    try {
+      const detected = await practiceApi("/detect-types", { text });
+      state.customWizard.variables = (detected.variables || []).map((v) => ({
+        name: v.name,
+        type: v.type || "scale",
+        min: null, max: null, percent: null, levels: [],
+      }));
+      if (!state.customWizard.variables.length) {
+        setStatus(status, "Could not extract any variables — please check your list.", "error");
+        return;
+      }
+      setStatus(status, "");
+      showCustomQ(2);
+    } catch (err) {
+      setStatus(status, `Could not detect types: ${err.message}`, "error");
+    }
+  } else if (from === 2) {
+    const n = Number($("#cw-q2-n").value);
+    if (!Number.isFinite(n) || n < 20 || n > 500) {
+      alert("Pick a number between 20 and 500.");
+      return;
+    }
+    state.customWizard.n = n;
+    renderCustomQ3Fields();
+    showCustomQ(3);
+  } else if (from === 3) {
+    showCustomQ(4);
+  }
+}
+
+async function customWizardGenerate() {
+  const status = $("#cw-status");
+  const cw = state.customWizard;
+  cw.effect = ($("#cw-q4-effect").value || "").trim();
+  if (!cw.variables.length) {
+    setStatus(status, "No variables to generate — go back to question 1.", "error");
+    return;
+  }
+  setStatus(status, "Generating dataset…", "loading");
+  try {
+    // Mirror practice.html: POST to /api/practice/generate to create the
+    // dataset, then re-fetch via /api/stats/dataset/<job_id> to get the
+    // full preview/classification payload the analysis flow expects.
+    const created = await practiceApi("/generate", {
+      objective: "",
+      outcome: "",
+      variables: cw.variables.map((v) => ({
+        name: v.name,
+        type: v.type,
+        min: v.min,
+        max: v.max,
+        percent: v.percent,
+        levels: v.levels && v.levels.length ? v.levels : null,
+        is_outcome: false,
+      })),
+      n: cw.n,
+      expected_effect: cw.effect,
+      instructions: "",
+      missing_pct: 5.0,
+    });
+    const data = await api(`/dataset/${created.job_id}`);
+    state.dataSource = "custom";
+    state.entryChoice = "practice";
+    ingestDataset(data);
+    setStatus(status, "");
+    showScreen("preview");
+    renderPreview();
+  } catch (err) {
+    setStatus(status, `Could not generate: ${err.message}`, "error");
+  }
+}
+
+function bindCustomWizard() {
+  const root = $("#screen-2c-custom");
+  if (!root) return;
+  root.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-cw-action]");
+    if (!btn) return;
+    const action = btn.dataset.cwAction;
+    if (action === "cancel") {
+      showScreen("2c");
+    } else if (action === "prev") {
+      const from = Number(btn.dataset.from);
+      showCustomQ(Math.max(1, from - 1));
+    } else if (action === "next") {
+      const from = Number(btn.dataset.from);
+      customWizardNext(from);
+    } else if (action === "generate") {
+      customWizardGenerate();
+    }
+  });
 }
 
 /* ------------------------------------------------------------------ */
@@ -783,13 +995,13 @@ function ingestDataset(data) {
   state.summary = data.summary;
   state.columns = data.columns;
   // Surface the practice banner whenever the backend marks the dataset
-  // as dummy/wizard-generated. The banner stays visible across screens.
+  // as dummy/wizard-generated. Toggle (not just show) so a real upload
+  // after a prior practice run hides the leftover banner.
   try {
     const s = data.summary || {};
-    if (s.is_dummy || s.is_practice_wizard || data.is_dummy || data.is_practice_wizard) {
-      const banner = document.getElementById("practice-banner");
-      if (banner) banner.classList.remove("is-hidden");
-    }
+    const isPractice = !!(s.is_dummy || s.is_practice_wizard || data.is_dummy || data.is_practice_wizard);
+    const banner = document.getElementById("practice-banner");
+    if (banner) banner.classList.toggle("is-hidden", !isPractice);
   } catch (_) { /* banner is purely cosmetic */ }
   state.classifications = data.classifications || [];
   state.preview = data.preview || [];
@@ -1452,6 +1664,27 @@ function renderPreview() {
 
   // ZONE 4 — preview table (only when previewReady)
   renderPreviewZone(s);
+
+  // Practice-data extras: longer preview, Step 3 reassurance, optional
+  // Excel download, optional "regenerate with changes" shortcut back into
+  // the inline custom wizard. Real uploads hide all of this. The "custom"
+  // condition derives from the backend flag so deep-link/resume paths work
+  // even when state.dataSource was lost (e.g. fresh tab).
+  const isPractice = !!(s.is_dummy || s.is_practice_wizard);
+  const isCustom = !!s.is_practice_wizard || state.dataSource === "custom";
+  const label = $("#preview-zone-label");
+  // Backend always returns up to 10 preview rows now. Use the actual array
+  // length so the label is honest if a tiny dataset returns fewer.
+  if (label) {
+    const n = Array.isArray(state.preview) ? state.preview.length : 0;
+    label.textContent = `Preview — first ${n || (isPractice ? 10 : 5)} rows`;
+  }
+  const note = $("#preview-step3-note");
+  if (note) note.classList.toggle("is-hidden", !isPractice);
+  const dl = $("#btn-download-excel");
+  if (dl) dl.classList.toggle("is-hidden", !isPractice);
+  const regen = $("#btn-regenerate-custom");
+  if (regen) regen.classList.toggle("is-hidden", !isCustom);
 }
 
 function bindPreview() {
@@ -1478,6 +1711,33 @@ function bindPreview() {
   });
   $('[data-action="restart"]', $("#screen-preview")).addEventListener("click", restart);
   $$('[data-action="back-to-1"]').forEach((b) => b.addEventListener("click", () => showScreen("1")));
+
+  // Practice-only: Download Excel button hits the practice router directly
+  // and lets the browser stream the file (no JSON round-trip).
+  const dl = $("#btn-download-excel");
+  if (dl) {
+    dl.addEventListener("click", () => {
+      if (!state.jobId) return;
+      window.location.href = `/api/practice/${state.jobId}/excel`;
+    });
+  }
+  // Custom-wizard only: jump back into the wizard at Q3 (smart per-variable
+  // settings) so the user can tweak ranges/types and regenerate.
+  const regen = $("#btn-regenerate-custom");
+  if (regen) {
+    regen.addEventListener("click", () => {
+      // Keep prior answers in state.customWizard so the wizard re-opens
+      // pre-filled. Q3 is where range/type tweaking happens.
+      if (!state.customWizard.variables.length) {
+        // Fallback if user landed on preview without going through wizard
+        // (e.g. via ?practice=...). Send them to Q1 to start fresh.
+        openCustomWizard(1);
+        return;
+      }
+      renderCustomQ3Fields();
+      openCustomWizard(3);
+    });
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -3135,6 +3395,17 @@ function restart() {
   state.quality = null;
   state.qualityActions = [];
   state.followUp = null;
+  // Reset preview-routing flags + custom-wizard answers so a fresh upload
+  // after a prior practice run doesn't inherit Regenerate / Download Excel
+  // buttons or stale Q1-Q3 selections.
+  state.dataSource = null;
+  state.customWizard = { activeQ: 1, variables: [], n: 60, effect: "" };
+  // restart() doesn't go through ingestDataset, so hide the practice banner
+  // here too — otherwise it persists across "← Change file" → upload flows.
+  try {
+    const banner = document.getElementById("practice-banner");
+    if (banner) banner.classList.add("is-hidden");
+  } catch (_) { /* banner is purely cosmetic */ }
   state.issues = [];
   state.autoCoding = [];
   state.assistantThread = [];
@@ -3194,6 +3465,7 @@ function initApp() {
     bindIntake();
     bindScreen2A();
     bindScreen2C();
+    bindCustomWizard();
     bindPreview();
     bindScreen3();
     bindScreen4();
@@ -3221,8 +3493,13 @@ function initApp() {
       api(`/dataset/${practiceId}`)
         .then((data) => {
           state.entryChoice = "practice";
+          // Deep-link from the standalone practice wizard ⇒ treat as a
+          // wizard-built dataset so the preview surfaces the same extras
+          // (Step-3 note, Download Excel, Regenerate) as the inline path.
+          state.dataSource = "custom";
           ingestDataset(data);
           showScreen("preview");
+          renderPreview();
         })
         .catch((err) => {
           console.warn("Could not load practice dataset:", err.message);

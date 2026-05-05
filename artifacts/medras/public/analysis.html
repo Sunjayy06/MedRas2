@@ -10,7 +10,7 @@
     />
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%232f6fed'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-family='Inter,sans-serif' font-size='18' font-weight='700' fill='white'%3EM%3C/text%3E%3C/svg%3E" />
     <link rel="stylesheet" href="/css/style.css" />
-    <link rel="stylesheet" href="/css/analysis.css?v=2026050403" />
+    <link rel="stylesheet" href="/css/analysis.css?v=2026050502" />
   </head>
   <body>
     <header class="site-header" data-testid="site-header">
@@ -278,12 +278,85 @@
 
         <div id="practice-status" class="se-status" role="status" aria-live="polite" data-testid="status-practice"></div>
 
-        <p class="se-practice-custom-link">
-          Need different variables?
-          <a href="/practice.html" data-testid="link-practice-custom">
-            Or build a custom practice dataset →
-          </a>
-        </p>
+        <div class="se-custom-card" data-action="open-custom-wizard" role="button" tabindex="0" data-testid="card-custom-wizard">
+          <div class="se-custom-card-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+          </div>
+          <div class="se-custom-card-body">
+            <strong>Build your own practice dataset</strong>
+            <span>Answer 4 quick questions and we'll generate a fake dataset with exactly the variables you need. Nothing is uploaded — it's safe to experiment.</span>
+          </div>
+          <span class="se-custom-card-arrow" aria-hidden="true">→</span>
+        </div>
+      </section>
+
+      <!-- ===========================================================
+           SCREEN 2C-CUSTOM · Build-your-own practice dataset wizard
+           =========================================================== -->
+      <section class="se-screen se-screen-narrow is-hidden" id="screen-2c-custom" data-testid="screen-2c-custom">
+        <header class="se-screen-head">
+          <h2>Build your own practice dataset</h2>
+          <p>Answer 4 quick questions. We'll generate fake patient data with the variables you describe — nothing is uploaded.</p>
+        </header>
+
+        <div class="se-cw-progress" aria-label="Question progress">
+          <span class="se-cw-dot is-active" data-q="1">1</span>
+          <span class="se-cw-rule"></span>
+          <span class="se-cw-dot" data-q="2">2</span>
+          <span class="se-cw-rule"></span>
+          <span class="se-cw-dot" data-q="3">3</span>
+          <span class="se-cw-rule"></span>
+          <span class="se-cw-dot" data-q="4">4</span>
+        </div>
+
+        <!-- Q1 -->
+        <div class="se-cw-panel" data-q="1" data-testid="panel-cw-q1">
+          <h3>1. What variables do you want?</h3>
+          <p class="se-hint">Type one variable name per line. Examples: <em>age, sex, BMI, treatment_group, Harris Hip Score</em>. We'll auto-detect what kind each one is in the next steps.</p>
+          <textarea id="cw-q1-vars" rows="8" placeholder="age&#10;sex&#10;BMI&#10;hemoglobin&#10;treatment_group&#10;Harris Hip Score" data-testid="textarea-cw-vars"></textarea>
+          <div class="se-actions">
+            <button type="button" class="btn btn-secondary" data-cw-action="cancel" data-testid="button-cw-cancel">← Back to templates</button>
+            <button type="button" class="btn btn-primary" data-cw-action="next" data-from="1" data-testid="button-cw-q1-next">Next →</button>
+          </div>
+          <div id="cw-q1-status" class="se-status" role="status" aria-live="polite" data-testid="status-cw-q1"></div>
+        </div>
+
+        <!-- Q2 -->
+        <div class="se-cw-panel is-hidden" data-q="2" data-testid="panel-cw-q2">
+          <h3>2. How many patients?</h3>
+          <p class="se-hint">Pick a sample size between 20 and 500. Around 60 is a comfortable default for practice.</p>
+          <label class="se-field" style="max-width:240px;">
+            <span class="se-visually-hidden">Number of patients</span>
+            <input type="number" id="cw-q2-n" min="20" max="500" step="1" value="60" data-testid="input-cw-n" />
+          </label>
+          <div class="se-actions">
+            <button type="button" class="btn btn-secondary" data-cw-action="prev" data-from="2" data-testid="button-cw-q2-prev">← Back</button>
+            <button type="button" class="btn btn-primary" data-cw-action="next" data-from="2" data-testid="button-cw-q2-next">Next →</button>
+          </div>
+        </div>
+
+        <!-- Q3 -->
+        <div class="se-cw-panel is-hidden" data-q="3" data-testid="panel-cw-q3">
+          <h3>3. Any specific requirements per variable?</h3>
+          <p class="se-hint">We've made smart guesses about each variable's type and range. Tweak anything you'd like — or leave the defaults and continue.</p>
+          <div id="cw-q3-fields" class="se-cw-fields" data-testid="cw-fields"></div>
+          <div class="se-actions">
+            <button type="button" class="btn btn-secondary" data-cw-action="prev" data-from="3" data-testid="button-cw-q3-prev">← Back</button>
+            <button type="button" class="btn btn-primary" data-cw-action="next" data-from="3" data-testid="button-cw-q3-next">Next →</button>
+          </div>
+        </div>
+
+        <!-- Q4 -->
+        <div class="se-cw-panel is-hidden" data-q="4" data-testid="panel-cw-q4">
+          <h3>4. What result are you expecting? <span class="se-optional">(optional)</span></h3>
+          <p class="se-hint">Tell us in a sentence which variable should differ between groups and by roughly how much. We'll bake this signal into the data so your analysis can find it. Leave blank for random/no-effect data.</p>
+          <textarea id="cw-q4-effect" rows="4" placeholder="e.g. mean Harris Hip Score is about 8 points higher in the treatment group" data-testid="textarea-cw-effect"></textarea>
+          <div class="se-actions">
+            <button type="button" class="btn btn-secondary" data-cw-action="prev" data-from="4" data-testid="button-cw-q4-prev">← Back</button>
+            <button type="button" class="btn btn-primary" data-cw-action="generate" data-testid="button-cw-generate">Generate dataset</button>
+          </div>
+          <div id="cw-status" class="se-status" role="status" aria-live="polite" data-testid="status-cw"></div>
+        </div>
       </section>
 
       <!-- ===========================================================
@@ -367,6 +440,9 @@
         <!-- ZONE 4 · Preview (visible only after a decision) -->
         <div class="se-zone se-preview-zone" id="preview-zone" data-zone="4">
           <p class="se-zone-label" id="preview-zone-label">Preview — first 5 rows</p>
+          <p class="se-preview-step3-note is-hidden" id="preview-step3-note" data-testid="text-step3-note">
+            <strong>Step 3 will confirm</strong> what kind of variable each column is — you can change anything that looks wrong there.
+          </p>
 
           <div class="se-preview-placeholder" id="preview-placeholder">
             Select your sheets above and click <strong>Merge</strong> to see the combined dataset.
@@ -405,7 +481,9 @@
 
         <div class="se-actions se-preview-actions">
           <button type="button" class="btn btn-secondary" data-action="restart" data-testid="button-preview-restart">← Change file</button>
-          <button type="button" class="btn btn-primary" data-action="confirm-preview" data-testid="button-confirm-preview" disabled>Confirm and go to Variables →</button>
+          <button type="button" class="btn btn-secondary is-hidden" data-action="regenerate-custom" id="btn-regenerate-custom" data-testid="button-regenerate-custom">Regenerate with changes</button>
+          <button type="button" class="btn btn-secondary is-hidden" data-action="download-excel" id="btn-download-excel" data-testid="button-download-excel">Download as Excel</button>
+          <button type="button" class="btn btn-primary" data-action="confirm-preview" data-testid="button-confirm-preview" disabled>Use this data for analysis →</button>
         </div>
 
         <div id="preview-status" class="se-status" role="status" aria-live="polite" data-testid="status-preview"></div>
@@ -752,6 +830,6 @@
       </div>
     </footer>
 
-    <script src="/js/analysis.js?v=2026050403" defer></script>
+    <script src="/js/analysis.js?v=2026050502" defer></script>
   </body>
 </html>
