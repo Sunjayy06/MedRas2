@@ -23,6 +23,51 @@
       .replace(/'/g, "&#39;");
   }
 
+  function escapeRegex(s) {
+    return String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  }
+
+  // Build a single case-insensitive regex matching any protected term, with
+  // longest-first ordering so e.g. "p < 0.001" wins over "0.001". Returns
+  // ``null`` when no terms are supplied. The regex is recreated once per
+  // page render rather than once per card.
+  let _termRegex = null;
+  function buildTermRegex(terms) {
+    if (!terms || !terms.length) return null;
+    const cleaned = Array.from(new Set(
+      terms.map((t) => String(t || "").trim()).filter(Boolean)
+    ));
+    if (!cleaned.length) return null;
+    cleaned.sort((a, b) => b.length - a.length);
+    const pat = cleaned.map(escapeRegex).join("|");
+    try {
+      return new RegExp("(" + pat + ")", "g");
+    } catch (_) {
+      return null;
+    }
+  }
+
+  // Escape ``text`` and wrap any matches of ``rx`` in <mark>. Done in a
+  // single pass so HTML in the protected terms (e.g. "<5%") is escaped
+  // BEFORE being injected — the input is treated as plain text throughout.
+  function highlightTerms(text, rx) {
+    const safe = String(text == null ? "" : text);
+    if (!rx) return escapeHtml(safe);
+    let out = "";
+    let lastIdx = 0;
+    rx.lastIndex = 0;
+    let m;
+    while ((m = rx.exec(safe)) !== null) {
+      // Defensive against zero-width matches.
+      if (m.index === rx.lastIndex) { rx.lastIndex++; continue; }
+      out += escapeHtml(safe.slice(lastIdx, m.index));
+      out += '<mark class="pm-protected-term">' + escapeHtml(m[0]) + '</mark>';
+      lastIdx = rx.lastIndex;
+    }
+    out += escapeHtml(safe.slice(lastIdx));
+    return out || '<span class="pm-compare-empty">—</span>';
+  }
+
   // ---------- DOM refs ----------
   const empty = $("#pm-empty");
   const progressCard = $("#pm-progress-card");
@@ -239,6 +284,15 @@
       ? "0 / 0"
       : `${preserved} / ${protectedTotal}`;
 
+    // Build the highlight regex from whatever protected terms we sent to
+    // the pipeline (plus any that came back). Terms that the LLM dropped
+    // are still highlighted in the original column so the user can find
+    // and reinsert them.
+    const termsForHighlight = (input && Array.isArray(input.protected_terms))
+      ? input.protected_terms
+      : [];
+    _termRegex = buildTermRegex(termsForHighlight);
+
     // Surface warnings (missing terms, fallbacks)
     const warnings = [];
     if (missing.length > 0) {
@@ -329,11 +383,11 @@
       <div class="pm-section-card-compare" data-testid="compare-${sec.index}">
         <div class="pm-compare-col">
           <div class="pm-compare-head">Original</div>
-          <div class="pm-compare-text" data-testid="text-original-${sec.index}">${escapeHtml(original) || '<span class="pm-compare-empty">—</span>'}</div>
+          <div class="pm-compare-text" data-testid="text-original-${sec.index}">${highlightTerms(original, _termRegex)}</div>
         </div>
         <div class="pm-compare-col">
           <div class="pm-compare-head">Rewritten${skipped && skipReason === "references" ? " (verbatim)" : ""}</div>
-          <div class="pm-compare-text" data-testid="text-rewritten-${sec.index}">${escapeHtml(finalText) || '<span class="pm-compare-empty">—</span>'}</div>
+          <div class="pm-compare-text" data-testid="text-rewritten-${sec.index}">${highlightTerms(finalText, _termRegex)}</div>
         </div>
       </div>
       ${stagesHtml}

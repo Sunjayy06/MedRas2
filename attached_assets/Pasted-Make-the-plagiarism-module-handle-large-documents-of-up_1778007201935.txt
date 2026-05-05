@@ -1,0 +1,48 @@
+Make the plagiarism module handle large documents of up to 200 pages efficiently without hanging, crashing or timing out. Implement all of the following:
+
+1. CHUNK PROCESSING — never process the whole document at once
+When a document is uploaded, split it into individual sections as already done. Then process each section one at a time in a sequential queue. Only send one section to the AI at a time. Wait for that section to complete before sending the next. This prevents memory overload and API timeouts.
+
+2. JOB ID SYSTEM — so the browser never has to wait
+When the user clicks Rewrite, immediately return a unique jobId to the frontend like { jobId: "abc123", totalSections: 9 }. The actual rewriting runs in the background on the server. The frontend uses this jobId to check progress.
+
+Add a background processing function that:
+- Stores job progress in a server-side Map using the jobId as key
+- Processes one section at a time
+- After each section completes, updates the job progress in the Map: { jobId, status: "processing", completedSections: 3, totalSections: 9, currentSection: "Methods", results: [...completed sections so far...] }
+- When all sections are done sets status to "complete"
+- If any section fails, marks that section as failed and continues with the next one — never stop the whole job because one section had an error
+
+3. LIVE PROGRESS POLLING — frontend checks every 5 seconds
+After receiving the jobId, the frontend should poll GET /api/plagiarism-module/progress/:jobId every 5 seconds.
+The response returns current progress: { status, completedSections, totalSections, currentSection, percentComplete, results }
+The frontend updates the progress bar and status text live as each section completes.
+As soon as each section result arrives, display it immediately on the results page — do not wait for all sections to finish before showing anything.
+
+4. STREAMING RESULTS — show sections as they finish
+On the results page, as each section comes back from the progress poll, append it to the page immediately with a smooth fade-in animation. The user sees section 1 appear, then section 2, then section 3 — the page fills up gradually. This makes a 200 page document feel fast because the user sees progress immediately.
+
+5. MEMORY MANAGEMENT — prevent server crashes
+After each section is processed and its result stored in the job Map, immediately clear the section's original text from memory — only keep the rewritten result.
+Set a maximum of 3 concurrent jobs at any time. If a 4th user tries to start a job, return: "The system is currently processing other documents. Please try again in a few minutes."
+Automatically delete completed jobs from the Map after 30 minutes to free memory.
+Never keep more than 500MB of text data in the job Map at once.
+
+6. TIMEOUT HANDLING — per section not per whole document
+Set a 60 second timeout on each individual AI call for each section. If one section times out, mark it as "timed out", skip it, and continue with the next section. At the end show the user which sections timed out with a button to retry just those sections individually.
+
+7. PROGRESS BAR UI — make it informative not just a spinner
+Replace any existing spinner with a detailed progress display showing:
+- A smooth animated progress bar showing percentage complete like 34%
+- Current section being processed: "Rewriting Discussion section..."
+- Which AI pass is running: "Pass 2 of 4 — Gemini AI pattern removal"
+- Sections completed so far: "3 of 9 sections complete"
+- Live estimated time remaining calculated from average time per section so far
+- A scrollable list below the progress bar showing completed sections with a green tick as they finish
+- A message: "You can scroll down to read completed sections while the rest processes"
+
+8. RETRY FAILED SECTIONS — do not make users reprocess everything
+On the results page, if any sections failed or timed out, show a yellow banner: "X sections could not be processed. Click below to retry just those sections."
+Add a "Retry Failed Sections" button that sends only the failed sections back through the pipeline without reprocessing the successful ones.
+
+Do not change any other part of the Medras application. Only modify the plagiarism module files and routes.

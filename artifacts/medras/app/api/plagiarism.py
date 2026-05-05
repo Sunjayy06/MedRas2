@@ -121,6 +121,25 @@ async def _read_with_cap(file: UploadFile, cap: int) -> bytes:
     return b"".join(chunks)
 
 
+def _safe_extract(filename: str, content: bytes) -> str:
+    """Wrap extract_text_from_upload so each known failure mode becomes
+    a clean HTTPException with a user-friendly message.
+
+    The catch-all branch sanitises the exception text so an unexpected
+    provider/library error can never include an API key.
+    """
+    try:
+        return plagiarism_analyzer.extract_text_from_upload(filename or "", content)
+    except plagiarism_analyzer.UploadExtractionError as exc:
+        raise HTTPException(status_code=exc.http_status, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        log.exception("file extraction failed")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Could not read file: {plagiarism_analyzer.sanitize_error_message(exc)}",
+        ) from exc
+
+
 def _normalise_provider(value: str | None) -> Literal["openai", "gemini", "auto"]:
     if value not in ("openai", "gemini", "auto"):
         return "auto"
@@ -146,12 +165,12 @@ async def check_text(request: Request, payload: CheckRequest) -> dict:
         result = plagiarism_analyzer.check_originality(text, provider=payload.provider)
     except RuntimeError as exc:
         # Missing API key — surface as 503 so the UI can show a helpful note.
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise HTTPException(status_code=503, detail=plagiarism_analyzer.sanitize_error_message(exc)) from exc
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise HTTPException(status_code=400, detail=plagiarism_analyzer.sanitize_error_message(exc)) from exc
     except Exception as exc:  # noqa: BLE001
         log.exception("plagiarism check failed")
-        raise HTTPException(status_code=502, detail=f"Analysis failed: {exc}") from exc
+        raise HTTPException(status_code=502, detail=f"Analysis failed: {plagiarism_analyzer.sanitize_error_message(exc)}") from exc
     return result
 
 
@@ -162,17 +181,16 @@ async def check_file(
     file: UploadFile = File(...),
     provider: str = Form("auto"),
 ) -> dict:
-    """Same as /check but accepts a PDF/DOCX/TXT file upload (≤100 MB)."""
+    """Same as /check but accepts a PDF/DOCX/TXT file upload (≤100 MB, ≤200 pages)."""
     provider_choice = _normalise_provider(provider)
     content = await _read_with_cap(file, MAX_UPLOAD_BYTES)
     if not content:
         raise HTTPException(status_code=400, detail="Uploaded file is empty.")
-
-    try:
-        text = plagiarism_analyzer.extract_text_from_upload(file.filename or "", content)
-    except Exception as exc:  # noqa: BLE001
-        log.exception("plagiarism file extract failed")
-        raise HTTPException(status_code=400, detail=f"Could not read file: {exc}") from exc
+    filename = file.filename
+    text = _safe_extract(filename or "", content)
+    # Free the raw upload bytes from memory as soon as extraction is done —
+    # we never persist uploads to disk and we no longer need them after this.
+    del content
 
     text = (text or "").strip()
     if not text:
@@ -188,13 +206,18 @@ async def check_file(
     try:
         result = plagiarism_analyzer.check_originality(text, provider=provider_choice)
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise HTTPException(status_code=503, detail=plagiarism_analyzer.sanitize_error_message(exc)) from exc
     except Exception as exc:  # noqa: BLE001
         log.exception("plagiarism file check failed")
-        raise HTTPException(status_code=502, detail=f"Analysis failed: {exc}") from exc
+        raise HTTPException(
+            status_code=502,
+            detail=f"Analysis failed: {plagiarism_analyzer.sanitize_error_message(exc)}",
+        ) from exc
 
-    result["filename"] = file.filename
-    result["analysed_chars"] = len(text)
+    analysed_chars = len(text)
+    del text  # text is now embedded in `result`; drop the local reference
+    result["filename"] = filename
+    result["analysed_chars"] = analysed_chars
     result["truncated"] = truncated
     return result
 
@@ -220,24 +243,24 @@ async def analyze_file(
     if not content:
         raise HTTPException(status_code=400, detail="Uploaded file is empty.")
 
-    name = (file.filename or "").lower()
+    filename = file.filename or ""
+    name = filename.lower()
     if not (name.endswith(".pdf") or name.endswith(".docx") or name.endswith(".txt") or name.endswith(".md")):
         raise HTTPException(
             status_code=415,
-            detail="Unsupported file type. Upload a .pdf, .docx, .txt, or .md file.",
+            detail="Unsupported file type. Please upload a .pdf, .docx, .txt or .md file.",
         )
 
-    try:
-        text = plagiarism_analyzer.extract_text_from_upload(file.filename or "", content)
-    except Exception as exc:  # noqa: BLE001
-        log.exception("plagiarism analyze-file extract failed")
-        raise HTTPException(status_code=400, detail=f"Could not read file: {exc}") from exc
+    size_bytes = len(content)
+    text = _safe_extract(filename, content)
+    # Drop the raw upload from memory as soon as we've turned it into text.
+    del content
 
     text = (text or "").strip()
     if not text:
         raise HTTPException(
             status_code=400,
-            detail="No readable text found in the file. Scanned PDFs without OCR cannot be analysed.",
+            detail="No readable text found in the file.",
         )
 
     truncated = False
@@ -249,11 +272,14 @@ async def analyze_file(
         breakdown = text_analyzer.analyze_document(text)
     except Exception as exc:  # noqa: BLE001
         log.exception("plagiarism analyze-file detection failed")
-        raise HTTPException(status_code=500, detail=f"Document analysis failed: {exc}") from exc
+        raise HTTPException(
+            status_code=500,
+            detail=f"Document analysis failed: {plagiarism_analyzer.sanitize_error_message(exc)}",
+        ) from exc
 
     return {
-        "filename": file.filename,
-        "size_bytes": len(content),
+        "filename": filename,
+        "size_bytes": size_bytes,
         "extracted_chars": len(text),
         "truncated": truncated,
         "extracted_text": text,
@@ -321,12 +347,12 @@ async def reduce_text(request: Request, payload: ReduceRequest) -> dict:
                 ),
             ) from exc
         except RuntimeError as exc:
-            raise HTTPException(status_code=503, detail=str(exc)) from exc
+            raise HTTPException(status_code=503, detail=plagiarism_analyzer.sanitize_error_message(exc)) from exc
         except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
+            raise HTTPException(status_code=400, detail=plagiarism_analyzer.sanitize_error_message(exc)) from exc
         except Exception as exc:  # noqa: BLE001
             log.exception("plagiarism rewrite_pipeline failed")
-            raise HTTPException(status_code=502, detail=f"Rewrite pipeline failed: {exc}") from exc
+            raise HTTPException(status_code=502, detail=f"Rewrite pipeline failed: {plagiarism_analyzer.sanitize_error_message(exc)}") from exc
         return result
 
     try:
@@ -336,12 +362,12 @@ async def reduce_text(request: Request, payload: ReduceRequest) -> dict:
             protected_terms=payload.protected_terms,
         )
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise HTTPException(status_code=503, detail=plagiarism_analyzer.sanitize_error_message(exc)) from exc
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise HTTPException(status_code=400, detail=plagiarism_analyzer.sanitize_error_message(exc)) from exc
     except Exception as exc:  # noqa: BLE001
         log.exception("plagiarism reduce failed")
-        raise HTTPException(status_code=502, detail=f"Rewrite failed: {exc}") from exc
+        raise HTTPException(status_code=502, detail=f"Rewrite failed: {plagiarism_analyzer.sanitize_error_message(exc)}") from exc
     return result
 
 
@@ -440,6 +466,10 @@ async def reduce_stream(request: Request, payload: ReduceStreamRequest):
                 # Don't push an error; the consumer is gone anyway.
                 log.info("reduce-stream pipeline aborted (client disconnect)")
             except plagiarism_analyzer.ProviderQuotaExhausted as exc:
+                # Log the raw provider message for ops; never forward it to
+                # the client. Only the fixed user-safe message goes out.
+                log.warning("reduce-stream both providers exhausted: %s",
+                            plagiarism_analyzer.sanitize_error_message(exc))
                 loop.call_soon_threadsafe(queue.put_nowait, {
                     "type": "error",
                     "status": 503,
@@ -449,20 +479,19 @@ async def reduce_stream(request: Request, payload: ReduceStreamRequest):
                         "hit its free-tier daily request limit. Please try again "
                         "tomorrow, or top up one of the provider accounts."
                     ),
-                    "detail": str(exc)[:500],
                 })
             except ValueError as exc:
                 loop.call_soon_threadsafe(queue.put_nowait, {
-                    "type": "error", "status": 400, "message": str(exc),
+                    "type": "error", "status": 400, "message": plagiarism_analyzer.sanitize_error_message(exc),
                 })
             except RuntimeError as exc:
                 loop.call_soon_threadsafe(queue.put_nowait, {
-                    "type": "error", "status": 503, "message": str(exc),
+                    "type": "error", "status": 503, "message": plagiarism_analyzer.sanitize_error_message(exc),
                 })
             except Exception as exc:  # noqa: BLE001
                 log.exception("reduce-stream pipeline crashed")
                 loop.call_soon_threadsafe(queue.put_nowait, {
-                    "type": "error", "status": 502, "message": f"Rewrite pipeline failed: {exc}",
+                    "type": "error", "status": 502, "message": f"Rewrite pipeline failed: {plagiarism_analyzer.sanitize_error_message(exc)}",
                 })
             finally:
                 loop.call_soon_threadsafe(queue.put_nowait, SENTINEL)

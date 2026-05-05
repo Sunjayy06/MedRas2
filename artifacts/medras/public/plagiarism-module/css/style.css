@@ -948,10 +948,43 @@ a:hover { text-decoration: underline; }
 }
 .pm-compare-empty { color: var(--pm-text-soft); font-style: italic; }
 
+/* Highlighted protected term inside compare panes — light yellow so users
+ * can see at a glance which numbers / drug names / citations were protected
+ * from rewriting. Uses native <mark> styling overrides. */
+.pm-compare-text mark.pm-protected-term {
+  background: #fff3b8;
+  color: inherit;
+  padding: 0 2px;
+  border-radius: 3px;
+  border-bottom: 1px solid #f0d97a;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+/* Mobile / responsive — reduce-results page */
 @media (max-width: 720px) {
   .pm-section-card-compare { grid-template-columns: 1fr; }
   .pm-summary-grid { grid-template-columns: 1fr; }
   .pm-summary-actions { flex-direction: column; align-items: stretch; }
+  .pm-summary-actions .pm-btn--xl { width: 100%; justify-content: center; font-size: 16px; padding: 16px 20px; }
+  .pm-summary-format { text-align: center; }
+  .pm-quality-legend { flex-wrap: wrap; gap: 6px; }
+  .pm-section-card-head { flex-wrap: wrap; gap: 8px; }
+  .pm-progress-meta { flex-direction: column; align-items: flex-start; gap: 4px; }
+  .pm-progress-list { padding-left: 18px; }
+  .pm-progress-item { flex-wrap: wrap; }
+}
+
+@media (max-width: 480px) {
+  .pm-h1 { font-size: 26px; }
+  .pm-lede { font-size: 14px; }
+  .pm-shell { padding: 28px 14px 56px; }
+  .pm-surface-card { padding: 18px; border-radius: 12px; }
+  .pm-summary-stat-value { font-size: 28px; }
+  .pm-compare-text { max-height: 260px; font-size: 13px; }
+  .pm-stage-text { max-height: 180px; }
+  .pm-quality-chip { font-size: 11px; padding: 3px 8px; }
+  .pm-section-card-title h3 { font-size: 16px; }
 }
 
 /* Stages drawer */

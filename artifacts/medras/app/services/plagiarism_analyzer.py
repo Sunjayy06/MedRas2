@@ -935,13 +935,77 @@ def rewrite_pipeline(
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# Upload-extraction errors
+# ---------------------------------------------------------------------------
+# These are caught at the route layer and translated into HTTP responses
+# with friendly user-facing messages. Keep the messages free of any API keys
+# or internal paths — the route layer also calls sanitize_error_message() on
+# anything that flows back to the client.
+
+MAX_PAGES_PDF = 200  # Cost/abuse protection — see /api/plagiarism docstring.
+
+
+class UploadExtractionError(Exception):
+    """Base class for clean, user-facing upload errors."""
+
+    http_status: int = 400
+
+
+class UnsupportedFileError(UploadExtractionError):
+    http_status = 415
+
+
+class PasswordProtectedError(UploadExtractionError):
+    http_status = 400
+
+
+class ImageOnlyPdfError(UploadExtractionError):
+    http_status = 422
+
+
+class DocumentTooLargeError(UploadExtractionError):
+    http_status = 413
+
+
+class CorruptedFileError(UploadExtractionError):
+    http_status = 400
+
+
+# Patterns for stripping anything that looks like a credential before an
+# error message is returned to the browser. Belt-and-braces — provider
+# error strings should not contain these in the first place.
+_API_KEY_PATTERNS = [
+    re.compile(r"sk-[A-Za-z0-9_\-]{16,}"),
+    re.compile(r"AIza[0-9A-Za-z_\-]{16,}"),
+    re.compile(r"Bearer\s+[A-Za-z0-9_\-\.]+", re.IGNORECASE),
+    re.compile(r"api[_-]?key['\"\s:=]+[A-Za-z0-9_\-]{16,}", re.IGNORECASE),
+    re.compile(r"x-api-key[:\s=]+[A-Za-z0-9_\-]{16,}", re.IGNORECASE),
+]
+
+
+def sanitize_error_message(msg: str | Exception) -> str:
+    """Strip anything that looks like an API key from an error string.
+
+    Defence in depth — provider SDKs should not embed keys in their error
+    text, but this guarantees nothing leaks even if they ever did.
+    """
+    text = str(msg)
+    for pat in _API_KEY_PATTERNS:
+        text = pat.sub("[redacted]", text)
+    return text
+
+
 def extract_text_from_upload(filename: str, content: bytes) -> str:
     """Pull plain text from an uploaded PDF / DOCX / TXT file.
 
-    Falls back to a UTF-8 decode for unknown extensions. Files larger than
-    a sensible cap are rejected at the route layer, not here.
+    Raises a subclass of :class:`UploadExtractionError` with a user-safe
+    message for each known failure mode. Files larger than the byte cap
+    are rejected at the route layer; this function additionally enforces
+    a page cap for PDFs (``MAX_PAGES_PDF``).
     """
     name = (filename or "").lower()
+
     if name.endswith(".txt") or name.endswith(".md"):
         try:
             return content.decode("utf-8", errors="replace")
@@ -950,26 +1014,97 @@ def extract_text_from_upload(filename: str, content: bytes) -> str:
 
     if name.endswith(".pdf"):
         from io import BytesIO
-        from pypdf import PdfReader
+        try:
+            from pypdf import PdfReader
+            from pypdf.errors import PdfReadError, FileNotDecryptedError
+        except ImportError:  # pragma: no cover
+            from pypdf import PdfReader  # type: ignore
+            PdfReadError = Exception  # type: ignore
+            FileNotDecryptedError = Exception  # type: ignore
 
-        reader = PdfReader(BytesIO(content))
+        try:
+            reader = PdfReader(BytesIO(content))
+        except PdfReadError as exc:
+            raise CorruptedFileError(
+                "This PDF file looks corrupted or is not a valid PDF. Please re-export it and try again."
+            ) from exc
+        except Exception as exc:
+            raise CorruptedFileError(
+                "We could not open this PDF file. Please make sure it is a valid PDF and try again."
+            ) from exc
+
+        # Password-protected PDF: try empty password (some PDFs are
+        # encrypted but readable with no password); if that fails, ask
+        # the user to remove the password.
+        if getattr(reader, "is_encrypted", False):
+            decrypted = False
+            try:
+                if reader.decrypt("") in (1, 2):  # type: ignore[arg-type]
+                    decrypted = True
+            except Exception:
+                decrypted = False
+            if not decrypted:
+                raise PasswordProtectedError(
+                    "This PDF is password protected. Please remove the password in your PDF reader (File → Export / Print to PDF without security), then upload again."
+                )
+
+        try:
+            page_count = len(reader.pages)
+        except Exception:
+            page_count = 0
+
+        if page_count > MAX_PAGES_PDF:
+            raise DocumentTooLargeError(
+                f"This document has {page_count} pages, which exceeds the {MAX_PAGES_PDF}-page limit. Please split it into smaller documents and upload each part separately."
+            )
+
         parts: list[str] = []
         for page in reader.pages:
             try:
                 parts.append(page.extract_text() or "")
+            except FileNotDecryptedError as exc:
+                raise PasswordProtectedError(
+                    "This PDF is password protected. Please remove the password and upload again."
+                ) from exc
             except Exception:
                 continue
-        return "\n\n".join(p for p in parts if p.strip())
+
+        text = "\n\n".join(p for p in parts if p.strip())
+
+        # Image-only / scanned PDF: pages exist but no extractable text.
+        # We don't run OCR — surface a clear, actionable error.
+        if not text.strip() and page_count > 0:
+            raise ImageOnlyPdfError(
+                "This PDF appears to contain only scanned images, not selectable text. Please run it through OCR (e.g. Adobe Acrobat → Recognize Text, or an online OCR tool) and upload the resulting searchable PDF."
+            )
+
+        return text
 
     if name.endswith(".docx"):
         from io import BytesIO
-        import docx  # python-docx
+        try:
+            import docx  # python-docx
+            from docx.opc.exceptions import PackageNotFoundError
+        except ImportError:  # pragma: no cover
+            import docx  # type: ignore
+            PackageNotFoundError = Exception  # type: ignore
 
-        doc = docx.Document(BytesIO(content))
+        try:
+            doc = docx.Document(BytesIO(content))
+        except PackageNotFoundError as exc:
+            # Old .doc, password-protected .docx, or unrelated file with
+            # a .docx extension all raise PackageNotFoundError. Give a
+            # clear next step for each likely cause.
+            raise CorruptedFileError(
+                "We could not open this Word document. If it is password protected, remove the password (File → Info → Protect Document → Encrypt with Password → delete password). If it is an old .doc file, save it as .docx in Word first."
+            ) from exc
+        except Exception as exc:
+            raise CorruptedFileError(
+                "We could not read this Word document. Please re-save it as .docx in Word and try again."
+            ) from exc
+
         return "\n".join(p.text for p in doc.paragraphs if p.text)
 
-    # Last-ditch: try plain decode.
-    try:
-        return content.decode("utf-8", errors="replace")
-    except Exception:
-        return ""
+    raise UnsupportedFileError(
+        "Unsupported file type. Please upload a .pdf, .docx, .txt or .md file."
+    )
