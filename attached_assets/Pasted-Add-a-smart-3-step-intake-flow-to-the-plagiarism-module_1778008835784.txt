@@ -1,0 +1,89 @@
+Add a smart 3-step intake flow to the plagiarism module. This appears when the user clicks "Reduce Plagiarism" before any file upload happens. Do not change any other part of the Medras application.
+
+STEP 1 — Ask if they have already checked with plagiarism software:
+
+Show a clean card with the heading "Before we start — have you already checked your document?"
+
+Show two large option buttons:
+
+Button A: "Yes, I have a plagiarism report"
+Description under button: "You have already run your document through Turnitin, Drillbit, Aarjav, iThenticate, Urkund or any other plagiarism checker and have the report"
+Button B: "No, I want to process my original document directly"
+Description under button: "You have not checked yet or do not have a report — we will process your full document"
+
+Below the two buttons show a small text line: "Supported plagiarism software reports: Turnitin, Drillbit, Aarjav, iThenticate, Urkund, PlagScan, Copyleaks, or any PDF/DOCX report"
+
+STEP 2A — If user clicks "Yes I have a plagiarism report":
+
+Show a two column upload area side by side:
+
+Left column headed "Step 1 — Upload your ORIGINAL document":
+- Drag and drop zone for PDF or DOCX
+- Label: "Your original thesis, article or dissertation"
+- File name shown after selection
+
+Right column headed "Step 2 — Upload your PLAGIARISM REPORT":
+- Drag and drop zone for PDF, DOCX or TXT
+- Label: "The report from Turnitin, Drillbit, Aarjav or any checker"
+- File name shown after selection
+- Helper text below: "This can be a PDF report, a similarity report, or even a text export of your checker results"
+
+A dropdown below both columns: "Which software generated this report?" with options:
+Turnitin, Drillbit, Aarjav, iThenticate, Urkund, Copyleaks, PlagScan, Other
+
+A green "Analyse Both Files" button that only activates when BOTH files are uploaded.
+
+STEP 2B — If user clicks "No, process directly":
+
+Show a single upload zone:
+- Drag and drop for PDF or DOCX
+- Label: "Upload your document"
+- Helper text: "We will analyse your full document and rewrite all sections that need improvement"
+- Green "Analyse My Document" button
+
+STEP 3 — Backend processing for Path A (with plagiarism report):
+
+Add a new backend function in the plagiarism service that:
+- Receives both the original document and the plagiarism report
+- Extracts text from the original document as already done
+- Extracts text from the plagiarism report using the same pdf-parse or mammoth extraction
+- Scans the report text to identify flagged sections by looking for these patterns:
+  * Percentage similarity values like "Introduction: 34%" or "34% similarity"
+  * Section names followed by highlight descriptions
+  * Phrases like "high similarity", "match found", "plagiarised", "flagged"
+  * Any section name from the known list (Abstract, Introduction, Methods etc) that appears near a percentage above 10%
+- Build a flagged sections map: { "Introduction": { similarityPercent: 34, flagged: true }, "Discussion": { similarityPercent: 67, flagged: true }, "Methods": { similarityPercent: 8, flagged: false } }
+- Sections with similarity above 10% are marked as priority rewrite
+- Sections with similarity below 10% are marked as low priority — rewrite lightly or skip
+- Pass this flagged map to the rewriting pipeline
+
+REWRITING BEHAVIOUR based on plagiarism report:
+
+In the rewriting pipeline, use the flagged sections map to control rewriting intensity:
+
+RED priority sections (similarity above 30%): Run all 3 rewriting stages with maximum intensity. Use the most aggressive restructuring techniques.
+
+ORANGE priority sections (similarity 15 to 30%): Run all 3 stages with moderate intensity.
+
+YELLOW priority sections (similarity 10 to 15%): Run stage 1 and stage 2 only. Light restructuring.
+
+GREEN sections (similarity below 10%): Skip rewriting entirely. Return original text unchanged. Show a green tag "Already within acceptable limits — not rewritten"
+
+References and Bibliography: Always skip regardless of similarity score.
+
+DISPLAY on results page:
+
+For Path A (with report) show at the top:
+- A summary box: "Based on your [SOFTWARE NAME] report: X sections needed rewriting, Y sections were already acceptable, Z sections were skipped"
+- Each section card should show the original similarity percentage from the report in a badge like "Was 34% similar" next to the section heading
+- After rewriting show: "Targeted rewriting applied to high-similarity sections only"
+
+For Path B (without report) show:
+- "Full document processed — all sections analysed and rewritten for originality"
+
+NAVIGATION:
+- Add a back button on each step so users can go back and change their choice
+- Show a step indicator at the top: Step 1 of 3, Step 2 of 3, Step 3 of 3
+- On mobile stack everything vertically
+
+Do not change any existing upload, rewriting or download functionality. This intake flow sits before the existing process and feeds into it.

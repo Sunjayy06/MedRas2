@@ -25,7 +25,7 @@ MedRAS is a structured Research Operating System that guides medical and academi
 *   `/public`: Frontend static files (HTML, CSS, JS).
     *   `/public/index.html`: Main landing page.
     *   `/public/analysis.html`: Statistical Analysis Engine UI.
-    *   `/public/plagiarism-module`: Plagiarism & AI Reduction module UI.
+    *   `/public/plagiarism-module`: Plagiarism & AI Reduction module UI (`intake.html` → `reduce-results.html`; `checker.html` for score-only).
 *   `/artifacts/medras`: Files outside this directory should not be modified.
 *   **DB Schema:** _Populate as you build_
 *   **API Contracts:** Defined implicitly by FastAPI Pydantic models.
@@ -37,6 +37,7 @@ MedRAS is a structured Research Operating System that guides medical and academi
 *   **In-Memory Processing:** All uploaded files are processed in-memory and never written to disk for security and performance.
 *   **LLMs for Planning/Writing Only:** LLMs are strictly used for planning and textual tasks; numerical computations are library-backed.
 *   **Dual LLM Provider Fallback:** Plagiarism & AI Reduction module uses an `auto` provider strategy, falling back between OpenAI and Google Gemini for resilience and quota management.
+*   **Plagiarism Reducer — 3-step intake (Path A vs Path B):** `/plagiarism-module/intake.html` is the front door for "Reduce plagiarism". Step 1 asks whether the user already has a plagiarism-checker report. Path A (with report) uploads original + report + software dropdown; report is parsed by `app/services/report_parser.py` into a `{section: {similarity_percent, flagged}}` map and forwarded into `POST /api/plagiarism/jobs` as `report.flagged_map`. Per-section intensity buckets: `<10%`=skip-verbatim (green badge "Already within acceptable limits"), `10-15%`=light (stages A+B only), `15-30%`=normal (all 3), `>30%`=aggressive (all 3, tagged). Path B is a single upload that omits `report` and behaves exactly as before. References are ALWAYS skipped regardless of report. Results page renders a Path-A summary box ("Based on your Turnitin report: X needed rewriting…") and a per-card "Was X% similar" badge colour-banded to the intensity bucket.
 *   **Plagiarism Pipeline — Job + Polling (replaces NDJSON streaming):** The reducer now uses `POST /api/plagiarism/jobs` → `GET /api/plagiarism/jobs/{id}` (polled every 5s). A singleton `JobManager` (`app/services/plagiarism_jobs.py`) runs each job in a daemon thread, processing one section at a time. Per-stage 60s wall-clock timeout (with the SDK request timeout set 2s tighter so the socket actually closes — no orphaned token burn). Caps: 3 concurrent jobs, 500MB total in-memory across all jobs, 30-min TTL with lazy cleanup on every create/get. After each section completes, `original` and stage-A/B intermediates are dropped and `bytes_tracked` is recomputed from the actual retained strings. Circuit breaker: 2 consecutive timeouts abort the rest of the job. `POST /jobs/{id}/retry` re-queues only failed/timed-out sections without re-uploading. All error strings are sanitized at the serialize_job boundary defensively (never leak provider keys).
 *   **Robust File Upload Handling:** Comprehensive pre-processing and error handling for uploaded documents (size caps, PDF type checks, password protection).
 

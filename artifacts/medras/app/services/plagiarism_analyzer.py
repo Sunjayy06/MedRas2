@@ -743,18 +743,31 @@ def process_one_section(
     protected_terms: Optional[List[str]] = None,
     stage_timeout: float = 60.0,
     progress_cb: Optional[Any] = None,
+    intensity: str = "normal",
 ) -> Dict[str, Any]:
-    """Run the 3-stage rewrite on ONE section with per-stage timeout.
+    """Run the rewrite on ONE section with per-stage timeout.
 
     Always returns a dict — never raises ordinary errors. The only thing
     that propagates is :class:`ProviderQuotaExhausted`, which the caller
     treats specially (no point retrying further sections when both
     providers are out).
 
+    ``intensity`` controls how much rewriting we do — used by the
+    plagiarism-report path so we don't waste compute on sections that
+    already came back clean from Turnitin/Drillbit/etc.:
+
+      * ``"skip"``       — return original unchanged (already acceptable)
+      * ``"light"``      — only stages A + B (paraphrase + humanise),
+                           skip the polish pass
+      * ``"normal"``     — full 3-stage rewrite (default)
+      * ``"aggressive"`` — full 3-stage rewrite (same path as normal,
+                           but tagged so the UI can flag the section)
+
     The returned dict has ``status`` set to one of:
 
       * ``"complete"``  — rewrite succeeded
-      * ``"skipped"``   — empty section or References (kept verbatim)
+      * ``"skipped"``   — empty section, References, or below-threshold
+                          (intensity="skip")
       * ``"timed_out"`` — at least one stage exceeded ``stage_timeout``
       * ``"failed"``    — a non-quota error occurred (network, parse, etc.)
 
@@ -796,11 +809,30 @@ def process_one_section(
             "skipped": True,
             "skip_reason": "references",
             "final_text": body,  # kept verbatim
+            "intensity": "skip",
             "quality": {"key": "gray", "label": "Kept verbatim", "hint": "References are never paraphrased."},
+        }
+
+    # Plagiarism-report intensity: caller said this section is already
+    # below the similarity threshold — skip rewriting entirely.
+    if intensity == "skip":
+        return {
+            **base_entry,
+            "status": "skipped",
+            "skipped": True,
+            "skip_reason": "below_threshold",
+            "final_text": body,  # kept verbatim
+            "intensity": "skip",
+            "quality": {
+                "key": "green",
+                "label": "Already within acceptable limits — not rewritten",
+                "hint": "Your plagiarism report flagged this section below the rewrite threshold, so it has been kept verbatim.",
+            },
         }
 
     section_terms = [t for t in (protected_terms or []) if t and t in body]
     started = time.monotonic()
+    light_mode = (intensity == "light")  # skip the Stage C polish pass
 
     def _cb(num: int, lbl: str) -> None:
         if progress_cb is None:
@@ -829,15 +861,21 @@ def process_one_section(
             stage_label=f"B:{label}",
             timeout_seconds=stage_timeout,
         )
-        _cb(3, "Pass 3 of 3 — GPT-4o quality polish")
-        c = _run_stage_with_timeout(
-            primary="openai",
-            system_prompt=STAGE_C_POLISH_PROMPT,
-            user_text=b["text"],
-            protected_terms=section_terms,
-            stage_label=f"C:{label}",
-            timeout_seconds=stage_timeout,
-        )
+        if light_mode:
+            # Light intensity (similarity 10-15%) — skip the polish pass
+            # and use stage B's output as the final text. Stage C is
+            # left empty so the UI can show "Light rewrite — 2 stages".
+            c = {"text": b["text"], "model": "(skipped — light mode)", "fallback_used": False}
+        else:
+            _cb(3, "Pass 3 of 3 — GPT-4o quality polish")
+            c = _run_stage_with_timeout(
+                primary="openai",
+                system_prompt=STAGE_C_POLISH_PROMPT,
+                user_text=b["text"],
+                protected_terms=section_terms,
+                stage_label=f"C:{label}",
+                timeout_seconds=stage_timeout,
+            )
     except StageTimeoutError as exc:
         return {
             **base_entry,
@@ -894,6 +932,7 @@ def process_one_section(
         "edits": edits,
         "fallback_used": fallback_used,
         "missing_terms": section_missing,
+        "intensity": intensity,
         "quality": quality,
         "elapsed_seconds": round(time.monotonic() - started, 1),
     }

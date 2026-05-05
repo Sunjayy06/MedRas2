@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Reduce plagiarism — Get started · MedRAS</title>
+    <meta name="description" content="3-step intake for the MedRAS plagiarism reducer. Upload your document with or without an existing plagiarism-checker report." />
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23ffc857'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-family='Inter,sans-serif' font-size='17' font-weight='800' fill='%23071430'%3EP%3C/text%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="/plagiarism-module/css/style.css?v=2026050505" />
+  </head>
+  <body data-testid="page-pm-intake">
+    <header class="pm-header">
+      <a href="/plagiarism-module/" class="pm-brand" data-testid="link-pm-home">
+        <span class="pm-brand-mark">P</span>
+        <span>Plagiarism &amp; AI Reduction</span>
+      </a>
+      <nav class="pm-nav" aria-label="Primary">
+        <a href="/plagiarism-module/checker.html" data-testid="link-nav-checker">Check score</a>
+        <a href="/" data-testid="link-back-medras">← Back to MedRAS</a>
+      </nav>
+    </header>
+
+    <main class="pm-shell">
+      <span class="pm-eyebrow" data-testid="text-intake-eyebrow">Plagiarism reducer</span>
+
+      <!-- Step indicator -->
+      <ol class="pm-stepper" data-testid="stepper" aria-label="Progress">
+        <li class="pm-stepper-item is-active" data-step="1" data-testid="stepper-1">
+          <span class="pm-stepper-dot">1</span>
+          <span class="pm-stepper-label">Choose path</span>
+        </li>
+        <li class="pm-stepper-item" data-step="2" data-testid="stepper-2">
+          <span class="pm-stepper-dot">2</span>
+          <span class="pm-stepper-label">Upload</span>
+        </li>
+        <li class="pm-stepper-item" data-step="3" data-testid="stepper-3">
+          <span class="pm-stepper-dot">3</span>
+          <span class="pm-stepper-label">Rewrite</span>
+        </li>
+      </ol>
+
+      <!-- ===================== STEP 1 ===================== -->
+      <section class="pm-intake-step" id="pm-step-1" data-testid="step-1">
+        <h1 class="pm-h1" data-testid="text-step1-title">
+          Before we start —<br/>
+          <span class="pm-grad">have you already checked your document?</span>
+        </h1>
+        <p class="pm-lede" data-testid="text-step1-lede">
+          If you already have a plagiarism report (Turnitin, Drillbit, Aarjav,
+          iThenticate, Urkund, Copyleaks, PlagScan or similar), we can target
+          rewriting only at the sections that need it. Otherwise we'll process
+          the whole document.
+        </p>
+
+        <div class="pm-choice-grid" role="group" aria-label="Choose intake path">
+          <button type="button" class="pm-choice-card pm-choice-card--a" id="pm-choice-with" data-testid="button-choice-with-report">
+            <div class="pm-choice-icon" aria-hidden="true">📄</div>
+            <h2>Yes, I have a plagiarism report</h2>
+            <p>
+              You have already run your document through Turnitin, Drillbit,
+              Aarjav, iThenticate, Urkund or any other plagiarism checker
+              and have the report.
+            </p>
+            <span class="pm-choice-cta">Upload original + report →</span>
+          </button>
+
+          <button type="button" class="pm-choice-card pm-choice-card--b" id="pm-choice-without" data-testid="button-choice-no-report">
+            <div class="pm-choice-icon" aria-hidden="true">✎</div>
+            <h2>No, process my original document directly</h2>
+            <p>
+              You have not checked yet or do not have a report — we will
+              process your full document.
+            </p>
+            <span class="pm-choice-cta">Upload my document →</span>
+          </button>
+        </div>
+
+        <p class="pm-intake-fineprint" data-testid="text-supported-software">
+          Supported plagiarism software reports: Turnitin, Drillbit, Aarjav,
+          iThenticate, Urkund, PlagScan, Copyleaks, or any PDF / DOCX report.
+        </p>
+      </section>
+
+      <!-- ===================== STEP 2A — Path A (with report) ===================== -->
+      <section class="pm-intake-step is-hidden" id="pm-step-2a" data-testid="step-2a">
+        <button type="button" class="pm-back-link" data-back-to="1" data-testid="button-back-2a">← Back</button>
+        <h1 class="pm-h2" data-testid="text-step2a-title">Upload your document and your plagiarism report</h1>
+        <p class="pm-help" data-testid="text-step2a-sub">
+          We'll match the sections in your document against the percentages in
+          the report and rewrite only what needs it.
+        </p>
+
+        <div class="pm-dual-upload">
+          <div class="pm-upload-col">
+            <h3 class="pm-upload-step">Step 1 — Upload your ORIGINAL document</h3>
+            <p class="pm-upload-label">Your original thesis, article or dissertation</p>
+            <div class="pm-dropzone" id="pm-drop-original" tabindex="0" role="button" data-testid="dropzone-original">
+              <div class="pm-dropzone-icon" aria-hidden="true">⬆</div>
+              <div class="pm-dropzone-title">Drag &amp; drop or click to choose</div>
+              <div class="pm-dropzone-hint">PDF or DOCX · up to 100 MB / 200 pages</div>
+              <div class="pm-dropzone-file" id="pm-drop-original-file" data-testid="text-original-file"></div>
+            </div>
+            <input type="file" id="pm-file-original" accept=".pdf,.docx" hidden />
+          </div>
+
+          <div class="pm-upload-col">
+            <h3 class="pm-upload-step">Step 2 — Upload your PLAGIARISM REPORT</h3>
+            <p class="pm-upload-label">The report from Turnitin, Drillbit, Aarjav or any checker</p>
+            <div class="pm-dropzone" id="pm-drop-report" tabindex="0" role="button" data-testid="dropzone-report">
+              <div class="pm-dropzone-icon" aria-hidden="true">📑</div>
+              <div class="pm-dropzone-title">Drag &amp; drop or click to choose</div>
+              <div class="pm-dropzone-hint">PDF, DOCX or TXT</div>
+              <div class="pm-dropzone-file" id="pm-drop-report-file" data-testid="text-report-file"></div>
+            </div>
+            <input type="file" id="pm-file-report" accept=".pdf,.docx,.txt,.text" hidden />
+            <p class="pm-upload-helper">
+              This can be a PDF report, a similarity report, or even a text
+              export of your checker results.
+            </p>
+          </div>
+        </div>
+
+        <div class="pm-intake-row">
+          <label for="pm-software" class="pm-intake-field-label">
+            Which software generated this report?
+          </label>
+          <select id="pm-software" class="pm-select" data-testid="select-software">
+            <option value="Turnitin">Turnitin</option>
+            <option value="Drillbit">Drillbit</option>
+            <option value="Aarjav">Aarjav</option>
+            <option value="iThenticate">iThenticate</option>
+            <option value="Urkund">Urkund</option>
+            <option value="Copyleaks">Copyleaks</option>
+            <option value="PlagScan">PlagScan</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+
+        <div class="pm-intake-error is-hidden" id="pm-step2a-error" data-testid="text-step2a-error" role="alert"></div>
+
+        <div class="pm-intake-actions">
+          <button type="button"
+                  class="pm-btn pm-btn--accent pm-btn--xl"
+                  id="pm-analyse-both"
+                  data-testid="button-analyse-both"
+                  disabled>
+            <span class="pm-btn-icon" aria-hidden="true">⚡</span>
+            <span id="pm-analyse-both-label">Analyse Both Files</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- ===================== STEP 2B — Path B (no report) ===================== -->
+      <section class="pm-intake-step is-hidden" id="pm-step-2b" data-testid="step-2b">
+        <button type="button" class="pm-back-link" data-back-to="1" data-testid="button-back-2b">← Back</button>
+        <h1 class="pm-h2" data-testid="text-step2b-title">Upload your document</h1>
+        <p class="pm-help" data-testid="text-step2b-sub">
+          We'll analyse your full document and rewrite all sections that
+          need improvement.
+        </p>
+
+        <div class="pm-single-upload">
+          <div class="pm-dropzone" id="pm-drop-direct" tabindex="0" role="button" data-testid="dropzone-direct">
+            <div class="pm-dropzone-icon" aria-hidden="true">⬆</div>
+            <div class="pm-dropzone-title">Drag &amp; drop or click to choose</div>
+            <div class="pm-dropzone-hint">PDF or DOCX · up to 100 MB / 200 pages</div>
+            <div class="pm-dropzone-file" id="pm-drop-direct-file" data-testid="text-direct-file"></div>
+          </div>
+          <input type="file" id="pm-file-direct" accept=".pdf,.docx" hidden />
+        </div>
+
+        <div class="pm-intake-error is-hidden" id="pm-step2b-error" data-testid="text-step2b-error" role="alert"></div>
+
+        <div class="pm-intake-actions">
+          <button type="button"
+                  class="pm-btn pm-btn--accent pm-btn--xl"
+                  id="pm-analyse-direct"
+                  data-testid="button-analyse-direct"
+                  disabled>
+            <span class="pm-btn-icon" aria-hidden="true">⚡</span>
+            <span id="pm-analyse-direct-label">Analyse My Document</span>
+          </button>
+        </div>
+      </section>
+    </main>
+
+    <footer class="pm-footer">© MedRAS — Plagiarism &amp; AI Reduction module</footer>
+
+    <script src="/plagiarism-module/js/intake.js?v=2026050505" defer></script>
+  </body>
+</html>

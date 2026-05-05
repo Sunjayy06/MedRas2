@@ -135,6 +135,7 @@ class JobManager:
         protected_terms: Optional[List[str]],
         title: str,
         filename: Optional[str],
+        report: Optional[Dict[str, Any]] = None,
     ) -> JobState:
         """Register a new job and spawn its background worker.
 
@@ -177,11 +178,19 @@ class JobManager:
 
             job_id = uuid.uuid4().hex[:12]
             now = time.time()
+            # Resolve per-section intensity from the plagiarism report
+            # (Path A). Falls back to "normal" for every section when no
+            # report was supplied (Path B). Imported lazily to avoid a
+            # circular dependency at module load.
+            from app.services import report_parser as rp
+            flagged_map = (report or {}).get("flagged_map") or {}
             section_states: List[Dict[str, Any]] = []
             for i, sec in enumerate(sections):
+                label = (sec.get("label") or "").strip() or f"Section {i+1}"
+                intensity, sim_pct = rp.match_intensity_for_label(label, flagged_map)
                 section_states.append({
                     "index": i,
-                    "label": (sec.get("label") or "").strip() or f"Section {i+1}",
+                    "label": label,
                     "original": sec.get("text") or "",
                     "status": "pending",
                     "final_text": "",
@@ -197,6 +206,8 @@ class JobManager:
                     "elapsed_seconds": 0.0,
                     "error": None,
                     "quality": None,
+                    "intensity": intensity,
+                    "similarity_percent": sim_pct,
                 })
 
             state = JobState(
@@ -210,6 +221,14 @@ class JobManager:
                 updated_at=now,
                 bytes_tracked=estimated_with_results,
             )
+            # Stash the plagiarism-report metadata on the state object
+            # so serialize_job can echo it back to the UI for the Path A
+            # summary box ("Based on your Turnitin report: …").
+            state.report_meta = {
+                "software": (report or {}).get("software"),
+                "flagged_map": flagged_map,
+                "summary": rp.summarise_report(flagged_map) if flagged_map else None,
+            } if report else None
             self._jobs[job_id] = state
 
         # Spawn worker OUTSIDE the lock so a slow start doesn't block
@@ -351,6 +370,7 @@ class JobManager:
                         protected_terms=j.protected_terms,
                         stage_timeout=SECTION_TIMEOUT_SECONDS,
                         progress_cb=_on_pass,
+                        intensity=s.get("intensity") or "normal",
                     )
                 except pa.ProviderQuotaExhausted as exc:
                     # Both providers exhausted — abort the whole job;
@@ -396,7 +416,13 @@ class JobManager:
                 elapsed = time.time() - started
                 status = result.get("status")
                 with self._lock:
+                    # Preserve similarity_percent — the rewriter never
+                    # sets it but the UI needs it for the "Was X% similar"
+                    # badge on every card.
+                    sim_pct = s.get("similarity_percent")
                     s.update(result)
+                    if sim_pct is not None and s.get("similarity_percent") is None:
+                        s["similarity_percent"] = sim_pct
                     if status == "complete" and not result.get("skipped"):
                         j.completion_times.append(elapsed)
                     # Drop original text from memory for any section
@@ -541,6 +567,7 @@ def serialize_job(j: JobState) -> Dict[str, Any]:
         "eta_seconds": eta,
         "error": _safe_error(j.error),
         "sections": out_sections,
+        "report_meta": getattr(j, "report_meta", None),
     }
 
 

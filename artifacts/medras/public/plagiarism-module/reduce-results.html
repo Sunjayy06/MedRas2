@@ -6,7 +6,7 @@
     <title>Rewrite results · MedRAS</title>
     <meta name="description" content="Section-by-section rewrite results from the MedRAS plagiarism reducer, with side-by-side comparison and a Word-ready download." />
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23ffc857'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-family='Inter,sans-serif' font-size='17' font-weight='800' fill='%23071430'%3EP%3C/text%3E%3C/svg%3E" />
-    <link rel="stylesheet" href="/plagiarism-module/css/style.css?v=2026050504" />
+    <link rel="stylesheet" href="/plagiarism-module/css/style.css?v=2026050505" />
   </head>
   <body data-testid="page-pm-reduce-results">
     <header class="pm-header">
@@ -15,7 +15,7 @@
         <span>Plagiarism &amp; AI Reduction</span>
       </a>
       <nav class="pm-nav" aria-label="Primary">
-        <a href="/plagiarism-module/checker.html?mode=reduce" data-testid="link-new-reduce">Rewrite another</a>
+        <a href="/plagiarism-module/intake.html" data-testid="link-new-reduce">Rewrite another</a>
         <a href="/" data-testid="link-back-medras">MedRAS</a>
       </nav>
     </header>
@@ -34,7 +34,7 @@
         <h3>No rewrite in progress</h3>
         <p>Start from the reducer page — paste or upload your text, then come back here for the results.</p>
         <p style="margin-top: 18px;">
-          <a class="pm-btn pm-btn--primary" href="/plagiarism-module/checker.html?mode=reduce" data-testid="button-empty-go">Open the reducer</a>
+          <a class="pm-btn pm-btn--primary" href="/plagiarism-module/intake.html" data-testid="button-empty-go">Open the reducer</a>
         </p>
       </div>
 
@@ -77,12 +77,30 @@
         <h2>Rewrite failed</h2>
         <p id="pm-error-message" data-testid="text-error-message"></p>
         <p style="margin-top: 16px;">
-          <a class="pm-btn pm-btn--secondary" href="/plagiarism-module/checker.html?mode=reduce" data-testid="button-retry">← Back to the reducer</a>
+          <a class="pm-btn pm-btn--secondary" href="/plagiarism-module/intake.html" data-testid="button-retry">← Back to the reducer</a>
         </p>
       </div>
 
       <!-- Results — populated after streaming completes -->
       <div id="pm-results" class="is-hidden" data-testid="state-results">
+        <!-- Path A summary box — only shown when a plagiarism report was supplied -->
+        <div class="pm-report-summary is-hidden" id="pm-report-summary" data-testid="card-report-summary">
+          <div class="pm-report-summary-icon" aria-hidden="true">📊</div>
+          <div class="pm-report-summary-body">
+            <h3 id="pm-report-summary-title" data-testid="text-report-summary-title">Targeted rewriting applied</h3>
+            <p id="pm-report-summary-text" data-testid="text-report-summary-body"></p>
+          </div>
+        </div>
+
+        <!-- Path B note — full document processed -->
+        <div class="pm-report-summary pm-report-summary--b is-hidden" id="pm-pathb-note" data-testid="card-pathb-note">
+          <div class="pm-report-summary-icon" aria-hidden="true">✓</div>
+          <div class="pm-report-summary-body">
+            <h3>Full document processed</h3>
+            <p>All sections were analysed and rewritten for originality.</p>
+          </div>
+        </div>
+
         <!-- Summary card -->
         <div class="pm-surface-card pm-summary-card">
           <div class="pm-summary-grid">
@@ -126,13 +144,13 @@
         <div class="pm-section-cards" id="pm-section-cards" data-testid="list-section-cards"></div>
 
         <div class="pm-actions" style="margin-top: 24px;">
-          <a href="/plagiarism-module/checker.html?mode=reduce" class="pm-btn pm-btn--secondary" data-testid="button-rewrite-another">Rewrite another</a>
+          <a href="/plagiarism-module/intake.html" class="pm-btn pm-btn--secondary" data-testid="button-rewrite-another">Rewrite another</a>
         </div>
       </div>
     </main>
 
     <footer class="pm-footer">© MedRAS — Plagiarism &amp; AI Reduction module</footer>
 
-    <script src="/plagiarism-module/js/reduce-results.js?v=2026050504" defer></script>
+    <script src="/plagiarism-module/js/reduce-results.js?v=2026050505" defer></script>
   </body>
 </html>

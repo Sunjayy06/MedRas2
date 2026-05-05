@@ -143,6 +143,14 @@
     } else {
       body.text = payload.text;
     }
+    // Path A: forward the plagiarism-report metadata so the backend
+    // can drive per-section rewrite intensity.
+    if (payload.report && payload.report.flagged_map) {
+      body.report = {
+        software: payload.report.software || "Other",
+        flagged_map: payload.report.flagged_map,
+      };
+    }
 
     const res = await fetch("/api/plagiarism/jobs", {
       method: "POST",
@@ -343,6 +351,7 @@
 
     // Build the summary card from settled sections.
     populateSummary(snap);
+    populateReportSummary(snap);
     showRetryBannerIfNeeded(snap);
 
     // Persist to sessionStorage as a result for back-button / refresh.
@@ -408,6 +417,44 @@
     fresh.addEventListener("click", () => downloadDocx(snap));
     // Update our reference so future finalize() calls see the new node.
     Object.defineProperty(window, "_pmDownloadBtn", { value: fresh, configurable: true });
+  }
+
+  // Path A summary box: "Based on your Turnitin report: …"
+  // Path B note:        "Full document processed — all sections analysed…"
+  // Path is determined by whether the job was created with a report_meta
+  // (server-authoritative — we don't trust the client's intake choice).
+  function populateReportSummary(snap) {
+    const box = document.getElementById("pm-report-summary");
+    const noteB = document.getElementById("pm-pathb-note");
+    if (!box || !noteB) return;
+    const meta = snap.report_meta;
+    const sections = snap.sections || [];
+
+    if (meta && meta.flagged_map && Object.keys(meta.flagged_map).length) {
+      // Counts come from what we ACTUALLY did, not just the report —
+      // a section in the report that didn't appear in the document
+      // would otherwise inflate the totals confusingly.
+      const rewritten = sections.filter((s) => s.status === "complete").length;
+      const acceptable = sections.filter((s) => s.status === "skipped" && s.skip_reason === "below_threshold").length;
+      const skippedRefs = sections.filter((s) => s.status === "skipped" && s.skip_reason === "references").length;
+      const software = meta.software || "your plagiarism report";
+      const titleEl = document.getElementById("pm-report-summary-title");
+      const textEl = document.getElementById("pm-report-summary-text");
+      if (titleEl) titleEl.textContent = "Targeted rewriting applied to high-similarity sections only";
+      if (textEl) {
+        const parts = [];
+        parts.push(`Based on your <strong>${escapeHtml(software)}</strong> report:`);
+        parts.push(` <strong>${rewritten}</strong> section${rewritten === 1 ? "" : "s"} needed rewriting,`);
+        parts.push(` <strong>${acceptable}</strong> ${acceptable === 1 ? "was" : "were"} already acceptable,`);
+        parts.push(` <strong>${skippedRefs}</strong> reference section${skippedRefs === 1 ? "" : "s"} kept verbatim.`);
+        textEl.innerHTML = parts.join("");
+      }
+      box.classList.remove("is-hidden");
+      noteB.classList.add("is-hidden");
+    } else {
+      box.classList.add("is-hidden");
+      noteB.classList.remove("is-hidden");
+    }
   }
 
   function showRetryBannerIfNeeded(snap) {
@@ -538,10 +585,23 @@
     const qLabel = failed ? labelChip : (q.label || "—");
     const qHint = failed ? (sec.error || "") : (q.hint || "");
 
+    // Path A only — show the original similarity % from the
+    // plagiarism report next to the section heading. We bucket the
+    // colour to match the rewrite intensity it triggered.
+    let simBadge = "";
+    if (sec.similarity_percent != null) {
+      const pct = Number(sec.similarity_percent);
+      let band = "green";
+      if (pct >= 30) band = "red";
+      else if (pct >= 15) band = "orange";
+      else if (pct >= 10) band = "yellow";
+      simBadge = `<span class="pm-sim-badge pm-sim-badge--${band}" data-testid="badge-similarity-${sec.index}" title="Original similarity from your plagiarism report">Was ${pct}% similar</span>`;
+    }
+
     return `<article class="pm-section-card pm-section-card--${escapeHtml(qKey)}" data-section-index="${sec.index}" data-testid="card-section-${sec.index}">
       <header class="pm-section-card-head">
         <div class="pm-section-card-title">
-          <h3 data-testid="text-section-label-${sec.index}">${escapeHtml(sec.label || "Section")}</h3>
+          <h3 data-testid="text-section-label-${sec.index}">${escapeHtml(sec.label || "Section")}${simBadge}</h3>
           <span class="pm-section-card-meta" data-testid="text-section-meta-${sec.index}">${escapeHtml(labelChip)}</span>
         </div>
         <span class="pm-quality-chip pm-quality-chip--${escapeHtml(qKey)}" data-testid="chip-quality-${sec.index}" title="${escapeHtml(qHint)}">

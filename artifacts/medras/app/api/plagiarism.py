@@ -22,7 +22,7 @@ import asyncio
 import io
 import json
 import re
-from typing import List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import StreamingResponse
@@ -562,6 +562,19 @@ async def reduce_stream(request: Request, payload: ReduceStreamRequest):
 # ---------------------------------------------------------------------------
 
 
+class JobReportIn(BaseModel):
+    """Optional plagiarism-report metadata supplied by the new intake flow.
+
+    Drives per-section rewrite intensity so we don't burn tokens
+    re-paraphrasing sections that already came back clean from the
+    user's plagiarism checker (Turnitin / Drillbit / etc.).
+    """
+    software: Optional[str] = Field(default=None, max_length=80)
+    # flagged_map keys are normalised section names (lower-case);
+    # values look like {"similarity_percent": 34.0, "flagged": True}.
+    flagged_map: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
+
+
 class JobCreateRequest(BaseModel):
     """Body for POST /jobs.
 
@@ -574,6 +587,7 @@ class JobCreateRequest(BaseModel):
     protected_terms: List[str] = Field(default_factory=list)
     title: str = Field(default="Rewritten document", max_length=200)
     filename: Optional[str] = Field(default=None, max_length=200)
+    report: Optional[JobReportIn] = None
 
 
 @router.post("/jobs")
@@ -614,6 +628,7 @@ async def create_job(request: Request, payload: JobCreateRequest) -> dict:
             protected_terms=payload.protected_terms,
             title=payload.title,
             filename=payload.filename,
+            report=payload.report.model_dump() if payload.report else None,
         )
     except plagiarism_jobs.CapacityError as exc:
         # 429 = Too Many Requests — the request is well-formed but the
@@ -666,6 +681,76 @@ async def cancel_job(request: Request, job_id: str) -> dict:
     if not ok:
         raise HTTPException(status_code=404, detail="Job not found.")
     return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# /parse-report — Path A intake helper
+# ---------------------------------------------------------------------------
+# Receives a plagiarism-checker report (PDF / DOCX / TXT) plus the
+# software name, extracts text, and returns a {section: similarity_%}
+# map the intake page can persist into sessionStorage and pass straight
+# back into POST /jobs as the ``report`` field.
+# ---------------------------------------------------------------------------
+
+
+@router.post("/parse-report")
+@limiter.limit("20/minute")
+async def parse_report(
+    request: Request,
+    file: UploadFile = File(..., description="Plagiarism report PDF/DOCX/TXT"),
+    software: str = Form(default="Other"),
+) -> dict:
+    """Extract a flagged-sections map from an uploaded plagiarism report."""
+    from app.services import report_parser
+
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="The uploaded report is empty.")
+    if len(content) > MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Report exceeds the {MAX_UPLOAD_BYTES // (1024 * 1024)} MB upload cap.",
+        )
+
+    filename = file.filename or "report"
+    suffix = (filename.rsplit(".", 1)[-1] if "." in filename else "").lower()
+
+    # TXT goes straight to UTF-8 decode; PDF / DOCX reuse the same
+    # extractor the original-document upload uses, so we get identical
+    # error semantics (password-protected PDFs, oversized files, etc.).
+    if suffix in ("txt", "text"):
+        try:
+            text = content.decode("utf-8", errors="replace")
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(
+                status_code=400,
+                detail=f"Could not read the report as text: {exc}",
+            ) from exc
+    else:
+        try:
+            text = _safe_extract_text(filename, content)
+        except HTTPException:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(
+                status_code=400,
+                detail=plagiarism_analyzer.sanitize_error_message(exc),
+            ) from exc
+
+    flagged_map = report_parser.parse_report_text(text or "")
+    summary = report_parser.summarise_report(flagged_map)
+
+    return {
+        "filename": filename,
+        "software": (software or "Other").strip()[:80] or "Other",
+        "extracted_chars": len(text or ""),
+        "flagged_map": flagged_map,
+        "summary": summary,
+        # Helpful diagnostic so the UI can warn the user when the
+        # report parser couldn't find anything (e.g. they uploaded the
+        # original by mistake).
+        "parsed_section_count": len(flagged_map),
+    }
 
 
 # ---------------------------------------------------------------------------
