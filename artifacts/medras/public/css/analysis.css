@@ -176,8 +176,8 @@
 }
 .se-cw-field-row {
   display: grid;
-  grid-template-columns: minmax(160px, 1.2fr) minmax(160px, 1fr) minmax(220px, 1.6fr);
-  gap: 12px;
+  grid-template-columns: minmax(180px, 1fr) minmax(240px, 1.8fr);
+  gap: 14px;
   align-items: center;
   padding: 10px 12px;
   background: #f9fafb;
@@ -185,17 +185,19 @@
   border-radius: 10px;
 }
 .se-cw-field-name {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   font-weight: 600;
   color: var(--color-text);
   word-break: break-word;
 }
-.se-cw-field-type select {
-  width: 100%;
-  padding: 7px 10px;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  background: #fff;
-  font: inherit;
+.se-cw-field-hint {
+  font-size: 12px;
+  font-weight: 500;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 .se-cw-field-extra {
   display: flex;

@@ -823,13 +823,17 @@ function renderCustomQ3Fields() {
     wrap.innerHTML = `<p class="se-hint">No variables yet — go back and add some.</p>`;
     return;
   }
+  // Type was auto-detected at Q1 (POST /detect-types) and is intentionally
+  // NOT shown here — full variable classification happens later in Step 3,
+  // so re-asking for it in the wizard would just repeat that work. We still
+  // surface a small per-type hint chip so the user knows what they're
+  // configuring (range vs %positive vs levels).
+  const TYPE_HINT = {
+    scale: "Number",
+    binary: "Yes / No",
+    nominal: "Category",
+  };
   wrap.innerHTML = vars.map((v, i) => {
-    const typeSel = `
-      <select data-i="${i}" data-k="type" data-testid="select-cw-type-${i}">
-        <option value="scale"${v.type === "scale" ? " selected" : ""}>Scale (number)</option>
-        <option value="binary"${v.type === "binary" ? " selected" : ""}>Binary (yes/no)</option>
-        <option value="nominal"${v.type === "nominal" ? " selected" : ""}>Nominal (category)</option>
-      </select>`;
     let extra = "";
     if (v.type === "scale") {
       extra = `
@@ -840,10 +844,13 @@ function renderCustomQ3Fields() {
     } else {
       extra = `<label class="se-cw-mini se-cw-mini-wide">Levels (comma-separated) <input type="text" data-i="${i}" data-k="levels" value="${escapeHtml((v.levels || []).join(", "))}" placeholder="e.g. Group A, Group B"></label>`;
     }
+    const hint = TYPE_HINT[v.type] || "Number";
     return `
       <div class="se-cw-field-row">
-        <div class="se-cw-field-name">${escapeHtml(v.name)}</div>
-        <div class="se-cw-field-type">${typeSel}</div>
+        <div class="se-cw-field-name">
+          <span>${escapeHtml(v.name)}</span>
+          <span class="se-cw-field-hint" data-testid="hint-cw-type-${i}">${hint}</span>
+        </div>
         <div class="se-cw-field-extra">${extra}</div>
       </div>`;
   }).join("");
@@ -854,9 +861,6 @@ function renderCustomQ3Fields() {
     if (Number.isNaN(i) || !k || !vars[i]) return;
     if (k === "levels") {
       vars[i].levels = String(t.value || "").split(",").map((s) => s.trim()).filter(Boolean);
-    } else if (k === "type") {
-      vars[i].type = t.value;
-      renderCustomQ3Fields();   // type change → re-render so extras match
     } else {
       vars[i][k] = t.value === "" ? null : Number(t.value);
     }
