@@ -126,6 +126,30 @@ Only output JSON.
 """
 
 
+def _build_protected_terms_block(terms: list[str] | None) -> str:
+    """Return an extra prompt block listing strings that must NOT change.
+
+    The detector upstream gives us drug names, p-values, percentages, dose
+    units, citations, DOIs, gene symbols, ICD codes, and similar. We
+    surface them to the model as a hard constraint so the rewrite cannot
+    quietly paraphrase "p < 0.001" into "highly significant" or rename a
+    drug.
+    """
+    if not terms:
+        return ""
+    # Cap the injected list to keep the prompt within reason. The detector
+    # already enforces 400 — we further trim for prompt economy.
+    capped = terms[:200]
+    items = "\n".join(f"  - {t}" for t in capped)
+    return (
+        "\n\nPROTECTED STRINGS — these substrings MUST appear in the "
+        "rewritten text EXACTLY as written, without any paraphrasing, "
+        "reformatting, or capitalisation changes. Do not translate units. "
+        "Do not round numbers. Do not drop citation brackets.\n"
+        f"{items}\n"
+    )
+
+
 # ---------------------------------------------------------------------------
 # Provider calls
 # ---------------------------------------------------------------------------
@@ -251,11 +275,25 @@ def check_originality(text: str, *, provider: ProviderChoice = "auto") -> Dict[s
         return _normalise_check_result(parsed, fallback_word_count=word_count, model_used="gemini")
 
 
-def reduce_plagiarism(text: str, *, provider: ProviderChoice = "auto") -> Dict[str, Any]:
-    """Rewrite ``text`` to read more human and less templated."""
+def reduce_plagiarism(
+    text: str,
+    *,
+    provider: ProviderChoice = "auto",
+    protected_terms: Optional[list[str]] = None,
+) -> Dict[str, Any]:
+    """Rewrite ``text`` to read more human and less templated.
+
+    If ``protected_terms`` is supplied, those exact substrings are surfaced
+    to the LLM as hard "do not paraphrase" constraints, AND we verify
+    afterwards that each one still appears in the rewrite — any missing
+    terms are returned in the ``preserved_terms_missing`` field so the UI
+    can warn the user.
+    """
     text = (text or "").strip()
     if not text:
         raise ValueError("text is empty")
+
+    system_prompt = REDUCE_SYSTEM_PROMPT + _build_protected_terms_block(protected_terms)
 
     def _normalise(parsed: Dict[str, Any], *, model_used: str) -> Dict[str, Any]:
         rewritten = str(parsed.get("rewritten_text") or "").strip()
@@ -273,23 +311,34 @@ def reduce_plagiarism(text: str, *, provider: ProviderChoice = "auto") -> Dict[s
                 changes = int(changes)
             except Exception:
                 changes = 0
+        # Verify protected terms survived the rewrite. Any that didn't are
+        # surfaced for the UI to flag — we don't fail the whole call because
+        # often the missing term IS still present, just with a paraphrased
+        # boundary (e.g. trailing punctuation differs).
+        missing: list[str] = []
+        if protected_terms:
+            for term in protected_terms:
+                if term and term not in rewritten:
+                    missing.append(term)
         return {
             "original_text": text,
             "rewritten_text": rewritten,
             "changes_made": max(0, changes),
             "notes": str(parsed.get("notes") or "").strip()[:400],
             "model_used": model_used,
+            "protected_terms_count": len(protected_terms or []),
+            "preserved_terms_missing": missing[:50],
         }
 
     if provider == "openai":
-        return _normalise(_call_openai_json(REDUCE_SYSTEM_PROMPT, text, max_tokens=4096), model_used="openai")
+        return _normalise(_call_openai_json(system_prompt, text, max_tokens=4096), model_used="openai")
     if provider == "gemini":
-        return _normalise(_call_gemini_json(REDUCE_SYSTEM_PROMPT, text, max_tokens=8192), model_used="gemini")
+        return _normalise(_call_gemini_json(system_prompt, text, max_tokens=8192), model_used="gemini")
     try:
-        return _normalise(_call_openai_json(REDUCE_SYSTEM_PROMPT, text, max_tokens=4096), model_used="openai")
+        return _normalise(_call_openai_json(system_prompt, text, max_tokens=4096), model_used="openai")
     except Exception as exc:  # noqa: BLE001
         log.warning("plagiarism.reduce openai failed, falling back to gemini: %s", exc)
-        return _normalise(_call_gemini_json(REDUCE_SYSTEM_PROMPT, text, max_tokens=8192), model_used="gemini")
+        return _normalise(_call_gemini_json(system_prompt, text, max_tokens=8192), model_used="gemini")
 
 
 # ---------------------------------------------------------------------------

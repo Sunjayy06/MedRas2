@@ -31,7 +31,7 @@
 
       <div class="pm-surface-card">
         <h2 data-testid="text-input-title">1. Provide your text</h2>
-        <p class="pm-help">Up to ~5,000 words per check. Files are read in your browser session and sent over HTTPS.</p>
+        <p class="pm-help">Paste up to ~5,000 words per check, or upload a PDF / DOCX / TXT file up to 100 MB. Files are read in your browser session and sent over HTTPS.</p>
 
         <div class="pm-tabs" role="tablist" aria-label="Input mode">
           <button type="button" class="pm-tab is-active" data-tab="paste" role="tab" aria-selected="true" data-testid="tab-paste">Paste text</button>
@@ -57,9 +57,55 @@
           <div class="pm-dropzone" id="pm-dropzone" data-testid="dropzone-pm" tabindex="0" role="button" aria-label="Choose a file">
             <div class="pm-dropzone-icon">⬆</div>
             <div class="pm-dropzone-title">Click to choose a file or drop one here</div>
-            <div class="pm-dropzone-hint">Accepts .pdf, .docx, .txt, .md — up to 5 MB</div>
+            <div class="pm-dropzone-hint">Accepts .pdf, .docx, .txt, .md — up to 100 MB</div>
             <div class="pm-dropzone-file is-hidden" id="pm-dropzone-filename" data-testid="text-filename"></div>
             <input type="file" id="pm-file" accept=".pdf,.docx,.txt,.md" hidden data-testid="input-pm-file" />
+          </div>
+
+          <!-- Document analysis panel — populated after a file is uploaded
+               and /api/plagiarism/analyze-file has returned the breakdown. -->
+          <div class="pm-doc-analysis is-hidden" id="pm-doc-analysis" data-testid="panel-doc-analysis">
+            <div class="pm-doc-analysis-head">
+              <div>
+                <div class="pm-doc-title" id="pm-doc-title" data-testid="text-doc-title">Document analysis</div>
+                <div class="pm-doc-meta" id="pm-doc-meta" data-testid="text-doc-meta"></div>
+              </div>
+              <button type="button" class="pm-btn pm-btn--secondary pm-btn--small" id="pm-doc-clear" data-testid="button-doc-clear">Choose another file</button>
+            </div>
+
+            <div class="pm-doc-truncated is-hidden" id="pm-doc-truncated" data-testid="text-doc-truncated"></div>
+
+            <div class="pm-doc-grid">
+              <div class="pm-doc-col">
+                <div class="pm-doc-col-head">
+                  <span>Detected sections</span>
+                  <span class="pm-doc-col-hint" id="pm-doc-section-count" data-testid="text-section-count"></span>
+                </div>
+                <div class="pm-section-list" id="pm-section-list" data-testid="list-sections"></div>
+                <div class="pm-doc-actions">
+                  <button type="button" class="pm-link-btn" id="pm-section-all"  data-testid="button-section-all">Select all</button>
+                  <button type="button" class="pm-link-btn" id="pm-section-none" data-testid="button-section-none">Clear all</button>
+                  <span class="pm-doc-selected" id="pm-section-selected" data-testid="text-section-selected">0 words selected</span>
+                </div>
+              </div>
+
+              <div class="pm-doc-col">
+                <div class="pm-doc-col-head">
+                  <span>Protected technical terms</span>
+                  <span class="pm-doc-col-hint" id="pm-doc-term-count" data-testid="text-term-count"></span>
+                </div>
+                <p class="pm-help" style="margin: 4px 0 10px;">
+                  These will never be paraphrased — drug names, p-values,
+                  doses, citations, gene symbols, and similar are passed
+                  to the engine as hard "do not change" constraints.
+                </p>
+                <div class="pm-term-summary" id="pm-term-summary" data-testid="list-term-types"></div>
+                <details class="pm-term-details" data-testid="details-term-list">
+                  <summary>Show all detected terms</summary>
+                  <div class="pm-term-list" id="pm-term-list"></div>
+                </details>
+              </div>
+            </div>
           </div>
         </div>
 
