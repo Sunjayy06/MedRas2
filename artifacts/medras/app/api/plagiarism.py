@@ -59,12 +59,32 @@ class CheckRequest(BaseModel):
     provider: Literal["openai", "gemini", "auto"] = "auto"
 
 
+class PipelineSectionIn(BaseModel):
+    """One section to feed into the 3-stage rewrite pipeline.
+
+    The label drives References-skip detection (sections labelled
+    "References", "Bibliography", "Works Cited", "Literature Cited" are
+    kept verbatim and not rewritten).
+    """
+    label: str = Field(..., min_length=1, max_length=200)
+    text: str = Field(..., min_length=1)
+
+
 class ReduceRequest(BaseModel):
     text: str = Field(..., min_length=1)
     provider: Literal["openai", "gemini", "auto"] = "auto"
     # Strings that MUST appear unchanged in the rewrite. Usually populated
     # from the output of /analyze-file's protected_terms list.
     protected_terms: Optional[List[str]] = None
+    # If supplied, /reduce runs the 3-stage GPT-4o → Gemini → GPT-4o
+    # pipeline per section instead of the legacy single-shot rewrite.
+    # ``text`` is still required (used for size validation and as the
+    # legacy fallback if the pipeline raises).
+    sections: Optional[List[PipelineSectionIn]] = None
+    # Force the pipeline path even without explicit sections (treats the
+    # full text as one body section). Useful for the paste-text flow
+    # when the user wants the higher-quality multi-stage rewrite.
+    pipeline: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -241,8 +261,22 @@ async def analyze_file(
 async def reduce_text(request: Request, payload: ReduceRequest) -> dict:
     """Rewrite text to read more human and less templated.
 
-    If ``protected_terms`` is supplied, those substrings are passed to the
-    LLM as hard "do not change" constraints AND verified post-hoc.
+    Two paths:
+
+    1. **Pipeline path** — taken when ``sections`` is supplied OR
+       ``pipeline=true``. Runs each section through 3 LLM stages:
+       paraphrase (gpt-4o) → humanise (gemini-2.5-flash) → polish
+       (gpt-4o). Sections labelled References / Bibliography / Works
+       Cited / Literature Cited are skipped entirely and kept verbatim
+       in the combined output. The ``provider`` field is ignored on this
+       path — each stage has a fixed primary with the other provider as
+       its automatic fallback.
+
+    2. **Legacy single-shot path** — original behaviour. Used when
+       neither ``sections`` nor ``pipeline`` is set.
+
+    In both paths, ``protected_terms`` substrings are passed to the LLM
+    as hard "do not change" constraints AND verified post-hoc.
     """
     text = payload.text.strip()
     if len(text) > MAX_TEXT_CHARS:
@@ -250,6 +284,46 @@ async def reduce_text(request: Request, payload: ReduceRequest) -> dict:
             status_code=413,
             detail=f"Text is too long ({len(text):,} chars). Maximum is {MAX_TEXT_CHARS:,}.",
         )
+
+    use_pipeline = bool(payload.sections) or payload.pipeline
+    if use_pipeline:
+        sections_payload: list[dict[str, str]]
+        if payload.sections:
+            total = sum(len(s.text) for s in payload.sections)
+            if total > MAX_TEXT_CHARS:
+                raise HTTPException(
+                    status_code=413,
+                    detail=f"Combined sections are too long ({total:,} chars). Maximum is {MAX_TEXT_CHARS:,}.",
+                )
+            sections_payload = [{"label": s.label, "text": s.text} for s in payload.sections]
+        else:
+            sections_payload = [{"label": "Body", "text": text}]
+        try:
+            result = plagiarism_analyzer.rewrite_pipeline(
+                sections_payload,
+                protected_terms=payload.protected_terms,
+            )
+        except plagiarism_analyzer.ProviderQuotaExhausted as exc:
+            # Both AI providers are out of quota. Surface a clear,
+            # actionable 503 the UI can show instead of a 502 stack trace.
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "Both AI providers are out of quota right now. "
+                    "OpenAI returned insufficient_quota (billing) and Gemini "
+                    "hit its free-tier daily request limit. Please try again "
+                    "tomorrow, or top up one of the provider accounts."
+                ),
+            ) from exc
+        except RuntimeError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception as exc:  # noqa: BLE001
+            log.exception("plagiarism rewrite_pipeline failed")
+            raise HTTPException(status_code=502, detail=f"Rewrite pipeline failed: {exc}") from exc
+        return result
+
     try:
         result = plagiarism_analyzer.reduce_plagiarism(
             text,

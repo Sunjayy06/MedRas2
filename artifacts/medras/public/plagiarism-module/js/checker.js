@@ -271,31 +271,52 @@
   }
 
   function buildSelectedText() {
-    if (!docAnalysis) return "";
+    const pieces = buildSelectedSections();
+    if (!pieces.length) {
+      // No section breakdown — return the full extracted text if anything is checked.
+      const fullText = (docAnalysis && docAnalysis.extracted_text) || "";
+      const sections = (docAnalysis && docAnalysis.sections) || [];
+      if (!sections.length) return fullText;
+      return "";
+    }
+    return pieces.map((p) => `${p.label}\n${p.text}`).join("\n\n");
+  }
+
+  // Returns [{label, text}] for sections currently checked, with the
+  // heading line stripped from the body. Used both by buildSelectedText
+  // (legacy callers) and by the rewrite pipeline payload.
+  function buildSelectedSections() {
+    if (!docAnalysis) return [];
     const sections = docAnalysis.sections || [];
     const fullText = docAnalysis.extracted_text || "";
-    if (!sections.length) return fullText;
+    if (!sections.length) return [];
+    const lines = fullText.split(/\r?\n/);
+    const ordered = sections.slice().sort((a, b) => a.start_line - b.start_line);
     const checked = $$('.pm-section-row input[type="checkbox"]:checked')
       .map((cb) => parseInt(cb.dataset.sectionIndex, 10))
       .filter((i) => !isNaN(i));
-    if (!checked.length) return "";
-    if (checked.length === sections.length) return fullText;
-    // Reconstruct each selected section by slicing the extracted_text using
-    // start_line. We split once, slice, then re-join — only the checked
-    // sections survive. This keeps server payloads small (we ship just the
-    // breakdown back, not per-section text).
-    const lines = fullText.split(/\r?\n/);
-    const ordered = sections.slice().sort((a, b) => a.start_line - b.start_line);
-    const pieces = [];
+    if (!checked.length) return [];
+    const out = [];
     for (let i = 0; i < ordered.length; i++) {
       const idx = sections.indexOf(ordered[i]);
       if (!checked.includes(idx)) continue;
       const startLine = ordered[i].start_line - 1;
       const endLine = (i + 1 < ordered.length) ? ordered[i + 1].start_line - 1 : lines.length;
       const sliceText = lines.slice(startLine, endLine).join("\n").trim();
-      if (sliceText) pieces.push(sliceText);
+      if (!sliceText) continue;
+      const label = ordered[i].label || "Section";
+      // Strip the heading line if it's the first line of the slice.
+      let body = sliceText;
+      const firstNl = sliceText.indexOf("\n");
+      const firstLine = (firstNl === -1 ? sliceText : sliceText.slice(0, firstNl)).trim();
+      const labelLower = label.toLowerCase();
+      const headingPattern = /^\s*(?:\d+[\.\)]?\s*)?[A-Za-z][A-Za-z\s&]*\s*[:\.\-]?\s*$/;
+      if (firstLine.toLowerCase() === labelLower || headingPattern.test(firstLine)) {
+        body = firstNl === -1 ? "" : sliceText.slice(firstNl + 1).trim();
+      }
+      if (body) out.push({ label, text: body });
     }
-    return pieces.join("\n\n");
+    return out;
   }
 
   function getProtectedTerms(scopedText) {
@@ -363,9 +384,23 @@
       }
 
       if (isReduceMode) {
-        result = await callApi("/api/plagiarism/reduce", {
-          json: { text, provider, protected_terms: protectedTerms },
-        });
+        // For uploads with a section breakdown, use the 3-stage pipeline
+        // (gpt-4o → gemini → gpt-4o) and skip References automatically.
+        // For pasted text, also opt into the pipeline so the user gets
+        // the higher-quality multi-stage rewrite.
+        const body = { text, provider, protected_terms: protectedTerms };
+        if (activeTab === "upload" && docAnalysis) {
+          const selectedSections = buildSelectedSections();
+          if (selectedSections.length) {
+            body.sections = selectedSections;
+          } else {
+            body.pipeline = true;
+          }
+        } else {
+          body.pipeline = true;
+        }
+        setStatus("Running 3-stage rewrite pipeline (paraphrase → humanise → polish). This can take 30-90 seconds…", "loading");
+        result = await callApi("/api/plagiarism/reduce", { json: body });
         showReduceResult(result);
         setStatus("Rewrite complete.", "success");
       } else {
@@ -427,10 +462,84 @@
            <code style="display:block; margin-top:6px; font-size:12px;">${missing.slice(0, 20).map(escapeHtml).join(" · ")}</code>
          </div>`
       : "";
+
+    // Pipeline panel (only for /reduce responses that came from the 3-stage path)
+    let pipelineBlock = "";
+    if (result.pipeline && Array.isArray(result.pipeline.sections)) {
+      const stages = result.pipeline.stages || [];
+      const sections = result.pipeline.sections;
+      const skipCount = sections.filter((s) => s.skipped).length;
+      const writtenCount = sections.length - skipCount;
+      const stageHeaderHtml = stages.map((s) => `
+        <span class="pm-pipeline-stage">
+          <span class="pm-pipeline-stage-name">${escapeHtml(s.name)}</span>
+          <span class="pm-pipeline-stage-model">${escapeHtml(s.primary)}</span>
+        </span>
+      `).join('<span class="pm-pipeline-arrow">→</span>');
+      const sectionRowsHtml = sections.map((s, i) => {
+        if (s.skipped) {
+          const reason = s.skip_reason === "references"
+            ? "Kept verbatim (References — never rewritten)"
+            : `Skipped (${s.skip_reason || "empty"})`;
+          return `
+            <details class="pm-pipeline-row is-skipped" data-testid="pipeline-section-${i}">
+              <summary>
+                <span class="pm-pipeline-row-label">${escapeHtml(s.label)}</span>
+                <span class="pm-pipeline-row-meta">${escapeHtml(reason)}</span>
+              </summary>
+            </details>`;
+        }
+        const models = s.stage_models || {};
+        const modelChips = ["a", "b", "c"].map((k) => {
+          const m = models[k] || "—";
+          const isFb = /fallback/i.test(m);
+          return `<span class="pm-pipeline-model-chip${isFb ? " is-fallback" : ""}">${escapeHtml(m)}</span>`;
+        }).join("");
+        return `
+          <details class="pm-pipeline-row" data-testid="pipeline-section-${i}">
+            <summary>
+              <span class="pm-pipeline-row-label">${escapeHtml(s.label)}</span>
+              <span class="pm-pipeline-row-meta">${(s.edits || 0).toLocaleString()} edits · ${modelChips}</span>
+            </summary>
+            <div class="pm-pipeline-stage-blocks">
+              <div class="pm-pipeline-stage-block">
+                <div class="pm-pipeline-stage-block-title">Original</div>
+                <pre class="pm-pipeline-stage-block-text">${escapeHtml(s.original || "")}</pre>
+              </div>
+              <div class="pm-pipeline-stage-block">
+                <div class="pm-pipeline-stage-block-title">After A · Paraphrase (${escapeHtml(models.a || "")})</div>
+                <pre class="pm-pipeline-stage-block-text">${escapeHtml(s.stage_a_text || "")}</pre>
+              </div>
+              <div class="pm-pipeline-stage-block">
+                <div class="pm-pipeline-stage-block-title">After B · Humanise (${escapeHtml(models.b || "")})</div>
+                <pre class="pm-pipeline-stage-block-text">${escapeHtml(s.stage_b_text || "")}</pre>
+              </div>
+              <div class="pm-pipeline-stage-block">
+                <div class="pm-pipeline-stage-block-title">After C · Polish (${escapeHtml(models.c || "")}) — final</div>
+                <pre class="pm-pipeline-stage-block-text">${escapeHtml(s.stage_c_text || "")}</pre>
+              </div>
+            </div>
+          </details>`;
+      }).join("");
+      pipelineBlock = `
+        <div class="pm-pipeline-panel" data-testid="panel-pipeline">
+          <div class="pm-pipeline-header">
+            <strong>3-stage pipeline</strong>
+            <span class="pm-pipeline-summary" data-testid="text-pipeline-summary">
+              ${writtenCount} section${writtenCount === 1 ? "" : "s"} rewritten · ${skipCount} kept verbatim
+              ${result.pipeline.any_fallback ? '<span class="pm-pipeline-fallback-flag">fallback used</span>' : ""}
+            </span>
+          </div>
+          <div class="pm-pipeline-stages">${stageHeaderHtml}</div>
+          <div class="pm-pipeline-rows">${sectionRowsHtml}</div>
+        </div>`;
+    }
+
     host.innerHTML = `
       <h2>Rewritten draft</h2>
       <p class="pm-help">${escapeHtml(result.notes || "Rewrite complete.")} <span style="color:var(--pm-text-soft);">· ${result.changes_made || 0} edits · engine: ${escapeHtml(result.model_used || "auto")}${protectedNote}</span></p>
       ${missingBlock}
+      ${pipelineBlock}
       <textarea class="pm-textarea" id="pm-rewrite-out" data-testid="textarea-pm-rewrite" style="min-height:340px;"></textarea>
       <div class="pm-actions">
         <button type="button" class="pm-btn pm-btn--primary" id="pm-copy" data-testid="button-pm-copy">Copy rewritten text</button>

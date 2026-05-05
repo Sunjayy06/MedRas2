@@ -23,10 +23,11 @@ match against a database.
 
 from __future__ import annotations
 
+import difflib
 import json
 import os
 import re
-from typing import Any, Dict, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from app.core.logging import get_logger
 
@@ -171,6 +172,138 @@ def _call_openai_json(system_prompt: str, user_text: str, *, max_tokens: int = 2
     )
     raw = resp.choices[0].message.content or "{}"
     return json.loads(raw)
+
+
+# ---------------------------------------------------------------------------
+# Plain-text provider calls (used by the 3-stage rewrite pipeline)
+# ---------------------------------------------------------------------------
+
+
+# Markers for errors that mean "your account is out of credits / requests
+# for this provider — retrying will NEVER help". Checked BEFORE the
+# transient marker check so a 429 with insufficient_quota doesn't get
+# retried 3 times pointlessly.
+_QUOTA_EXHAUSTED_MARKERS = (
+    "insufficient_quota",
+    "exceeded your current quota",
+    "resource_exhausted",
+    "quota exceeded",
+    "billing",
+)
+
+# Markers for errors that are likely transient and worth retrying.
+_TRANSIENT_MARKERS = (
+    "503", "unavailable", "overloaded",
+    "rate_limit", "rate limit",
+    "timeout", "timed out", "deadline exceeded",
+    "service unavailable", "connection reset", "connection error",
+)
+
+
+class ProviderQuotaExhausted(RuntimeError):
+    """Raised when a provider is permanently out of quota for this billing
+    period. Distinct from a transient error so the route layer can return
+    a clear, actionable 503 instead of a generic 502.
+    """
+
+
+def _is_quota_exhausted_error(exc: Exception) -> bool:
+    msg = (str(exc) or "").lower()
+    return any(m in msg for m in _QUOTA_EXHAUSTED_MARKERS)
+
+
+def _is_transient_error(exc: Exception) -> bool:
+    """True for errors that are likely to succeed on retry. Quota errors
+    are explicitly excluded — they're permanent for the billing period."""
+    if _is_quota_exhausted_error(exc):
+        return False
+    msg = (str(exc) or "").lower()
+    return any(m in msg for m in _TRANSIENT_MARKERS)
+
+
+def _with_retry(fn, *, attempts: int = 3, base_delay: float = 1.5):
+    """Call ``fn()`` up to ``attempts`` times with exponential backoff on
+    transient errors (503/timeout/overloaded). Quota-exhaustion errors
+    are re-raised IMMEDIATELY (no retry, no backoff) so the caller can
+    fall back to the other provider in seconds rather than minutes.
+    """
+    import time
+    last_exc: Optional[Exception] = None
+    for attempt in range(attempts):
+        try:
+            return fn()
+        except Exception as exc:  # noqa: BLE001
+            last_exc = exc
+            if _is_quota_exhausted_error(exc):
+                # Permanent. Don't retry. Don't waste the user's time.
+                log.warning("provider quota exhausted, no retry: %s", str(exc)[:200])
+                raise
+            if not _is_transient_error(exc) or attempt == attempts - 1:
+                raise
+            delay = base_delay * (2 ** attempt)
+            log.warning("transient provider error (attempt %d/%d, retry in %.1fs): %s",
+                        attempt + 1, attempts, str(exc)[:200])
+            time.sleep(delay)
+    if last_exc:
+        raise last_exc
+    raise RuntimeError("retry loop exited without result")
+
+
+def _strip_fences(s: str) -> str:
+    """Strip accidental ``` code fences and leading/trailing blank lines."""
+    s = (s or "").strip()
+    if s.startswith("```"):
+        nl = s.find("\n")
+        if nl != -1:
+            s = s[nl + 1 :]
+        if s.endswith("```"):
+            s = s[:-3]
+    return s.strip()
+
+
+def _call_openai_text(
+    system_prompt: str,
+    user_text: str,
+    *,
+    model: str = "gpt-4o",
+    max_tokens: int = 4096,
+    temperature: float = 0.4,
+) -> str:
+    """Call OpenAI Chat Completions and return plain-text content."""
+    client = _get_openai()
+    resp = client.chat.completions.create(
+        model=model,
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_text},
+        ],
+        max_tokens=max_tokens,
+        temperature=temperature,
+    )
+    return _strip_fences(resp.choices[0].message.content or "")
+
+
+def _call_gemini_text(
+    system_prompt: str,
+    user_text: str,
+    *,
+    max_tokens: int = 8192,
+    temperature: float = 0.4,
+) -> str:
+    """Call Gemini generate_content and return plain-text content."""
+    from google.genai import types
+
+    client = _get_gemini()
+    contents = f"{system_prompt}\n\n--- TEXT ---\n{user_text}"
+    resp = client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=contents,
+        config=types.GenerateContentConfig(
+            max_output_tokens=max_tokens,
+            temperature=temperature,
+        ),
+    )
+    return _strip_fences(resp.text or "")
 
 
 def _call_gemini_json(system_prompt: str, user_text: str, *, max_tokens: int = 4096) -> Dict[str, Any]:
@@ -339,6 +472,319 @@ def reduce_plagiarism(
     except Exception as exc:  # noqa: BLE001
         log.warning("plagiarism.reduce openai failed, falling back to gemini: %s", exc)
         return _normalise(_call_gemini_json(system_prompt, text, max_tokens=8192), model_used="gemini")
+
+
+# ---------------------------------------------------------------------------
+# 3-stage rewrite pipeline
+# ---------------------------------------------------------------------------
+#
+# When the user clicks "Reduce plagiarism" on an analysed upload, we run
+# each detected section through three sequential LLM stages:
+#
+#   A. Paraphrase-for-originality    — primary: OpenAI gpt-4o
+#   B. De-AI / humanise              — primary: Gemini gemini-2.5-flash
+#   C. Quality-and-flow polish pass  — primary: OpenAI gpt-4o
+#
+# Each stage falls back to the OTHER provider if its primary fails (so the
+# pipeline still completes when, e.g., the OpenAI key is over quota). The
+# References / Bibliography section is skipped entirely — academic refs
+# must NEVER be paraphrased or "humanised". Protected terms (drug names,
+# p-values, citations, etc.) are surfaced as a hard constraint to every
+# stage and verified post-hoc on the combined output.
+
+STAGE_A_PARAPHRASE_PROMPT = """You are an expert academic editor performing PARAPHRASE-FOR-ORIGINALITY. Rewrite the passage below so it expresses the same ideas using different words and sentence structures, reducing surface similarity to common academic phrasing.
+
+HARD RULES:
+- Every protected string listed below MUST appear in your output EXACTLY as written, character-for-character. Do not change capitalisation, units, punctuation, or rounding.
+- Preserve every numeric value, p-value, confidence interval, drug name, gene symbol, citation, and DOI exactly.
+- Preserve the meaning and the order of ideas. Do not add new claims or remove information.
+- Preserve paragraph breaks.
+- If the passage starts with a heading word (Abstract, Methods, Results, etc.), keep that heading on its own line at the top.
+
+Output ONLY the rewritten text — no preface, no JSON, no code fences, no commentary.
+"""
+
+STAGE_B_HUMANIZE_PROMPT = """You are an experienced human researcher editing the passage below to remove all signs of AI-generated writing. Make it read like a thoughtful human author wrote it.
+
+HARD RULES:
+- Vary sentence length sharply. Mix short sentences (5-10 words) with longer ones.
+- Strip AI-typical filler and transitions: "Moreover", "Furthermore", "Additionally", "In conclusion", "It is important to note", "It is worth noting", "delve into", "robust", "comprehensive", "navigate", "tapestry", "underscore", "showcase".
+- Remove formulaic hedging ("It can be argued that", "It should be noted that", "Generally speaking").
+- Use active voice when natural. Allow occasional contractions or sentences starting with "And" or "But" if it sounds more human.
+- Every protected string listed below MUST appear in your output EXACTLY as written. Preserve all numbers, statistics, citations, drug names, units, and DOIs.
+- Preserve the meaning. Do not add new claims or remove information.
+- Preserve paragraph structure and any heading on its own line at the top.
+
+Output ONLY the revised text — no preface, no JSON, no code fences, no commentary.
+"""
+
+STAGE_C_POLISH_PROMPT = """You are a senior journal editor performing the FINAL QUALITY PASS on the passage below. Check for grammar errors, awkward phrasing, broken transitions, and inconsistencies. Make MINIMAL edits — only fix actual problems. If a sentence already reads cleanly, leave it untouched.
+
+HARD RULES:
+- Every protected string listed below MUST appear in your output EXACTLY as written. Do not touch numbers, p-values, confidence intervals, drug names, citations, units, or DOIs.
+- Preserve the meaning and overall length. Do not add new claims, remove information, or substantially shorten.
+- Preserve paragraph structure and any heading on its own line at the top.
+
+Output ONLY the polished text — no preface, no JSON, no code fences, no commentary.
+"""
+
+# Match labels that the analyzer uses for the references block. Anything
+# matching this is skipped by the pipeline (kept verbatim in final output).
+# Match section labels for reference lists. Tolerates a leading number
+# prefix ("5. References", "5) References", "5 References") so labels
+# coming straight from the section detector still match.
+_REFERENCES_LABEL_RE = re.compile(
+    r"^\s*(?:\d+\s*[\.\)]?\s+)?(?:references?|bibliography|works\s+cited|literature\s+cited)\b",
+    re.IGNORECASE,
+)
+
+
+def _is_references_label(label: str) -> bool:
+    return bool(_REFERENCES_LABEL_RE.match(label or ""))
+
+
+def _approx_word_edits(before: str, after: str) -> int:
+    """Heuristic count of token-level edits between two strings.
+
+    Used only to populate the ``changes_made`` counter shown in the UI.
+    Not a quality metric — just a rough indicator.
+    """
+    a = re.findall(r"\S+", before or "")
+    b = re.findall(r"\S+", after or "")
+    if not a and not b:
+        return 0
+    sm = difflib.SequenceMatcher(None, a, b, autojunk=False)
+    edits = 0
+    for tag, i1, i2, j1, j2 in sm.get_opcodes():
+        if tag == "equal":
+            continue
+        edits += max(i2 - i1, j2 - j1)
+    return edits
+
+
+def _run_stage(
+    *,
+    primary: Literal["openai", "gemini"],
+    system_prompt: str,
+    user_text: str,
+    protected_terms: Optional[List[str]],
+    stage_label: str,
+) -> Dict[str, Any]:
+    """Run one stage with primary-provider preference and other-provider fallback.
+
+    Returns a dict with keys:
+      ``text``           — the stage output (non-empty),
+      ``model``          — human-readable provider label (e.g. "gpt-4o" or
+                           "gemini-2.5-flash (fallback)"),
+      ``fallback_used``  — bool, true if the primary failed.
+    """
+    full_prompt = system_prompt + _build_protected_terms_block(protected_terms)
+    primary_err: Optional[str] = None
+
+    def _openai_call() -> str:
+        return _with_retry(lambda: _call_openai_text(full_prompt, user_text, model="gpt-4o"))
+
+    def _gemini_call() -> str:
+        return _with_retry(lambda: _call_gemini_text(full_prompt, user_text))
+
+    def _try_fallback(
+        other_call,
+        other_label: str,
+        primary_exc: Exception,
+    ) -> Dict[str, Any]:
+        primary_err_str = f"{type(primary_exc).__name__}: {primary_exc}"
+        primary_was_quota = _is_quota_exhausted_error(primary_exc)
+        try:
+            text = other_call()
+        except Exception as fb_exc:  # noqa: BLE001
+            fallback_was_quota = _is_quota_exhausted_error(fb_exc)
+            # Only raise ProviderQuotaExhausted when BOTH providers failed
+            # specifically with quota errors. Otherwise (e.g. transient 503
+            # on one side, quota on the other) propagate the fallback
+            # exception so the route returns its normal 502 with the real
+            # cause — we do NOT want to mislead the user with a "both out
+            # of quota" message when only one provider actually was.
+            if primary_was_quota and fallback_was_quota:
+                raise ProviderQuotaExhausted(
+                    f"Stage {stage_label}: both providers exhausted. "
+                    f"Primary error: {primary_err_str[:300]}. "
+                    f"Fallback error: {str(fb_exc)[:300]}"
+                ) from fb_exc
+            raise
+        if not text:
+            raise RuntimeError(f"Stage {stage_label}: both providers returned empty output")
+        return {"text": text, "model": f"{other_label} (fallback)", "fallback_used": True, "primary_error": primary_err_str}
+
+    if primary == "openai":
+        try:
+            text = _openai_call()
+            if text:
+                return {"text": text, "model": "gpt-4o", "fallback_used": False, "primary_error": None}
+            raise RuntimeError("Empty output from gpt-4o")
+        except Exception as exc:  # noqa: BLE001
+            log.warning("pipeline %s: openai primary failed (%s) — falling back to gemini", stage_label, str(exc)[:200])
+            return _try_fallback(_gemini_call, "gemini-2.5-flash", exc)
+    else:
+        try:
+            text = _gemini_call()
+            if text:
+                return {"text": text, "model": "gemini-2.5-flash", "fallback_used": False, "primary_error": None}
+            raise RuntimeError("Empty output from gemini")
+        except Exception as exc:  # noqa: BLE001
+            log.warning("pipeline %s: gemini primary failed (%s) — falling back to openai", stage_label, str(exc)[:200])
+            return _try_fallback(_openai_call, "gpt-4o", exc)
+
+
+def rewrite_pipeline(
+    sections: List[Dict[str, str]],
+    *,
+    protected_terms: Optional[List[str]] = None,
+) -> Dict[str, Any]:
+    """Run the 3-stage rewrite pipeline across a list of sections.
+
+    Each ``sections`` item is ``{"label": str, "text": str}``. Sections
+    whose label is References / Bibliography / Works Cited are skipped
+    entirely (returned unchanged in the combined output, marked
+    ``skipped: True``). Empty-text sections are dropped.
+
+    The combined ``rewritten_text`` joins the per-section finals in input
+    order with a blank line between them. Protected terms are passed to
+    every stage AND verified against the combined final; any that didn't
+    survive are reported in ``preserved_terms_missing``.
+    """
+    if not sections:
+        raise ValueError("rewrite_pipeline requires at least one section")
+
+    per_section: List[Dict[str, Any]] = []
+    final_parts: List[str] = []
+    total_changes = 0
+    any_fallback = False
+    protected_terms = protected_terms or []
+
+    for sec in sections:
+        label = (sec.get("label") or "").strip() or "Section"
+        body = (sec.get("text") or "").strip()
+        if not body:
+            per_section.append({
+                "label": label,
+                "skipped": True,
+                "skip_reason": "empty",
+                "original": "",
+                "final_text": "",
+                "stage_a_text": "",
+                "stage_b_text": "",
+                "stage_c_text": "",
+                "stage_models": {},
+                "edits": 0,
+            })
+            continue
+
+        if _is_references_label(label):
+            per_section.append({
+                "label": label,
+                "skipped": True,
+                "skip_reason": "references",
+                "original": body,
+                "final_text": body,  # kept verbatim
+                "stage_a_text": "",
+                "stage_b_text": "",
+                "stage_c_text": "",
+                "stage_models": {},
+                "edits": 0,
+            })
+            final_parts.append(body)
+            continue
+
+        # Filter protected terms to those actually present in this section.
+        section_terms = [t for t in protected_terms if t and t in body]
+
+        # Stage A: GPT-4o paraphrase for originality
+        a = _run_stage(
+            primary="openai",
+            system_prompt=STAGE_A_PARAPHRASE_PROMPT,
+            user_text=body,
+            protected_terms=section_terms,
+            stage_label=f"A:{label}",
+        )
+        # Stage B: Gemini humanise
+        b = _run_stage(
+            primary="gemini",
+            system_prompt=STAGE_B_HUMANIZE_PROMPT,
+            user_text=a["text"],
+            protected_terms=section_terms,
+            stage_label=f"B:{label}",
+        )
+        # Stage C: GPT-4o quality polish
+        c = _run_stage(
+            primary="openai",
+            system_prompt=STAGE_C_POLISH_PROMPT,
+            user_text=b["text"],
+            protected_terms=section_terms,
+            stage_label=f"C:{label}",
+        )
+
+        if a["fallback_used"] or b["fallback_used"] or c["fallback_used"]:
+            any_fallback = True
+
+        per_section.append({
+            "label": label,
+            "skipped": False,
+            "original": body,
+            "stage_a_text": a["text"],
+            "stage_b_text": b["text"],
+            "stage_c_text": c["text"],
+            "final_text": c["text"],
+            "stage_models": {"a": a["model"], "b": b["model"], "c": c["model"]},
+            "edits": _approx_word_edits(body, c["text"]),
+        })
+        final_parts.append(c["text"])
+        total_changes += per_section[-1]["edits"]
+
+    final_combined = "\n\n".join(final_parts)
+    if not final_combined.strip():
+        # All sections were empty or only References (which we keep
+        # verbatim but here even the verbatim text was empty). Treat as
+        # a client input problem so the route returns 400, not 503.
+        raise ValueError(
+            "Pipeline produced no output: every supplied section was empty "
+            "or contained only references. Please include at least one "
+            "non-empty, non-References section."
+        )
+
+    missing = []
+    for term in protected_terms:
+        if term and term not in final_combined:
+            missing.append(term)
+
+    original_combined = "\n\n".join(
+        (s.get("text") or "").strip() for s in sections if (s.get("text") or "").strip()
+    )
+
+    notes_bits = [f"3-stage pipeline across {sum(1 for s in per_section if not s['skipped'])} section(s)"]
+    skipped_refs = [s["label"] for s in per_section if s.get("skip_reason") == "references"]
+    if skipped_refs:
+        notes_bits.append(f"References kept verbatim: {', '.join(skipped_refs)}")
+    if any_fallback:
+        notes_bits.append("one or more stages used the fallback provider")
+
+    return {
+        "original_text": original_combined,
+        "rewritten_text": final_combined,
+        "changes_made": total_changes,
+        "notes": ". ".join(notes_bits) + ".",
+        "model_used": "pipeline (gpt-4o → gemini-2.5-flash → gpt-4o)" + (" + fallbacks" if any_fallback else ""),
+        "protected_terms_count": len(protected_terms),
+        "preserved_terms_missing": missing[:50],
+        "pipeline": {
+            "stages": [
+                {"key": "a", "name": "Paraphrase for originality", "primary": "gpt-4o"},
+                {"key": "b", "name": "De-AI / humanise", "primary": "gemini-2.5-flash"},
+                {"key": "c", "name": "Quality polish", "primary": "gpt-4o"},
+            ],
+            "any_fallback": any_fallback,
+            "sections": per_section,
+        },
+    }
 
 
 # ---------------------------------------------------------------------------
