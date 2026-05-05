@@ -635,10 +635,85 @@ def _run_stage(
             return _try_fallback(_openai_call, "gpt-4o", exc)
 
 
+class PipelineCancelled(RuntimeError):
+    """Raised when a streaming consumer disconnects mid-pipeline.
+
+    The route-level handler suppresses this so we don't log it as a real
+    error — it's just the worker thread cooperatively bailing out so we
+    don't keep burning LLM credits on a request nobody is listening to.
+    """
+
+
+def _classify_section_quality(
+    original: str,
+    final: str,
+    edits: int,
+    missing_terms_count: int,
+    protected_terms_in_section: int,
+    fallback_used: bool,
+) -> Dict[str, str]:
+    """Assign a colour-coded quality bucket to a rewritten section.
+
+    The four buckets follow the product spec:
+      - green   "Well rewritten"           — substantial edits, clean
+      - yellow  "Moderate changes"         — some edits made
+      - orange  "Review recommended"       — few edits, or missing terms,
+                                             or fallback provider was used
+      - red     "Heavily technical"        — high protected-term density,
+                                             paraphrase potential is naturally
+                                             limited (mostly numbers / citations)
+
+    Returned dict has ``key`` (machine), ``label`` (human), and ``hint``.
+    """
+    word_count = max(1, len(re.findall(r"\S+", original or "")))
+    technical_density = protected_terms_in_section / word_count
+    edit_ratio = edits / word_count
+
+    # 1. Source is heavily technical → mark red regardless of edits, because
+    #    the source naturally constrains how much can be rephrased. If the
+    #    section ALSO has missing protected terms, surface that in the hint
+    #    so the per-section card still warns about the preservation failure
+    #    (red colour kept per product spec).
+    if technical_density >= 0.08 or protected_terms_in_section >= 8:
+        hint = "This section is dense with protected terms (numbers, drug names, citations) that cannot be paraphrased. Limited rewrite potential is expected."
+        if missing_terms_count > 0:
+            hint += f" ⚠ {missing_terms_count} protected term(s) did NOT survive the rewrite — restore them manually before submitting."
+        return {"key": "red", "label": "Heavily technical", "hint": hint}
+    # 2. Missing protected terms is a serious quality problem — flag for review.
+    if missing_terms_count > 0:
+        return {
+            "key": "orange",
+            "label": "Review recommended",
+            "hint": f"{missing_terms_count} protected term(s) did not survive the rewrite. Please verify before accepting.",
+        }
+    # 3. Very small edit footprint OR fallback provider used → review.
+    if edit_ratio < 0.10 or fallback_used:
+        return {
+            "key": "orange",
+            "label": "Review recommended",
+            "hint": "Few edits were made or a fallback provider was used. Compare the rewrite to the original carefully.",
+        }
+    # 4. Moderate edits.
+    if edit_ratio < 0.25:
+        return {
+            "key": "yellow",
+            "label": "Moderate changes",
+            "hint": "The rewrite made some changes. Review for tone and accuracy.",
+        }
+    # 5. Substantial edits, clean run.
+    return {
+        "key": "green",
+        "label": "Well rewritten",
+        "hint": "Substantial paraphrasing with no preservation issues.",
+    }
+
+
 def rewrite_pipeline(
     sections: List[Dict[str, str]],
     *,
     protected_terms: Optional[List[str]] = None,
+    progress_cb: Optional[Any] = None,
+    cancel_event: Optional[Any] = None,
 ) -> Dict[str, Any]:
     """Run the 3-stage rewrite pipeline across a list of sections.
 
@@ -661,11 +736,38 @@ def rewrite_pipeline(
     any_fallback = False
     protected_terms = protected_terms or []
 
-    for sec in sections:
+    def _emit(event: Dict[str, Any]) -> None:
+        if progress_cb is None:
+            return
+        try:
+            progress_cb(event)
+        except Exception as cb_exc:  # noqa: BLE001
+            log.warning("progress_cb raised, continuing: %s", cb_exc)
+
+    def _check_cancelled() -> None:
+        if cancel_event is not None and cancel_event.is_set():
+            raise PipelineCancelled("client disconnected, aborting pipeline")
+
+    # Pre-compute the work plan so the client can render the progress bar
+    # at the correct total before any stages run.
+    plan_sections = []
+    for i, sec in enumerate(sections):
+        label_pre = (sec.get("label") or "").strip() or f"Section {i+1}"
+        body_pre = (sec.get("text") or "").strip()
+        if not body_pre:
+            plan_sections.append({"index": i, "label": label_pre, "skipped": True, "skip_reason": "empty"})
+        elif _is_references_label(label_pre):
+            plan_sections.append({"index": i, "label": label_pre, "skipped": True, "skip_reason": "references"})
+        else:
+            plan_sections.append({"index": i, "label": label_pre, "skipped": False, "skip_reason": None})
+    _emit({"type": "init", "total_sections": len(plan_sections), "sections": plan_sections})
+
+    for i, sec in enumerate(sections):
         label = (sec.get("label") or "").strip() or "Section"
         body = (sec.get("text") or "").strip()
         if not body:
-            per_section.append({
+            entry = {
+                "index": i,
                 "label": label,
                 "skipped": True,
                 "skip_reason": "empty",
@@ -676,11 +778,16 @@ def rewrite_pipeline(
                 "stage_c_text": "",
                 "stage_models": {},
                 "edits": 0,
-            })
+                "quality": {"key": "gray", "label": "Empty", "hint": "No content to rewrite."},
+                "missing_terms": [],
+            }
+            per_section.append(entry)
+            _emit({"type": "section_done", "section": entry})
             continue
 
         if _is_references_label(label):
-            per_section.append({
+            entry = {
+                "index": i,
                 "label": label,
                 "skipped": True,
                 "skip_reason": "references",
@@ -691,9 +798,20 @@ def rewrite_pipeline(
                 "stage_c_text": "",
                 "stage_models": {},
                 "edits": 0,
-            })
+                "quality": {
+                    "key": "gray",
+                    "label": "Kept verbatim",
+                    "hint": "References are never paraphrased.",
+                },
+                "missing_terms": [],
+            }
+            per_section.append(entry)
             final_parts.append(body)
+            _emit({"type": "section_done", "section": entry})
             continue
+
+        _check_cancelled()
+        _emit({"type": "section_start", "index": i, "label": label})
 
         # Filter protected terms to those actually present in this section.
         section_terms = [t for t in protected_terms if t and t in body]
@@ -706,6 +824,8 @@ def rewrite_pipeline(
             protected_terms=section_terms,
             stage_label=f"A:{label}",
         )
+        _emit({"type": "stage_done", "index": i, "stage": "a", "model": a["model"]})
+        _check_cancelled()
         # Stage B: Gemini humanise
         b = _run_stage(
             primary="gemini",
@@ -714,6 +834,8 @@ def rewrite_pipeline(
             protected_terms=section_terms,
             stage_label=f"B:{label}",
         )
+        _emit({"type": "stage_done", "index": i, "stage": "b", "model": b["model"]})
+        _check_cancelled()
         # Stage C: GPT-4o quality polish
         c = _run_stage(
             primary="openai",
@@ -722,11 +844,26 @@ def rewrite_pipeline(
             protected_terms=section_terms,
             stage_label=f"C:{label}",
         )
+        _emit({"type": "stage_done", "index": i, "stage": "c", "model": c["model"]})
 
-        if a["fallback_used"] or b["fallback_used"] or c["fallback_used"]:
+        section_fallback = a["fallback_used"] or b["fallback_used"] or c["fallback_used"]
+        if section_fallback:
             any_fallback = True
 
-        per_section.append({
+        edits = _approx_word_edits(body, c["text"])
+        # Per-section missing-terms check (pre combined verification below)
+        section_missing = [t for t in section_terms if t and t not in c["text"]]
+        quality = _classify_section_quality(
+            original=body,
+            final=c["text"],
+            edits=edits,
+            missing_terms_count=len(section_missing),
+            protected_terms_in_section=len(section_terms),
+            fallback_used=section_fallback,
+        )
+
+        entry = {
+            "index": i,
             "label": label,
             "skipped": False,
             "original": body,
@@ -735,10 +872,14 @@ def rewrite_pipeline(
             "stage_c_text": c["text"],
             "final_text": c["text"],
             "stage_models": {"a": a["model"], "b": b["model"], "c": c["model"]},
-            "edits": _approx_word_edits(body, c["text"]),
-        })
+            "edits": edits,
+            "quality": quality,
+            "missing_terms": section_missing,
+        }
+        per_section.append(entry)
         final_parts.append(c["text"])
-        total_changes += per_section[-1]["edits"]
+        total_changes += edits
+        _emit({"type": "section_done", "section": entry})
 
     final_combined = "\n\n".join(final_parts)
     if not final_combined.strip():
@@ -767,7 +908,7 @@ def rewrite_pipeline(
     if any_fallback:
         notes_bits.append("one or more stages used the fallback provider")
 
-    return {
+    final_result = {
         "original_text": original_combined,
         "rewritten_text": final_combined,
         "changes_made": total_changes,
@@ -785,6 +926,8 @@ def rewrite_pipeline(
             "sections": per_section,
         },
     }
+    _emit({"type": "complete", "result": final_result})
+    return final_result
 
 
 # ---------------------------------------------------------------------------

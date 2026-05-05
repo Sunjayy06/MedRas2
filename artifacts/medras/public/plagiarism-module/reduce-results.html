@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Rewrite results · MedRAS</title>
+    <meta name="description" content="Section-by-section rewrite results from the MedRAS plagiarism reducer, with side-by-side comparison and a Word-ready download." />
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23ffc857'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-family='Inter,sans-serif' font-size='17' font-weight='800' fill='%23071430'%3EP%3C/text%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="/plagiarism-module/css/style.css?v=2026050502" />
+  </head>
+  <body data-testid="page-pm-reduce-results">
+    <header class="pm-header">
+      <a href="/plagiarism-module/" class="pm-brand" data-testid="link-pm-home">
+        <span class="pm-brand-mark">P</span>
+        <span>Plagiarism &amp; AI Reduction</span>
+      </a>
+      <nav class="pm-nav" aria-label="Primary">
+        <a href="/plagiarism-module/checker.html?mode=reduce" data-testid="link-new-reduce">Rewrite another</a>
+        <a href="/" data-testid="link-back-medras">MedRAS</a>
+      </nav>
+    </header>
+
+    <main class="pm-shell">
+      <span class="pm-eyebrow" data-testid="text-results-eyebrow">Plagiarism reducer</span>
+      <h1 class="pm-h1" data-testid="text-results-title">Your rewritten document.</h1>
+      <p class="pm-lede" data-testid="text-results-lede">
+        Each section is rewritten through a 3-stage pipeline. Compare the original
+        and rewritten text side by side, then download the full document as Word.
+      </p>
+
+      <!-- Empty state — shown when sessionStorage has no input -->
+      <div class="pm-surface-card pm-empty is-hidden" id="pm-empty" data-testid="state-empty">
+        <div class="pm-empty-icon">📝</div>
+        <h3>No rewrite in progress</h3>
+        <p>Start from the reducer page — paste or upload your text, then come back here for the results.</p>
+        <p style="margin-top: 18px;">
+          <a class="pm-btn pm-btn--primary" href="/plagiarism-module/checker.html?mode=reduce" data-testid="button-empty-go">Open the reducer</a>
+        </p>
+      </div>
+
+      <!-- Progress card — visible during processing -->
+      <div class="pm-surface-card pm-progress-card" id="pm-progress-card" data-testid="card-progress">
+        <h2 data-testid="text-progress-title">Rewriting your document…</h2>
+        <p class="pm-help" id="pm-progress-sub" data-testid="text-progress-sub">
+          Three sequential AI passes per section: paraphrase → humanise → polish.
+          References are kept verbatim. This usually takes 30–90 seconds.
+        </p>
+
+        <div class="pm-progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="pm-progress-bar" data-testid="progress-bar">
+          <div class="pm-progress-fill" id="pm-progress-fill" style="width:0%"></div>
+        </div>
+        <div class="pm-progress-meta">
+          <span id="pm-progress-pct" data-testid="text-progress-pct">0%</span>
+          <span id="pm-progress-current" data-testid="text-progress-current">Starting…</span>
+        </div>
+
+        <ol class="pm-progress-list" id="pm-progress-list" data-testid="list-progress" aria-label="Per-section progress"></ol>
+      </div>
+
+      <!-- Error card — shown if the pipeline fails -->
+      <div class="pm-surface-card pm-error-card is-hidden" id="pm-error-card" data-testid="card-error" role="alert">
+        <h2>Rewrite failed</h2>
+        <p id="pm-error-message" data-testid="text-error-message"></p>
+        <p style="margin-top: 16px;">
+          <a class="pm-btn pm-btn--secondary" href="/plagiarism-module/checker.html?mode=reduce" data-testid="button-retry">← Back to the reducer</a>
+        </p>
+      </div>
+
+      <!-- Results — populated after streaming completes -->
+      <div id="pm-results" class="is-hidden" data-testid="state-results">
+        <!-- Summary card -->
+        <div class="pm-surface-card pm-summary-card">
+          <div class="pm-summary-grid">
+            <div class="pm-summary-stat" data-testid="stat-sections">
+              <div class="pm-summary-stat-value" id="pm-stat-sections">—</div>
+              <div class="pm-summary-stat-label">sections rewritten</div>
+            </div>
+            <div class="pm-summary-stat" data-testid="stat-edits">
+              <div class="pm-summary-stat-value" id="pm-stat-edits">—</div>
+              <div class="pm-summary-stat-label">word-level edits</div>
+            </div>
+            <div class="pm-summary-stat" data-testid="stat-terms">
+              <div class="pm-summary-stat-value" id="pm-stat-terms">—</div>
+              <div class="pm-summary-stat-label">protected terms preserved</div>
+            </div>
+          </div>
+
+          <div class="pm-summary-actions">
+            <button type="button" class="pm-btn pm-btn--accent pm-btn--xl" id="pm-download" data-testid="button-download-docx">
+              <span class="pm-btn-icon" aria-hidden="true">⬇</span>
+              Download as Word document (.docx)
+            </button>
+            <span class="pm-summary-format" data-testid="text-docx-format">
+              Times New Roman, 12 pt, 1.5 line spacing, 1″ margins, page numbers.
+            </span>
+          </div>
+
+          <div class="pm-summary-note is-hidden" id="pm-summary-warnings" data-testid="text-warnings"></div>
+        </div>
+
+        <!-- Quality legend -->
+        <div class="pm-quality-legend" aria-label="Section quality colour key" data-testid="legend-quality">
+          <span class="pm-quality-chip pm-quality-chip--green">Well rewritten</span>
+          <span class="pm-quality-chip pm-quality-chip--yellow">Moderate changes</span>
+          <span class="pm-quality-chip pm-quality-chip--orange">Review recommended</span>
+          <span class="pm-quality-chip pm-quality-chip--red">Heavily technical</span>
+        </div>
+
+        <!-- Per-section cards -->
+        <div class="pm-section-cards" id="pm-section-cards" data-testid="list-section-cards"></div>
+
+        <div class="pm-actions" style="margin-top: 24px;">
+          <a href="/plagiarism-module/checker.html?mode=reduce" class="pm-btn pm-btn--secondary" data-testid="button-rewrite-another">Rewrite another</a>
+        </div>
+      </div>
+    </main>
+
+    <footer class="pm-footer">© MedRAS — Plagiarism &amp; AI Reduction module</footer>
+
+    <script src="/plagiarism-module/js/reduce-results.js?v=2026050502" defer></script>
+  </body>
+</html>

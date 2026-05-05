@@ -384,25 +384,32 @@
       }
 
       if (isReduceMode) {
-        // For uploads with a section breakdown, use the 3-stage pipeline
-        // (gpt-4o → gemini → gpt-4o) and skip References automatically.
-        // For pasted text, also opt into the pipeline so the user gets
-        // the higher-quality multi-stage rewrite.
-        const body = { text, provider, protected_terms: protectedTerms };
+        // Hand off to the dedicated streaming results page. Stash the
+        // input in sessionStorage and navigate — the results page will
+        // call /reduce-stream and render a live progress bar there.
+        const reduceInput = { protected_terms: protectedTerms };
         if (activeTab === "upload" && docAnalysis) {
           const selectedSections = buildSelectedSections();
           if (selectedSections.length) {
-            body.sections = selectedSections;
+            reduceInput.sections = selectedSections;
           } else {
-            body.pipeline = true;
+            reduceInput.text = text;
           }
+          if (docAnalysis.filename) reduceInput.filename = docAnalysis.filename;
+          reduceInput.title = docAnalysis.filename
+            ? docAnalysis.filename.replace(/\.[^.]+$/, "")
+            : "Rewritten document";
         } else {
-          body.pipeline = true;
+          reduceInput.text = text;
+          reduceInput.title = "Rewritten document";
         }
-        setStatus("Running 3-stage rewrite pipeline (paraphrase → humanise → polish). This can take 30-90 seconds…", "loading");
-        result = await callApi("/api/plagiarism/reduce", { json: body });
-        showReduceResult(result);
-        setStatus("Rewrite complete.", "success");
+        try {
+          sessionStorage.setItem("pm:reduceInput", JSON.stringify(reduceInput));
+        } catch (e) {
+          throw new Error("Could not stage the rewrite (browser storage full). Please clear some space and try again.");
+        }
+        window.location.href = "/plagiarism-module/reduce-results.html";
+        return;
       } else {
         result = await callApi("/api/plagiarism/check", { json: { text, provider } });
         if (docAnalysis && docAnalysis.filename) {

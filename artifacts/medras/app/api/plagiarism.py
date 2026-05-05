@@ -18,9 +18,14 @@ All endpoints return JSON. The actual analysis is delegated to
 
 from __future__ import annotations
 
+import asyncio
+import io
+import json
+import re
 from typing import List, Literal, Optional
 
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.core.limiter import limiter
@@ -338,3 +343,347 @@ async def reduce_text(request: Request, payload: ReduceRequest) -> dict:
         log.exception("plagiarism reduce failed")
         raise HTTPException(status_code=502, detail=f"Rewrite failed: {exc}") from exc
     return result
+
+
+# ---------------------------------------------------------------------------
+# Streaming pipeline (NDJSON) — used by the dedicated reduce-results page so
+# the user sees a section-by-section progress bar instead of staring at a
+# spinner for 30-90s.
+# ---------------------------------------------------------------------------
+
+class ReduceStreamRequest(BaseModel):
+    """Same shape as ReduceRequest minus the legacy ``provider`` field.
+
+    The streaming endpoint always uses the 3-stage pipeline; it would be
+    nonsense to stream a single-shot legacy call.
+    """
+    text: Optional[str] = None
+    sections: Optional[List[PipelineSectionIn]] = None
+    protected_terms: Optional[List[str]] = None
+
+
+@router.post("/reduce-stream")
+@limiter.limit("10/minute")
+async def reduce_stream(request: Request, payload: ReduceStreamRequest):
+    """Run the 3-stage rewrite pipeline and stream NDJSON progress events.
+
+    Each line of the response body is one JSON event:
+
+      ``{"type": "init", "total_sections": N, "sections": [...]}``
+      ``{"type": "section_start", "index": i, "label": "..."}``
+      ``{"type": "stage_done", "index": i, "stage": "a"|"b"|"c", "model": "..."}``
+      ``{"type": "section_done", "section": {...}}``
+      ``{"type": "complete", "result": {...full pipeline response...}}``
+      ``{"type": "error", "status": int, "message": "..."}``
+
+    The frontend reads the response with ``fetch`` + a streaming reader and
+    advances a progress bar on each ``stage_done`` event.
+
+    Validation mirrors ``/reduce``: provide either ``sections`` or ``text``.
+    """
+    sections_payload: list[dict[str, str]]
+    if payload.sections:
+        total = sum(len(s.text) for s in payload.sections)
+        if total > MAX_TEXT_CHARS:
+            raise HTTPException(
+                status_code=413,
+                detail=f"Combined sections are too long ({total:,} chars). Maximum is {MAX_TEXT_CHARS:,}.",
+            )
+        sections_payload = [{"label": s.label, "text": s.text} for s in payload.sections]
+    elif payload.text:
+        text = payload.text.strip()
+        if not text:
+            raise HTTPException(status_code=400, detail="Text is empty.")
+        if len(text) > MAX_TEXT_CHARS:
+            raise HTTPException(
+                status_code=413,
+                detail=f"Text is too long ({len(text):,} chars). Maximum is {MAX_TEXT_CHARS:,}.",
+            )
+        sections_payload = [{"label": "Body", "text": text}]
+    else:
+        raise HTTPException(status_code=400, detail="Provide either 'text' or 'sections'.")
+
+    protected_terms = payload.protected_terms or []
+
+    async def event_generator():
+        import threading
+        loop = asyncio.get_running_loop()
+        # Bounded queue so a runaway worker can't grow memory unboundedly
+        # if the consumer falls behind. With per-section events this is
+        # plenty of headroom (init + N×(start + 3 stage + done) + complete).
+        queue: asyncio.Queue = asyncio.Queue(maxsize=256)
+        cancel_event = threading.Event()
+        SENTINEL = object()
+
+        def progress_cb(event: dict) -> None:
+            # Called from the worker thread; hop onto the loop safely.
+            # If the queue is full, drop the event rather than block the
+            # worker — the progress UI is best-effort, not delivery-critical.
+            def _put():
+                try:
+                    queue.put_nowait(event)
+                except asyncio.QueueFull:
+                    log.warning("reduce-stream queue full, dropping event %s", event.get("type"))
+            loop.call_soon_threadsafe(_put)
+
+        async def runner():
+            try:
+                await asyncio.to_thread(
+                    plagiarism_analyzer.rewrite_pipeline,
+                    sections_payload,
+                    protected_terms=protected_terms,
+                    progress_cb=progress_cb,
+                    cancel_event=cancel_event,
+                )
+            except plagiarism_analyzer.PipelineCancelled:
+                # Client disconnected — pipeline cooperatively aborted.
+                # Don't push an error; the consumer is gone anyway.
+                log.info("reduce-stream pipeline aborted (client disconnect)")
+            except plagiarism_analyzer.ProviderQuotaExhausted as exc:
+                loop.call_soon_threadsafe(queue.put_nowait, {
+                    "type": "error",
+                    "status": 503,
+                    "message": (
+                        "Both AI providers are out of quota right now. "
+                        "OpenAI returned insufficient_quota (billing) and Gemini "
+                        "hit its free-tier daily request limit. Please try again "
+                        "tomorrow, or top up one of the provider accounts."
+                    ),
+                    "detail": str(exc)[:500],
+                })
+            except ValueError as exc:
+                loop.call_soon_threadsafe(queue.put_nowait, {
+                    "type": "error", "status": 400, "message": str(exc),
+                })
+            except RuntimeError as exc:
+                loop.call_soon_threadsafe(queue.put_nowait, {
+                    "type": "error", "status": 503, "message": str(exc),
+                })
+            except Exception as exc:  # noqa: BLE001
+                log.exception("reduce-stream pipeline crashed")
+                loop.call_soon_threadsafe(queue.put_nowait, {
+                    "type": "error", "status": 502, "message": f"Rewrite pipeline failed: {exc}",
+                })
+            finally:
+                loop.call_soon_threadsafe(queue.put_nowait, SENTINEL)
+
+        worker_task = asyncio.create_task(runner())
+
+        async def _disconnect_watcher():
+            # Poll for client disconnect every 2s. When detected, signal
+            # the worker to bail at its next stage boundary so we stop
+            # burning LLM credits on a request nobody is listening to.
+            try:
+                while not cancel_event.is_set() and not worker_task.done():
+                    if await request.is_disconnected():
+                        log.info("reduce-stream client disconnected; signalling cancel")
+                        cancel_event.set()
+                        return
+                    await asyncio.sleep(2.0)
+            except asyncio.CancelledError:
+                pass
+
+        watcher_task = asyncio.create_task(_disconnect_watcher())
+        try:
+            while True:
+                try:
+                    event = await asyncio.wait_for(queue.get(), timeout=30.0)
+                except asyncio.TimeoutError:
+                    # Heartbeat — empty newline keeps proxies from buffering
+                    # during the long Stage-A LLM call. NDJSON parsers
+                    # ignore blank lines.
+                    yield "\n"
+                    continue
+                if event is SENTINEL:
+                    break
+                yield json.dumps(event, ensure_ascii=False) + "\n"
+        finally:
+            cancel_event.set()  # ensure worker bails on its next checkpoint
+            watcher_task.cancel()
+            # We can't kill the worker thread, but the cancel_event will
+            # cause it to exit at the next stage boundary (within one LLM
+            # call's worth of time, ~5-30s). The asyncio task will then
+            # complete on its own; we don't await it because that would
+            # hold the response open.
+            if not worker_task.done():
+                worker_task.cancel()
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="application/x-ndjson",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "X-Accel-Buffering": "no",  # disable proxy buffering
+        },
+    )
+
+
+# ---------------------------------------------------------------------------
+# DOCX export — Times New Roman 12pt academic formatting
+# ---------------------------------------------------------------------------
+
+class ExportSectionIn(BaseModel):
+    label: str = Field(..., min_length=1, max_length=200)
+    text: str = ""
+    skipped: bool = False
+    skip_reason: Optional[str] = None
+
+
+class ExportDocxRequest(BaseModel):
+    title: str = Field(default="Rewritten document", max_length=200)
+    sections: List[ExportSectionIn] = Field(..., min_length=1)
+    notes: Optional[str] = None
+    filename: Optional[str] = None  # for the download filename only
+
+
+def _safe_filename(name: str) -> str:
+    """Strip path separators and weird chars from a user-provided basename."""
+    base = re.sub(r"[^A-Za-z0-9._-]+", "_", name or "").strip("._")
+    return base or "rewritten"
+
+
+@router.post("/export-docx")
+@limiter.limit("20/minute")
+def export_docx(request: Request, payload: ExportDocxRequest):
+    """Render the rewrite result as a DOCX file in academic format.
+
+    Formatting:
+      * Times New Roman, 12pt body
+      * 1.5 line spacing, justified
+      * 1 inch (2.54 cm) margins
+      * Section heading per ``label`` (TNR 12pt, bold, before/after spacing)
+      * Title page-style heading at the top
+      * Page numbers in the footer (right-aligned)
+    """
+    try:
+        from docx import Document
+        from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_LINE_SPACING
+        from docx.oxml.ns import qn
+        from docx.oxml import OxmlElement
+        from docx.shared import Cm, Pt
+    except ImportError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail="DOCX export is unavailable: python-docx is not installed.",
+        ) from exc
+
+    doc = Document()
+
+    # 1 inch (2.54 cm) margins on every section.
+    for section in doc.sections:
+        section.top_margin = Cm(2.54)
+        section.bottom_margin = Cm(2.54)
+        section.left_margin = Cm(2.54)
+        section.right_margin = Cm(2.54)
+
+    # Force the default style to Times New Roman 12pt — applies to body and
+    # any paragraph that doesn't override it.
+    style = doc.styles["Normal"]
+    style.font.name = "Times New Roman"
+    style.font.size = Pt(12)
+    # Ensure east-asian / cs fallbacks also map to TNR (Word quirk).
+    rpr = style.element.rPr
+    if rpr is not None:
+        for tag in ("w:eastAsia", "w:cs", "w:hAnsi", "w:ascii"):
+            rfonts = rpr.find(qn("w:rFonts"))
+            if rfonts is not None:
+                rfonts.set(qn(tag), "Times New Roman")
+
+    # Title
+    title_p = doc.add_paragraph()
+    title_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    title_run = title_p.add_run(payload.title or "Rewritten document")
+    title_run.font.name = "Times New Roman"
+    title_run.font.size = Pt(16)
+    title_run.bold = True
+
+    if payload.notes:
+        notes_p = doc.add_paragraph()
+        notes_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        notes_run = notes_p.add_run(payload.notes)
+        notes_run.font.name = "Times New Roman"
+        notes_run.font.size = Pt(11)
+        notes_run.italic = True
+
+    doc.add_paragraph()  # spacer
+
+    # Body sections
+    for sec in payload.sections:
+        # Heading — manual paragraph so we keep TNR 12pt (Word's built-in
+        # heading styles use a different font and size).
+        h = doc.add_paragraph()
+        h.paragraph_format.space_before = Pt(12)
+        h.paragraph_format.space_after = Pt(6)
+        h.paragraph_format.keep_with_next = True
+        h_run = h.add_run(sec.label)
+        h_run.font.name = "Times New Roman"
+        h_run.font.size = Pt(12)
+        h_run.bold = True
+
+        text = (sec.text or "").strip()
+        if not text:
+            empty_p = doc.add_paragraph()
+            empty_run = empty_p.add_run("[empty section]")
+            empty_run.font.name = "Times New Roman"
+            empty_run.font.size = Pt(12)
+            empty_run.italic = True
+            continue
+
+        # Split on blank lines into paragraphs; preserve internal newlines
+        # within a paragraph as soft line breaks.
+        paragraphs = re.split(r"\n\s*\n+", text)
+        for para_text in paragraphs:
+            para_text = para_text.strip("\n")
+            if not para_text:
+                continue
+            p = doc.add_paragraph()
+            p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+            pf = p.paragraph_format
+            pf.line_spacing_rule = WD_LINE_SPACING.ONE_POINT_FIVE
+            pf.space_after = Pt(6)
+            pf.first_line_indent = Cm(1.27)  # ~0.5 inch
+            lines = para_text.split("\n")
+            for li, line in enumerate(lines):
+                if li > 0:
+                    p.add_run().add_break()
+                run = p.add_run(line)
+                run.font.name = "Times New Roman"
+                run.font.size = Pt(12)
+
+    # Page numbers in the footer (right-aligned). Uses raw OOXML because
+    # python-docx doesn't expose page-number fields directly.
+    for section in doc.sections:
+        footer = section.footer
+        fp = footer.paragraphs[0] if footer.paragraphs else footer.add_paragraph()
+        fp.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+        run = fp.add_run()
+        run.font.name = "Times New Roman"
+        run.font.size = Pt(10)
+        fld_begin = OxmlElement("w:fldChar")
+        fld_begin.set(qn("w:fldCharType"), "begin")
+        instr = OxmlElement("w:instrText")
+        instr.set(qn("xml:space"), "preserve")
+        instr.text = "PAGE"
+        fld_end = OxmlElement("w:fldChar")
+        fld_end.set(qn("w:fldCharType"), "end")
+        run._r.append(fld_begin)
+        run._r.append(instr)
+        run._r.append(fld_end)
+
+    buf = io.BytesIO()
+    doc.save(buf)
+    buf.seek(0)
+
+    base = _safe_filename(payload.filename or payload.title or "rewritten")
+    if base.lower().endswith(".docx"):
+        base = base[:-5]
+    download_name = f"{base}_rewritten.docx"
+
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={
+            "Content-Disposition": f'attachment; filename="{download_name}"',
+            "Cache-Control": "no-store",
+        },
+    )
