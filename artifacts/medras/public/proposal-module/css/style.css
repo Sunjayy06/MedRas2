@@ -1550,3 +1550,235 @@ a:hover { text-decoration: underline; }
   .prop-stepper-label { display: none; }
   .prop-stepper-item { padding: 6px 10px; }
 }
+
+/* =================== Step 5 references — 3-card preflight =================== */
+.prop-ref-pre-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  margin-top: 18px;
+}
+@media (max-width: 900px) { .prop-ref-pre-grid { grid-template-columns: 1fr; } }
+
+.prop-ref-pre-card {
+  display: flex; gap: 12px;
+  padding: 16px 18px;
+  border-radius: 12px;
+  background: rgba(122, 162, 255, 0.06);
+  border: 1px solid rgba(122, 162, 255, 0.2);
+  color: inherit;
+  text-decoration: none;
+  text-align: left;
+  cursor: pointer;
+  transition: background .15s ease, border-color .15s ease, transform .12s ease;
+  font: inherit;
+}
+.prop-ref-pre-card:hover {
+  background: rgba(122, 162, 255, 0.13);
+  border-color: rgba(122, 162, 255, 0.5);
+  transform: translateY(-1px);
+}
+.prop-ref-pre-card--primary { background: rgba(122, 162, 255, 0.14); border-color: rgba(122, 162, 255, 0.45); }
+.prop-ref-pre-card--rec     { background: rgba(80, 200, 140, 0.10); border-color: rgba(80, 200, 140, 0.40); position: relative; }
+.prop-ref-pre-card--fallback{ background: rgba(255, 200, 80, 0.06); border-color: rgba(255, 200, 80, 0.30); }
+.prop-ref-pre-card--fallback strong { color: #ffd58a; }
+
+.prop-ref-pre-icon { font-size: 28px; line-height: 1; flex-shrink: 0; }
+.prop-ref-pre-body { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.prop-ref-pre-body strong { font-size: 1.02rem; color: #e6eefb; }
+.prop-ref-pre-body span { font-size: .85rem; color: #b8c7e0; line-height: 1.45; }
+.prop-ref-pre-badge {
+  display: inline-block; align-self: flex-start;
+  font-size: .65rem; text-transform: uppercase; letter-spacing: .08em;
+  padding: 2px 8px; border-radius: 999px; margin-bottom: 4px;
+  background: rgba(80, 200, 140, 0.22); color: #b6f0d2;
+  border: 1px solid rgba(80, 200, 140, 0.45);
+}
+
+/* =================== Step 4 outline — chevron pencil on each row =================== */
+.prop-out-acc-chev {
+  margin-left: auto;
+  font-size: 1rem;
+  color: #8aa0c5;
+  opacity: .55;
+  transition: opacity .15s ease, color .15s ease;
+}
+.prop-out-acc-head:hover .prop-out-acc-chev { opacity: 1; color: #cfe0ff; }
+
+/* =================== Step 4 outline — section editor MODAL =================== */
+.prop-modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(8, 14, 28, 0.72);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  z-index: 1000;
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px;
+  animation: prop-modal-fade .15s ease-out;
+}
+@keyframes prop-modal-fade { from { opacity: 0; } to { opacity: 1; } }
+.prop-modal-overlay[hidden] { display: none !important; }
+
+.prop-modal {
+  width: 100%; max-width: 880px;
+  max-height: calc(100vh - 48px);
+  display: flex; flex-direction: column;
+  background: linear-gradient(180deg, #0f172a 0%, #0a1224 100%);
+  border: 1px solid rgba(122, 162, 255, 0.3);
+  border-radius: 16px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.55);
+  overflow: hidden;
+  animation: prop-modal-pop .18s cubic-bezier(.2,.8,.3,1.1);
+}
+@keyframes prop-modal-pop {
+  from { opacity: 0; transform: translateY(12px) scale(.97); }
+  to   { opacity: 1; transform: none; }
+}
+
+.prop-modal-head {
+  display: flex; align-items: center; gap: 12px;
+  padding: 16px 22px;
+  border-bottom: 1px solid rgba(122, 162, 255, 0.18);
+  background: rgba(122, 162, 255, 0.05);
+}
+.prop-modal-num {
+  flex-shrink: 0;
+  width: 32px; height: 32px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 8px;
+  background: rgba(122, 162, 255, 0.18);
+  color: #cfe0ff;
+  font-weight: 600;
+  font-size: .95rem;
+}
+.prop-modal-title {
+  flex: 1; min-width: 0;
+  font-size: 1.15rem; font-weight: 600;
+  color: #e6eefb;
+  margin: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.prop-modal-close {
+  flex-shrink: 0;
+  background: none; border: none; color: #a8b9d6;
+  font-size: 1.3rem; line-height: 1; cursor: pointer;
+  padding: 6px 10px; border-radius: 6px;
+}
+.prop-modal-close:hover { background: rgba(255, 100, 100, 0.15); color: #ff9e9e; }
+
+.prop-modal-body {
+  padding: 18px 22px;
+  overflow-y: auto;
+  flex: 1;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.prop-modal-textarea {
+  width: 100%;
+  min-height: 280px;
+  padding: 14px;
+  border-radius: 10px;
+  background: #0a0f1c;
+  border: 1px solid rgba(122, 162, 255, 0.25);
+  color: #e6eefb;
+  font: 14px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  resize: vertical;
+}
+.prop-modal-textarea:focus { outline: none; border-color: rgba(122, 162, 255, 0.6); box-shadow: 0 0 0 3px rgba(122, 162, 255, 0.15); }
+.prop-modal-textarea:disabled { opacity: .55; cursor: progress; }
+
+.prop-modal-meta {
+  font-size: .78rem;
+  color: #8aa0c5;
+  text-align: right;
+}
+.prop-modal-meta.is-full  { color: #6cd49e; }
+.prop-modal-meta.is-short { color: #ffc46b; }
+.prop-modal-meta.is-empty { color: #ff8b8b; }
+
+.prop-modal-actions {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  padding-top: 4px;
+}
+.prop-modal-actions .prop-out-acc-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  background: rgba(122, 162, 255, 0.10);
+  border: 1px solid rgba(122, 162, 255, 0.28);
+  color: #cfe0ff;
+  font-size: .85rem;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background .12s ease, border-color .12s ease;
+}
+.prop-modal-actions .prop-out-acc-btn:hover {
+  background: rgba(122, 162, 255, 0.20);
+  border-color: rgba(122, 162, 255, 0.55);
+}
+
+.prop-modal-foot {
+  display: flex; justify-content: flex-end; gap: 10px;
+  padding: 14px 22px;
+  border-top: 1px solid rgba(122, 162, 255, 0.18);
+  background: rgba(122, 162, 255, 0.04);
+}
+
+/* =================== Sample-size formula preview panel =================== */
+.prop-ss-panel {
+  border: 1px solid rgba(80, 200, 140, 0.35);
+  border-radius: 10px;
+  background: rgba(80, 200, 140, 0.06);
+  padding: 12px 14px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.prop-ss-head {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  font-size: .92rem; font-weight: 600; color: #b6f0d2;
+}
+.prop-ss-head > span { flex-shrink: 0; }
+.prop-ss-design {
+  margin-left: auto;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: #0a0f1c;
+  border: 1px solid rgba(122, 162, 255, 0.3);
+  color: #e6eefb;
+  font-size: .85rem;
+}
+.prop-ss-formula, .prop-ss-substitution, .prop-ss-result {
+  font: 14px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: #e6eefb;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.25);
+  word-break: break-word;
+}
+.prop-ss-formula sub, .prop-ss-substitution sub, .prop-ss-result sub { font-size: .75em; }
+.prop-ss-formula sup, .prop-ss-substitution sup, .prop-ss-result sup { font-size: .75em; }
+.prop-ss-substitution { color: #cfe0ff; background: rgba(122, 162, 255, 0.08); }
+.prop-ss-result       { color: #b6f0d2; background: rgba(80, 200, 140, 0.12); font-weight: 500; }
+.prop-ss-result strong{ color: #6cd49e; font-size: 1.05em; }
+.prop-ss-result:empty, .prop-ss-substitution:empty { display: none; }
+.prop-ss-label {
+  display: inline-block;
+  font-size: .65rem; text-transform: uppercase; letter-spacing: .08em;
+  margin-right: 6px;
+  color: #8aa0c5;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-weight: 600;
+}
+.prop-ss-help {
+  font-size: .78rem; color: #a8b9d6; margin: 0;
+}
+.prop-ss-help code {
+  background: rgba(122, 162, 255, 0.12);
+  padding: 1px 5px; border-radius: 4px;
+  font-size: .9em; color: #cfe0ff;
+}
+
+@media (max-width: 600px) {
+  .prop-modal { max-height: 100vh; border-radius: 0; }
+  .prop-modal-overlay { padding: 0; }
+  .prop-modal-head, .prop-modal-body, .prop-modal-foot { padding-left: 14px; padding-right: 14px; }
+  .prop-ss-design { margin-left: 0; width: 100%; }
+}

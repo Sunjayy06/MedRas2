@@ -5,7 +5,9 @@
      - medras.proposal.intake     (role, format, langMode, secondLangLabel, …)
      - medras.proposal.generated  (sections, sources, all_retrieved, domain)
      - medras.proposal.manual     (budget, timeline)
-     - medras.proposal.titlepage  (this page's auto-saved metadata)
+     - medras.proposal.titlepage  (this page's auto-saved title-page metadata)
+     - medras.proposal.consent    (this page's auto-saved language picks +
+                                   delivery-mode picker)
 
    Calls:
      POST /api/proposal/export/docx
@@ -23,10 +25,36 @@
   var RESULT_KEY   = "medras.proposal.generated";
   var MANUAL_KEY   = "medras.proposal.manual";
   var TITLE_KEY    = "medras.proposal.titlepage";
+  var CONSENT_KEY  = "medras.proposal.consent";
   var PLAGIARISM_PREFILL_KEY = "medras.plagiarism.prefill";
 
+  // Format ids that get the extended Indian-MD-thesis cover layout
+  // (Phone, Email, year-of-residency, "Submitted in partial fulfilment of MD/MS
+  // in [Specialty] under [University]", etc.). Mirrors the backend allow-list
+  // in `app/services/proposal_export.py:_INDIAN_THESIS_FORMAT_IDS`.
+  var INDIAN_THESIS_FORMAT_IDS = ["phd-syn", "md-ms-syn", "inst-diss"];
+
+  // 11-language consent picker. English is mandatory. The other 10 are the
+  // 8th-Schedule Indian languages most commonly required by IRB/IEC review
+  // for participant-facing consent — Hindi, the four Dravidian languages
+  // (Tamil, Telugu, Kannada, Malayalam), Marathi, Bengali, Gujarati,
+  // Punjabi, and Odia.
+  var CONSENT_LANGUAGES = [
+    { code: "en", label: "English",   native: "English",   mandatory: true  },
+    { code: "hi", label: "Hindi",     native: "हिन्दी"            },
+    { code: "ta", label: "Tamil",     native: "தமிழ்"             },
+    { code: "te", label: "Telugu",    native: "తెలుగు"            },
+    { code: "kn", label: "Kannada",   native: "ಕನ್ನಡ"            },
+    { code: "ml", label: "Malayalam", native: "മലയാളം"           },
+    { code: "mr", label: "Marathi",   native: "मराठी"             },
+    { code: "bn", label: "Bengali",   native: "বাংলা"             },
+    { code: "gu", label: "Gujarati",  native: "ગુજરાતી"           },
+    { code: "pa", label: "Punjabi",   native: "ਪੰਜਾਬੀ"           },
+    { code: "or", label: "Odia",      native: "ଓଡ଼ିଆ"             },
+  ];
+
   var ALL_KEYS = [
-    INTAKE_KEY, RESULT_KEY, MANUAL_KEY, TITLE_KEY,
+    INTAKE_KEY, RESULT_KEY, MANUAL_KEY, TITLE_KEY, CONSENT_KEY,
     "medras.proposal.topic",
   ];
 
@@ -50,9 +78,11 @@
     return {
       institution: "", committee: "Institutional Research Committee",
       study_title: "", year: String(new Date().getFullYear()),
-      pi:       { name: "", designation: "Principal Investigator", department: "" },
-      guide:    { name: "", designation: "Guide", department: "" },
-      co_guide: { name: "", designation: "Co-Guide", department: "" },
+      degree: "", specialty: "", university: "", submission_date: "",
+      pi:       { name: "", designation: "Principal Investigator", department: "",
+                  year_of_residency: "", phone: "", email: "" },
+      guide:    { name: "", designation: "Guide",    department: "", phone: "", email: "" },
+      co_guide: { name: "", designation: "Co-Guide", department: "", phone: "", email: "" },
     };
   }
   function readTitleMeta() {
@@ -65,6 +95,10 @@
       committee:   stored.committee   || def.committee,
       study_title: stored.study_title || def.study_title,
       year:        stored.year        || def.year,
+      degree:      stored.degree      || def.degree,
+      specialty:   stored.specialty   || def.specialty,
+      university:  stored.university  || def.university,
+      submission_date: stored.submission_date || def.submission_date,
       pi:       Object.assign({}, def.pi,       stored.pi       || {}),
       guide:    Object.assign({}, def.guide,    stored.guide    || {}),
       co_guide: Object.assign({}, def.co_guide, stored.co_guide || {}),
@@ -85,13 +119,48 @@
     }, obj);
   }
 
-  // ---- consent languages from intake ----
-  function consentLanguages(intake) {
-    var langs = [{ code: "en", label: "English" }];
-    if ((intake.langMode || "").toLowerCase() === "bilingual" && intake.secondLangLabel) {
-      langs.push({ code: intake.secondLang || "other", label: intake.secondLangLabel });
-    }
-    return langs;
+  // ---- consent state (languages + delivery) ----
+  function defaultConsentState(intake) {
+    // Pre-tick the language they picked back at Step 2 if it is in our grid.
+    var picks = { en: true };
+    var second = (intake && intake.secondLang || "").toLowerCase();
+    var secondLabel = (intake && intake.secondLangLabel || "").toLowerCase();
+    CONSENT_LANGUAGES.forEach(function (l) {
+      if (l.code === "en") return;
+      if (second && l.code === second) picks[l.code] = true;
+      if (secondLabel && l.label.toLowerCase() === secondLabel) picks[l.code] = true;
+    });
+    return { picks: picks, delivery: "attached" };
+  }
+  function readConsentState(intake) {
+    var stored = readJSON(CONSENT_KEY, null);
+    var def = defaultConsentState(intake);
+    if (!stored) return def;
+    return {
+      picks: Object.assign({ en: true }, stored.picks || {}, { en: true }),
+      delivery: ["attached","separate","both"].indexOf(stored.delivery) >= 0
+        ? stored.delivery : def.delivery,
+    };
+  }
+  function writeConsentState(state) { writeJSON(CONSENT_KEY, state); }
+
+  function selectedLanguages(consentState) {
+    return CONSENT_LANGUAGES.filter(function (l) {
+      return l.code === "en" || !!consentState.picks[l.code];
+    }).map(function (l) { return { code: l.code, label: l.label }; });
+  }
+
+  // ---- format gating (Indian thesis vs everything else) ----
+  function isIndianThesisFormat(intake) {
+    var fid = ((intake.format || {}).id || "").toLowerCase();
+    return INDIAN_THESIS_FORMAT_IDS.indexOf(fid) >= 0;
+  }
+  function applyFormatGating(intake) {
+    var show = isIndianThesisFormat(intake);
+    var els = document.querySelectorAll(".dl-thesis-only");
+    Array.prototype.forEach.call(els, function (el) {
+      el.hidden = !show;
+    });
   }
 
   // ---- payload ----
@@ -102,13 +171,15 @@
     var manual = readJSON(MANUAL_KEY, {}) || {};
     var titleMeta = readTitleMeta();
     if (!titleMeta.study_title) titleMeta.study_title = intake.topic || generated.topic || "";
+    var consent = readConsentState(intake);
     return {
       intake: intake,
       sections: generated.sections,
       manual: manual,
       sources: generated.sources || [],
       title_meta: titleMeta,
-      consent_languages: consentLanguages(intake),
+      consent_languages: selectedLanguages(consent),
+      consent_delivery: consent.delivery,
     };
   }
 
@@ -163,6 +234,63 @@
         writeJSON(TITLE_KEY, fresh);
       });
     });
+  }
+
+  // ---- consent UI binding ----
+  function bindConsentUI(intake) {
+    var grid = $("dl-lang-grid");
+    var consent = readConsentState(intake);
+    grid.innerHTML = CONSENT_LANGUAGES.map(function (l) {
+      var locked = !!l.mandatory;
+      var checked = locked || !!consent.picks[l.code];
+      return '<label class="dl-lang-cb' + (locked ? ' is-locked' : '') + '">' +
+        '<input type="checkbox" value="' + escapeHtml(l.code) + '"' +
+          ' data-testid="checkbox-lang-' + escapeHtml(l.code) + '"' +
+          (checked ? ' checked' : '') + (locked ? ' disabled' : '') + ' />' +
+        '<span class="dl-lang-cb-name">' + escapeHtml(l.label) + '</span>' +
+        '<span class="dl-lang-cb-native">' + escapeHtml(l.native) + '</span>' +
+        '</label>';
+    }).join("");
+    Array.prototype.forEach.call(grid.querySelectorAll('input[type="checkbox"]'), function (cb) {
+      cb.addEventListener("change", function () {
+        if (cb.disabled) return;
+        var fresh = readConsentState(intake);
+        if (cb.checked) fresh.picks[cb.value] = true; else delete fresh.picks[cb.value];
+        fresh.picks.en = true;
+        writeConsentState(fresh);
+        // refresh summary pills so the user sees their selection reflected
+        var p = buildPayload();
+        if (p) renderSummary(p);
+        updateDeliveryNote();
+      });
+    });
+
+    var radios = document.querySelectorAll('input[name="dl-delivery"]');
+    Array.prototype.forEach.call(radios, function (r) {
+      r.checked = (r.value === consent.delivery);
+      r.addEventListener("change", function () {
+        if (!r.checked) return;
+        var fresh = readConsentState(intake);
+        fresh.delivery = r.value;
+        writeConsentState(fresh);
+        updateDeliveryNote();
+      });
+    });
+    updateDeliveryNote();
+  }
+
+  function updateDeliveryNote() {
+    var checked = document.querySelector('input[name="dl-delivery"]:checked');
+    var mode = checked ? checked.value : "attached";
+    var note = $("dl-delivery-note");
+    if (!note) return;
+    if (mode === "attached") {
+      note.textContent = "Word and PDF buttons return a single file. The .zip option still bundles both.";
+    } else if (mode === "separate") {
+      note.textContent = "Use “Download Both (.zip)” to receive the consent-only file alongside the proposal — single-file Word/PDF buttons will omit the consent forms.";
+    } else {
+      note.textContent = "Use “Download Both (.zip)” to receive the consent-only file in addition to the proposal copy that already contains it.";
+    }
   }
 
   // ---- status helpers ----
@@ -280,12 +408,17 @@
       $("dl-empty").classList.remove("gen-hidden");
       return;
     }
-    ["dl-summary-card","dl-meta-card","dl-actions-card","dl-handoff-card"].forEach(function (id) {
-      $(id).classList.remove("gen-hidden");
+    ["dl-summary-card","dl-meta-card","dl-consent-card","dl-actions-card","dl-handoff-card"].forEach(function (id) {
+      var el = $(id); if (el) el.classList.remove("gen-hidden");
     });
+
+    var intake = readJSON(INTAKE_KEY, {}) || {};
+    applyFormatGating(intake);
+    bindTitleMetaForm();
+    bindConsentUI(intake);
+
     var payload = buildPayload();
     if (payload) renderSummary(payload);
-    bindTitleMetaForm();
 
     $("dl-btn-docx").addEventListener("click", function () { runDownload("docx"); });
     $("dl-btn-pdf" ).addEventListener("click", function () { runDownload("pdf");  });

@@ -42,14 +42,30 @@
 
       <!-- ============== Pre-flight ============== -->
       <section class="prop-out-preflight" id="prop-ref-preflight" data-testid="card-preflight">
-        <h2>Do you have reference papers to upload?</h2>
-        <p>PDFs of papers, a reference list as Word or text, or anything that contains citations.</p>
-        <div class="prop-out-preflight-actions">
-          <button type="button" class="prop-cta-primary" id="prop-ref-pre-yes" data-testid="button-pre-yes">
-            Yes, I'll upload references
+        <h2>How would you like to add your references?</h2>
+        <p>You can upload existing papers, hand off to the Study Builder to derive a real reading list from your research question, or — as a last resort — let MedRAS generate plausible suggestions you'll need to verify yourself.</p>
+        <div class="prop-ref-pre-grid" data-testid="pre-grid">
+          <button type="button" class="prop-ref-pre-card prop-ref-pre-card--primary" id="prop-ref-pre-yes" data-testid="button-pre-yes">
+            <div class="prop-ref-pre-icon">📚</div>
+            <div class="prop-ref-pre-body">
+              <strong>I'll upload reference papers</strong>
+              <span>Drop in PDFs, a Word reference list, or anything with citations and we'll extract title, authors, journal, year and DOI for each one.</span>
+            </div>
           </button>
-          <button type="button" class="prop-cta-ghost" id="prop-ref-pre-no" data-testid="button-pre-no">
-            No — generate plausible references for me
+          <a class="prop-ref-pre-card prop-ref-pre-card--rec" id="prop-ref-pre-builder" data-testid="button-pre-builder" href="/#study-builder" target="_blank" rel="noopener">
+            <div class="prop-ref-pre-icon">🧭</div>
+            <div class="prop-ref-pre-body">
+              <span class="prop-ref-pre-badge">Recommended</span>
+              <strong>Use the Study Builder</strong>
+              <span>Derive a real, RAG-verified reading list from your research question and methodology, then come back here to import it. Opens in a new tab.</span>
+            </div>
+          </a>
+          <button type="button" class="prop-ref-pre-card prop-ref-pre-card--fallback" id="prop-ref-pre-no" data-testid="button-pre-no">
+            <div class="prop-ref-pre-icon">✨</div>
+            <div class="prop-ref-pre-body">
+              <strong>Generate plausible suggestions</strong>
+              <span><em>Last resort.</em> AI-suggested references that <strong>must</strong> be verified in PubMed/Scholar before citing — useful only as a placeholder while you gather real papers.</span>
+            </div>
           </button>
         </div>
       </section>
@@ -151,6 +167,6 @@
     </main>
 
     <script src="/proposal-module/js/proposal-state.js?v=2026050605"></script>
-    <script src="/proposal-module/js/references.js?v=2026050604"></script>
+    <script src="/proposal-module/js/references.js?v=2026050610"></script>
   </body>
 </html>

@@ -83,14 +83,54 @@
         </div>
       </section>
 
-      <!-- ============== Section accordion ============== -->
+      <!-- ============== Section list (clicking a row opens the modal) ============== -->
       <section class="prop-out-sections" id="prop-out-sections" hidden data-testid="card-sections">
         <header class="prop-out-sections-head">
           <h2>Your proposal sections</h2>
-          <p id="prop-out-sections-sub">Click any section to expand and edit. A green tick means it's filled, red means it's still empty.</p>
+          <p id="prop-out-sections-sub">Click any section to open it in a focused editor. A green tick means it's filled, red means it's still empty.</p>
         </header>
         <ol class="prop-out-acc" id="prop-out-acc" data-testid="list-accordion"></ol>
       </section>
+
+      <!-- ============== Section editor MODAL ============== -->
+      <div class="prop-modal-overlay" id="prop-out-modal" hidden role="dialog" aria-modal="true" aria-labelledby="prop-out-modal-title" data-testid="modal-section">
+        <div class="prop-modal" role="document">
+          <header class="prop-modal-head">
+            <span class="prop-modal-num" id="prop-out-modal-num"></span>
+            <h2 class="prop-modal-title" id="prop-out-modal-title">Section</h2>
+            <button type="button" class="prop-modal-close" id="prop-out-modal-close" aria-label="Close (changes discarded)" data-testid="button-modal-close">✕</button>
+          </header>
+          <div class="prop-modal-body">
+            <textarea id="prop-out-modal-textarea" class="prop-modal-textarea" rows="14" placeholder="Type the content for this section here, or use the helper buttons below to import or auto-draft it." data-testid="textarea-modal"></textarea>
+            <div class="prop-modal-meta" id="prop-out-modal-meta">0 chars</div>
+
+            <!-- Sample-size formula panel (only on sample-size sections) -->
+            <div class="prop-ss-panel" id="prop-out-modal-ss" hidden data-testid="panel-samplesize">
+              <header class="prop-ss-head">
+                <span>📐 Sample-size formula preview</span>
+                <select class="prop-ss-design" id="prop-out-modal-ss-design" data-testid="select-ss-design">
+                  <option value="single_proportion">Single proportion (prevalence / cross-sectional)</option>
+                  <option value="two_proportions">Two proportions (case-control / RCT, dichotomous outcome)</option>
+                  <option value="single_mean">Single mean</option>
+                  <option value="two_means">Two means (RCT / cohort, continuous outcome)</option>
+                  <option value="sens_spec">Sensitivity / Specificity (diagnostic accuracy)</option>
+                  <option value="correlation">Correlation coefficient</option>
+                </select>
+              </header>
+              <div class="prop-ss-formula" id="prop-out-modal-ss-formula"></div>
+              <div class="prop-ss-substitution" id="prop-out-modal-ss-sub"></div>
+              <div class="prop-ss-result" id="prop-out-modal-ss-result"></div>
+              <p class="prop-ss-help">Numbers below are parsed live from your section text — type values like <code>p = 0.5</code>, <code>d = 0.05</code>, <code>Z = 1.96</code>, <code>power = 0.80</code>, <code>σ = 1.2</code>. The Sample Size Calculator is the source of truth — this is just an inline preview.</p>
+            </div>
+
+            <div class="prop-modal-actions" id="prop-out-modal-actions"></div>
+          </div>
+          <footer class="prop-modal-foot">
+            <button type="button" class="prop-cta-ghost" id="prop-out-modal-cancel" data-testid="button-modal-cancel">Cancel</button>
+            <button type="button" class="prop-cta-primary" id="prop-out-modal-save" data-testid="button-modal-save">Save &amp; Close</button>
+          </footer>
+        </div>
+      </div>
 
       <!-- ============== Audit ============== -->
       <section class="prop-out-audit" id="prop-out-audit" hidden data-testid="card-audit">
@@ -119,6 +159,6 @@
     </main>
 
     <script src="/proposal-module/js/proposal-state.js?v=2026050605"></script>
-    <script src="/proposal-module/js/outline.js?v=2026050603"></script>
+    <script src="/proposal-module/js/outline.js?v=2026050610"></script>
   </body>
 </html>

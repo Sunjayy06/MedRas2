@@ -375,49 +375,134 @@ def _add_toc_field(doc) -> None:
     settings.append(update)
 
 
+# Format ids that get the extended Indian-MD-thesis cover page
+# (Phone, Email, year-of-residency, "Submitted in partial fulfilment of MD/MS
+# in [Specialty] under [University]", etc.). All other formats keep the
+# simpler legacy cover layout.
+_INDIAN_THESIS_FORMAT_IDS = {"phd-syn", "md-ms-syn", "inst-diss"}
+
+
+def _is_indian_thesis_format(intake: Dict[str, Any]) -> bool:
+    fmt = intake.get("format") or {}
+    fid = (fmt.get("id") or "").strip().lower()
+    return fid in _INDIAN_THESIS_FORMAT_IDS
+
+
+def _person_contact_line(person: Dict[str, Any]) -> Optional[str]:
+    """Return 'Phone: …  ·  Email: …' style line, or None if both blank."""
+    phone = (person.get("phone") or "").strip()
+    email = (person.get("email") or "").strip()
+    bits = []
+    if phone: bits.append(f"Phone: {phone}")
+    if email: bits.append(f"Email: {email}")
+    return "  ·  ".join(bits) if bits else None
+
+
 def _docx_title_page(doc: Document, intake: Dict[str, Any], title_meta: Dict[str, Any]) -> None:
-    """Indian-MD-thesis-style title page (capitalised title, PI/Guide blocks)."""
+    """Indian-MD-thesis-style title page (capitalised title, PI/Guide blocks).
+
+    When the chosen format is one of the Indian thesis types (PhD Synopsis,
+    MD/MS/DNB Thesis Synopsis, or Institutional Dissertation), we render the
+    extended cover layout that real Indian university thesis offices expect:
+    Research Committee + Institutional Human Ethics Committee header,
+    "Submitted in partial fulfilment of MD/MS in [Specialty] under
+    [University]", PI year-of-residency, and Phone/Email lines under each
+    person. All non-Indian-thesis formats keep the simpler layout.
+    """
+    indian = _is_indian_thesis_format(intake)
     institution = (title_meta.get("institution") or "[Institution name]").strip()
     committee   = (title_meta.get("committee")   or "Institutional Research Committee").strip()
     study_title = (title_meta.get("study_title") or intake.get("topic") or "[Study title]").strip()
     year        = (title_meta.get("year")        or str(datetime.now().year)).strip()
+    specialty   = (title_meta.get("specialty")   or "").strip()
+    university  = (title_meta.get("university")  or "").strip()
+    degree      = (title_meta.get("degree")      or "").strip()
+    submission_date = (title_meta.get("submission_date") or "").strip()
     pi          = title_meta.get("pi") or {}
     guide       = title_meta.get("guide") or {}
     co_guide    = title_meta.get("co_guide") or {}
 
-    def _centered(text, size, bold=False, space_after=12):
+    def _centered(text, size, bold=False, space_after=12, italic=False):
         p = doc.add_paragraph()
         p.alignment = WD_ALIGN_PARAGRAPH.CENTER
         p.paragraph_format.space_after = Pt(space_after)
         p.paragraph_format.line_spacing_rule = WD_LINE_SPACING.SINGLE
         run = p.add_run(text)
         _set_run_font(run, size, bold=bold)
+        if italic: run.italic = True
 
     _centered(institution.upper(), 16, bold=True, space_after=6)
-    _centered(committee, 12, bold=False, space_after=24)
+    if indian:
+        _centered("Research Committee and Institutional Human Ethics Committee",
+                  12, bold=True, space_after=24)
+    else:
+        _centered(committee, 12, bold=False, space_after=24)
 
-    _centered("DISSERTATION / RESEARCH PROPOSAL", 12, bold=True, space_after=6)
-    _centered("submitted in partial fulfilment of the requirements", 11, space_after=2)
-    _centered(f"for the degree of {(intake.get('role') or 'Research').upper()}", 11, space_after=24)
+    if indian:
+        # Build the partial-fulfilment line dynamically from specialty + university.
+        deg_label = (degree or "MD / MS").strip()
+        spec_part = f" in {specialty}" if specialty else ""
+        uni_part  = f" under {university}" if university else ""
+        _centered("DISSERTATION / THESIS SYNOPSIS", 12, bold=True, space_after=6)
+        _centered(f"Submitted in partial fulfilment of the requirements for the degree of",
+                  11, space_after=2)
+        _centered(f"{deg_label}{spec_part}{uni_part}".strip(),
+                  11, bold=True, space_after=24)
+    else:
+        _centered("DISSERTATION / RESEARCH PROPOSAL", 12, bold=True, space_after=6)
+        _centered("submitted in partial fulfilment of the requirements", 11, space_after=2)
+        _centered(f"for the degree of {(intake.get('role') or 'Research').upper()}",
+                  11, space_after=24)
 
     _centered(study_title.upper(), 16, bold=True, space_after=24)
 
+    # ---------- PI ----------
     _centered("Submitted by", 11, space_after=4)
     _centered(f"{(pi.get('name') or '[Principal Investigator name]')}", 14, bold=True, space_after=2)
-    _centered(f"{pi.get('designation') or 'Principal Investigator'}, "
-              f"{pi.get('department') or '[Department]'}", 11, space_after=20)
+    pi_role_bits = []
+    if indian:
+        yr = (pi.get("year_of_residency") or "").strip()
+        if yr: pi_role_bits.append(f"{yr} year resident")
+    if pi.get("designation"):
+        pi_role_bits.append(pi.get("designation"))
+    pi_role_bits.append(pi.get("department") or "[Department]")
+    _centered(", ".join([b for b in pi_role_bits if b]), 11, space_after=2)
+    if indian:
+        contact = _person_contact_line(pi)
+        if contact: _centered(contact, 10, space_after=18, italic=True)
+        else:       _centered("", 10, space_after=18)
+    else:
+        # Add one consistent space below PI block.
+        doc.paragraphs[-1].paragraph_format.space_after = Pt(20)
 
+    # ---------- Guide ----------
     _centered("Under the guidance of", 11, space_after=4)
     _centered(f"{guide.get('name') or '[Guide name]'}", 13, bold=True, space_after=2)
     _centered(f"{guide.get('designation') or 'Guide'}, "
-              f"{guide.get('department') or '[Department]'}", 11, space_after=16)
+              f"{guide.get('department') or '[Department]'}", 11, space_after=2)
+    if indian:
+        contact = _person_contact_line(guide)
+        if contact: _centered(contact, 10, space_after=14, italic=True)
+        else:       _centered("", 10, space_after=14)
+    else:
+        doc.paragraphs[-1].paragraph_format.space_after = Pt(16)
 
+    # ---------- Co-Guide (optional) ----------
     if (co_guide.get("name") or "").strip():
         _centered("Under the co-guidance of", 11, space_after=4)
         _centered(f"{co_guide.get('name')}", 13, bold=True, space_after=2)
         _centered(f"{co_guide.get('designation') or 'Co-Guide'}, "
-                  f"{co_guide.get('department') or '[Department]'}", 11, space_after=20)
+                  f"{co_guide.get('department') or '[Department]'}", 11, space_after=2)
+        if indian:
+            contact = _person_contact_line(co_guide)
+            if contact: _centered(contact, 10, space_after=18, italic=True)
+            else:       _centered("", 10, space_after=18)
+        else:
+            doc.paragraphs[-1].paragraph_format.space_after = Pt(20)
 
+    # ---------- Footer of the cover page ----------
+    if indian and submission_date:
+        _centered(submission_date, 12, space_after=4)
     _centered(year, 12, bold=True, space_after=0)
 
 
@@ -433,6 +518,26 @@ def _render_section_text(doc: Document, body: str) -> None:
         _add_para(doc, para_text, size=12)
 
 
+def _consent_packs(intake: Dict[str, Any], title_meta: Dict[str, Any],
+                   languages: List[Dict[str, Any]]) -> List[Tuple[str, str]]:
+    """Return [(language_label, rendered_consent_text), …] starting with English."""
+    english_consent = _render_consent(intake, title_meta)
+    packs: List[Tuple[str, str]] = [("English", english_consent)]
+    for lang in languages:
+        label = (lang.get("label") or lang.get("code") or "").strip()
+        if not label or label.lower() in {"english", "en"}:
+            continue
+        translated = _translate_consent(english_consent, label)
+        if translated:
+            packs.append((label, translated))
+        else:
+            packs.append((label,
+                f"[Automatic translation to {label} unavailable — please attach a "
+                f"manually-reviewed {label} translation of the English consent form "
+                f"before submitting to the Ethics Committee.]"))
+    return packs
+
+
 def build_docx(payload: Dict[str, Any]) -> bytes:
     """Render the full proposal + consent forms to DOCX bytes."""
     intake     = payload.get("intake")     or {}
@@ -441,6 +546,7 @@ def build_docx(payload: Dict[str, Any]) -> bytes:
     sources    = payload.get("sources")    or []
     title_meta = payload.get("title_meta") or {}
     languages  = payload.get("consent_languages") or []   # list of {code, label}
+    delivery   = (payload.get("consent_delivery") or "attached").strip().lower()
 
     doc = Document()
 
@@ -493,29 +599,40 @@ def build_docx(payload: Dict[str, Any]) -> bytes:
             _set_run_font(run, size=12)
 
     # === Consent forms (English + each selected secondary language) ===
-    english_consent = _render_consent(intake, title_meta)
-    consent_packs: List[Tuple[str, str]] = [("English", english_consent)]
-    for lang in languages:
-        label = (lang.get("label") or lang.get("code") or "").strip()
-        if not label or label.lower() in {"english", "en"}:
-            continue
-        translated = _translate_consent(english_consent, label)
-        if translated:
-            consent_packs.append((label, translated))
-        else:
-            consent_packs.append((label,
-                f"[Automatic translation to {label} unavailable — please attach a "
-                f"manually-reviewed {label} translation of the English consent form "
-                f"on the previous page before submitting to the Ethics Committee.]"))
-
-    for idx, (label, text) in enumerate(consent_packs):
-        doc.add_page_break()
-        _add_heading(doc, f"Informed Consent Form — {label}", level=1)
-        _add_para(doc, text, size=12, align=WD_ALIGN_PARAGRAPH.LEFT, line_spacing=1.5)
+    # Skipped entirely when the user chose "separate" delivery — in that case
+    # consent forms are produced as a standalone document via build_consent_docx.
+    if delivery != "separate":
+        for label, text in _consent_packs(intake, title_meta, languages):
+            doc.add_page_break()
+            _add_heading(doc, f"Informed Consent Form — {label}", level=1)
+            _add_para(doc, text, size=12, align=WD_ALIGN_PARAGRAPH.LEFT, line_spacing=1.5)
 
     buf = io.BytesIO()
     doc.save(buf)
     return buf.getvalue()
+
+
+def build_consent_docx(payload: Dict[str, Any]) -> bytes:
+    """Render only the multilingual consent forms as a standalone DOCX, used
+    when the user picks "separate" or "both" delivery on Step 8."""
+    intake     = payload.get("intake")     or {}
+    title_meta = payload.get("title_meta") or {}
+    languages  = payload.get("consent_languages") or []
+
+    doc = Document()
+    for sec in doc.sections:
+        sec.top_margin = sec.bottom_margin = sec.left_margin = sec.right_margin = Inches(1)
+        _add_page_number_footer(sec)
+    normal = doc.styles["Normal"]
+    normal.font.name = "Times New Roman"; normal.font.size = Pt(12)
+
+    packs = _consent_packs(intake, title_meta, languages)
+    for idx, (label, text) in enumerate(packs):
+        if idx > 0: doc.add_page_break()
+        _add_heading(doc, f"Informed Consent Form — {label}", level=1)
+        _add_para(doc, text, size=12, align=WD_ALIGN_PARAGRAPH.LEFT, line_spacing=1.5)
+
+    buf = io.BytesIO(); doc.save(buf); return buf.getvalue()
 
 
 # ===========================================================================
@@ -569,50 +686,95 @@ def _pdf_styles() -> Dict[str, ParagraphStyle]:
 
 def _pdf_title_page(story: List[Any], styles: Dict[str, ParagraphStyle],
                     intake: Dict[str, Any], title_meta: Dict[str, Any]) -> None:
+    indian = _is_indian_thesis_format(intake)
     institution = (title_meta.get("institution") or "[Institution name]").strip()
     committee   = (title_meta.get("committee")   or "Institutional Research Committee").strip()
     study_title = (title_meta.get("study_title") or intake.get("topic") or "[Study title]").strip()
     year        = (title_meta.get("year")        or str(datetime.now().year)).strip()
+    specialty   = (title_meta.get("specialty")   or "").strip()
+    university  = (title_meta.get("university")  or "").strip()
+    degree      = (title_meta.get("degree")      or "").strip()
+    submission_date = (title_meta.get("submission_date") or "").strip()
     pi          = title_meta.get("pi") or {}
     guide       = title_meta.get("guide") or {}
     co_guide    = title_meta.get("co_guide") or {}
 
-    story.append(Paragraph(institution.upper(), styles["tbig"]))
-    story.append(Paragraph(committee, styles["tsmall"]))
+    contact_style = ParagraphStyle("Contact", parent=styles["tsmall"],
+                                   fontName="Times-Italic", fontSize=10, leading=14)
+
+    story.append(Paragraph(_pdf_safe(institution.upper()), styles["tbig"]))
+    if indian:
+        story.append(Paragraph(_pdf_safe(
+            "Research Committee and Institutional Human Ethics Committee"),
+            styles["tsmall"]))
+    else:
+        story.append(Paragraph(_pdf_safe(committee), styles["tsmall"]))
     story.append(Spacer(1, 0.4 * inch))
 
-    story.append(Paragraph("DISSERTATION / RESEARCH PROPOSAL", styles["tmed"]))
-    story.append(Paragraph("submitted in partial fulfilment of the requirements", styles["tsmall"]))
-    story.append(Paragraph(f"for the degree of {(intake.get('role') or 'Research').upper()}",
-                           styles["tsmall"]))
+    if indian:
+        deg_label = (degree or "MD / MS").strip()
+        spec_part = f" in {specialty}" if specialty else ""
+        uni_part  = f" under {university}" if university else ""
+        story.append(Paragraph("DISSERTATION / THESIS SYNOPSIS", styles["tmed"]))
+        story.append(Paragraph(_pdf_safe(
+            "Submitted in partial fulfilment of the requirements for the degree of"),
+            styles["tsmall"]))
+        story.append(Paragraph(_pdf_safe(f"{deg_label}{spec_part}{uni_part}".strip()),
+                               styles["tmed"]))
+    else:
+        story.append(Paragraph("DISSERTATION / RESEARCH PROPOSAL", styles["tmed"]))
+        story.append(Paragraph("submitted in partial fulfilment of the requirements", styles["tsmall"]))
+        story.append(Paragraph(_pdf_safe(
+            f"for the degree of {(intake.get('role') or 'Research').upper()}"),
+            styles["tsmall"]))
     story.append(Spacer(1, 0.4 * inch))
 
-    story.append(Paragraph(study_title.upper(), styles["tbig"]))
+    story.append(Paragraph(_pdf_safe(study_title.upper()), styles["tbig"]))
     story.append(Spacer(1, 0.4 * inch))
 
+    # ---------- PI ----------
     story.append(Paragraph("Submitted by", styles["tsmall"]))
-    story.append(Paragraph(pi.get("name") or "[Principal Investigator name]", styles["tmed"]))
-    story.append(Paragraph(
-        f"{pi.get('designation') or 'Principal Investigator'}, "
-        f"{pi.get('department') or '[Department]'}", styles["tsmall"]))
-    story.append(Spacer(1, 0.3 * inch))
-
-    story.append(Paragraph("Under the guidance of", styles["tsmall"]))
-    story.append(Paragraph(guide.get("name") or "[Guide name]", styles["tmed"]))
-    story.append(Paragraph(
-        f"{guide.get('designation') or 'Guide'}, "
-        f"{guide.get('department') or '[Department]'}", styles["tsmall"]))
+    story.append(Paragraph(_pdf_safe(pi.get("name") or "[Principal Investigator name]"),
+                           styles["tmed"]))
+    pi_role_bits = []
+    if indian:
+        yr = (pi.get("year_of_residency") or "").strip()
+        if yr: pi_role_bits.append(f"{yr} year resident")
+    if pi.get("designation"):
+        pi_role_bits.append(pi.get("designation"))
+    pi_role_bits.append(pi.get("department") or "[Department]")
+    story.append(Paragraph(_pdf_safe(", ".join([b for b in pi_role_bits if b])),
+                           styles["tsmall"]))
+    if indian:
+        contact = _person_contact_line(pi)
+        if contact: story.append(Paragraph(_pdf_safe(contact), contact_style))
     story.append(Spacer(1, 0.25 * inch))
+
+    # ---------- Guide ----------
+    story.append(Paragraph("Under the guidance of", styles["tsmall"]))
+    story.append(Paragraph(_pdf_safe(guide.get("name") or "[Guide name]"), styles["tmed"]))
+    story.append(Paragraph(_pdf_safe(
+        f"{guide.get('designation') or 'Guide'}, "
+        f"{guide.get('department') or '[Department]'}"), styles["tsmall"]))
+    if indian:
+        contact = _person_contact_line(guide)
+        if contact: story.append(Paragraph(_pdf_safe(contact), contact_style))
+    story.append(Spacer(1, 0.2 * inch))
 
     if (co_guide.get("name") or "").strip():
         story.append(Paragraph("Under the co-guidance of", styles["tsmall"]))
-        story.append(Paragraph(co_guide.get("name"), styles["tmed"]))
-        story.append(Paragraph(
+        story.append(Paragraph(_pdf_safe(co_guide.get("name")), styles["tmed"]))
+        story.append(Paragraph(_pdf_safe(
             f"{co_guide.get('designation') or 'Co-Guide'}, "
-            f"{co_guide.get('department') or '[Department]'}", styles["tsmall"]))
-        story.append(Spacer(1, 0.3 * inch))
+            f"{co_guide.get('department') or '[Department]'}"), styles["tsmall"]))
+        if indian:
+            contact = _person_contact_line(co_guide)
+            if contact: story.append(Paragraph(_pdf_safe(contact), contact_style))
+        story.append(Spacer(1, 0.25 * inch))
 
-    story.append(Paragraph(year, styles["tmed"]))
+    if indian and submission_date:
+        story.append(Paragraph(_pdf_safe(submission_date), styles["tsmall"]))
+    story.append(Paragraph(_pdf_safe(year), styles["tmed"]))
 
 
 def _pdf_paragraph_chunks(text: str) -> List[str]:
@@ -631,6 +793,7 @@ def build_pdf(payload: Dict[str, Any]) -> bytes:
     sources    = payload.get("sources")    or []
     title_meta = payload.get("title_meta") or {}
     languages  = payload.get("consent_languages") or []
+    delivery   = (payload.get("consent_delivery") or "attached").strip().lower()
 
     buf = io.BytesIO()
     doc = _PropPdfDoc(
@@ -674,25 +837,13 @@ def build_pdf(payload: Dict[str, Any]) -> bytes:
         for entry in _bibliography_entries(sources):
             story.append(Paragraph(_pdf_safe(entry), styles["pre"]))
 
-    english_consent = _render_consent(intake, title_meta)
-    consent_packs: List[Tuple[str, str]] = [("English", english_consent)]
-    for lang in languages:
-        label = (lang.get("label") or lang.get("code") or "").strip()
-        if not label or label.lower() in {"english", "en"}:
-            continue
-        translated = _translate_consent(english_consent, label)
-        if translated:
-            consent_packs.append((label, translated))
-        else:
-            consent_packs.append((label,
-                f"[Automatic translation to {label} unavailable — please attach a "
-                f"manually-reviewed {label} translation of the English consent form.]"))
-
-    for label, text in consent_packs:
-        story.append(PageBreak())
-        story.append(Paragraph(f"Informed Consent Form — {label}", styles["h1"]))
-        for line in text.split("\n"):
-            story.append(Paragraph(_pdf_safe(line) or "&nbsp;", styles["pre"]))
+    # Consent forms — skipped when "separate" delivery was chosen.
+    if delivery != "separate":
+        for label, text in _consent_packs(intake, title_meta, languages):
+            story.append(PageBreak())
+            story.append(Paragraph(_pdf_safe(f"Informed Consent Form — {label}"), styles["h1"]))
+            for line in text.split("\n"):
+                story.append(Paragraph(_pdf_safe(line) or "&nbsp;", styles["pre"]))
 
     # multiBuild runs the layout twice so the TableOfContents flowable can
     # discover real page numbers from the H1 notifications and re-render.
@@ -700,10 +851,36 @@ def build_pdf(payload: Dict[str, Any]) -> bytes:
     return buf.getvalue()
 
 
+def build_consent_pdf(payload: Dict[str, Any]) -> bytes:
+    """Standalone multilingual consent PDF — counterpart to build_consent_docx."""
+    intake     = payload.get("intake")     or {}
+    title_meta = payload.get("title_meta") or {}
+    languages  = payload.get("consent_languages") or []
+
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buf, pagesize=LETTER,
+        leftMargin=inch, rightMargin=inch, topMargin=inch, bottomMargin=inch,
+        title="Informed Consent Forms",
+    )
+    styles = _pdf_styles()
+    story: List[Any] = []
+    for idx, (label, text) in enumerate(_consent_packs(intake, title_meta, languages)):
+        if idx > 0: story.append(PageBreak())
+        story.append(Paragraph(_pdf_safe(f"Informed Consent Form — {label}"), styles["h1"]))
+        for line in text.split("\n"):
+            story.append(Paragraph(_pdf_safe(line) or "&nbsp;", styles["pre"]))
+    doc.build(story, onFirstPage=_pdf_footer, onLaterPages=_pdf_footer)
+    return buf.getvalue()
+
+
 # ===========================================================================
 # Combined ZIP
 # ===========================================================================
 def build_zip(payload: Dict[str, Any]) -> bytes:
+    """Bundle proposal DOCX + PDF, plus standalone consent files when the user
+    chose "separate" or "both" delivery."""
+    delivery = (payload.get("consent_delivery") or "attached").strip().lower()
     docx_bytes = build_docx(payload)
     pdf_bytes  = build_pdf(payload)
     safe_title = re.sub(r"[^A-Za-z0-9._-]+", "_", (payload.get("title_meta") or {}).get("study_title") or "proposal")[:60] or "proposal"
@@ -711,6 +888,9 @@ def build_zip(payload: Dict[str, Any]) -> bytes:
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
         zf.writestr(f"{safe_title}.docx", docx_bytes)
         zf.writestr(f"{safe_title}.pdf",  pdf_bytes)
+        if delivery in {"separate", "both"}:
+            zf.writestr(f"{safe_title}__consent.docx", build_consent_docx(payload))
+            zf.writestr(f"{safe_title}__consent.pdf",  build_consent_pdf(payload))
     return buf.getvalue()
 
 

@@ -40,6 +40,22 @@
       .dl-summary .dl-tile .dl-tile-value { font-size:1rem; font-weight:600; color:#e6eefb; }
       .dl-langs { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
       .dl-lang-pill { padding:3px 10px; border-radius:999px; font-size:.78rem; background: rgba(122,162,255,.15); border:1px solid rgba(122,162,255,.3); color:#cfe0ff; }
+      .dl-opt { font-size:.7rem; color:#8aa0c5; font-weight:400; margin-left:4px; }
+      .dl-lang-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap:8px 14px; }
+      .dl-lang-cb { display:flex; align-items:center; gap:8px; padding:8px 10px; border-radius:8px; background: rgba(122,162,255,.06); border:1px solid rgba(122,162,255,.18); cursor:pointer; user-select:none; }
+      .dl-lang-cb:hover { background: rgba(122,162,255,.12); }
+      .dl-lang-cb.is-locked { opacity:.85; cursor:default; background: rgba(80,200,140,.1); border-color: rgba(80,200,140,.3); }
+      .dl-lang-cb input { accent-color:#7aa2ff; transform: scale(1.1); }
+      .dl-lang-cb-name { font-size:.92rem; color:#e6eefb; }
+      .dl-lang-cb-native { font-size:.78rem; color:#a8b9d6; margin-left:auto; }
+      .dl-radio-row { display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px; }
+      @media (max-width: 720px) { .dl-radio-row { grid-template-columns: 1fr; } }
+      .dl-radio { display:flex; gap:10px; padding:12px 14px; border-radius:10px; background: rgba(122,162,255,.06); border:1px solid rgba(122,162,255,.18); cursor:pointer; }
+      .dl-radio:hover { background: rgba(122,162,255,.12); }
+      .dl-radio input { accent-color:#7aa2ff; margin-top:3px; transform: scale(1.15); flex-shrink:0; }
+      .dl-radio span { font-size:.88rem; color:#e6eefb; line-height:1.4; }
+      .dl-radio span small { color:#a8b9d6; font-size:.78rem; }
+      .dl-radio:has(input:checked) { background: rgba(122,162,255,.2); border-color: rgba(122,162,255,.55); }
       .gen-hidden { display:none !important; }
       .dl-empty { padding:32px; text-align:center; color:#a8b9d6; background: rgba(122,162,255,.05); border:1px dashed rgba(122,162,255,.2); border-radius:12px; }
       .dl-empty a { color:#7aa2ff; }
@@ -93,8 +109,11 @@
       <section id="dl-meta-card" class="dl-section gen-hidden" data-testid="card-titlepage">
         <h2>Title-page metadata</h2>
         <p class="dl-help">
-          These appear on the cover page in the format used for Indian MD
-          thesis proposals. Fields auto-save as you type.
+          These appear on the cover page. The extended fields (Specialty,
+          University, year of residency, Phone &amp; Email per person) are
+          shown only for Indian thesis formats — PhD Synopsis, MD/MS/DNB
+          Thesis Synopsis, and Institutional Dissertation. Phone &amp; Email
+          are always optional. Fields auto-save as you type.
         </p>
 
         <div class="dl-block">
@@ -111,6 +130,21 @@
           </div>
         </div>
 
+        <!-- Indian-thesis-only block: degree / specialty / university / submission date -->
+        <div class="dl-block dl-thesis-only" id="dl-block-thesis" hidden>
+          <h3>Indian thesis details</h3>
+          <div class="dl-grid">
+            <div class="dl-field"><label for="dl-degree">Degree</label>
+              <input id="dl-degree" data-testid="input-degree" data-meta="degree" placeholder="e.g. MD, MS, MD (Medicine), DNB, PhD" /></div>
+            <div class="dl-field"><label for="dl-specialty">Specialty</label>
+              <input id="dl-specialty" data-testid="input-specialty" data-meta="specialty" placeholder="e.g. Internal Medicine, Paediatrics, Pathology" /></div>
+            <div class="dl-field"><label for="dl-university">University</label>
+              <input id="dl-university" data-testid="input-university" data-meta="university" placeholder="e.g. Rajiv Gandhi University of Health Sciences" /></div>
+            <div class="dl-field"><label for="dl-submission-date">Submission month / date</label>
+              <input id="dl-submission-date" data-testid="input-submission-date" data-meta="submission_date" placeholder="e.g. April 2026" /></div>
+          </div>
+        </div>
+
         <div class="dl-block">
           <h3>Principal Investigator (you)</h3>
           <div class="dl-grid">
@@ -120,6 +154,12 @@
               <input id="dl-pi-designation" data-testid="input-pi-designation" data-meta="pi.designation" placeholder="Postgraduate Resident" /></div>
             <div class="dl-field"><label for="dl-pi-department">Department</label>
               <input id="dl-pi-department" data-testid="input-pi-department" data-meta="pi.department" placeholder="Department of Internal Medicine" /></div>
+            <div class="dl-field dl-thesis-only" hidden><label for="dl-pi-year-residency">Year of residency</label>
+              <input id="dl-pi-year-residency" data-testid="input-pi-year" data-meta="pi.year_of_residency" placeholder="1st / 2nd / 3rd" /></div>
+            <div class="dl-field dl-thesis-only" hidden><label for="dl-pi-phone">Phone <span class="dl-opt">(optional)</span></label>
+              <input id="dl-pi-phone" type="tel" data-testid="input-pi-phone" data-meta="pi.phone" placeholder="+91 98765 43210" /></div>
+            <div class="dl-field dl-thesis-only" hidden><label for="dl-pi-email">Email <span class="dl-opt">(optional)</span></label>
+              <input id="dl-pi-email" type="email" data-testid="input-pi-email" data-meta="pi.email" placeholder="aditi.sharma@example.edu" /></div>
           </div>
         </div>
 
@@ -132,6 +172,10 @@
               <input id="dl-guide-designation" data-testid="input-guide-designation" data-meta="guide.designation" placeholder="Professor &amp; Head" /></div>
             <div class="dl-field"><label for="dl-guide-department">Department</label>
               <input id="dl-guide-department" data-testid="input-guide-department" data-meta="guide.department" placeholder="Department of Internal Medicine" /></div>
+            <div class="dl-field dl-thesis-only" hidden><label for="dl-guide-phone">Phone <span class="dl-opt">(optional)</span></label>
+              <input id="dl-guide-phone" type="tel" data-testid="input-guide-phone" data-meta="guide.phone" placeholder="+91 98765 43210" /></div>
+            <div class="dl-field dl-thesis-only" hidden><label for="dl-guide-email">Email <span class="dl-opt">(optional)</span></label>
+              <input id="dl-guide-email" type="email" data-testid="input-guide-email" data-meta="guide.email" placeholder="r.mehta@example.edu" /></div>
           </div>
         </div>
 
@@ -144,7 +188,47 @@
               <input id="dl-cog-designation" data-testid="input-cog-designation" data-meta="co_guide.designation" placeholder="Associate Professor" /></div>
             <div class="dl-field"><label for="dl-cog-department">Department</label>
               <input id="dl-cog-department" data-testid="input-cog-department" data-meta="co_guide.department" placeholder="Department of Endocrinology" /></div>
+            <div class="dl-field dl-thesis-only" hidden><label for="dl-cog-phone">Phone <span class="dl-opt">(optional)</span></label>
+              <input id="dl-cog-phone" type="tel" data-testid="input-cog-phone" data-meta="co_guide.phone" placeholder="+91 98765 43210" /></div>
+            <div class="dl-field dl-thesis-only" hidden><label for="dl-cog-email">Email <span class="dl-opt">(optional)</span></label>
+              <input id="dl-cog-email" type="email" data-testid="input-cog-email" data-meta="co_guide.email" placeholder="p.iyer@example.edu" /></div>
           </div>
+        </div>
+      </section>
+
+      <section id="dl-consent-card" class="dl-section gen-hidden" data-testid="card-consent">
+        <h2>Informed-consent forms</h2>
+        <p class="dl-help">
+          English is mandatory. Tick any additional Indian-language translations
+          you'd like generated by AI (you'll review them before submitting to
+          the Ethics Committee). Translations take ~20-40 seconds each, and are
+          cached for the rest of this session.
+        </p>
+
+        <div class="dl-block">
+          <h3>Languages</h3>
+          <div class="dl-lang-grid" id="dl-lang-grid" data-testid="grid-languages">
+            <!-- populated by JS -->
+          </div>
+        </div>
+
+        <div class="dl-block">
+          <h3>Delivery</h3>
+          <div class="dl-radio-row" role="radiogroup" aria-label="Consent delivery">
+            <label class="dl-radio">
+              <input type="radio" name="dl-delivery" value="attached" data-testid="radio-delivery-attached" />
+              <span><strong>Attach to proposal</strong><br><small>Consent forms appear at the end of the same .docx / .pdf as the proposal.</small></span>
+            </label>
+            <label class="dl-radio">
+              <input type="radio" name="dl-delivery" value="separate" data-testid="radio-delivery-separate" />
+              <span><strong>Separate file</strong><br><small>Proposal stays consent-free; consent forms are bundled in a separate .docx + .pdf inside the zip.</small></span>
+            </label>
+            <label class="dl-radio">
+              <input type="radio" name="dl-delivery" value="both" data-testid="radio-delivery-both" />
+              <span><strong>Both</strong><br><small>Consent appears at the end of the proposal <em>and</em> as a standalone file inside the zip.</small></span>
+            </label>
+          </div>
+          <p class="dl-help" id="dl-delivery-note" style="margin-top:8px"></p>
         </div>
       </section>
 
@@ -179,6 +263,6 @@
       </div>
     </main>
 
-    <script src="/proposal-module/js/download.js?v=2026050601"></script>
+    <script src="/proposal-module/js/download.js?v=2026050610"></script>
   </body>
 </html>
