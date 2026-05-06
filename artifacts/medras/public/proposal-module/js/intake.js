@@ -187,16 +187,7 @@
         payload.secondLangOther = "";
       }
       writeState(payload);
-      // Step 3 (format pick) is the next planned screen — coming next iteration.
-      // For now, confirm selection and take the user back to the homepage so
-      // they don't hit a 404.
-      window.alert(
-        "Saved!\n\nRole: " + (saved.roleLabel || saved.role) +
-        "\nLanguage: " + (mode === "english" ? "English only" :
-          "English + " + (payload.secondLangLabel || "(not set)")) +
-        "\n\nThe next step (format / funder selection) is coming soon."
-      );
-      window.location.href = "/proposal-module/";
+      window.location.href = "/proposal-module/format.html";
     });
 
     applySelection();
