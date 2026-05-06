@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Step 4 · Build your outline — Proposal Writing · MedRAS</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%237aa2ff'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-family='Inter,sans-serif' font-size='17' font-weight='800' fill='%23071430'%3EP%3C/text%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="/proposal-module/css/style.css?v=2026050603" />
+  </head>
+  <body data-testid="page-prop-outline">
+    <header class="prop-header">
+      <a href="/proposal-module/" class="prop-brand" data-testid="link-prop-home">
+        <span class="prop-brand-mark">P</span>
+        <span>MedRAS — Proposal Writing Module</span>
+      </a>
+      <nav class="prop-nav" aria-label="Primary">
+        <a href="/" data-testid="link-back-medras">← Back to MedRAS</a>
+      </nav>
+    </header>
+
+    <main class="prop-shell prop-shell--wide">
+      <ol class="prop-stepper" data-testid="stepper" data-current="4" aria-label="Progress">
+        <li class="prop-stepper-item is-done" data-step="1"><span class="prop-stepper-dot">1</span><span class="prop-stepper-label">Role</span></li>
+        <li class="prop-stepper-item is-done" data-step="2"><span class="prop-stepper-dot">2</span><span class="prop-stepper-label">Language</span></li>
+        <li class="prop-stepper-item is-done" data-step="3"><span class="prop-stepper-dot">3</span><span class="prop-stepper-label">Format</span></li>
+        <li class="prop-stepper-item is-active" data-step="4"><span class="prop-stepper-dot">4</span><span class="prop-stepper-label">Outline</span></li>
+        <li class="prop-stepper-item" data-step="5"><span class="prop-stepper-dot">5</span><span class="prop-stepper-label">Draft</span></li>
+        <li class="prop-stepper-item" data-step="6"><span class="prop-stepper-dot">6</span><span class="prop-stepper-label">Export</span></li>
+      </ol>
+
+      <span class="prop-eyebrow">Step 4 of 6</span>
+      <h1 class="prop-h1" data-testid="text-outline-title">
+        Build your <span class="prop-grad">outline</span>
+      </h1>
+      <p class="prop-lede" data-testid="text-outline-lede">
+        Fill out the sections of your <strong id="prop-out-format-label">proposal</strong>.
+        You can upload existing material to auto-fill them, type directly into each one, or
+        ask MedRAS to draft anything still missing.
+      </p>
+
+      <!-- ============== Pre-flight question ============== -->
+      <section class="prop-out-preflight" id="prop-out-preflight" data-testid="card-preflight">
+        <h2>Do you already have any documents for this proposal?</h2>
+        <p>Drafts, notes, related papers, slide decks — anything goes. We'll extract the text and try to slot the right bits into the right sections automatically.</p>
+        <div class="prop-out-preflight-actions">
+          <button type="button" class="prop-cta-primary" id="prop-out-pre-yes" data-testid="button-pre-yes">
+            Yes, I have documents to upload
+          </button>
+          <button type="button" class="prop-cta-ghost" id="prop-out-pre-no" data-testid="button-pre-no">
+            No, I'll start fresh
+          </button>
+        </div>
+      </section>
+
+      <!-- ============== Bulk upload zone ============== -->
+      <section class="prop-out-upload" id="prop-out-upload" hidden data-testid="card-upload">
+        <header class="prop-out-upload-head">
+          <h2>Upload your existing documents</h2>
+          <button type="button" class="prop-out-skip" id="prop-out-skip-upload" data-testid="button-skip-upload">
+            Skip — I'll start fresh →
+          </button>
+        </header>
+        <p>PDF, Word (.docx), PowerPoint (.pptx), text or markdown. Up to 10 files, 100 MB each.</p>
+
+        <label class="prop-out-dropzone" id="prop-out-dropzone" for="prop-out-files" data-testid="dropzone-bulk">
+          <div class="prop-out-dropzone-icon" aria-hidden="true">📥</div>
+          <strong>Drop files here</strong>
+          <span>or click to choose — multiple files allowed</span>
+          <input type="file" id="prop-out-files" multiple
+                 accept=".pdf,.docx,.pptx,.txt,.md"
+                 hidden data-testid="input-files-bulk" />
+        </label>
+
+        <ul class="prop-out-filelist" id="prop-out-filelist" data-testid="list-files"></ul>
+
+        <div class="prop-out-upload-actions">
+          <button type="button" class="prop-cta-primary" id="prop-out-process" disabled data-testid="button-process">
+            Extract & auto-fill sections
+          </button>
+          <span class="prop-out-status" id="prop-out-process-status" aria-live="polite"></span>
+        </div>
+      </section>
+
+      <!-- ============== Section accordion ============== -->
+      <section class="prop-out-sections" id="prop-out-sections" hidden data-testid="card-sections">
+        <header class="prop-out-sections-head">
+          <h2>Your proposal sections</h2>
+          <p id="prop-out-sections-sub">Click any section to expand and edit. A green tick means it's filled, red means it's still empty.</p>
+        </header>
+        <ol class="prop-out-acc" id="prop-out-acc" data-testid="list-accordion"></ol>
+      </section>
+
+      <!-- ============== Audit ============== -->
+      <section class="prop-out-audit" id="prop-out-audit" hidden data-testid="card-audit">
+        <header class="prop-out-audit-head">
+          <h2>Completion audit</h2>
+          <p>Quick health-check on your outline before moving on.</p>
+        </header>
+
+        <div class="prop-out-progress-row">
+          <div class="prop-out-progress-track">
+            <div class="prop-out-progress-bar" id="prop-out-progress-bar" style="width:0%"></div>
+          </div>
+          <span class="prop-out-progress-pct" id="prop-out-progress-pct" data-testid="text-progress-pct">0%</span>
+        </div>
+
+        <ul class="prop-out-audit-list" id="prop-out-audit-list" data-testid="list-audit"></ul>
+      </section>
+
+      <!-- ============== Actions ============== -->
+      <div class="prop-actions" data-testid="row-actions">
+        <a href="/proposal-module/format.html" class="prop-cta-ghost" data-testid="button-back">← Back</a>
+        <button type="button" class="prop-cta-primary" id="prop-out-next" data-testid="button-next">
+          Continue →
+        </button>
+      </div>
+    </main>
+
+    <script src="/proposal-module/js/outline.js?v=2026050603"></script>
+  </body>
+</html>

@@ -587,12 +587,7 @@
           sections: sections.map(function (s) { return { name: s.name, included: !!s.included }; }),
         },
       });
-      window.alert(
-        "Saved!\n\nFormat: " + current.label +
-        "\nSections included: " + inc + " of " + sections.length +
-        "\n\nThe next step (Outline) is coming soon."
-      );
-      window.location.href = "/proposal-module/";
+      window.location.href = "/proposal-module/outline.html";
     });
 
     updateSummary();
