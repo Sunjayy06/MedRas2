@@ -578,16 +578,7 @@
     // ---- Continue ----
     nextBtn.addEventListener("click", function () {
       persist();
-      var counts = { full: 0, short: 0, empty: 0 };
-      includedSections.forEach(function (n) { counts[statusFor(sectionContent[n] || "")]++; });
-      window.alert(
-        "Outline saved!\n\n" +
-        "  ✓ Full:  " + counts.full + "\n" +
-        "  · Short: " + counts.short + "\n" +
-        "  ✕ Empty: " + counts.empty + "\n\n" +
-        "Step 5 (Draft) is coming soon."
-      );
-      window.location.href = "/proposal-module/";
+      window.location.href = "/proposal-module/references.html";
     });
   }
 

@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Step 5 · References — Proposal Writing · MedRAS</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%237aa2ff'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-family='Inter,sans-serif' font-size='17' font-weight='800' fill='%23071430'%3EP%3C/text%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="/proposal-module/css/style.css?v=2026050604" />
+  </head>
+  <body data-testid="page-prop-references">
+    <header class="prop-header">
+      <a href="/proposal-module/" class="prop-brand" data-testid="link-prop-home">
+        <span class="prop-brand-mark">P</span>
+        <span>MedRAS — Proposal Writing Module</span>
+      </a>
+      <nav class="prop-nav" aria-label="Primary">
+        <a href="/" data-testid="link-back-medras">← Back to MedRAS</a>
+      </nav>
+    </header>
+
+    <main class="prop-shell prop-shell--wide">
+      <ol class="prop-stepper" data-testid="stepper" data-current="5" aria-label="Progress">
+        <li class="prop-stepper-item is-done" data-step="1"><span class="prop-stepper-dot">1</span><span class="prop-stepper-label">Role</span></li>
+        <li class="prop-stepper-item is-done" data-step="2"><span class="prop-stepper-dot">2</span><span class="prop-stepper-label">Language</span></li>
+        <li class="prop-stepper-item is-done" data-step="3"><span class="prop-stepper-dot">3</span><span class="prop-stepper-label">Format</span></li>
+        <li class="prop-stepper-item is-done" data-step="4"><span class="prop-stepper-dot">4</span><span class="prop-stepper-label">Outline</span></li>
+        <li class="prop-stepper-item is-active" data-step="5"><span class="prop-stepper-dot">5</span><span class="prop-stepper-label">References</span></li>
+        <li class="prop-stepper-item" data-step="6"><span class="prop-stepper-dot">6</span><span class="prop-stepper-label">Generate</span></li>
+        <li class="prop-stepper-item" data-step="7"><span class="prop-stepper-dot">7</span><span class="prop-stepper-label">Preview</span></li>
+        <li class="prop-stepper-item" data-step="8"><span class="prop-stepper-dot">8</span><span class="prop-stepper-label">Download</span></li>
+      </ol>
+
+      <span class="prop-eyebrow">Step 5 of 8</span>
+      <h1 class="prop-h1" data-testid="text-references-title">
+        Add your <span class="prop-grad">references</span>
+      </h1>
+      <p class="prop-lede">
+        Upload reference articles (PDF or Word) and we'll extract title, authors, journal, year and DOI for each one — formatted in
+        <strong id="prop-ref-style-name">Vancouver</strong> style.
+        Or, if you don't have any yet, we can generate plausible suggestions to seed your list.
+      </p>
+
+      <!-- ============== Pre-flight ============== -->
+      <section class="prop-out-preflight" id="prop-ref-preflight" data-testid="card-preflight">
+        <h2>Do you have reference papers to upload?</h2>
+        <p>PDFs of papers, a reference list as Word or text, or anything that contains citations.</p>
+        <div class="prop-out-preflight-actions">
+          <button type="button" class="prop-cta-primary" id="prop-ref-pre-yes" data-testid="button-pre-yes">
+            Yes, I'll upload references
+          </button>
+          <button type="button" class="prop-cta-ghost" id="prop-ref-pre-no" data-testid="button-pre-no">
+            No — generate plausible references for me
+          </button>
+        </div>
+      </section>
+
+      <!-- ============== Upload mode ============== -->
+      <section class="prop-out-upload" id="prop-ref-upload" hidden data-testid="card-upload">
+        <header class="prop-out-upload-head">
+          <h2>Upload reference papers</h2>
+          <button type="button" class="prop-out-skip" id="prop-ref-switch-gen" data-testid="button-switch-generate">Switch to generate →</button>
+        </header>
+        <p>PDF, Word, PowerPoint, text or markdown. Up to 10 files, 100 MB each.</p>
+        <label class="prop-out-dropzone" id="prop-ref-dropzone" for="prop-ref-files" data-testid="dropzone-bulk">
+          <div class="prop-out-dropzone-icon" aria-hidden="true">📚</div>
+          <strong>Drop files here</strong>
+          <span>or click to choose — multiple files allowed</span>
+          <input type="file" id="prop-ref-files" multiple
+                 accept=".pdf,.docx,.pptx,.txt,.md" hidden data-testid="input-files-bulk" />
+        </label>
+        <ul class="prop-out-filelist" id="prop-ref-filelist" data-testid="list-files"></ul>
+        <div class="prop-out-upload-actions">
+          <button type="button" class="prop-cta-primary" id="prop-ref-extract" disabled data-testid="button-extract">
+            Extract references
+          </button>
+          <span class="prop-out-status" id="prop-ref-extract-status" aria-live="polite"></span>
+        </div>
+      </section>
+
+      <!-- ============== Generate mode ============== -->
+      <section class="prop-out-upload" id="prop-ref-generate" hidden data-testid="card-generate">
+        <header class="prop-out-upload-head">
+          <h2>Generate plausible references</h2>
+          <button type="button" class="prop-out-skip" id="prop-ref-switch-up" data-testid="button-switch-upload">← Switch to upload</button>
+        </header>
+        <p>
+          We'll suggest realistic-sounding references for your topic. <strong>These are starting
+          points, not verified citations</strong> — please look each one up in PubMed or Google
+          Scholar before citing.
+        </p>
+        <div class="prop-ref-genform">
+          <label class="prop-ref-field">
+            <span class="prop-ref-field-lbl">Research topic</span>
+            <textarea id="prop-ref-gen-topic" rows="2" placeholder="e.g. Smartphone-based self-monitoring for type 2 diabetes in tertiary care" data-testid="input-gen-topic"></textarea>
+          </label>
+          <div class="prop-ref-fieldrow">
+            <label class="prop-ref-field">
+              <span class="prop-ref-field-lbl">How many references?</span>
+              <input type="number" id="prop-ref-gen-count" min="5" max="50" value="15" data-testid="input-gen-count" />
+            </label>
+            <label class="prop-ref-field">
+              <span class="prop-ref-field-lbl">Recency window (years back)</span>
+              <input type="number" id="prop-ref-gen-recency" min="2" max="30" value="7" data-testid="input-gen-recency" />
+            </label>
+          </div>
+          <label class="prop-ref-field">
+            <span class="prop-ref-field-lbl">Preferred journals (optional, comma-separated)</span>
+            <input type="text" id="prop-ref-gen-journals" placeholder="e.g. Lancet, NEJM, BMJ" data-testid="input-gen-journals" />
+          </label>
+        </div>
+        <div class="prop-out-upload-actions">
+          <button type="button" class="prop-cta-primary" id="prop-ref-do-generate" data-testid="button-do-generate">
+            ✨ Generate references
+          </button>
+          <span class="prop-out-status" id="prop-ref-gen-status" aria-live="polite"></span>
+        </div>
+      </section>
+
+      <!-- ============== Results ============== -->
+      <div class="prop-ref-grid" id="prop-ref-results" hidden>
+        <section class="prop-out-sections" data-testid="card-list">
+          <header class="prop-out-sections-head">
+            <h2>Your references <span id="prop-ref-count" class="prop-ref-count">(0)</span></h2>
+            <p>
+              Style:
+              <select id="prop-ref-style" class="prop-ref-style-pick" data-testid="select-style"></select>
+              · Click any reference to edit it.
+            </p>
+          </header>
+          <div class="prop-ref-warning" id="prop-ref-warning" hidden></div>
+          <ol class="prop-ref-list" id="prop-ref-list" data-testid="list-references"></ol>
+        </section>
+
+        <aside class="prop-out-sections prop-ref-chat" data-testid="card-chat">
+          <header class="prop-out-sections-head">
+            <h2>Tell me about your references</h2>
+            <p>Try: "minimum 30 references", "only past 5 years", "only Lancet and NEJM", "remove anything before 2018".</p>
+          </header>
+          <div class="prop-ref-chat-log" id="prop-ref-chat-log" aria-live="polite"></div>
+          <form class="prop-ref-chat-form" id="prop-ref-chat-form">
+            <input type="text" id="prop-ref-chat-input" placeholder="Type a reference rule…" autocomplete="off" data-testid="input-chat" />
+            <button type="submit" class="prop-cta-primary prop-cta-sm" data-testid="button-chat-send">Send</button>
+          </form>
+        </aside>
+      </div>
+
+      <div class="prop-actions" data-testid="row-actions">
+        <a href="/proposal-module/outline.html" class="prop-cta-ghost" data-testid="button-back">← Back</a>
+        <button type="button" class="prop-cta-primary" id="prop-ref-next" data-testid="button-next">Continue →</button>
+      </div>
+    </main>
+
+    <script src="/proposal-module/js/references.js?v=2026050604"></script>
+  </body>
+</html>
