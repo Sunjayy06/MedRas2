@@ -26,6 +26,7 @@ MedRAS is a structured Research Operating System that guides medical and academi
     *   `/public/index.html`: Main landing page.
     *   `/public/analysis.html`: Statistical Analysis Engine UI.
     *   `/public/plagiarism-module`: Plagiarism & AI Reduction module UI (`intake.html` → `reduce-results.html`; `checker.html` for score-only).
+    *   `/public/proposal-module`: Proposal Writing Module UI. `index.html` is the module homepage (header "MedRAS — Proposal Writing Module", Start CTA, supported-format lists for Indian + global funders). `role.html` (Step 1 of 6) and `language.html` (Step 2 of 6) form the intake flow; both share `css/style.css` (navy theme, `.prop-*` namespace) and `js/intake.js` (sessionStorage key `medras.proposal.intake` storing `{role, roleLabel, langMode, secondLang, secondLangLabel, secondLangOther}`). `language.html` self-redirects to `role.html` if no role is saved. Steps 3–6 (Format / Outline / Draft / Export) are stubbed placeholders in the stepper for the next iteration.
 *   `/artifacts/medras`: Files outside this directory should not be modified.
 *   **DB Schema:** _Populate as you build_
 *   **API Contracts:** Defined implicitly by FastAPI Pydantic models.
@@ -46,7 +47,7 @@ MedRAS is a structured Research Operating System that guides medical and academi
 *   **Study Builder:** Translates research objectives into methodologies.
 *   **Sample Size Calculator:** Provides formula-driven sample size estimations with advanced UX and reporting.
 *   **Statistical Analysis Engine:** Guided 12-screen wizard for data input, variable classification, quality checks, and statistical analysis with client-side state persistence.
-*   **Proposal Generator:** Facilitates drafting research proposals.
+*   **Proposal Writing Module:** Guided 6-step intake (Role → Language → Format → Outline → Draft → Export) for ICMR, IEC, UGC, DST-SERB, PhD Synopsis, CTRI, AYUSH, DBT, CSIR, NIH, WHO, ICH-GCP, Horizon Europe, Wellcome Trust, Gates, NIHR, NHMRC, CIHR. Role + language steps are live; format/outline/draft/export are upcoming.
 *   **Thesis & Article Writer:** Assists in compiling structured manuscripts.
 *   **Plagiarism & AI Reduction:** Offers originality scoring, AI likelihood detection, and a 3-stage rewrite pipeline to reduce plagiarism while preserving academic integrity.
 

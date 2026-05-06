@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Step 2 · Language — Proposal Writing · MedRAS</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%237aa2ff'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-family='Inter,sans-serif' font-size='17' font-weight='800' fill='%23071430'%3EP%3C/text%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="/proposal-module/css/style.css?v=2026050601" />
+  </head>
+  <body data-testid="page-prop-language">
+    <header class="prop-header">
+      <a href="/proposal-module/" class="prop-brand" data-testid="link-prop-home">
+        <span class="prop-brand-mark">P</span>
+        <span>MedRAS — Proposal Writing Module</span>
+      </a>
+      <nav class="prop-nav" aria-label="Primary">
+        <a href="/" data-testid="link-back-medras">← Back to MedRAS</a>
+      </nav>
+    </header>
+
+    <main class="prop-shell">
+      <!-- Stepper -->
+      <ol class="prop-stepper" data-testid="stepper" data-current="2" aria-label="Progress">
+        <li class="prop-stepper-item is-done" data-step="1"><span class="prop-stepper-dot">1</span><span class="prop-stepper-label">Role</span></li>
+        <li class="prop-stepper-item is-active" data-step="2"><span class="prop-stepper-dot">2</span><span class="prop-stepper-label">Language</span></li>
+        <li class="prop-stepper-item" data-step="3"><span class="prop-stepper-dot">3</span><span class="prop-stepper-label">Format</span></li>
+        <li class="prop-stepper-item" data-step="4"><span class="prop-stepper-dot">4</span><span class="prop-stepper-label">Outline</span></li>
+        <li class="prop-stepper-item" data-step="5"><span class="prop-stepper-dot">5</span><span class="prop-stepper-label">Draft</span></li>
+        <li class="prop-stepper-item" data-step="6"><span class="prop-stepper-dot">6</span><span class="prop-stepper-label">Export</span></li>
+      </ol>
+
+      <span class="prop-eyebrow">Step 2 of 6</span>
+      <h1 class="prop-h1" data-testid="text-lang-title">
+        Pick a <span class="prop-grad">writing language</span>
+      </h1>
+      <p class="prop-lede" data-testid="text-lang-lede">
+        Choose English only, or English plus a second language for a parallel
+        translation. Useful for IECs and university committees that ask for
+        regional-language abstracts.
+      </p>
+
+      <p class="prop-role-recall" id="prop-role-recall" data-testid="text-role-recall" hidden>
+        Continuing as <strong></strong>.
+      </p>
+
+      <div class="prop-lang-grid" role="radiogroup" aria-label="Choose proposal language">
+        <div class="prop-lang-card" tabindex="0" role="radio" aria-checked="false" data-lang-mode="english" data-testid="lang-english">
+          <div class="prop-lang-icon" aria-hidden="true">🇬🇧</div>
+          <h2>English only</h2>
+          <p>Single-language proposal in academic English. Recommended for ICMR, DST-SERB, NIH and most international funders.</p>
+        </div>
+
+        <div class="prop-lang-card" tabindex="0" role="radio" aria-checked="false" data-lang-mode="bilingual" data-testid="lang-bilingual">
+          <div class="prop-lang-icon" aria-hidden="true">🌐</div>
+          <h2>English + another language</h2>
+          <p>Generate the proposal in English with a parallel version in your chosen Indian language.</p>
+
+          <label class="prop-lang-label" for="prop-second-lang">Second language</label>
+          <select id="prop-second-lang" class="prop-lang-select" data-testid="select-second-lang">
+            <option value="">Select a language…</option>
+            <option value="hi">Hindi</option>
+            <option value="ta">Tamil</option>
+            <option value="te">Telugu</option>
+            <option value="kn">Kannada</option>
+            <option value="ml">Malayalam</option>
+            <option value="mr">Marathi</option>
+            <option value="bn">Bengali</option>
+            <option value="gu">Gujarati</option>
+            <option value="pa">Punjabi</option>
+            <option value="other">Other</option>
+          </select>
+
+          <input type="text" id="prop-second-lang-other" class="prop-lang-input" placeholder="Specify language" hidden data-testid="input-other-lang" />
+        </div>
+      </div>
+
+      <div class="prop-actions" data-testid="row-actions">
+        <a href="/proposal-module/role.html" class="prop-cta-ghost" data-testid="button-back">← Back</a>
+        <button type="button" class="prop-cta-primary" id="prop-lang-next" disabled data-testid="button-next">
+          Continue →
+        </button>
+      </div>
+    </main>
+
+    <script src="/proposal-module/js/intake.js?v=2026050601"></script>
+  </body>
+</html>

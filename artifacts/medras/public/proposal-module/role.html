@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Step 1 · Who are you? — Proposal Writing · MedRAS</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%237aa2ff'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-family='Inter,sans-serif' font-size='17' font-weight='800' fill='%23071430'%3EP%3C/text%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="/proposal-module/css/style.css?v=2026050601" />
+  </head>
+  <body data-testid="page-prop-role">
+    <header class="prop-header">
+      <a href="/proposal-module/" class="prop-brand" data-testid="link-prop-home">
+        <span class="prop-brand-mark">P</span>
+        <span>MedRAS — Proposal Writing Module</span>
+      </a>
+      <nav class="prop-nav" aria-label="Primary">
+        <a href="/" data-testid="link-back-medras">← Back to MedRAS</a>
+      </nav>
+    </header>
+
+    <main class="prop-shell">
+      <!-- Stepper -->
+      <ol class="prop-stepper" data-testid="stepper" data-current="1" aria-label="Progress">
+        <li class="prop-stepper-item is-active" data-step="1"><span class="prop-stepper-dot">1</span><span class="prop-stepper-label">Role</span></li>
+        <li class="prop-stepper-item" data-step="2"><span class="prop-stepper-dot">2</span><span class="prop-stepper-label">Language</span></li>
+        <li class="prop-stepper-item" data-step="3"><span class="prop-stepper-dot">3</span><span class="prop-stepper-label">Format</span></li>
+        <li class="prop-stepper-item" data-step="4"><span class="prop-stepper-dot">4</span><span class="prop-stepper-label">Outline</span></li>
+        <li class="prop-stepper-item" data-step="5"><span class="prop-stepper-dot">5</span><span class="prop-stepper-label">Draft</span></li>
+        <li class="prop-stepper-item" data-step="6"><span class="prop-stepper-dot">6</span><span class="prop-stepper-label">Export</span></li>
+      </ol>
+
+      <span class="prop-eyebrow">Step 1 of 6</span>
+      <h1 class="prop-h1" data-testid="text-role-title">
+        First — <span class="prop-grad">who are you?</span>
+      </h1>
+      <p class="prop-lede" data-testid="text-role-lede">
+        Your role tells us how much methodology guidance to add, what tone to
+        use, and which template fields to expose. You can change this later.
+      </p>
+
+      <div class="prop-role-grid" role="radiogroup" aria-label="Choose your role">
+        <button type="button" class="prop-role-card" data-role="ug" data-testid="role-ug">
+          <div class="prop-role-icon" aria-hidden="true">📚</div>
+          <h2>UG Student</h2>
+          <p>Undergraduate dissertation, short project or elective. Heavy guidance, simpler language.</p>
+        </button>
+
+        <button type="button" class="prop-role-card" data-role="pg" data-testid="role-pg">
+          <div class="prop-role-icon" aria-hidden="true">🩺</div>
+          <h2>PG or Resident</h2>
+          <p>MD / MS / DNB thesis. ICMR / university format with stronger statistical sections.</p>
+        </button>
+
+        <button type="button" class="prop-role-card" data-role="phd" data-testid="role-phd">
+          <div class="prop-role-icon" aria-hidden="true">🎓</div>
+          <h2>PhD Researcher</h2>
+          <p>Doctoral synopsis or thesis proposal. Deeper literature review, hypothesis framing, and rigour.</p>
+        </button>
+
+        <button type="button" class="prop-role-card" data-role="cti" data-testid="role-cti">
+          <div class="prop-role-icon" aria-hidden="true">🧪</div>
+          <h2>Clinical Trial Investigator</h2>
+          <p>CTRI / ICH-GCP compliant protocol with regulatory, safety and monitoring sections.</p>
+        </button>
+
+        <button type="button" class="prop-role-card" data-role="faculty" data-testid="role-faculty">
+          <div class="prop-role-icon" aria-hidden="true">🏛️</div>
+          <h2>Faculty or Institution</h2>
+          <p>Extramural grant — ICMR, DST-SERB, DBT, NIH, Wellcome, Gates and similar funders.</p>
+        </button>
+
+        <button type="button" class="prop-role-card" data-role="indep" data-testid="role-indep">
+          <div class="prop-role-icon" aria-hidden="true">✨</div>
+          <h2>Independent Researcher</h2>
+          <p>Investigator-initiated work without an institutional template. Flexible structure.</p>
+        </button>
+      </div>
+
+      <div class="prop-actions" data-testid="row-actions">
+        <a href="/proposal-module/" class="prop-cta-ghost" data-testid="button-back">← Back</a>
+        <button type="button" class="prop-cta-primary" id="prop-role-next" disabled data-testid="button-next">
+          Continue →
+        </button>
+      </div>
+    </main>
+
+    <script src="/proposal-module/js/intake.js?v=2026050601"></script>
+  </body>
+</html>
