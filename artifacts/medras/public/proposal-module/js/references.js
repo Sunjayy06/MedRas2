@@ -672,13 +672,7 @@
       if (min && n < min) {
         if (!window.confirm("You have " + n + " references but asked for at least " + min + ". Continue anyway?")) return;
       }
-      window.alert(
-        "References saved!\n\n" +
-        "  Total: " + n + "\n" +
-        "  Style: " + currentStyle + "\n\n" +
-        "Step 6 (Generate proposal) is coming next."
-      );
-      window.location.href = "/proposal-module/";
+      window.location.href = "/proposal-module/generate.html";
     });
   }
 

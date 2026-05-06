@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Step 6 · Generate · Proposal Writing Module · MedRAS</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%237aa2ff'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-family='Inter,sans-serif' font-size='17' font-weight='800' fill='%23071430'%3EP%3C/text%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="/proposal-module/css/style.css?v=2026050606" />
+    <style>
+      /* Step-6-specific overrides — kept inline so we don't perturb the
+         shared stylesheet other modules rely on. */
+      .gen-grid { display:grid; grid-template-columns: minmax(0,1fr) 360px; gap:24px; align-items:start; margin-top:18px; }
+      @media (max-width: 980px) { .gen-grid { grid-template-columns: 1fr; } }
+      .gen-section { background: var(--card-bg, #0d1830); border:1px solid rgba(122,162,255,.18); border-radius:12px; padding:18px 20px; margin-bottom:16px; }
+      .gen-section h3 { margin:0 0 10px; font-size:1.05rem; color:#cfe0ff; }
+      .gen-section .gen-body { white-space: pre-wrap; line-height:1.55; color:#e6eefb; font-size:.96rem; }
+      .gen-cite { display:inline-block; padding:1px 6px; margin:0 1px; background: rgba(122,162,255,.18); border:1px solid rgba(122,162,255,.35); border-radius:4px; font-size:.78rem; font-family: ui-monospace,Menlo,monospace; color:#cfe0ff; cursor:pointer; }
+      .gen-cite:hover { background: rgba(122,162,255,.35); }
+      .gen-sources { position: sticky; top: 16px; background: var(--card-bg, #0d1830); border:1px solid rgba(122,162,255,.18); border-radius:12px; padding:14px 16px; max-height: calc(100vh - 60px); overflow:auto; }
+      .gen-sources h3 { margin:0 0 8px; font-size:1rem; color:#cfe0ff; }
+      .gen-sources .gen-meta { font-size:.78rem; color:#8aa0c5; margin-bottom:10px; }
+      .gen-source-item { padding:10px 0; border-bottom:1px solid rgba(122,162,255,.1); }
+      .gen-source-item:last-child { border-bottom:0; }
+      .gen-source-item .gen-src-id { display:inline-block; padding:1px 6px; background: rgba(122,162,255,.2); border-radius:4px; font-size:.72rem; font-family: ui-monospace,Menlo,monospace; color:#cfe0ff; margin-bottom:4px; }
+      .gen-source-item .gen-src-title { font-size:.86rem; color:#e6eefb; line-height:1.35; margin:2px 0 3px; }
+      .gen-source-item .gen-src-meta { font-size:.74rem; color:#8aa0c5; line-height:1.4; }
+      .gen-source-item a { color:#7aa2ff; text-decoration:none; }
+      .gen-source-item a:hover { text-decoration:underline; }
+      .gen-src-badge { display:inline-block; padding:1px 5px; background: rgba(255,255,255,.06); border-radius:3px; font-size:.68rem; text-transform: uppercase; letter-spacing:.04em; color:#a8b9d6; margin-left:4px; }
+      .gen-db-strip { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
+      .gen-db-pill { padding:2px 8px; border-radius:999px; font-size:.74rem; background: rgba(122,162,255,.12); color:#cfe0ff; border:1px solid rgba(122,162,255,.2); }
+      .gen-db-pill.is-cached { background: rgba(80,200,140,.14); border-color: rgba(80,200,140,.32); color:#bff2d4; }
+      .gen-db-pill.is-stub  { background: rgba(255,180,80,.12); border-color: rgba(255,180,80,.3); color:#ffd9a8; }
+      .gen-db-pill.is-error { background: rgba(255,90,90,.1); border-color: rgba(255,90,90,.3); color:#ffb3b3; }
+      .gen-stub-list { margin-top:14px; padding-top:10px; border-top:1px dashed rgba(255,180,80,.3); }
+      .gen-stub-list h4 { margin:0 0 6px; font-size:.82rem; color:#ffd9a8; text-transform:uppercase; letter-spacing:.05em; }
+      .gen-stub-list p { font-size:.78rem; color:#d8c3a0; margin:4px 0; line-height:1.4; }
+      .gen-form { display:grid; gap:10px; margin:14px 0 10px; }
+      .gen-form label { font-size:.86rem; color:#cfe0ff; }
+      .gen-form textarea { width:100%; min-height:90px; padding:10px 12px; border-radius:8px; border:1px solid rgba(122,162,255,.25); background: rgba(0,0,0,.18); color:#e6eefb; font-family: inherit; font-size:.95rem; resize:vertical; }
+      .gen-status { margin:10px 0; padding:10px 14px; border-radius:8px; font-size:.88rem; }
+      .gen-status.is-info  { background: rgba(122,162,255,.1); color:#cfe0ff; border:1px solid rgba(122,162,255,.25); }
+      .gen-status.is-error { background: rgba(255,90,90,.1); color:#ffb3b3; border:1px solid rgba(255,90,90,.3); }
+      .gen-status.is-ok    { background: rgba(80,200,140,.1); color:#bff2d4; border:1px solid rgba(80,200,140,.3); }
+      .gen-spinner { display:inline-block; width:14px; height:14px; border:2px solid rgba(122,162,255,.3); border-top-color:#7aa2ff; border-radius:50%; animation: gen-spin .8s linear infinite; vertical-align: -2px; margin-right:6px; }
+      @keyframes gen-spin { to { transform: rotate(360deg); } }
+      .gen-hidden { display:none !important; }
+    </style>
+  </head>
+  <body data-testid="page-prop-generate">
+    <header class="prop-header">
+      <a href="/proposal-module/" class="prop-brand" data-testid="link-prop-home">
+        <span class="prop-brand-mark">P</span>
+        <span>MedRAS — Proposal Writing Module</span>
+      </a>
+      <nav class="prop-nav" aria-label="Primary">
+        <a href="/" data-testid="link-back-medras">← Back to MedRAS</a>
+      </nav>
+    </header>
+
+    <main class="prop-shell prop-shell--wide">
+      <ol class="prop-stepper" data-testid="stepper" data-current="6" aria-label="Progress">
+        <li class="prop-stepper-item is-done" data-step="1"><span class="prop-stepper-dot">1</span><span class="prop-stepper-label">Role</span></li>
+        <li class="prop-stepper-item is-done" data-step="2"><span class="prop-stepper-dot">2</span><span class="prop-stepper-label">Language</span></li>
+        <li class="prop-stepper-item is-done" data-step="3"><span class="prop-stepper-dot">3</span><span class="prop-stepper-label">Format</span></li>
+        <li class="prop-stepper-item is-done" data-step="4"><span class="prop-stepper-dot">4</span><span class="prop-stepper-label">Outline</span></li>
+        <li class="prop-stepper-item is-done" data-step="5"><span class="prop-stepper-dot">5</span><span class="prop-stepper-label">References</span></li>
+        <li class="prop-stepper-item is-active" data-step="6"><span class="prop-stepper-dot">6</span><span class="prop-stepper-label">Generate</span></li>
+        <li class="prop-stepper-item" data-step="7"><span class="prop-stepper-dot">7</span><span class="prop-stepper-label">Preview</span></li>
+        <li class="prop-stepper-item" data-step="8"><span class="prop-stepper-dot">8</span><span class="prop-stepper-label">Download</span></li>
+      </ol>
+
+      <span class="prop-eyebrow">Step 6 of 8</span>
+      <h1 class="prop-h1" data-testid="text-generate-title">
+        Generate evidence-grounded <span class="prop-grad">sections</span>
+      </h1>
+      <p class="prop-lede">
+        We'll search PubMed, Europe PMC, Crossref, OpenAlex and other open
+        academic databases for real papers on your topic, then have Gemini
+        draft your <strong>Background</strong>, <strong>Literature Review</strong>
+        and <strong>Rationale</strong> citing only those verified sources.
+      </p>
+
+      <section class="gen-section" data-testid="card-topic">
+        <h3>Your research topic</h3>
+        <form class="gen-form" id="gen-form">
+          <label for="gen-topic">Describe the question you want to study (1–3 sentences):</label>
+          <textarea id="gen-topic" data-testid="input-topic"
+                    placeholder="e.g. Effectiveness of mRNA COVID-19 booster vaccines on preventing severe outcomes in adults aged 65+ with type-2 diabetes."></textarea>
+          <div>
+            <button type="submit" class="prop-cta-primary" id="gen-go" data-testid="button-generate">
+              Search real sources & draft sections →
+            </button>
+          </div>
+        </form>
+        <div id="gen-status" class="gen-status is-info gen-hidden" aria-live="polite"></div>
+      </section>
+
+      <div class="gen-grid gen-hidden" id="gen-results" data-testid="card-results">
+        <div>
+          <section class="gen-section" data-testid="card-background">
+            <h3>Background</h3>
+            <div class="gen-body" id="gen-out-background"></div>
+          </section>
+          <section class="gen-section" data-testid="card-literature-review">
+            <h3>Literature Review</h3>
+            <div class="gen-body" id="gen-out-literature_review"></div>
+          </section>
+          <section class="gen-section" data-testid="card-rationale">
+            <h3>Rationale</h3>
+            <div class="gen-body" id="gen-out-rationale"></div>
+          </section>
+        </div>
+
+        <aside class="gen-sources" data-testid="card-sources" aria-label="Cited sources">
+          <h3>Sources used <span class="gen-src-badge" id="gen-src-count">0</span></h3>
+          <div class="gen-meta" id="gen-src-meta"></div>
+          <div class="gen-db-strip" id="gen-db-strip"></div>
+          <div id="gen-src-list"></div>
+          <div class="gen-stub-list gen-hidden" id="gen-stub-list">
+            <h4>Subscription-only sources</h4>
+            <div id="gen-stub-body"></div>
+          </div>
+        </aside>
+      </div>
+
+      <div class="prop-actions" data-testid="row-actions">
+        <a href="/proposal-module/references.html" class="prop-cta-ghost" data-testid="button-back">← Back</a>
+        <a href="/proposal-module/" class="prop-cta-ghost" data-testid="button-home">Back to home</a>
+      </div>
+    </main>
+
+    <script src="/proposal-module/js/proposal-state.js?v=2026050605"></script>
+    <script src="/proposal-module/js/generate.js?v=2026050601"></script>
+  </body>
+</html>

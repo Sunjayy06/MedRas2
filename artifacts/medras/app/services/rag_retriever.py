@@ -1,5 +1,20 @@
 """RAG retriever — concurrent fan-out across academic databases.
 
+Caching
+-------
+Each ``(database, query, limit)`` triple is cached in-process for
+``CACHE_TTL_S`` seconds (default 1 hour). Repeated calls within that
+window return the cached result without hitting the network.
+
+Stub sources
+------------
+Cochrane, CINAHL Open and IEEE Open do not expose a free public API.
+Stub adapters return one record with ``is_stub=True`` and a
+human-readable ``message`` — the orchestrator surfaces this so the UI
+can show "requires subscription" to the user.
+
+
+
 NOTE: the original spec for this file was truncated in the request.
 The implementation here matches the database list defined in
 ``rag_router.DOMAIN_DATABASE_MAP`` and provides:
@@ -33,6 +48,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+import time
 import xml.etree.ElementTree as ET
 from typing import Any, Awaitable, Callable, Dict, List, Optional, TypedDict
 
@@ -44,8 +60,20 @@ DEFAULT_TIMEOUT_S = 8.0
 DEFAULT_LIMIT_PER_DB = 5
 DEFAULT_TOTAL_LIMIT = 25
 MAX_DATABASES_PER_CALL = 12   # cap concurrent fan-out to protect outbound conns
+CACHE_TTL_S = 60 * 60          # 1 hour
+CACHE_MAX_ENTRIES = 512        # bound memory
 
 _USER_AGENT = "MedRAS/1.0 (academic research assistant; mailto:research@medras.local)"
+
+# Subscription-required messages for closed sources.
+_SUBSCRIPTION_MESSAGES: Dict[str, str] = {
+    "cochrane":    "Cochrane Library requires an institutional subscription. Visit cochranelibrary.com to search systematic reviews directly.",
+    "cinahl_open": "CINAHL is a subscription-only nursing database. Ask your institution's library for access.",
+    "ieee_open":   "IEEE Xplore requires a subscription for most content. Try ieeexplore.ieee.org for open-access papers.",
+}
+
+# In-process TTL cache: { (db, query_norm, limit): (expires_at, records) }
+_cache: Dict[tuple, tuple[float, List["Record"]]] = {}
 
 
 class Record(TypedDict, total=False):
@@ -58,6 +86,7 @@ class Record(TypedDict, total=False):
     url: str
     abstract: str
     is_stub: bool           # True if the adapter is a placeholder
+    message: str            # human-readable note (e.g. "requires subscription")
     raw_id: str             # native id from the source (PMID, OpenAlex W..., etc.)
 
 
@@ -187,6 +216,37 @@ async def _search_semantic_scholar(client: httpx.AsyncClient, query: str, limit:
     return out
 
 
+async def _pubmed_efetch_abstracts(client: httpx.AsyncClient, pmids: List[str]) -> Dict[str, str]:
+    """Fetch full abstracts for the given PMIDs via efetch (XML). Returns
+    ``{pmid: abstract_text}``. Failures or missing abstracts → empty string.
+    """
+    if not pmids: return {}
+    text = await _get_text(client, "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi",
+                           params={"db": "pubmed", "id": ",".join(pmids),
+                                   "rettype": "abstract", "retmode": "xml"})
+    if not text: return {}
+    out: Dict[str, str] = {}
+    try:
+        root = ET.fromstring(text)
+    except ET.ParseError:
+        return {}
+    for art in root.findall(".//PubmedArticle"):
+        pmid_el = art.find(".//MedlineCitation/PMID")
+        pmid = (pmid_el.text or "").strip() if pmid_el is not None else ""
+        if not pmid: continue
+        # Abstract may have multiple <AbstractText> children with Label= attrs
+        # (Background / Methods / Results / Conclusions).
+        parts: List[str] = []
+        for at in art.findall(".//Abstract/AbstractText"):
+            label = (at.attrib.get("Label") or "").strip()
+            # Recursively join all text content (handles inline tags like <i>).
+            chunk = "".join(at.itertext()).strip()
+            if not chunk: continue
+            parts.append(f"{label}: {chunk}" if label else chunk)
+        out[pmid] = _clean(" ".join(parts))[:3000]
+    return out
+
+
 async def _search_pubmed(client: httpx.AsyncClient, query: str, limit: int) -> List[Record]:
     # 1) esearch -> list of PMIDs
     es = await _get_json(client, "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi",
@@ -194,9 +254,11 @@ async def _search_pubmed(client: httpx.AsyncClient, query: str, limit: int) -> L
     if not es: return []
     ids = (((es.get("esearchresult") or {}).get("idlist")) or [])[:limit]
     if not ids: return []
-    # 2) esummary -> metadata
-    su = await _get_json(client, "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi",
-                         params={"db": "pubmed", "id": ",".join(ids), "retmode": "json"})
+    # 2) esummary (metadata) and efetch (abstracts) in parallel.
+    su_task = _get_json(client, "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi",
+                        params={"db": "pubmed", "id": ",".join(ids), "retmode": "json"})
+    ab_task = _pubmed_efetch_abstracts(client, ids)
+    su, abstracts = await asyncio.gather(su_task, ab_task, return_exceptions=False)
     if not su: return []
     res = (su.get("result") or {})
     out: List[Record] = []
@@ -204,7 +266,6 @@ async def _search_pubmed(client: httpx.AsyncClient, query: str, limit: int) -> L
         item = res.get(pmid) or {}
         if not item: continue
         authors = [_clean(a.get("name")) for a in (item.get("authors") or []) if a.get("name")]
-        # Find DOI from articleids
         doi = ""
         for a in (item.get("articleids") or []):
             if a.get("idtype") == "doi":
@@ -217,7 +278,7 @@ async def _search_pubmed(client: httpx.AsyncClient, query: str, limit: int) -> L
             journal=_clean(item.get("fulljournalname") or item.get("source")),
             doi=doi,
             url=f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/",
-            abstract="",  # PubMed esummary doesn't include abstract; would need efetch
+            abstract=(abstracts or {}).get(pmid, ""),
             raw_id=pmid,
         ))
     return out
@@ -320,9 +381,10 @@ async def _search_doaj(client: httpx.AsyncClient, query: str, limit: int) -> Lis
 # ---------------------------------------------------------------------------
 
 async def _stub(source_name: str) -> List[Record]:
+    msg = _SUBSCRIPTION_MESSAGES.get(source_name, "Source not yet integrated.")
     log.debug("rag_retriever: stub adapter '%s' returned no results", source_name)
-    return [Record(source=source_name, is_stub=True, title="", authors=[], year=None,
-                   journal="", doi="", url="", abstract="", raw_id="")]
+    return [Record(source=source_name, is_stub=True, message=msg, title="", authors=[],
+                   year=None, journal="", doi="", url="", abstract="", raw_id="")]
 
 
 # ---------------------------------------------------------------------------
@@ -350,8 +412,41 @@ ADAPTERS: tuple[str, ...] = tuple(list(_LIVE_ADAPTERS.keys()) + list(_STUB_SOURC
 # Public API
 # ---------------------------------------------------------------------------
 
+def _cache_key(db: str, query: str, limit: int) -> tuple:
+    return (db, re.sub(r"\s+", " ", (query or "").strip().lower()), int(limit))
+
+
+def _cache_get(key: tuple) -> Optional[List["Record"]]:
+    hit = _cache.get(key)
+    if not hit: return None
+    expires, records = hit
+    if expires < time.time():
+        _cache.pop(key, None)
+        return None
+    return records
+
+
+def _cache_put(key: tuple, records: List["Record"]) -> None:
+    if len(_cache) >= CACHE_MAX_ENTRIES:
+        # Evict the oldest entries (cheap O(n) sweep — acceptable at this size).
+        now = time.time()
+        stale = [k for k, (exp, _) in _cache.items() if exp < now]
+        for k in stale: _cache.pop(k, None)
+        if len(_cache) >= CACHE_MAX_ENTRIES:
+            # Still full — drop ~25% of arbitrary entries (FIFO via dict order).
+            for k in list(_cache.keys())[: CACHE_MAX_ENTRIES // 4]:
+                _cache.pop(k, None)
+    _cache[key] = (time.time() + CACHE_TTL_S, records)
+
+
+def cache_clear() -> None:
+    """Test/admin helper — clear the entire retrieval cache."""
+    _cache.clear()
+
+
 async def search(database: str, query: str, limit: int = DEFAULT_LIMIT_PER_DB,
-                 timeout_s: float = DEFAULT_TIMEOUT_S) -> List[Record]:
+                 timeout_s: float = DEFAULT_TIMEOUT_S,
+                 use_cache: bool = True) -> List[Record]:
     """Search a single database. Convenience wrapper for one-off use."""
     db = (database or "").strip().lower()
     if db in _STUB_SOURCES:
@@ -360,8 +455,17 @@ async def search(database: str, query: str, limit: int = DEFAULT_LIMIT_PER_DB,
     if not fn:
         log.info("rag_retriever: unknown database '%s'", db)
         return []
+    lim = max(1, int(limit or 1))
+    if use_cache:
+        key = _cache_key(db, query, lim)
+        cached = _cache_get(key)
+        if cached is not None:
+            return cached
     async with httpx.AsyncClient(timeout=timeout_s, headers={"User-Agent": _USER_AGENT}) as client:
-        return await fn(client, query, max(1, int(limit or 1)))
+        records = await fn(client, query, lim)
+    if use_cache and records:
+        _cache_put(_cache_key(db, query, lim), records)
+    return records
 
 
 def _dedupe(records: List[Record]) -> List[Record]:
@@ -390,7 +494,8 @@ def _dedupe(records: List[Record]) -> List[Record]:
 async def retrieve(databases: List[str], query: str,
                    limit_per_db: int = DEFAULT_LIMIT_PER_DB,
                    total_limit: int = DEFAULT_TOTAL_LIMIT,
-                   timeout_s: float = DEFAULT_TIMEOUT_S) -> Dict[str, Any]:
+                   timeout_s: float = DEFAULT_TIMEOUT_S,
+                   use_cache: bool = True) -> Dict[str, Any]:
     """Fan out the query across the given databases concurrently.
 
     Returns ``{"records": [...], "sources": {db: {"count": n, "stub": bool, "error": Optional[str]}}}``.
@@ -409,29 +514,45 @@ async def retrieve(databases: List[str], query: str,
     sources: Dict[str, Dict[str, Any]] = {}
     tasks: List[Awaitable[List[Record]]] = []
     used: List[str] = []
-
-    async with httpx.AsyncClient(timeout=timeout_s, headers={"User-Agent": _USER_AGENT}) as client:
-        for db in databases:
-            db = (db or "").strip().lower()
-            if not db or db in sources: continue
-            if db in _STUB_SOURCES:
-                sources[db] = {"count": 0, "stub": True, "error": None}
-                continue
-            fn = _LIVE_ADAPTERS.get(db)
-            if not fn:
-                sources[db] = {"count": 0, "stub": False, "error": "unknown database"}
-                continue
-            tasks.append(fn(client, q, max(1, int(limit_per_db or 1))))
-            used.append(db)
-        results: List[Any] = await asyncio.gather(*tasks, return_exceptions=True)
-
+    lim = max(1, int(limit_per_db or 1))
     merged: List[Record] = []
-    for db, res in zip(used, results):
-        if isinstance(res, Exception):
-            sources[db] = {"count": 0, "stub": False, "error": str(res)}
+
+    # Resolve cache hits up front (no need to spin up an HTTP client for them).
+    pending_dbs: List[tuple[str, Callable]] = []
+    for db in databases:
+        db = (db or "").strip().lower()
+        if not db or db in sources: continue
+        if db in _STUB_SOURCES:
+            sources[db] = {"count": 0, "stub": True, "error": None,
+                           "message": _SUBSCRIPTION_MESSAGES.get(db, "")}
             continue
-        sources[db] = {"count": len(res), "stub": False, "error": None}
-        merged.extend(res)
+        fn = _LIVE_ADAPTERS.get(db)
+        if not fn:
+            sources[db] = {"count": 0, "stub": False, "error": "unknown database"}
+            continue
+        if use_cache:
+            cached = _cache_get(_cache_key(db, q, lim))
+            if cached is not None:
+                sources[db] = {"count": len(cached), "stub": False, "error": None, "cached": True}
+                merged.extend(cached)
+                continue
+        pending_dbs.append((db, fn))
+
+    if pending_dbs:
+        async with httpx.AsyncClient(timeout=timeout_s, headers={"User-Agent": _USER_AGENT}) as client:
+            for db, fn in pending_dbs:
+                tasks.append(fn(client, q, lim))
+                used.append(db)
+            results: List[Any] = await asyncio.gather(*tasks, return_exceptions=True)
+
+        for db, res in zip(used, results):
+            if isinstance(res, Exception):
+                sources[db] = {"count": 0, "stub": False, "error": str(res)}
+                continue
+            sources[db] = {"count": len(res), "stub": False, "error": None, "cached": False}
+            if use_cache and res:
+                _cache_put(_cache_key(db, q, lim), res)
+            merged.extend(res)
 
     deduped = _dedupe(merged)
     return {"records": deduped[: max(1, int(total_limit))], "sources": sources}

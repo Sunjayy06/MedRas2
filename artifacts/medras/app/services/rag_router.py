@@ -45,30 +45,35 @@ ALL_DOMAINS: tuple[str, ...] = tuple(DOMAIN_DATABASE_MAP.keys())
 # ---------------------------------------------------------------------------
 
 _FORMAT_DOMAIN: dict[str, str] = {
-    # Medical / health funders & regulators
-    "icmr":         "medical_clinical",
-    "iec":          "medical_clinical",
-    "ich_gcp":      "medical_clinical",
-    "ctri":         "medical_clinical",
-    "ayush":        "medical_clinical",
-    "who":          "medical_clinical",
-    "nih_r01":      "medical_clinical",
-    "nihr":         "medical_clinical",
-    "nhmrc":        "medical_clinical",
-    "cihr":         "medical_clinical",
-    "wellcome":     "medical_clinical",
-    "gates":        "medical_clinical",
+    # Medical / health funders & regulators (ids match public/proposal-module/js/format.js)
+    "icmr":          "medical_clinical",
+    "icmr-tf":       "medical_clinical",
+    "iec-human":     "medical_clinical",
+    "iec-animal":    "medical_clinical",
+    "ich-gcp":       "medical_clinical",
+    "ctri":          "medical_clinical",
+    "ayush":         "medical_clinical",
+    "who":           "medical_clinical",
+    "nih-r01":       "medical_clinical",
+    "nih-r21":       "medical_clinical",
+    "nihr":          "medical_clinical",
+    "mrc":           "medical_clinical",
+    "nhmrc":         "medical_clinical",
+    "wellcome":      "medical_clinical",
+    "gates":         "medical_clinical",
+    "md-ms-syn":     "medical_clinical",
     # Biotech (lean medical/pharma)
-    "dbt":          "pharmacology",
+    "dbt":           "pharmacology",
     # Generic science funders — depend on topic
-    "dst_serb_crg": "general",
-    "dst_serb_ecr": "general",
-    "csir":         "general",
-    "horizon_europe": "general",
-    # University formats — depend on topic
-    "ugc_major":    "general",
-    "ugc_minor":    "general",
-    "phd_synopsis": "general",
+    "dst-crg":       "general",
+    "dst-ecr":       "general",
+    "csir":          "general",
+    "horizon":       "general",
+    # University / institutional — depend on topic
+    "ugc-major":     "general",
+    "ugc-minor":     "general",
+    "phd-syn":       "general",
+    "inst-diss":     "general",
 }
 
 # ---------------------------------------------------------------------------

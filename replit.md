@@ -31,7 +31,8 @@ MedRAS is a structured Research Operating System that guides medical and academi
 *   **In-Memory Processing:** All uploaded files are processed in-memory for security and performance.
 *   **LLMs for Planning/Writing Only:** LLMs are strictly used for planning and textual tasks; numerical computations are library-backed.
 *   **Dual LLM Provider Fallback:** Plagiarism & AI Reduction module uses an `auto` provider strategy, falling back between OpenAI and Google Gemini for resilience.
-*   **Smart RAG Infrastructure:** Includes services for domain routing, guideline retrieval, and asynchronous fan-out external database querying for research papers.
+*   **Smart RAG Infrastructure:** Includes services for domain routing (`rag_router`, format-id map kept in sync with `format.js`), guideline retrieval (`rag_guidelines`), and asynchronous fan-out external database querying (`rag_retriever`). Retriever has 1-hour in-process TTL cache (`CACHE_TTL_S`), parallel PubMed esummary+efetch for full abstracts, and surfaces "requires subscription" messages for Cochrane/CINAHL/IEEE stubs.
+*   **Proposal Generator (Step 6 — RAG-backed sections):** `app/services/proposal_generator.py` orchestrates router → cached retrieve → Gemini 2.5 Flash JSON to draft Background / Literature Review / Rationale citing only retrieved `[CITE_n]` sources. Endpoint `POST /api/proposal/generate-rag-sections`. Frontend at `public/proposal-module/generate.html` with sources panel listing every cited paper plus per-database status pills (live/cached/subscription).
 *   **Proposal Writing Module State Management:** Uses `sessionStorage` mirrored to `localStorage` for auto-save, mobile responsiveness, and a `beforeunload` guard for in-flight operations.
 *   **Plagiarism Pipeline Job Management:** Uses a `JobManager` for daemon thread processing, per-stage timeouts, and circuit breakers, replacing NDJSON streaming with polling.
 
