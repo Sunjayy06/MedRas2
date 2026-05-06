@@ -6,54 +6,43 @@ MedRAS is a structured Research Operating System that guides medical and academi
 
 *   `uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload`: Run the FastAPI application.
 *   `python -m pytest`: Run tests.
-*   **Required Env Vars:** `OPENAI_API_KEY`, `GEMINI_API_KEY`, `COPALEAKS_API_KEY` (for plagiarism checks).
+*   **Required Env Vars:** `OPENAI_API_KEY`, `GEMINI_API_KEY`, `COPALEAKS_API_KEY`.
 
 ## Stack
 
 *   **Backend:** Python 3.11, FastAPI, Uvicorn
 *   **Frontend:** HTML, CSS, JavaScript (no frameworks)
 *   **ORM:** _Populate as you build_
-*   **Validation:** Pydantic (implicitly via FastAPI)
+*   **Validation:** Pydantic
 *   **Build Tool:** _Populate as you build_
-*   **Key Libraries:** `pandas`, `numpy`, `scipy`, `statsmodels`, `scikit-learn`, `lifelines`, `pingouin`, `scikit-posthocs`, `pypdf`, `python-docx`.
 
 ## Where things live
 
-*   `/app`: Backend Python source code.
-    *   `/app/api`: API endpoints (e.g., `plagiarism.py`).
-    *   `/app/services`: Core business logic and statistical services (e.g., `variable_classifier.py`, `data_quality.py`, `text_analyzer.py`, `plagiarism_analyzer.py`).
-*   `/public`: Frontend static files (HTML, CSS, JS).
-    *   `/public/index.html`: Main landing page.
-    *   `/public/analysis.html`: Statistical Analysis Engine UI.
-    *   `/public/plagiarism-module`: Plagiarism & AI Reduction module UI (`intake.html` → `reduce-results.html`; `checker.html` for score-only).
-    *   `/public/proposal-module`: Proposal Writing Module UI. `index.html` is the module homepage. `role.html` (Step 1) and `language.html` (Step 2) share `js/intake.js`; `format.html` (Step 3) uses `js/format.js`; `outline.html` (Step 4) uses `js/outline.js`; `references.html` (Step 5) uses `js/references.js`. All share `css/style.css` (navy theme, `.prop-*` namespace). SessionStorage key `medras.proposal.intake` stores `{role, roleLabel, langMode, secondLang, secondLangLabel, secondLangOther, format:{...}, outline:{sections:{name:text}, updatedAt}, references:{items:[{title,authors[],journal,year,volume,issue,pages,doi,is_ai_generated?,validation?}], style, preferences, updatedAt}}`. Each step self-redirects backwards if its prerequisite state is missing. Steps 6–8 (Generate / Preview / Download) are stubbed placeholders in the stepper for the next iterations.
-*   `/artifacts/medras`: Files outside this directory should not be modified.
+*   `/app`: Backend Python source code (API endpoints, services).
+*   `/public`: Frontend static files (HTML, CSS, JS) for various modules.
+*   `/artifacts/medras`: Files that should not be modified.
 *   **DB Schema:** _Populate as you build_
-*   **API Contracts:** Defined implicitly by FastAPI Pydantic models.
-*   **Theme Files:** `/public/css/style.css` (primary styling).
+*   **API Contracts:** Implicitly defined by FastAPI Pydantic models.
+*   **Theme Files:** `/public/css/style.css`.
 
 ## Architecture decisions
 
-*   **No Frontend Frameworks:** Intentional choice for simplicity, direct control, and robustness.
-*   **In-Memory Processing:** All uploaded files are processed in-memory and never written to disk for security and performance.
+*   **No Frontend Frameworks:** Intentional choice for simplicity and direct control.
+*   **In-Memory Processing:** All uploaded files are processed in-memory for security and performance.
 *   **LLMs for Planning/Writing Only:** LLMs are strictly used for planning and textual tasks; numerical computations are library-backed.
-*   **Dual LLM Provider Fallback:** Plagiarism & AI Reduction module uses an `auto` provider strategy, falling back between OpenAI and Google Gemini for resilience and quota management.
-*   **Proposal Writing Module — Cross-cutting polish (auto-save, mobile, format templates, rate limit):** `public/proposal-module/js/proposal-state.js` is auto-injected into all 5 step pages BEFORE their main script and (a) mirrors `sessionStorage["medras.proposal.intake"]` to localStorage every 1s + on `pagehide`/`visibilitychange`, (b) on a fresh tab restores from localStorage and renders a `.prop-welcome-banner` with Got-it / Start-over buttons (Start-over wipes BOTH stores), (c) installs a `beforeunload` guard that fires only when in-flight async ops have called `window.MedrasProposalState.setBusy(true)`. `outline.js` and `references.js` wrap their extract / generate / validate-DOI fetches in setBusy(±). Mobile responsive: `style.css` adds `@media (max-width:720px)` (stack role/lang/format grids to 1 col, full-width action buttons, horizontal-scrolling stepper) and `@media (max-width:480px)` (hide stepper labels, smaller H1). `app/services/format_templates.py` exposes `TEMPLATES` dict with detailed subsections + writing guidance for all 20 formats (ICMR / IEC / UGC Major+Minor / DST-SERB CRG+ECR / PhD Synopsis / AYUSH / CTRI / DBT / CSIR / NIH R01 / WHO / ICH-GCP / Horizon Europe / Wellcome / Gates / NIHR / NHMRC / CIHR) — to be consumed by Step 6 (Generate). `app/services/rate_limiter.py` is a sliding-window in-memory limiter (FastAPI dependency `generation_rate_limit`, 3 req/hr default, keyed by client IP, opportunistic stale-bucket cleanup) — to be applied to Step 6's generation endpoint. Main `public/index.html` primary nav adds a "Proposal Writing" link.
-*   **Proposal Writing Module — Step 5 References (upload, generate, validate, format):** Frontend `public/proposal-module/references.html` + `js/references.js`. Two-mode card: upload PDF/DOCX/PPTX/TXT/MD reference papers (multi-file, 100 MB each, 200 MB total), OR generate plausible refs from outline-derived topic. Right-side chatbox parses 6 intents (`minimum N`, `past/last N years`, `after/since YYYY`, `before YYYY`, `only J1, J2`, `dedupe`, `reset`). Backend: `app/services/citation_formatter.py` (Vancouver/APA/AMA/IEEE/Chicago + `detect_styles()` from format.citation field), `reference_extractor.py` (Gemini JSON, dedups, normalises DOIs), `reference_generator.py` (always marks `is_ai_generated=True`, NEVER invents DOIs, prompts Gemini to leave doi field empty), `doi_validator.py` (Crossref API with 5s timeout, in-process LRU cache 2000 entries / 1 hr TTL, `find_duplicates()`). Endpoints: `POST /api/references/{extract|generate|validate-doi|format|dedupe}`. `validate-doi` wraps the blocking `urllib.urlopen` call in `asyncio.to_thread` to avoid stalling the event loop. SessionStorage adds `references:{items, style, preferences:{minCount,maxYearsBack,minYear,journals[]}, updatedAt}`. UI badges: green=DOI verified, amber=AI-generated/duplicate, red=DOI not found/malformed; per-ref Edit / Check DOI / Remove buttons; manual-add button. Stepper expanded from 6 to 8 steps across all proposal pages: Role → Language → Format → Outline → References → Generate → Preview → Download (Steps 6-8 are stubbed placeholders for the next iterations).
-*   **Proposal Writing Module — Step 4 Outline (upload + AI section-fill):** Frontend is `public/proposal-module/outline.html` + `js/outline.js`. Flow: pre-flight ("do you have docs?") → bulk upload zone (PDF/DOCX/PPTX/TXT/MD; ≤10 files, 100 MB each, 200 MB total) → vertical accordion of sections (status icon green/amber/red, textarea, three buttons: per-section upload / Sample Size Calculator [only on `/sample\s*size|statistical\s+(analysis|plan)/i` matches, links to `/sample-size.html`] / Study Builder [disabled, "soon"]) → audit panel with overall % bar + per-row "Let MedRAS Generate This" on red rows. Status thresholds: ≥200 chars=full(green), ≥1=short(amber), 0=empty(red); progress = (full + 0.5·short)/total. Bulk extract NEVER overwrites already-typed content. Backend: `app/services/outline_extractor.py` wraps `plagiarism_analyzer.extract_text_from_upload` and adds `.pptx` (python-pptx, slides+tables+notes; rejects `.ppt`); `app/services/section_classifier.py` calls Gemini 2.5-flash via `_pa._call_gemini_json` (classify, max 30k corpus chars, 8k chars/section cap) and `_pa._call_gemini_text` (generate, 200-400 words, uses placeholders for unknowns). Endpoints: `POST /api/outline/extract` (multi-file + sections JSON), `POST /api/outline/extract-section` (single file appends to existing), `POST /api/outline/generate` (JSON body). New runtime dep: `python-pptx>=1.0`.
-*   **Proposal Writing Module — Format catalog lives in `js/format.js`:** All 28 supported formats (15 Indian + 13 global) are defined as a `FORMATS` array of `{id, label, group, country, fundingBody, wordLimit, citation, description, sections[]}`. Step 3's split-screen layout reads from this single source. Section list is mutable per session; the chatbox parser supports five intents — `remove/delete/drop X`, `add X (after Y)?`, `rename X to Y`, `include/exclude/tick/untick X`, and `reset`. Section matching is case-insensitive substring (exact match wins). All chat output uses `textContent` (no innerHTML on user input). Continue is gated on at least one section being included.
-*   **Plagiarism Reducer — 3-step intake (Path A vs Path B):** `/plagiarism-module/intake.html` is the front door for "Reduce plagiarism". Step 1 asks whether the user already has a plagiarism-checker report. Path A (with report) uploads original + report + software dropdown; report is parsed by `app/services/report_parser.py` into a `{section: {similarity_percent, flagged}}` map and forwarded into `POST /api/plagiarism/jobs` as `report.flagged_map`. Per-section intensity buckets: `<10%`=skip-verbatim (green badge "Already within acceptable limits"), `10-15%`=light (stages A+B only), `15-30%`=normal (all 3), `>30%`=aggressive (all 3, tagged). Path B is a single upload that omits `report` and behaves exactly as before. References are ALWAYS skipped regardless of report. Results page renders a Path-A summary box ("Based on your Turnitin report: X needed rewriting…") and a per-card "Was X% similar" badge colour-banded to the intensity bucket.
-*   **Plagiarism Pipeline — Job + Polling (replaces NDJSON streaming):** The reducer now uses `POST /api/plagiarism/jobs` → `GET /api/plagiarism/jobs/{id}` (polled every 5s). A singleton `JobManager` (`app/services/plagiarism_jobs.py`) runs each job in a daemon thread, processing one section at a time. Per-stage 60s wall-clock timeout (with the SDK request timeout set 2s tighter so the socket actually closes — no orphaned token burn). Caps: 3 concurrent jobs, 500MB total in-memory across all jobs, 30-min TTL with lazy cleanup on every create/get. After each section completes, `original` and stage-A/B intermediates are dropped and `bytes_tracked` is recomputed from the actual retained strings. Circuit breaker: 2 consecutive timeouts abort the rest of the job. `POST /jobs/{id}/retry` re-queues only failed/timed-out sections without re-uploading. All error strings are sanitized at the serialize_job boundary defensively (never leak provider keys).
-*   **Robust File Upload Handling:** Comprehensive pre-processing and error handling for uploaded documents (size caps, PDF type checks, password protection).
+*   **Dual LLM Provider Fallback:** Plagiarism & AI Reduction module uses an `auto` provider strategy, falling back between OpenAI and Google Gemini for resilience.
+*   **Smart RAG Infrastructure:** Includes services for domain routing, guideline retrieval, and asynchronous fan-out external database querying for research papers.
+*   **Proposal Writing Module State Management:** Uses `sessionStorage` mirrored to `localStorage` for auto-save, mobile responsiveness, and a `beforeunload` guard for in-flight operations.
+*   **Plagiarism Pipeline Job Management:** Uses a `JobManager` for daemon thread processing, per-stage timeouts, and circuit breakers, replacing NDJSON streaming with polling.
 
 ## Product
 
 *   **Study Builder:** Translates research objectives into methodologies.
-*   **Sample Size Calculator:** Provides formula-driven sample size estimations with advanced UX and reporting.
-*   **Statistical Analysis Engine:** Guided 12-screen wizard for data input, variable classification, quality checks, and statistical analysis with client-side state persistence.
-*   **Proposal Writing Module:** Guided 8-step intake (Role → Language → Format → Outline → References → Generate → Preview → Download) for ICMR, IEC, UGC, DST-SERB, PhD Synopsis, CTRI, AYUSH, DBT, CSIR, NIH, WHO, ICH-GCP, Horizon Europe, Wellcome Trust, Gates, NIHR, NHMRC, CIHR. Steps 1-5 (Role / Language / Format / Outline / References) are live; References supports multi-file upload + Gemini metadata extraction OR plausible-ref generation, citation formatting in five styles, DOI validation against Crossref, duplicate detection, and a chatbox for natural-language preferences. Generate / Preview / Download are upcoming.
+*   **Sample Size Calculator:** Provides formula-driven sample size estimations.
+*   **Statistical Analysis Engine:** Guided wizard for data input, variable classification, quality checks, and statistical analysis.
+*   **Proposal Writing Module:** Guided 8-step intake (Role → Language → Format → Outline → References → Generate → Preview → Download) supporting various academic formats.
 *   **Thesis & Article Writer:** Assists in compiling structured manuscripts.
-*   **Plagiarism & AI Reduction:** Offers originality scoring, AI likelihood detection, and a 3-stage rewrite pipeline to reduce plagiarism while preserving academic integrity.
+*   **Plagiarism & AI Reduction:** Offers originality scoring, AI likelihood detection, and a 3-stage rewrite pipeline.
 
 ## User preferences
 
@@ -64,14 +53,14 @@ MedRAS is a structured Research Operating System that guides medical and academi
 
 ## Gotchas
 
-*   Uploaded files are subject to 100 MB byte cap and 200-page PDF cap; ensure files meet these limits.
-*   Plagiarism module's rewrite pipeline automatically skips References/Bibliography sections; do not include them if you want them paraphrased.
-*   Quota exhaustion for LLM providers will lead to temporary service unavailability for plagiarism rewrites; a fallback mechanism is in place, but prolonged exhaustion will require topping up accounts or waiting.
+*   Uploaded files are subject to 100 MB byte cap and 200-page PDF cap.
+*   Plagiarism module's rewrite pipeline automatically skips References/Bibliography sections.
+*   Quota exhaustion for LLM providers will lead to temporary service unavailability for plagiarism rewrites.
 
 ## Pointers
 
-*   [FastAPI Documentation](https://fastapi.tiangolo.com/){:target="_blank"}
-*   [Pandas Documentation](https://pandas.pydata.org/docs/){:target="_blank"}
-*   [OpenAI API Documentation](https://platform.openai.com/docs/){:target="_blank"}
-*   [Google Gemini API Documentation](https://ai.google.dev/docs){:target="_blank"}
-*   [Uvicorn Documentation](https://www.uvicorn.org/){:target="_blank"}
+*   [FastAPI Documentation](https://fastapi.tiangolo.com/)
+*   [Pandas Documentation](https://pandas.pydata.org/docs/)
+*   [OpenAI API Documentation](https://platform.openai.com/docs/)
+*   [Google Gemini API Documentation](https://ai.google.dev/docs)
+*   [Uvicorn Documentation](https://www.uvicorn.org/)

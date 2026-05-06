@@ -1,0 +1,59 @@
+Add a smart RAG system to Medras for the Proposal Writing, Plagiarism Reducer, Thesis Writing and Study Builder modules. Do not change any existing functionality. Only add new files.
+
+Create these new files:
+- app/services/rag_router.py
+- app/services/rag_guidelines.py
+- app/services/rag_retriever.py
+
+In app/services/rag_router.py build the domain detection and database routing system:
+
+Create a dictionary called DOMAIN_DATABASE_MAP that maps every user domain to the correct academic databases to search:
+
+medical_clinical maps to: pubmed, europe_pmc, cochrane, crossref, openalex
+pharmacology maps to: pubmed, europe_pmc, crossref, openalex
+nursing maps to: pubmed, europe_pmc, cinahl_open, crossref
+engineering maps to: semantic_scholar, crossref, openalex, ieee_open
+computer_science maps to: semantic_scholar, crossref, openalex, arxiv
+social_sciences maps to: semantic_scholar, openalex, crossref, doaj
+psychology maps to: semantic_scholar, openalex, crossref, pubmed
+business_economics maps to: openalex, crossref, semantic_scholar, doaj
+law maps to: openalex, crossref, doaj, semantic_scholar
+education maps to: openalex, semantic_scholar, crossref, doaj
+humanities maps to: openalex, crossref, doaj, semantic_scholar
+general maps to: crossref, openalex, semantic_scholar
+
+Create a function called detect_domain that takes the user role, selected format and research topic as inputs and returns the correct domain string. Use simple keyword matching on the research topic to confirm the domain. For example if the format is ICMR or the topic contains words like patients, clinical, disease, treatment, hospital, drug then confirm medical_clinical domain. If topic contains words like algorithm, software, machine learning, circuit then confirm computer_science. If topic contains words like market, revenue, firm, company, profit then confirm business_economics. If no keywords match use the format selected to determine domain. Return the matched domain string.
+
+Create a function called get_databases_for_domain that takes a domain string and returns the list of databases to search from DOMAIN_DATABASE_MAP.
+
+In app/services/rag_guidelines.py store all trusted local guidelines that never need to be searched because they are permanent standards. Store them as a Python dictionary called TRUSTED_GUIDELINES:
+
+Under medical_clinical store these as full text summaries:
+- ICMR Ethical Guidelines 2017: key requirements for human subjects research in India including informed consent, ethics committee approval, vulnerable populations, privacy and confidentiality
+- Declaration of Helsinki 2013: core principles for medical research involving human subjects
+- CONSORT 2010: checklist of items required in randomised trial reports including allocation concealment, blinding, outcome reporting
+- STROBE: checklist for observational studies including cohort case-control and cross-sectional
+- PRISMA 2020: preferred reporting items for systematic reviews and meta-analyses
+- SPIRIT 2013: standard protocol items for clinical trials
+- ICH-GCP E6 R2: good clinical practice guidelines for trial conduct
+- CPCSEA: committee for the purpose of control and supervision of experiments on animals guidelines
+
+Under statistics store:
+- Appropriate test selection criteria: when to use parametric vs non-parametric, continuous vs categorical, paired vs independent, two group vs multiple group
+- Assumption checklists for all major tests
+- Effect size interpretation benchmarks: small medium large for Cohen d, eta squared, Cramers V
+
+Under proposal_writing store:
+- ICMR required sections and what each section must contain
+- IEC Ethics Committee required sections
+- UGC Major Project required sections
+- DST-SERB required sections
+- NIH R01 required sections
+- WHO proposal required sections
+
+Under study_design store:
+- Criteria for choosing each study design: RCT, cohort, case-control, cross-sectional, systematic review
+- Minimum sample size considerations for each design
+- Bias risks for each design and how to address them
+
+Create a function called get_guidelines_for_domain that takes a domain and task and returns the relevant guideline text to include in the AI prompt.
