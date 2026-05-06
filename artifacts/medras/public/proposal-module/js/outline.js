@@ -327,6 +327,7 @@
   }
 
   function processBulk() {
+    if (window.MedrasProposalState) window.MedrasProposalState.setBusy(true);
     if (!queuedFiles.length) return;
     processBtn.disabled = true;
     setProcessStatus("Reading " + queuedFiles.length + " file(s) and asking AI to slot the content into your sections — this can take 20-40 seconds…", "info");
@@ -344,7 +345,7 @@
         if (!res.ok) {
           var msg = (res.body && res.body.detail) ? res.body.detail : ("Request failed (" + res.status + ").");
           setProcessStatus("⚠ " + msg, "error");
-          processBtn.disabled = false;
+          processBtn.disabled = false; if (window.MedrasProposalState) window.MedrasProposalState.setBusy(false);
           return;
         }
         var by = (res.body && res.body.by_section) || {};
@@ -374,6 +375,7 @@
       .catch(function (err) {
         setProcessStatus("⚠ Network error: " + (err && err.message ? err.message : err), "error");
         processBtn.disabled = queuedFiles.length === 0;
+        if (window.MedrasProposalState) window.MedrasProposalState.setBusy(false);
       });
   }
 

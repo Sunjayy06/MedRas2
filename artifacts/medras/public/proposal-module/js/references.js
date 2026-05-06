@@ -419,6 +419,7 @@
   // ===================== Extract upload =====================
   function doExtract() {
     if (!queuedFiles.length) return;
+    if (window.MedrasProposalState) window.MedrasProposalState.setBusy(true);
     extractBtn.disabled = true;
     setStatus(extractStatus, "Reading " + queuedFiles.length + " file(s) and extracting references — this can take 20-40 seconds…", "info");
     var fd = new FormData();
@@ -427,6 +428,7 @@
       .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, status: r.status, body: j }; }); })
       .then(function (res) {
         extractBtn.disabled = false;
+        if (window.MedrasProposalState) window.MedrasProposalState.setBusy(false);
         if (!res.ok) {
           setStatus(extractStatus, "⚠ " + (res.body.detail || ("Failed (" + res.status + ")")), "error");
           return;
@@ -444,6 +446,7 @@
       })
       .catch(function (err) {
         extractBtn.disabled = false;
+        if (window.MedrasProposalState) window.MedrasProposalState.setBusy(false);
         setStatus(extractStatus, "⚠ Network error: " + (err && err.message || err), "error");
       });
   }
@@ -452,6 +455,7 @@
   function doGenerate() {
     var topic = (genTopic.value || "").trim();
     if (!topic) { window.alert("Please describe your research topic."); return; }
+    if (window.MedrasProposalState) window.MedrasProposalState.setBusy(true);
     var count = parseInt(genCount.value, 10) || 15;
     var recency = parseInt(genRecency.value, 10) || 7;
     var journals = (genJournals.value || "").split(",").map(function (s) { return s.trim(); }).filter(Boolean);
@@ -464,6 +468,7 @@
       .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, status: r.status, body: j }; }); })
       .then(function (res) {
         genBtn.disabled = false;
+        if (window.MedrasProposalState) window.MedrasProposalState.setBusy(false);
         if (!res.ok) { setStatus(genStatus, "⚠ " + (res.body.detail || ("Failed (" + res.status + ")")), "error"); return; }
         var got = res.body.references || [];
         refs = refs.concat(got);
@@ -474,6 +479,7 @@
       })
       .catch(function (err) {
         genBtn.disabled = false;
+        if (window.MedrasProposalState) window.MedrasProposalState.setBusy(false);
         setStatus(genStatus, "⚠ Network error: " + (err && err.message || err), "error");
       });
   }

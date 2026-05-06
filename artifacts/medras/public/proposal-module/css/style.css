@@ -1442,3 +1442,111 @@ a:hover { text-decoration: underline; }
   box-shadow: 0 0 0 3px rgba(122,162,255,0.18);
 }
 .prop-cta-sm { padding: 8px 16px; font-size: 13px; }
+
+/* ============================================================
+   Welcome-back banner (shared)
+   ============================================================ */
+.prop-welcome-banner {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  margin: 0 0 18px;
+  border-radius: 10px;
+  background: linear-gradient(90deg, rgba(122,162,255,0.12), rgba(122,162,255,0.04));
+  border: 1px solid rgba(122,162,255,0.35);
+  color: #e6edff;
+  font-size: 14px;
+  line-height: 1.45;
+  animation: propBannerIn 0.3s ease-out;
+}
+@keyframes propBannerIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+.prop-welcome-msg { flex: 1; min-width: 200px; }
+.prop-welcome-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.prop-welcome-dismiss, .prop-welcome-startover {
+  padding: 6px 14px; border-radius: 999px;
+  font: inherit; font-size: 12.5px; font-weight: 600;
+  cursor: pointer; transition: all 0.15s ease;
+}
+.prop-welcome-dismiss {
+  background: rgba(122,162,255,0.18);
+  border: 1px solid rgba(122,162,255,0.35);
+  color: var(--prop-accent);
+}
+.prop-welcome-dismiss:hover { background: rgba(122,162,255,0.3); color: #fff; }
+.prop-welcome-startover {
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.18);
+  color: rgba(255,255,255,0.7);
+}
+.prop-welcome-startover:hover { background: rgba(239,68,68,0.15); border-color: rgba(239,68,68,0.4); color: #fca5a5; }
+
+/* ============================================================
+   Mobile responsive — stack everything on small screens
+   ============================================================ */
+@media (max-width: 720px) {
+  .prop-shell, .prop-shell--wide { padding: 16px 14px; }
+
+  /* Stepper: horizontal scroll instead of squashing */
+  .prop-stepper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    flex-wrap: nowrap;
+    padding: 8px;
+    gap: 10px;
+    scrollbar-width: none;
+  }
+  .prop-stepper::-webkit-scrollbar { display: none; }
+  .prop-stepper-item { flex: 0 0 auto; padding: 6px 12px; }
+  .prop-stepper-label { font-size: 12px; }
+
+  /* Headlines: smaller and tighter */
+  .prop-h1 { font-size: 30px; line-height: 1.15; }
+  .prop-lede { font-size: 14.5px; }
+  .prop-eyebrow { font-size: 11.5px; }
+
+  /* Card grids → single column */
+  .prop-role-grid, .prop-lang-grid, .prop-format-grid {
+    grid-template-columns: 1fr !important;
+    gap: 12px;
+  }
+
+  /* Action row stacks */
+  .prop-actions {
+    flex-direction: column-reverse;
+    gap: 10px;
+    align-items: stretch;
+  }
+  .prop-actions a, .prop-actions button {
+    width: 100%; text-align: center;
+  }
+
+  /* Outline accordion: tighter padding, full-width buttons */
+  .prop-out-accordion-row { padding: 10px 12px; }
+  .prop-out-accordion-tools { flex-direction: column; gap: 6px; }
+  .prop-out-accordion-tools button { width: 100%; }
+  .prop-out-progress { flex-direction: column; align-items: stretch; gap: 8px; }
+  .prop-out-upload-actions { flex-direction: column; align-items: stretch; }
+  .prop-out-upload-actions button { width: 100%; }
+
+  /* References grid (already stacks at 1000px, tighten further) */
+  .prop-ref-grid { gap: 14px; }
+  .prop-ref-fieldrow { grid-template-columns: 1fr; }
+  .prop-ref-actions { flex-direction: column; }
+  .prop-ref-act { width: 100%; text-align: center; }
+  .prop-ref-chat-log { max-height: 260px; }
+
+  /* Welcome banner */
+  .prop-welcome-banner { padding: 10px 12px; font-size: 13px; }
+  .prop-welcome-actions { width: 100%; }
+  .prop-welcome-actions button { flex: 1; }
+
+  /* Header */
+  .prop-header { padding: 12px 14px; }
+  .prop-brand { font-size: 14px; }
+}
+
+@media (max-width: 480px) {
+  .prop-h1 { font-size: 26px; }
+  .prop-stepper-label { display: none; }
+  .prop-stepper-item { padding: 6px 10px; }
+}
