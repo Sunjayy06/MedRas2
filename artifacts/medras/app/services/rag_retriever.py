@@ -161,9 +161,12 @@ async def _search_crossref(client: httpx.AsyncClient, query: str, limit: int) ->
 
 
 async def _search_openalex(client: httpx.AsyncClient, query: str, limit: int) -> List[Record]:
+    # NOTE: OpenAlex deprecated `host_venue` in 2024 in favour of
+    # `primary_location.source`. Requesting an unknown field can cause the
+    # API to return zero results, so we use the supported field here.
     data = await _get_json(client, "https://api.openalex.org/works",
                            params={"search": query, "per-page": limit,
-                                   "select": "id,title,authorships,publication_year,host_venue,doi,abstract_inverted_index"})
+                                   "select": "id,title,authorships,publication_year,primary_location,doi,abstract_inverted_index"})
     if not data: return []
     out: List[Record] = []
     for it in (data.get("results") or [])[:limit]:
@@ -178,7 +181,12 @@ async def _search_openalex(client: httpx.AsyncClient, query: str, limit: int) ->
             abstract = " ".join(w for _, w in positions)[:1500]
         authors = [_clean(((a.get("author") or {}).get("display_name")))
                    for a in (it.get("authorships") or [])]
-        venue = _clean(((it.get("host_venue") or {}).get("display_name")))
+        # Venue lives at primary_location.source.display_name; fall back to
+        # the legacy host_venue shape if a future API version restores it.
+        prim = (it.get("primary_location") or {}) or {}
+        src  = (prim.get("source") or {}) or {}
+        venue = _clean(src.get("display_name")
+                       or ((it.get("host_venue") or {}).get("display_name")))
         doi = _clean((it.get("doi") or "").replace("https://doi.org/", ""))
         out.append(Record(
             source="openalex",

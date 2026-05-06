@@ -123,7 +123,10 @@ _DOMAIN_KEYWORDS: dict[str, tuple[str, ...]] = {
         "governance", "public administration",
     ),
     "psychology": (
-        "psychology", "psychological", "cognitive", "behaviour", "behavior",
+        "psychology", "psychological", "cognitive", "cognition",
+        "behavioural psychology", "behavioral psychology",
+        "behavioural therapy", "behavioral therapy",
+        "human behaviour", "human behavior",
         "mental health", "depression", "anxiety", "stress", "trauma", "ptsd",
         "personality", "perception", "memory", "learning theory",
         "psychiatric", "psychotherapy",
@@ -131,8 +134,10 @@ _DOMAIN_KEYWORDS: dict[str, tuple[str, ...]] = {
     "business_economics": (
         "business", "management", "marketing", "finance", "economic",
         "economics", "macroeconomic", "microeconomic", "supply chain",
-        "consumer", "market", "trade", "stock", "valuation", "entrepreneur",
-        "startup", "hr ", "human resource",
+        "consumer", "consumer behaviour", "consumer behavior",
+        "retail", "e-commerce", "ecommerce",
+        "market", "trade", "stock", "valuation", "entrepreneur",
+        "startup", "hr ", "human resource", "branding", "advertising",
     ),
     "law": (
         "law", "legal", "constitution", "statute", "tort", "contract law",
