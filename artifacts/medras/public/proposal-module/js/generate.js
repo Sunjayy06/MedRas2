@@ -11,7 +11,13 @@
 
   var STORAGE_KEY  = "medras.proposal.intake";
   var TOPIC_KEY    = "medras.proposal.topic";
+  var RESULT_KEY   = "medras.proposal.generated";
   var ENDPOINT     = "/api/proposal/generate-rag-sections";
+
+  var SECTION_KEYS = [
+    "background", "literature_review", "rationale",
+    "methods", "statistical_plan", "ethics", "expected_outcomes"
+  ];
 
   // ----- state -----
   function readState() {
@@ -132,9 +138,12 @@
   }
 
   function renderResults(data) {
-    $("gen-out-background").innerHTML        = renderWithCitations(data.sections.background);
-    $("gen-out-literature_review").innerHTML = renderWithCitations(data.sections.literature_review);
-    $("gen-out-rationale").innerHTML         = renderWithCitations(data.sections.rationale);
+    var sections = data.sections || {};
+    SECTION_KEYS.forEach(function (key) {
+      var el = $("gen-out-" + key);
+      if (!el) return;
+      el.innerHTML = renderWithCitations(sections[key] || "");
+    });
     renderSources(data.sources || []);
     renderDatabasesMeta(data.databases_meta || {});
     var metaParts = [];
@@ -142,6 +151,22 @@
     if (data.all_retrieved) metaParts.push(data.all_retrieved.length + " papers retrieved");
     $("gen-src-meta").innerHTML = metaParts.join(" · ");
     $("gen-results").classList.remove("gen-hidden");
+    var cont = $("gen-continue");
+    if (cont) cont.classList.remove("gen-hidden");
+  }
+
+  function persistResult(topic, data) {
+    try {
+      sessionStorage.setItem(RESULT_KEY, JSON.stringify({
+        topic: topic,
+        generatedAt: new Date().toISOString(),
+        sections: data.sections || {},
+        sources: data.sources || [],
+        all_retrieved: data.all_retrieved || [],
+        domain: data.domain || null,
+        databases_meta: data.databases_meta || {},
+      }));
+    } catch (e) { /* storage full / disabled — non-fatal */ }
   }
 
   // ----- network -----
@@ -197,10 +222,11 @@
         '<span class="gen-spinner"></span>Searching real academic databases and drafting sections (≈30–60s)…');
       try {
         var data = await generate(topic);
+        persistResult(topic, data);
         renderResults(data);
         setStatus("ok",
-          "Drafted from " + (data.sources || []).length + " cited papers (" +
-          (data.all_retrieved || []).length + " retrieved). Click any [n] tag to jump to the source.");
+          "Drafted 7 sections from " + (data.sources || []).length + " cited papers (" +
+          (data.all_retrieved || []).length + " retrieved). Click any [n] tag to jump to the source, then Continue to Preview when you're ready.");
         // Smooth-scroll to results.
         setTimeout(function () {
           var r = $("gen-results");

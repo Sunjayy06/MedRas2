@@ -7,12 +7,13 @@
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%237aa2ff'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-family='Inter,sans-serif' font-size='17' font-weight='800' fill='%23071430'%3EP%3C/text%3E%3C/svg%3E" />
     <link rel="stylesheet" href="/proposal-module/css/style.css?v=2026050606" />
     <style>
-      /* Step-6-specific overrides — kept inline so we don't perturb the
-         shared stylesheet other modules rely on. */
       .gen-grid { display:grid; grid-template-columns: minmax(0,1fr) 360px; gap:24px; align-items:start; margin-top:18px; }
       @media (max-width: 980px) { .gen-grid { grid-template-columns: 1fr; } }
       .gen-section { background: var(--card-bg, #0d1830); border:1px solid rgba(122,162,255,.18); border-radius:12px; padding:18px 20px; margin-bottom:16px; }
-      .gen-section h3 { margin:0 0 10px; font-size:1.05rem; color:#cfe0ff; }
+      .gen-section h3 { margin:0 0 10px; font-size:1.05rem; color:#cfe0ff; display:flex; align-items:center; justify-content:space-between; }
+      .gen-section .gen-tag { font-size:.7rem; font-weight:600; letter-spacing:.05em; text-transform:uppercase; padding:2px 8px; border-radius:999px; background: rgba(122,162,255,.12); color:#a8b9d6; border:1px solid rgba(122,162,255,.2); }
+      .gen-section .gen-tag.is-rag { background: rgba(80,200,140,.12); color:#bff2d4; border-color: rgba(80,200,140,.3); }
+      .gen-section .gen-tag.is-guideline { background: rgba(255,180,80,.1); color:#ffd9a8; border-color: rgba(255,180,80,.28); }
       .gen-section .gen-body { white-space: pre-wrap; line-height:1.55; color:#e6eefb; font-size:.96rem; }
       .gen-cite { display:inline-block; padding:1px 6px; margin:0 1px; background: rgba(122,162,255,.18); border:1px solid rgba(122,162,255,.35); border-radius:4px; font-size:.78rem; font-family: ui-monospace,Menlo,monospace; color:#cfe0ff; cursor:pointer; }
       .gen-cite:hover { background: rgba(122,162,255,.35); }
@@ -45,6 +46,8 @@
       .gen-spinner { display:inline-block; width:14px; height:14px; border:2px solid rgba(122,162,255,.3); border-top-color:#7aa2ff; border-radius:50%; animation: gen-spin .8s linear infinite; vertical-align: -2px; margin-right:6px; }
       @keyframes gen-spin { to { transform: rotate(360deg); } }
       .gen-hidden { display:none !important; }
+      .gen-manual-note { margin-top:18px; padding:12px 14px; border-radius:10px; background: rgba(122,162,255,.06); border:1px dashed rgba(122,162,255,.25); font-size:.86rem; color:#a8b9d6; }
+      .gen-manual-note strong { color:#cfe0ff; }
     </style>
   </head>
   <body data-testid="page-prop-generate">
@@ -77,8 +80,9 @@
       <p class="prop-lede">
         We'll search PubMed, Europe PMC, Crossref, OpenAlex and other open
         academic databases for real papers on your topic, then have Gemini
-        draft your <strong>Background</strong>, <strong>Literature Review</strong>
-        and <strong>Rationale</strong> citing only those verified sources.
+        draft Background, Literature Review, Rationale, Methods, Statistical
+        Plan, Ethics and Expected Outcomes — citing only verified sources
+        and trusted standards.
       </p>
 
       <section class="gen-section" data-testid="card-topic">
@@ -99,17 +103,39 @@
       <div class="gen-grid gen-hidden" id="gen-results" data-testid="card-results">
         <div>
           <section class="gen-section" data-testid="card-background">
-            <h3>Background</h3>
+            <h3>Background <span class="gen-tag is-rag">RAG</span></h3>
             <div class="gen-body" id="gen-out-background"></div>
           </section>
           <section class="gen-section" data-testid="card-literature-review">
-            <h3>Literature Review</h3>
+            <h3>Literature Review <span class="gen-tag is-rag">RAG</span></h3>
             <div class="gen-body" id="gen-out-literature_review"></div>
           </section>
           <section class="gen-section" data-testid="card-rationale">
-            <h3>Rationale</h3>
+            <h3>Rationale <span class="gen-tag is-rag">RAG</span></h3>
             <div class="gen-body" id="gen-out-rationale"></div>
           </section>
+          <section class="gen-section" data-testid="card-methods">
+            <h3>Methods <span class="gen-tag is-rag">RAG</span></h3>
+            <div class="gen-body" id="gen-out-methods"></div>
+          </section>
+          <section class="gen-section" data-testid="card-statistical-plan">
+            <h3>Statistical Plan <span class="gen-tag is-rag">RAG</span></h3>
+            <div class="gen-body" id="gen-out-statistical_plan"></div>
+          </section>
+          <section class="gen-section" data-testid="card-ethics">
+            <h3>Ethics <span class="gen-tag is-guideline">Standards</span></h3>
+            <div class="gen-body" id="gen-out-ethics"></div>
+          </section>
+          <section class="gen-section" data-testid="card-expected-outcomes">
+            <h3>Expected Outcomes <span class="gen-tag is-rag">RAG</span></h3>
+            <div class="gen-body" id="gen-out-expected_outcomes"></div>
+          </section>
+
+          <div class="gen-manual-note" data-testid="note-manual-sections">
+            <strong>Budget &amp; Timeline</strong> are kept manual — these depend
+            on your institution's funding rules and project schedule, so we don't
+            auto-draft them. You'll add these on the Preview step.
+          </div>
         </div>
 
         <aside class="gen-sources" data-testid="card-sources" aria-label="Cited sources">
@@ -126,11 +152,11 @@
 
       <div class="prop-actions" data-testid="row-actions">
         <a href="/proposal-module/references.html" class="prop-cta-ghost" data-testid="button-back">← Back</a>
-        <a href="/proposal-module/" class="prop-cta-ghost" data-testid="button-home">Back to home</a>
+        <a href="/proposal-module/preview.html" class="prop-cta-primary gen-hidden" id="gen-continue" data-testid="button-continue-preview">Continue to Preview →</a>
       </div>
     </main>
 
     <script src="/proposal-module/js/proposal-state.js?v=2026050605"></script>
-    <script src="/proposal-module/js/generate.js?v=2026050601"></script>
+    <script src="/proposal-module/js/generate.js?v=2026050602"></script>
   </body>
 </html>
