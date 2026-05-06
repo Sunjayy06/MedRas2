@@ -1,0 +1,69 @@
+his is a sizable build. Let me first scout what's already in the intake state and how the plagiarism module accepts input, then build everything in parallel.
+
+
+4 actions
+Both libs already installed. Let me dig into intake state, language storage, plagiarism entry, and existing export service in parallel:
+
+
+5 actions
+I have enough context. Let me read the Gemini helper and the existing proposal API stub once, then build everything in parallel:
+
+
+3 actions
+Building everything in parallel now:
+
+
+6 actions
+Now wire the plagiarism prefill, fix two bugs I spotted in proposal_export.py (a stray ] in PDF consent fallback + a buggy multiline render), then smoke-test:
+
+
+16 actions
+All three builders work end-to-end (DOCX 47 paras, PDF 7 pages, ZIP valid). Now in parallel: hit the live endpoint, update replit.md, then run the code-review architect.
+
+
+4 actions
+Architect found three real issues. Fixing the severe ones now: real PDF TOC with page numbers, corrected translation prompt + validation, and stable cache key. The DOCX TOC field requiring F9 is the standard Word mechanism (Microsoft Word's own templates work the same way — there's no way to "pre-paginate" a DOCX from Python because pagination depends on the consumer's font rendering), so I'll add a clear hint near the field instead.
+
+
+6 actions
+Now the PDF TOC fix — real page numbers via TableOfContents flowable + afterFlowable hook + multiBuild:
+
+
+5 actions
+PDF TOC now has real page numbers (Background→3, Timeline→4, References→5) ✅. Final live-endpoint verification through the proxy with the reloaded server:
+
+
+Ran sleep
+Step 8 is fully built and live-verified. All four endpoints return 200 with valid file headers (PK for DOCX/ZIP, %PDF for PDF), and the architect-flagged contract gaps have been closed.
+
+What's working end-to-end
+Frontend — /proposal-module/download.html
+
+8-step stepper with Step 8 active
+Summary tiles (sections drafted / manual sections / cited sources / approx word count)
+Consent-language pills derived from the intake (English + any second language picked at Step 2)
+Title-page metadata form (Institution, Committee, study title, year, PI/Guide/Co-Guide name+designation+department) — auto-saved per keystroke to sessionStorage["medras.proposal.titlepage"]
+Download Word, Download PDF, Download Both (.zip) buttons
+Send to Plagiarism Checker → bundles plain text via /api/proposal/export/plaintext, stages it, and navigates to the checker which auto-fills with a green confirmation banner
+Start New Proposal (revealed after a successful download) clears every medras.proposal.* key and returns to Step 1
+Backend — app/services/proposal_export.py + app/api/proposal.py
+
+build_docx: title page (CAPS institution, committee header, CAPS study title, PI/Guide/Co-Guide blocks with proper Indian-MD designations) → Word TOC field with updateFields=true so Word offers to populate it on open → 7 generated sections + Budget/Timeline → References (Vancouver-ish) → Consent forms one per language. TNR 12pt body / 14pt bold headings, 1.5 line spacing, justified, 1″ margins, "Page X of Y" footer via field codes.
+build_pdf: matches the layout. Real reportlab TableOfContents flowable with actual page numbers (verified: Background→3, Timeline→4, References→5) thanks to a custom _PropPdfDoc that emits TOCEntry notifications and a multiBuild two-pass layout. TNR 12pt body / 14pt bold, 1.5 leading, justified, 1″ margins, "Page N" centered footer.
+build_zip: bundles both files with a sanitised filename stem.
+build_plaintext: minimal text bundle for the plagiarism handoff.
+Consent translation flow
+
+Hard-coded 8-section English template filled with the user's metadata.
+For each selected secondary language: best-effort Gemini 2.5 Flash translation with a hardened prompt (treats source as data, requires Western digits, preserves underscore signature lines and proper names in Latin script, no markdown).
+Post-translation validator rejects output that doesn't have all 8 numbered headings or at least 3 underscore signature lines — protects against malformed consent reaching an Ethics Committee.
+Stable cache key (md5 of template) survives process restarts.
+Translation failure or rejection ⇒ a clearly-labelled placeholder page asking for a manually-reviewed translation.
+Plagiarism handoff
+
+download.js writes sessionStorage["medras.plagiarism.prefill"] with {text, source, title, createdAt}
+plagiarism-module/checker.html auto-fills #pm-text, dispatches the input event so the word-counter updates, removes the key, and shows a green "Loaded from your Proposal Writing draft" notice (uses textContent, no XSS surface).
+replit.md
+Updated with a new Step 8 — Download architecture-decisions entry covering the exporter, translation flow, and plagiarism handoff.
+
+Open /proposal-module/download.html after generating a draft at Step 6 and you should be able to download all three formats and round-trip into the Plagiarism Checker.
