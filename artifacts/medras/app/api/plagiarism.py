@@ -30,7 +30,12 @@ from pydantic import BaseModel, Field
 
 from app.core.limiter import limiter
 from app.core.logging import get_logger
-from app.services import plagiarism_analyzer, plagiarism_jobs, text_analyzer
+from app.services import (
+    citation_suggester,
+    plagiarism_analyzer,
+    plagiarism_jobs,
+    text_analyzer,
+)
 
 log = get_logger(__name__)
 
@@ -922,3 +927,50 @@ def export_docx(request: Request, payload: ExportDocxRequest):
             "Cache-Control": "no-store",
         },
     )
+
+
+# ===========================================================================
+# /suggest-citations — RAG-grounded citation suggestions
+# ===========================================================================
+
+class SuggestCitationsRequest(BaseModel):
+    """Find real, verified published papers that could be cited to support
+    the factual claims in ``text``. Used by the rewrite-results page after
+    a section has been paraphrased."""
+    text: str = Field(..., min_length=20, max_length=20_000,
+                      description="The passage (typically one rewritten section) to analyse.")
+    topic_hint: Optional[str] = Field(default=None, max_length=500,
+                                      description="Optional topic to bias database routing (e.g. 'type 2 diabetes pharmacotherapy').")
+    max_claims: int = Field(default=5, ge=1, le=8,
+                            description="Maximum number of claims to extract from the passage.")
+
+
+@router.post("/suggest-citations")
+@limiter.limit("10/minute")
+async def suggest_citations_route(request: Request, payload: SuggestCitationsRequest) -> Dict[str, Any]:
+    """Return RAG-grounded citation suggestions for the given passage.
+
+    Pipeline (see ``app/services/citation_suggester.py``):
+    1. Gemini extracts up to ``max_claims`` citation-worthy claims +
+       focused search queries (with anti-hallucination quote check).
+    2. ``rag_router`` picks the appropriate databases.
+    3. ``rag_retriever`` fans out concurrently and returns real
+       deduplicated records (PubMed, Europe PMC, Crossref, OpenAlex, …).
+
+    The response carries the original retriever shape per suggestion so
+    the front-end can render title, authors, year, journal, and a DOI
+    link without any further lookups. ``suggestions`` may be empty for an
+    individual claim when no live database returned a match — never a
+    placeholder.
+    """
+    try:
+        result = await citation_suggester.suggest_citations(
+            text=payload.text,
+            topic_hint=payload.topic_hint,
+            max_claims=payload.max_claims,
+        )
+    except Exception as exc:                                  # noqa: BLE001
+        log.exception("suggest_citations failed")
+        raise HTTPException(status_code=503,
+                            detail=f"Citation suggestion service is unavailable: {exc}") from exc
+    return result

@@ -598,6 +598,19 @@
       simBadge = `<span class="pm-sim-badge pm-sim-badge--${band}" data-testid="badge-similarity-${sec.index}" title="Original similarity from your plagiarism report">Was ${pct}% similar</span>`;
     }
 
+    // RAG-grounded citation suggestions — only available for sections
+    // that were actually rewritten (skipping References/empty/failed).
+    const citationsHtml = (skipped || failed || !finalText.trim()) ? "" : `
+      <div class="pm-section-card-citations" data-testid="citations-block-${sec.index}">
+        <button type="button" class="pm-btn pm-btn--secondary pm-btn--sm pm-cite-btn"
+                data-cite-index="${sec.index}"
+                data-testid="button-suggest-citations-${sec.index}">
+          <span aria-hidden="true">🔎</span> Suggest real citations for this section
+        </button>
+        <p class="pm-cite-help">Searches PubMed, Europe PMC, Crossref &amp; OpenAlex for real published papers that support the claims in your rewritten text. No placeholders — every result is a real article with a DOI link.</p>
+        <div class="pm-cite-results" data-cite-results="${sec.index}" hidden></div>
+      </div>`;
+
     return `<article class="pm-section-card pm-section-card--${escapeHtml(qKey)}" data-section-index="${sec.index}" data-testid="card-section-${sec.index}">
       <header class="pm-section-card-head">
         <div class="pm-section-card-title">
@@ -611,8 +624,96 @@
       ${qHint ? `<p class="pm-section-card-hint">${escapeHtml(qHint)}</p>` : ""}
       ${compareHtml}
       ${stagesHtml}
+      ${citationsHtml}
     </article>`;
   }
+
+  // ---------- Citation suggestions ----------
+  function renderSuggestion(s) {
+    const authors = (s.authors || []).slice(0, 4);
+    const more = (s.authors || []).length > 4 ? " et al." : "";
+    const authorsTxt = authors.join(", ") + more;
+    const yr = s.year ? ` (${s.year})` : "";
+    const journal = s.journal ? `<span class="pm-cite-journal">${escapeHtml(s.journal)}</span>` : "";
+    const doi = (s.doi || "").trim();
+    const url = (s.url || "").trim();
+    const linkHref = doi ? `https://doi.org/${encodeURI(doi)}` : url;
+    const linkLabel = doi ? `doi:${doi}` : (url ? "View source" : "");
+    const linkHtml = linkHref ? `
+      <a class="pm-cite-link" href="${escapeHtml(linkHref)}" target="_blank" rel="noopener noreferrer"
+         data-testid="link-citation">${escapeHtml(linkLabel)} ↗</a>` : "";
+    const sourceTag = s.source ? `<span class="pm-cite-source" title="Database that returned this result">${escapeHtml(s.source)}</span>` : "";
+    return `<li class="pm-cite-item">
+      <div class="pm-cite-title">${escapeHtml(s.title || "(untitled)")}</div>
+      <div class="pm-cite-meta">${escapeHtml(authorsTxt)}${escapeHtml(yr)} ${journal} ${sourceTag}</div>
+      ${linkHtml}
+    </li>`;
+  }
+  function renderClaim(c) {
+    const sugg = c.suggestions || [];
+    const body = sugg.length
+      ? `<ul class="pm-cite-list">${sugg.map(renderSuggestion).join("")}</ul>`
+      : `<p class="pm-cite-empty">No matching papers were returned for this claim. Try rephrasing or check the source databases manually.</p>`;
+    return `<div class="pm-cite-claim" data-testid="cite-claim">
+      <blockquote class="pm-cite-quote">“${escapeHtml(c.quote || "")}”</blockquote>
+      <div class="pm-cite-query">Search query: <code>${escapeHtml(c.query || "")}</code></div>
+      ${body}
+    </div>`;
+  }
+  async function handleCitationClick(btn) {
+    const idx = Number(btn.getAttribute("data-cite-index"));
+    const card = btn.closest(".pm-section-card");
+    const out = card && card.querySelector(`[data-cite-results="${idx}"]`);
+    if (!card || !out) return;
+    const sec = (lastSnapshot && (lastSnapshot.sections || []).find((s) => s.index === idx));
+    const text = (sec && sec.final_text) || "";
+    if (!text.trim()) return;
+
+    btn.disabled = true;
+    const originalLabel = btn.innerHTML;
+    btn.innerHTML = '<span class="pm-cite-spinner" aria-hidden="true"></span> Searching real papers…';
+    out.hidden = false;
+    out.innerHTML = '<p class="pm-cite-loading">Querying PubMed, Europe PMC, Crossref &amp; OpenAlex…</p>';
+
+    try {
+      const resp = await fetch("/api/plagiarism/suggest-citations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text,
+          topic_hint: docTitle && docTitle !== "Rewritten document" ? docTitle : null,
+          max_claims: 5,
+        }),
+      });
+      if (!resp.ok) {
+        let msg = `HTTP ${resp.status}`;
+        try { const j = await resp.json(); msg = j.detail || msg; } catch (_) {}
+        throw new Error(msg);
+      }
+      const data = await resp.json();
+      const claims = data.claims || [];
+      const dbs = (data.databases || []).join(", ");
+      const noteHtml = data.notes ? `<p class="pm-cite-note">${escapeHtml(data.notes)}</p>` : "";
+      const headHtml = `<div class="pm-cite-head" data-testid="cite-head-${idx}">
+        <strong>${claims.length}</strong> citation-worthy claim(s) detected.
+        Routed to: <code>${escapeHtml(dbs || "—")}</code> (${escapeHtml(data.domain || "general")}).
+      </div>`;
+      const body = claims.length
+        ? claims.map(renderClaim).join("")
+        : `<p class="pm-cite-empty">No citation-worthy claims were detected in this section.</p>`;
+      out.innerHTML = headHtml + body + noteHtml;
+      btn.innerHTML = '<span aria-hidden="true">🔄</span> Refresh suggestions';
+    } catch (err) {
+      out.innerHTML = `<p class="pm-cite-error">Couldn't load citation suggestions: ${escapeHtml(err.message || String(err))}</p>`;
+      btn.innerHTML = originalLabel;
+    } finally {
+      btn.disabled = false;
+    }
+  }
+  document.addEventListener("click", (ev) => {
+    const btn = ev.target.closest(".pm-cite-btn");
+    if (btn) handleCitationClick(btn);
+  });
 
   // ---------- DOCX download ----------
   function buildLegacyResultShape(snap) {

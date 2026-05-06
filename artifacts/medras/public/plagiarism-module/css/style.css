@@ -1368,3 +1368,83 @@ a:hover { text-decoration: underline; }
   .pm-report-summary { flex-direction: column; gap: 8px; padding: 16px 18px; }
   .pm-sim-badge { display: inline-block; margin: 6px 0 0; }
 }
+
+/* ---------- RAG-grounded citation suggestions (per-section) ---------- */
+.pm-section-card-citations {
+  margin-top: 18px;
+  padding: 14px 16px;
+  background: #f5f7ff;
+  border: 1px solid #d6dcff;
+  border-radius: 10px;
+}
+.pm-cite-help {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: #4a5276;
+}
+.pm-btn--sm { padding: 6px 12px; font-size: 13px; }
+.pm-cite-spinner {
+  display: inline-block; width: 12px; height: 12px;
+  border: 2px solid currentColor; border-right-color: transparent;
+  border-radius: 50%; animation: pm-spin 0.8s linear infinite;
+  vertical-align: -2px; margin-right: 6px;
+}
+@keyframes pm-spin { to { transform: rotate(360deg); } }
+.pm-cite-results {
+  margin-top: 14px; padding-top: 14px;
+  border-top: 1px dashed #c9d0f0;
+}
+.pm-cite-loading, .pm-cite-error, .pm-cite-empty, .pm-cite-note {
+  margin: 8px 0; font-size: 13px;
+}
+.pm-cite-error  { color: #b3261e; }
+.pm-cite-empty  { color: #5a6080; font-style: italic; }
+.pm-cite-note   { color: #5a6080; font-size: 12px; }
+.pm-cite-head   {
+  margin-bottom: 12px; font-size: 13px; color: #2f3658;
+}
+.pm-cite-head code, .pm-cite-query code {
+  background: #ebeefc; padding: 1px 6px; border-radius: 4px;
+  font-family: ui-monospace, monospace; font-size: 12px;
+}
+.pm-cite-claim {
+  margin: 0 0 16px; padding: 12px 14px;
+  background: #ffffff; border: 1px solid #e3e7f9;
+  border-radius: 8px;
+}
+.pm-cite-quote {
+  margin: 0 0 8px; padding: 6px 10px;
+  border-left: 3px solid #6675c8;
+  background: #f9faff;
+  font-style: italic; color: #2f3658; font-size: 14px;
+}
+.pm-cite-query {
+  margin: 0 0 10px; font-size: 12px; color: #5a6080;
+}
+.pm-cite-list {
+  list-style: none; margin: 0; padding: 0;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.pm-cite-item {
+  padding: 10px 12px;
+  background: #fafbff; border: 1px solid #e3e7f9; border-radius: 6px;
+}
+.pm-cite-title {
+  font-weight: 600; color: #1f2547; font-size: 14px; line-height: 1.35;
+}
+.pm-cite-meta {
+  margin-top: 4px; font-size: 12px; color: #5a6080;
+}
+.pm-cite-journal { font-style: italic; }
+.pm-cite-source {
+  display: inline-block; margin-left: 6px;
+  padding: 1px 6px; border-radius: 3px;
+  background: #e1e6f7; color: #3b4373; font-size: 11px;
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+.pm-cite-link {
+  display: inline-block; margin-top: 6px;
+  font-size: 12px; color: #4f5fc0; text-decoration: none;
+  font-family: ui-monospace, monospace;
+}
+.pm-cite-link:hover { text-decoration: underline; }
