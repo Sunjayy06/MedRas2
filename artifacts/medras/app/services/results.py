@@ -467,7 +467,60 @@ _PHASE_B_TEST_IDS = frozenset({
     "pb_chi_or_fisher", "pb_kappa", "pb_icc_ba", "pb_km", "pb_cox",
     "pb_diagnostic", "pb_ordinal", "pb_count",
 })
-KNOWN_TEST_IDS = frozenset(set(_RUNNERS.keys()) | _PHASE_B_TEST_IDS)
+
+# Phase-C IDs — newly-added library-backed runners covering the rest of the
+# §9.x catalogue. See app/services/tests_phase_c.py.
+_PHASE_C_TEST_IDS = frozenset({
+    # §9.1 descriptives
+    "pc_descriptive_extended", "pc_crosstab",
+    # §9.2 means
+    "pc_one_sample_t", "pc_two_way_anova", "pc_factorial_anova",
+    "pc_ancova", "pc_mixed_anova", "pc_manova",
+    # §9.3 GLM
+    "pc_glm", "pc_gee",
+    # §9.4 mixed
+    "pc_linear_mixed",
+    # §9.5 correlations
+    "pc_pearson", "pc_spearman", "pc_kendall_tau",
+    "pc_partial_correlation", "pc_point_biserial",
+    "pc_correlation_matrix", "pc_distance_correlation",
+    # §9.6 regression
+    "pc_linear_regression", "pc_binary_logistic", "pc_multinomial_logistic",
+    "pc_probit", "pc_quantile_regression", "pc_robust_regression",
+    "pc_wls", "pc_ridge", "pc_lasso", "pc_elastic_net",
+    "pc_iv2sls", "pc_nonlinear", "pc_mediation", "pc_moderation",
+    # §9.7 loglinear
+    "pc_loglinear",
+    # §9.9 classification
+    "pc_lda", "pc_qda", "pc_kmeans", "pc_hierarchical_cluster",
+    "pc_knn", "pc_mlp",
+    # §9.10 dimension reduction
+    "pc_pca", "pc_efa", "pc_parallel_analysis", "pc_mds",
+    # §9.11 reliability extras
+    "pc_cronbach_alpha", "pc_split_half", "pc_sem_mdc",
+    # §9.12 nonparametric extras
+    "pc_cochran_q", "pc_sign_test", "pc_runs_test", "pc_ks_2sample",
+    "pc_mood_median", "pc_binomial_test", "pc_chi_goodness_of_fit",
+    "pc_mcnemar_bowker", "pc_dunns_post_hoc", "pc_nemenyi",
+    # §9.13 time series
+    "pc_acf_pacf", "pc_arima", "pc_seasonal_decompose",
+    "pc_holt_winters", "pc_spectral", "pc_segmented_regression",
+    # §9.14 survival extras
+    "pc_stratified_cox", "pc_time_varying_cox", "pc_parametric_aft",
+    "pc_rmst", "pc_cif", "pc_cause_specific_cox",
+    # §9.16 imputation
+    "pc_mice",
+    # §9.19 diagnostic
+    "pc_delong",
+    # §9.20 bayesian
+    "pc_bayesian_t",
+    # §9.21 effect size
+    "pc_omega_squared",
+    # §9.22 corrections
+    "pc_tukey_hsd", "pc_games_howell", "pc_dunnett",
+    "pc_multiple_correction",
+})
+KNOWN_TEST_IDS = frozenset(set(_RUNNERS.keys()) | _PHASE_B_TEST_IDS | _PHASE_C_TEST_IDS)
 KNOWN_GRAPH_IDS = frozenset(list(_GRAPH_RUNNERS.keys()) + ["forest_plot"])
 
 
@@ -521,7 +574,9 @@ def run_plan(
 
     # Phase-B function dispatch table (defined here so the import is local
     # and circular-import-safe).
+    from app.services import tests_phase_c as _pc
     FUNCTION_MAP = {
+        # --- Phase B (existing) -----------------------------------------
         "run_paired_ttest": run_paired_ttest,
         "run_wilcoxon": run_wilcoxon,
         "run_mcnemar": run_mcnemar,
@@ -535,6 +590,101 @@ def run_plan(
         "run_diagnostic_accuracy": run_diagnostic_accuracy,
         "run_ordinal_logistic": run_ordinal_logistic,
         "run_count_regression": run_count_regression,
+        # --- Phase C (new — see tests_phase_c.py) -----------------------
+        # §9.1
+        "pc_descriptive_extended": _pc.run_descriptive_extended,
+        "pc_crosstab": _pc.run_crosstab,
+        # §9.2
+        "pc_one_sample_t": _pc.run_one_sample_t,
+        "pc_two_way_anova": _pc.run_two_way_anova,
+        "pc_factorial_anova": _pc.run_factorial_anova,
+        "pc_ancova": _pc.run_ancova,
+        "pc_mixed_anova": _pc.run_mixed_anova,
+        "pc_manova": _pc.run_manova,
+        # §9.3
+        "pc_glm": _pc.run_glm,
+        "pc_gee": _pc.run_gee,
+        # §9.4
+        "pc_linear_mixed": _pc.run_linear_mixed,
+        # §9.5
+        "pc_pearson": _pc.run_pearson,
+        "pc_spearman": _pc.run_spearman,
+        "pc_kendall_tau": _pc.run_kendall_tau,
+        "pc_partial_correlation": _pc.run_partial_correlation,
+        "pc_point_biserial": _pc.run_point_biserial,
+        "pc_correlation_matrix": _pc.run_correlation_matrix,
+        "pc_distance_correlation": _pc.run_distance_correlation,
+        # §9.6
+        "pc_linear_regression": _pc.run_linear_regression,
+        "pc_binary_logistic": _pc.run_binary_logistic,
+        "pc_multinomial_logistic": _pc.run_multinomial_logistic,
+        "pc_probit": _pc.run_probit,
+        "pc_quantile_regression": _pc.run_quantile_regression,
+        "pc_robust_regression": _pc.run_robust_regression,
+        "pc_wls": _pc.run_wls,
+        "pc_ridge": _pc.run_ridge,
+        "pc_lasso": _pc.run_lasso,
+        "pc_elastic_net": _pc.run_elastic_net,
+        "pc_iv2sls": _pc.run_iv2sls,
+        "pc_nonlinear": _pc.run_nonlinear,
+        "pc_mediation": _pc.run_mediation,
+        "pc_moderation": _pc.run_moderation,
+        # §9.7
+        "pc_loglinear": _pc.run_loglinear,
+        # §9.9
+        "pc_lda": _pc.run_lda,
+        "pc_qda": _pc.run_qda,
+        "pc_kmeans": _pc.run_kmeans,
+        "pc_hierarchical_cluster": _pc.run_hierarchical_cluster,
+        "pc_knn": _pc.run_knn,
+        "pc_mlp": _pc.run_mlp,
+        # §9.10
+        "pc_pca": _pc.run_pca,
+        "pc_efa": _pc.run_efa,
+        "pc_parallel_analysis": _pc.run_parallel_analysis,
+        "pc_mds": _pc.run_mds,
+        # §9.11
+        "pc_cronbach_alpha": _pc.run_cronbach_alpha,
+        "pc_split_half": _pc.run_split_half,
+        "pc_sem_mdc": _pc.run_sem_mdc,
+        # §9.12
+        "pc_cochran_q": _pc.run_cochran_q,
+        "pc_sign_test": _pc.run_sign_test,
+        "pc_runs_test": _pc.run_runs_test,
+        "pc_ks_2sample": _pc.run_ks_2sample,
+        "pc_mood_median": _pc.run_mood_median,
+        "pc_binomial_test": _pc.run_binomial_test,
+        "pc_chi_goodness_of_fit": _pc.run_chi_goodness_of_fit,
+        "pc_mcnemar_bowker": _pc.run_mcnemar_bowker,
+        "pc_dunns_post_hoc": _pc.run_dunns_post_hoc,
+        "pc_nemenyi": _pc.run_nemenyi,
+        # §9.13
+        "pc_acf_pacf": _pc.run_acf_pacf,
+        "pc_arima": _pc.run_arima,
+        "pc_seasonal_decompose": _pc.run_seasonal_decompose,
+        "pc_holt_winters": _pc.run_holt_winters,
+        "pc_spectral": _pc.run_spectral,
+        "pc_segmented_regression": _pc.run_segmented_regression,
+        # §9.14
+        "pc_stratified_cox": _pc.run_stratified_cox,
+        "pc_time_varying_cox": _pc.run_time_varying_cox,
+        "pc_parametric_aft": _pc.run_parametric_aft,
+        "pc_rmst": _pc.run_rmst,
+        "pc_cif": _pc.run_cif,
+        "pc_cause_specific_cox": _pc.run_cause_specific_cox,
+        # §9.16
+        "pc_mice": _pc.run_mice_imputation,
+        # §9.19
+        "pc_delong": _pc.run_delong,
+        # §9.20
+        "pc_bayesian_t": _pc.run_bayesian_t,
+        # §9.21
+        "pc_omega_squared": _pc.run_omega_squared,
+        # §9.22
+        "pc_tukey_hsd": _pc.run_tukey_hsd,
+        "pc_games_howell": _pc.run_games_howell,
+        "pc_dunnett": _pc.run_dunnett,
+        "pc_multiple_correction": _pc.run_multiple_comparison_correction,
     }
 
     # Run tests --------------------------------------------------------------
