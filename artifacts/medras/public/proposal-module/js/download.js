@@ -1,0 +1,298 @@
+/* ============================================================
+   Proposal Writing Module — Step 8: Download
+   ============================================================
+   Reads from sessionStorage:
+     - medras.proposal.intake     (role, format, langMode, secondLangLabel, …)
+     - medras.proposal.generated  (sections, sources, all_retrieved, domain)
+     - medras.proposal.manual     (budget, timeline)
+     - medras.proposal.titlepage  (this page's auto-saved metadata)
+
+   Calls:
+     POST /api/proposal/export/docx
+     POST /api/proposal/export/pdf
+     POST /api/proposal/export/zip
+     POST /api/proposal/export/plaintext
+
+   "Send to Plagiarism Checker" pre-fills the checker via a session-scoped
+   handoff key (sessionStorage["medras.plagiarism.prefill"]).
+   ============================================================ */
+(function () {
+  "use strict";
+
+  var INTAKE_KEY   = "medras.proposal.intake";
+  var RESULT_KEY   = "medras.proposal.generated";
+  var MANUAL_KEY   = "medras.proposal.manual";
+  var TITLE_KEY    = "medras.proposal.titlepage";
+  var PLAGIARISM_PREFILL_KEY = "medras.plagiarism.prefill";
+
+  var ALL_KEYS = [
+    INTAKE_KEY, RESULT_KEY, MANUAL_KEY, TITLE_KEY,
+    "medras.proposal.topic",
+  ];
+
+  function $(id) { return document.getElementById(id); }
+  function escapeHtml(s) {
+    return String(s == null ? "" : s)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  }
+
+  function readJSON(key, fallback) {
+    try { return JSON.parse(sessionStorage.getItem(key) || "null") || fallback; }
+    catch (e) { return fallback; }
+  }
+  function writeJSON(key, val) {
+    try { sessionStorage.setItem(key, JSON.stringify(val)); } catch (e) {}
+  }
+
+  // ---- title-page metadata ----
+  function defaultTitleMeta() {
+    return {
+      institution: "", committee: "Institutional Research Committee",
+      study_title: "", year: String(new Date().getFullYear()),
+      pi:       { name: "", designation: "Principal Investigator", department: "" },
+      guide:    { name: "", designation: "Guide", department: "" },
+      co_guide: { name: "", designation: "Co-Guide", department: "" },
+    };
+  }
+  function readTitleMeta() {
+    var stored = readJSON(TITLE_KEY, null);
+    var def = defaultTitleMeta();
+    if (!stored) return def;
+    // Shallow merge with defaults so newly-added fields don't break old saves.
+    return {
+      institution: stored.institution || def.institution,
+      committee:   stored.committee   || def.committee,
+      study_title: stored.study_title || def.study_title,
+      year:        stored.year        || def.year,
+      pi:       Object.assign({}, def.pi,       stored.pi       || {}),
+      guide:    Object.assign({}, def.guide,    stored.guide    || {}),
+      co_guide: Object.assign({}, def.co_guide, stored.co_guide || {}),
+    };
+  }
+  function setNested(obj, dottedKey, value) {
+    var parts = dottedKey.split(".");
+    var cur = obj;
+    for (var i = 0; i < parts.length - 1; i++) {
+      if (!cur[parts[i]] || typeof cur[parts[i]] !== "object") cur[parts[i]] = {};
+      cur = cur[parts[i]];
+    }
+    cur[parts[parts.length - 1]] = value;
+  }
+  function getNested(obj, dottedKey) {
+    return dottedKey.split(".").reduce(function (acc, k) {
+      return (acc == null ? undefined : acc[k]);
+    }, obj);
+  }
+
+  // ---- consent languages from intake ----
+  function consentLanguages(intake) {
+    var langs = [{ code: "en", label: "English" }];
+    if ((intake.langMode || "").toLowerCase() === "bilingual" && intake.secondLangLabel) {
+      langs.push({ code: intake.secondLang || "other", label: intake.secondLangLabel });
+    }
+    return langs;
+  }
+
+  // ---- payload ----
+  function buildPayload() {
+    var intake = readJSON(INTAKE_KEY, {}) || {};
+    var generated = readJSON(RESULT_KEY, null);
+    if (!generated || !generated.sections) return null;
+    var manual = readJSON(MANUAL_KEY, {}) || {};
+    var titleMeta = readTitleMeta();
+    if (!titleMeta.study_title) titleMeta.study_title = intake.topic || generated.topic || "";
+    return {
+      intake: intake,
+      sections: generated.sections,
+      manual: manual,
+      sources: generated.sources || [],
+      title_meta: titleMeta,
+      consent_languages: consentLanguages(intake),
+    };
+  }
+
+  // ---- summary card ----
+  function renderSummary(payload) {
+    var sections = payload.sections || {};
+    var manual = payload.manual || {};
+    var sectionCount = 0;
+    ["background","literature_review","rationale","methods","statistical_plan","ethics","expected_outcomes"]
+      .forEach(function (k) { if ((sections[k] || "").trim()) sectionCount++; });
+    var manualCount = 0;
+    if ((manual.budget   || "").trim()) manualCount++;
+    if ((manual.timeline || "").trim()) manualCount++;
+    var sourceCount = (payload.sources || []).length;
+    var totalWords = 0;
+    Object.keys(sections).forEach(function (k) {
+      var s = (sections[k] || "").trim();
+      if (s) totalWords += s.split(/\s+/).length;
+    });
+    if ((manual.budget   || "").trim()) totalWords += manual.budget.trim().split(/\s+/).length;
+    if ((manual.timeline || "").trim()) totalWords += manual.timeline.trim().split(/\s+/).length;
+
+    var tiles = [
+      ["Sections drafted", sectionCount + " of 7"],
+      ["Manual sections",  manualCount  + " of 2"],
+      ["Cited sources",    String(sourceCount)],
+      ["Approx. word count", totalWords.toLocaleString()],
+    ];
+    $("dl-summary").innerHTML = tiles.map(function (t) {
+      return '<div class="dl-tile"><div class="dl-tile-label">' + escapeHtml(t[0]) + '</div>' +
+             '<div class="dl-tile-value">' + escapeHtml(t[1]) + '</div></div>';
+    }).join("");
+
+    var langs = payload.consent_languages || [];
+    $("dl-langs").innerHTML = langs.map(function (l) {
+      return '<span class="dl-lang-pill" data-testid="pill-lang-' + escapeHtml(l.code) + '">' +
+             escapeHtml(l.label) + '</span>';
+    }).join("");
+  }
+
+  // ---- title-page form binding ----
+  function bindTitleMetaForm() {
+    var meta = readTitleMeta();
+    var inputs = document.querySelectorAll("input[data-meta]");
+    Array.prototype.forEach.call(inputs, function (input) {
+      var key = input.getAttribute("data-meta");
+      var val = getNested(meta, key);
+      if (val != null) input.value = val;
+      input.addEventListener("input", function () {
+        var fresh = readTitleMeta();
+        setNested(fresh, key, input.value);
+        writeJSON(TITLE_KEY, fresh);
+      });
+    });
+  }
+
+  // ---- status helpers ----
+  function setStatus(kind, html) {
+    var el = $("dl-status");
+    el.className = "dl-status is-" + kind;
+    el.innerHTML = html;
+    el.classList.remove("gen-hidden");
+  }
+  function clearStatus() { $("dl-status").classList.add("gen-hidden"); }
+
+  // ---- download flow ----
+  function downloadBlob(blob, filename) {
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click();
+    setTimeout(function () { URL.revokeObjectURL(url); a.remove(); }, 0);
+  }
+
+  function safeFilename(stem, ext) {
+    var base = (stem || "proposal").replace(/[^A-Za-z0-9._-]+/g, "_").slice(0, 60) || "proposal";
+    return base + "." + ext;
+  }
+
+  async function postExport(endpoint, payload) {
+    var resp = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!resp.ok) {
+      var msg = "Server returned " + resp.status;
+      try { var j = await resp.json(); if (j.detail) msg = j.detail; } catch (e) {}
+      throw new Error(msg);
+    }
+    return resp;
+  }
+
+  function disableAll(disabled) {
+    ["dl-btn-docx","dl-btn-pdf","dl-btn-both","dl-btn-plag"].forEach(function (id) {
+      var b = $(id); if (b) b.disabled = disabled;
+    });
+  }
+
+  function showSuccessNew() { $("dl-btn-new").classList.remove("gen-hidden"); }
+
+  async function runDownload(kind) {
+    var payload = buildPayload();
+    if (!payload) { setStatus("error", "No generated proposal found."); return; }
+    var stem = (payload.title_meta && payload.title_meta.study_title) || "proposal";
+    var endpoint, ext, label;
+    if      (kind === "docx") { endpoint = "/api/proposal/export/docx"; ext = "docx"; label = "Word document"; }
+    else if (kind === "pdf")  { endpoint = "/api/proposal/export/pdf";  ext = "pdf";  label = "PDF document"; }
+    else                      { endpoint = "/api/proposal/export/zip";  ext = "zip";  label = "Word + PDF bundle"; }
+
+    disableAll(true);
+    setStatus("info", '<span class="dl-spinner"></span>Generating ' + escapeHtml(label) +
+      ' (consent translation may take 20-40s the first time)…');
+    try {
+      var resp = await postExport(endpoint, payload);
+      var blob = await resp.blob();
+      downloadBlob(blob, safeFilename(stem, ext));
+      setStatus("ok", "Downloaded " + escapeHtml(label) + " — check your downloads folder.");
+      showSuccessNew();
+    } catch (err) {
+      setStatus("error", "Could not generate the file: " + escapeHtml(err.message));
+    } finally {
+      disableAll(false);
+    }
+  }
+
+  async function sendToPlagiarismChecker() {
+    var payload = buildPayload();
+    if (!payload) { setStatus("error", "No generated proposal found."); return; }
+    disableAll(true);
+    setStatus("info", '<span class="dl-spinner"></span>Bundling proposal text for the Plagiarism Checker…');
+    try {
+      var resp = await postExport("/api/proposal/export/plaintext", payload);
+      var data = await resp.json();
+      if (!data || typeof data.text !== "string" || !data.text.trim()) {
+        throw new Error("Server returned no text.");
+      }
+      try {
+        sessionStorage.setItem(PLAGIARISM_PREFILL_KEY, JSON.stringify({
+          text: data.text,
+          source: "proposal-writing-module",
+          title: (payload.title_meta && payload.title_meta.study_title) || "",
+          createdAt: new Date().toISOString(),
+        }));
+      } catch (e) {
+        throw new Error("Could not stage text in session storage (" + e.message + ").");
+      }
+      setStatus("ok", "Text staged. Opening the Plagiarism Checker…");
+      setTimeout(function () { window.location.href = "/plagiarism-module/checker.html"; }, 400);
+    } catch (err) {
+      setStatus("error", "Could not stage for plagiarism checker: " + escapeHtml(err.message));
+      disableAll(false);
+    }
+  }
+
+  function startNewProposal() {
+    if (!confirm("Start a new proposal? This will clear the current draft from your browser session.")) return;
+    ALL_KEYS.forEach(function (k) {
+      try { sessionStorage.removeItem(k); } catch (e) {}
+      try { localStorage.removeItem(k); } catch (e) {}
+    });
+    window.location.href = "/proposal-module/role.html";
+  }
+
+  // ---- init ----
+  function init() {
+    var generated = readJSON(RESULT_KEY, null);
+    if (!generated || !generated.sections) {
+      $("dl-empty").classList.remove("gen-hidden");
+      return;
+    }
+    ["dl-summary-card","dl-meta-card","dl-actions-card","dl-handoff-card"].forEach(function (id) {
+      $(id).classList.remove("gen-hidden");
+    });
+    var payload = buildPayload();
+    if (payload) renderSummary(payload);
+    bindTitleMetaForm();
+
+    $("dl-btn-docx").addEventListener("click", function () { runDownload("docx"); });
+    $("dl-btn-pdf" ).addEventListener("click", function () { runDownload("pdf");  });
+    $("dl-btn-both").addEventListener("click", function () { runDownload("zip");  });
+    $("dl-btn-plag").addEventListener("click", sendToPlagiarismChecker);
+    $("dl-btn-new" ).addEventListener("click", startNewProposal);
+  }
+
+  document.addEventListener("DOMContentLoaded", init);
+})();

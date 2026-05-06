@@ -132,6 +132,30 @@
 
     <footer class="pm-footer">© MedRAS — Plagiarism &amp; AI Reduction module</footer>
 
+    <script>
+      // Auto-prefill from Proposal Writing Module's "Send to Plagiarism Checker" handoff.
+      (function () {
+        try {
+          var raw = sessionStorage.getItem("medras.plagiarism.prefill");
+          if (!raw) return;
+          var data = JSON.parse(raw);
+          if (!data || typeof data.text !== "string" || !data.text.trim()) return;
+          document.addEventListener("DOMContentLoaded", function () {
+            var ta = document.getElementById("pm-text");
+            if (!ta) return;
+            ta.value = data.text;
+            ta.dispatchEvent(new Event("input", { bubbles: true }));
+            try { sessionStorage.removeItem("medras.plagiarism.prefill"); } catch (e) {}
+            var notice = document.createElement("div");
+            notice.className = "pm-help";
+            notice.style.cssText = "margin-top:10px;padding:8px 12px;border-radius:6px;background:rgba(80,200,140,.12);border:1px solid rgba(80,200,140,.3);color:#bff2d4;";
+            notice.setAttribute("data-testid", "notice-prefilled-from-proposal");
+            notice.textContent = "Loaded from your Proposal Writing draft" + (data.title ? ': "' + data.title + '"' : "") + ". Edit if needed, then run the check.";
+            ta.parentNode.insertBefore(notice, ta.nextSibling);
+          });
+        } catch (e) { /* non-fatal */ }
+      })();
+    </script>
     <script src="/plagiarism-module/js/checker.js?v=2026050501" defer></script>
   </body>
 </html>

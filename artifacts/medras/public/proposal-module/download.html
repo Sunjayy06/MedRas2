@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Step 8 · Download · Proposal Writing Module · MedRAS</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%237aa2ff'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-family='Inter,sans-serif' font-size='17' font-weight='800' fill='%23071430'%3EP%3C/text%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="/proposal-module/css/style.css?v=2026050606" />
+    <style>
+      .dl-section { background: var(--card-bg, #0d1830); border:1px solid rgba(122,162,255,.18); border-radius:12px; padding:18px 22px; margin-bottom:18px; }
+      .dl-section h2 { margin:0 0 8px; font-size:1.05rem; color:#cfe0ff; }
+      .dl-section p.dl-help { margin:0 0 14px; font-size:.86rem; color:#a8b9d6; }
+      .dl-grid { display:grid; grid-template-columns: repeat(2, 1fr); gap:12px; }
+      @media (max-width: 640px) { .dl-grid { grid-template-columns: 1fr; } }
+      .dl-field { display:flex; flex-direction:column; gap:4px; }
+      .dl-field label { font-size:.8rem; color:#cfe0ff; font-weight:600; }
+      .dl-field input { padding:8px 10px; border-radius:8px; border:1px solid rgba(122,162,255,.25); background: rgba(0,0,0,.18); color:#e6eefb; font-family: inherit; font-size:.92rem; }
+      .dl-field input:focus { outline: 2px solid #7aa2ff; outline-offset: 1px; }
+      .dl-block { padding:12px 14px; border-radius:10px; background: rgba(122,162,255,.06); border:1px solid rgba(122,162,255,.18); margin-top:12px; }
+      .dl-block h3 { margin:0 0 8px; font-size:.92rem; color:#cfe0ff; }
+      .dl-actions { display:flex; flex-wrap:wrap; gap:10px; margin-top:8px; }
+      .dl-btn { display:inline-flex; align-items:center; gap:8px; padding:10px 18px; border-radius:10px; border:1px solid rgba(122,162,255,.35); background: rgba(122,162,255,.15); color:#e6eefb; font-weight:600; cursor:pointer; font-size:.95rem; text-decoration:none; transition: background .15s; }
+      .dl-btn:hover { background: rgba(122,162,255,.28); }
+      .dl-btn.is-primary { background: linear-gradient(135deg, #7aa2ff, #5b8dee); border-color: transparent; color: #071430; }
+      .dl-btn.is-primary:hover { filter: brightness(1.05); }
+      .dl-btn:disabled { opacity:.5; cursor:not-allowed; }
+      .dl-btn-warn { background: rgba(255,180,80,.15); border-color: rgba(255,180,80,.45); color:#ffd9a8; }
+      .dl-btn-warn:hover { background: rgba(255,180,80,.28); }
+      .dl-btn-danger { background: rgba(255,90,90,.12); border-color: rgba(255,90,90,.4); color:#ffb3b3; }
+      .dl-btn-danger:hover { background: rgba(255,90,90,.22); }
+      .dl-status { margin:14px 0; padding:10px 14px; border-radius:8px; font-size:.88rem; }
+      .dl-status.is-info  { background: rgba(122,162,255,.1); color:#cfe0ff; border:1px solid rgba(122,162,255,.25); }
+      .dl-status.is-error { background: rgba(255,90,90,.1); color:#ffb3b3; border:1px solid rgba(255,90,90,.3); }
+      .dl-status.is-ok    { background: rgba(80,200,140,.1); color:#bff2d4; border:1px solid rgba(80,200,140,.3); }
+      .dl-spinner { display:inline-block; width:14px; height:14px; border:2px solid rgba(122,162,255,.3); border-top-color:#7aa2ff; border-radius:50%; animation: dl-spin .8s linear infinite; vertical-align: -2px; margin-right:6px; }
+      @keyframes dl-spin { to { transform: rotate(360deg); } }
+      .dl-summary { display:grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap:10px; }
+      .dl-summary .dl-tile { padding:10px 12px; border-radius:8px; background: rgba(122,162,255,.08); border:1px solid rgba(122,162,255,.18); }
+      .dl-summary .dl-tile .dl-tile-label { font-size:.7rem; text-transform: uppercase; letter-spacing:.06em; color:#8aa0c5; margin-bottom:3px; }
+      .dl-summary .dl-tile .dl-tile-value { font-size:1rem; font-weight:600; color:#e6eefb; }
+      .dl-langs { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
+      .dl-lang-pill { padding:3px 10px; border-radius:999px; font-size:.78rem; background: rgba(122,162,255,.15); border:1px solid rgba(122,162,255,.3); color:#cfe0ff; }
+      .gen-hidden { display:none !important; }
+      .dl-empty { padding:32px; text-align:center; color:#a8b9d6; background: rgba(122,162,255,.05); border:1px dashed rgba(122,162,255,.2); border-radius:12px; }
+      .dl-empty a { color:#7aa2ff; }
+      .dl-success-zone { padding:18px 22px; border-radius:12px; background: rgba(80,200,140,.08); border:1px solid rgba(80,200,140,.3); margin-top:18px; }
+    </style>
+  </head>
+  <body data-testid="page-prop-download">
+    <header class="prop-header">
+      <a href="/proposal-module/" class="prop-brand" data-testid="link-prop-home">
+        <span class="prop-brand-mark">P</span>
+        <span>MedRAS — Proposal Writing Module</span>
+      </a>
+      <nav class="prop-nav" aria-label="Primary">
+        <a href="/" data-testid="link-back-medras">← Back to MedRAS</a>
+      </nav>
+    </header>
+
+    <main class="prop-shell prop-shell--wide">
+      <ol class="prop-stepper" data-testid="stepper" data-current="8" aria-label="Progress">
+        <li class="prop-stepper-item is-done" data-step="1"><span class="prop-stepper-dot">1</span><span class="prop-stepper-label">Role</span></li>
+        <li class="prop-stepper-item is-done" data-step="2"><span class="prop-stepper-dot">2</span><span class="prop-stepper-label">Language</span></li>
+        <li class="prop-stepper-item is-done" data-step="3"><span class="prop-stepper-dot">3</span><span class="prop-stepper-label">Format</span></li>
+        <li class="prop-stepper-item is-done" data-step="4"><span class="prop-stepper-dot">4</span><span class="prop-stepper-label">Outline</span></li>
+        <li class="prop-stepper-item is-done" data-step="5"><span class="prop-stepper-dot">5</span><span class="prop-stepper-label">References</span></li>
+        <li class="prop-stepper-item is-done" data-step="6"><span class="prop-stepper-dot">6</span><span class="prop-stepper-label">Generate</span></li>
+        <li class="prop-stepper-item is-done" data-step="7"><span class="prop-stepper-dot">7</span><span class="prop-stepper-label">Preview</span></li>
+        <li class="prop-stepper-item is-active" data-step="8"><span class="prop-stepper-dot">8</span><span class="prop-stepper-label">Download</span></li>
+      </ol>
+
+      <span class="prop-eyebrow">Step 8 of 8</span>
+      <h1 class="prop-h1" data-testid="text-download-title">Download your <span class="prop-grad">proposal</span></h1>
+      <p class="prop-lede">
+        Confirm the title-page metadata, then download a fully-formatted Word
+        or PDF document with title page, table of contents, all sections,
+        references and consent forms in every language you selected.
+      </p>
+
+      <div id="dl-empty" class="dl-empty gen-hidden" data-testid="state-empty">
+        <p>No generated draft found. <a href="/proposal-module/generate.html">Go back to Step 6</a> to draft your sections first.</p>
+      </div>
+
+      <section id="dl-summary-card" class="dl-section gen-hidden" data-testid="card-summary">
+        <h2>What we'll include</h2>
+        <div class="dl-summary" id="dl-summary"></div>
+        <div class="dl-block" id="dl-langs-block">
+          <h3>Consent forms in:</h3>
+          <div class="dl-langs" id="dl-langs"></div>
+        </div>
+      </section>
+
+      <section id="dl-meta-card" class="dl-section gen-hidden" data-testid="card-titlepage">
+        <h2>Title-page metadata</h2>
+        <p class="dl-help">
+          These appear on the cover page in the format used for Indian MD
+          thesis proposals. Fields auto-save as you type.
+        </p>
+
+        <div class="dl-block">
+          <h3>Institution</h3>
+          <div class="dl-grid">
+            <div class="dl-field"><label for="dl-institution">Institution name</label>
+              <input id="dl-institution" data-testid="input-institution" data-meta="institution" placeholder="e.g. All India Institute of Medical Sciences, New Delhi" /></div>
+            <div class="dl-field"><label for="dl-committee">Committee header</label>
+              <input id="dl-committee" data-testid="input-committee" data-meta="committee" placeholder="Institutional Research Committee" /></div>
+            <div class="dl-field"><label for="dl-study-title">Study title (capitalised on cover)</label>
+              <input id="dl-study-title" data-testid="input-study-title" data-meta="study_title" placeholder="(defaults to your topic)" /></div>
+            <div class="dl-field"><label for="dl-year">Year</label>
+              <input id="dl-year" data-testid="input-year" data-meta="year" placeholder="2026" /></div>
+          </div>
+        </div>
+
+        <div class="dl-block">
+          <h3>Principal Investigator (you)</h3>
+          <div class="dl-grid">
+            <div class="dl-field"><label for="dl-pi-name">Full name</label>
+              <input id="dl-pi-name" data-testid="input-pi-name" data-meta="pi.name" placeholder="Dr. Aditi Sharma" /></div>
+            <div class="dl-field"><label for="dl-pi-designation">Designation</label>
+              <input id="dl-pi-designation" data-testid="input-pi-designation" data-meta="pi.designation" placeholder="Postgraduate Resident" /></div>
+            <div class="dl-field"><label for="dl-pi-department">Department</label>
+              <input id="dl-pi-department" data-testid="input-pi-department" data-meta="pi.department" placeholder="Department of Internal Medicine" /></div>
+          </div>
+        </div>
+
+        <div class="dl-block">
+          <h3>Guide</h3>
+          <div class="dl-grid">
+            <div class="dl-field"><label for="dl-guide-name">Full name</label>
+              <input id="dl-guide-name" data-testid="input-guide-name" data-meta="guide.name" placeholder="Prof. R. Mehta" /></div>
+            <div class="dl-field"><label for="dl-guide-designation">Designation</label>
+              <input id="dl-guide-designation" data-testid="input-guide-designation" data-meta="guide.designation" placeholder="Professor &amp; Head" /></div>
+            <div class="dl-field"><label for="dl-guide-department">Department</label>
+              <input id="dl-guide-department" data-testid="input-guide-department" data-meta="guide.department" placeholder="Department of Internal Medicine" /></div>
+          </div>
+        </div>
+
+        <div class="dl-block">
+          <h3>Co-Guide <span style="font-size:.75rem;font-weight:400;color:#a8b9d6">(optional)</span></h3>
+          <div class="dl-grid">
+            <div class="dl-field"><label for="dl-cog-name">Full name</label>
+              <input id="dl-cog-name" data-testid="input-cog-name" data-meta="co_guide.name" placeholder="Dr. P. Iyer" /></div>
+            <div class="dl-field"><label for="dl-cog-designation">Designation</label>
+              <input id="dl-cog-designation" data-testid="input-cog-designation" data-meta="co_guide.designation" placeholder="Associate Professor" /></div>
+            <div class="dl-field"><label for="dl-cog-department">Department</label>
+              <input id="dl-cog-department" data-testid="input-cog-department" data-meta="co_guide.department" placeholder="Department of Endocrinology" /></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="dl-actions-card" class="dl-section gen-hidden" data-testid="card-actions">
+        <h2>Download</h2>
+        <p class="dl-help">
+          Generating a translated consent form may take 20-40 seconds the first
+          time per language. Subsequent downloads in the same session are instant.
+        </p>
+        <div class="dl-actions">
+          <button type="button" class="dl-btn is-primary" id="dl-btn-docx" data-testid="button-download-docx">⬇ Download Word (.docx)</button>
+          <button type="button" class="dl-btn is-primary" id="dl-btn-pdf"  data-testid="button-download-pdf">⬇ Download PDF</button>
+          <button type="button" class="dl-btn is-primary" id="dl-btn-both" data-testid="button-download-both">⬇ Download Both (.zip)</button>
+        </div>
+        <div id="dl-status" class="dl-status is-info gen-hidden" aria-live="polite"></div>
+      </section>
+
+      <section id="dl-handoff-card" class="dl-section gen-hidden" data-testid="card-handoff">
+        <h2>Next steps</h2>
+        <p class="dl-help">
+          Send the finished proposal straight to the Plagiarism Checker, or
+          start a fresh proposal from scratch.
+        </p>
+        <div class="dl-actions">
+          <button type="button" class="dl-btn dl-btn-warn" id="dl-btn-plag" data-testid="button-send-plagiarism">Send to Plagiarism Checker →</button>
+          <button type="button" class="dl-btn dl-btn-danger gen-hidden" id="dl-btn-new" data-testid="button-start-new">Start New Proposal</button>
+        </div>
+      </section>
+
+      <div class="prop-actions" data-testid="row-actions">
+        <a href="/proposal-module/preview.html" class="prop-cta-ghost" data-testid="button-back">← Back to Preview</a>
+      </div>
+    </main>
+
+    <script src="/proposal-module/js/download.js?v=2026050601"></script>
+  </body>
+</html>
