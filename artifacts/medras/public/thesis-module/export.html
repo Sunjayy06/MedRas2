@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Export thesis · MedRAS</title>
+<link rel="stylesheet" href="/thesis-module/css/style.css" />
+<style>
+  .th-block { padding:14px 16px; border-radius:10px; background:#fff; border:1px solid var(--th-line); margin-top:12px; }
+  .th-block h3 { margin:0 0 10px; font-size:14px; color:var(--th-ink-900); }
+  .th-grid2 { display:grid; grid-template-columns: repeat(2, 1fr); gap:10px; }
+  @media (max-width: 640px) { .th-grid2 { grid-template-columns: 1fr; } }
+  .th-field { display:flex; flex-direction:column; gap:4px; }
+  .th-field label { font-size:12px; color:var(--th-text-soft); font-weight:600; }
+  .th-field input { padding:7px 9px; border-radius:7px; border:1px solid var(--th-line); font-family:inherit; font-size:14px; background:#fff; }
+  .th-lang-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap:8px; }
+  .th-lang-cb { display:flex; align-items:center; gap:8px; padding:7px 10px; border-radius:8px; background:#fff; border:1px solid var(--th-line); cursor:pointer; user-select:none; font-size:13px; }
+  .th-lang-cb.is-locked { opacity:.85; cursor:default; background: #ecf6ed; border-color: var(--th-emerald); }
+  .th-lang-cb-native { font-size:11px; color:var(--th-text-soft); margin-left:auto; }
+  .th-radio-row { display:grid; grid-template-columns: 1fr 1fr 1fr; gap:8px; }
+  @media (max-width: 720px) { .th-radio-row { grid-template-columns: 1fr; } }
+  .th-radio { display:flex; gap:8px; padding:10px 12px; border-radius:8px; background:#fff; border:1px solid var(--th-line); cursor:pointer; font-size:13px; }
+  .th-radio:has(input:checked) { background: #ecf6ed; border-color: var(--th-emerald); }
+  .th-status { margin-top:12px; padding:10px 14px; border-radius:8px; font-size:13px; }
+  .th-status.ok    { background:#ecf6ed; color:var(--th-emerald-d); border:1px solid var(--th-emerald); }
+  .th-status.err   { background:#fdecec; color:#a02; border:1px solid #f5b3b3; }
+  .th-status.info  { background:#fff8e1; color:#7a5d00; border:1px solid var(--th-gold); }
+  .th-spinner { display:inline-block; width:12px; height:12px; border:2px solid rgba(0,0,0,.15); border-top-color: var(--th-emerald); border-radius:50%; animation: th-spin .8s linear infinite; vertical-align:-2px; margin-right:6px; }
+  @keyframes th-spin { to { transform: rotate(360deg); } }
+  .th-tile-row { display:grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap:10px; margin-top:6px; }
+  .th-tile { padding:8px 12px; border-radius:8px; background:#fff; border:1px solid var(--th-line); }
+  .th-tile-l { font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--th-text-soft); }
+  .th-tile-v { font-size:16px; font-weight:700; color:var(--th-ink-900); }
+</style>
+</head>
+<body>
+<header class="th-header">
+  <a class="th-brand" href="/thesis-module/"><span class="th-brand-mark">T</span><span>MedRAS — Thesis Writing</span></a>
+  <nav class="th-nav"><a href="/thesis-module/dashboard.html">← Dashboard</a><a href="/thesis-module/assets.html">Figures</a></nav>
+</header>
+
+<main class="th-shell th-wide">
+  <span class="th-eyebrow">Station 9 of 9 · Export</span>
+  <h1 class="th-h1">Download your thesis</h1>
+  <p class="th-sub">
+    Confirm the title-page metadata and consent options. Your thesis renders
+    with the title page, table of contents, all 16 spine chapters,
+    references and (optionally) consent forms in every language you tick.
+  </p>
+
+  <section class="th-card">
+    <h3 class="th-h3">What we'll include</h3>
+    <div class="th-tile-row" id="th-summary"></div>
+  </section>
+
+  <section class="th-card" id="th-meta-card">
+    <h3 class="th-h3">Title-page metadata</h3>
+    <p class="th-sub" style="margin-top:0">
+      The extended fields (Specialty, University, year of residency, Phone &amp;
+      Email per person) appear only for Indian thesis formats.
+      Auto-saved as you type.
+    </p>
+
+    <div class="th-block">
+      <h3>Institution</h3>
+      <div class="th-grid2">
+        <div class="th-field"><label>Institution name</label>
+          <input data-meta="institution" placeholder="e.g. AIIMS New Delhi" /></div>
+        <div class="th-field"><label>Committee header</label>
+          <input data-meta="committee" placeholder="Institutional Research Committee" /></div>
+        <div class="th-field"><label>Study title (capitalised on cover)</label>
+          <input data-meta="study_title" placeholder="(defaults to your topic)" /></div>
+        <div class="th-field"><label>Year</label>
+          <input data-meta="year" placeholder="2026" /></div>
+      </div>
+    </div>
+
+    <div class="th-block th-thesis-only" id="th-block-indian" hidden>
+      <h3>Indian thesis details</h3>
+      <div class="th-grid2">
+        <div class="th-field"><label>Degree</label>
+          <input data-meta="degree" placeholder="e.g. MD, MS, DNB, PhD" /></div>
+        <div class="th-field"><label>Specialty</label>
+          <input data-meta="specialty" placeholder="e.g. Internal Medicine" /></div>
+        <div class="th-field"><label>University</label>
+          <input data-meta="university" placeholder="e.g. RGUHS" /></div>
+        <div class="th-field"><label>Submission month / date</label>
+          <input data-meta="submission_date" placeholder="e.g. April 2026" /></div>
+      </div>
+    </div>
+
+    <div class="th-block">
+      <h3>Principal Investigator</h3>
+      <div class="th-grid2">
+        <div class="th-field"><label>Full name</label>
+          <input data-meta="pi.name" placeholder="Dr. Aditi Sharma" /></div>
+        <div class="th-field"><label>Designation</label>
+          <input data-meta="pi.designation" placeholder="Postgraduate Resident" /></div>
+        <div class="th-field"><label>Department</label>
+          <input data-meta="pi.department" placeholder="Department of Internal Medicine" /></div>
+        <div class="th-field th-thesis-only" hidden><label>Year of residency</label>
+          <input data-meta="pi.year_of_residency" placeholder="1st / 2nd / 3rd" /></div>
+        <div class="th-field th-thesis-only" hidden><label>Phone (optional)</label>
+          <input data-meta="pi.phone" /></div>
+        <div class="th-field th-thesis-only" hidden><label>Email (optional)</label>
+          <input data-meta="pi.email" /></div>
+      </div>
+    </div>
+
+    <div class="th-block">
+      <h3>Guide</h3>
+      <div class="th-grid2">
+        <div class="th-field"><label>Full name</label>
+          <input data-meta="guide.name" placeholder="Prof. R. Mehta" /></div>
+        <div class="th-field"><label>Designation</label>
+          <input data-meta="guide.designation" placeholder="Professor &amp; Head" /></div>
+        <div class="th-field"><label>Department</label>
+          <input data-meta="guide.department" /></div>
+        <div class="th-field th-thesis-only" hidden><label>Phone (optional)</label>
+          <input data-meta="guide.phone" /></div>
+        <div class="th-field th-thesis-only" hidden><label>Email (optional)</label>
+          <input data-meta="guide.email" /></div>
+      </div>
+    </div>
+
+    <div class="th-block">
+      <h3>Co-Guide <span style="color:var(--th-text-soft); font-weight:500; font-size:12px">(optional)</span></h3>
+      <div class="th-grid2">
+        <div class="th-field"><label>Full name</label>
+          <input data-meta="co_guide.name" /></div>
+        <div class="th-field"><label>Designation</label>
+          <input data-meta="co_guide.designation" /></div>
+        <div class="th-field"><label>Department</label>
+          <input data-meta="co_guide.department" /></div>
+        <div class="th-field th-thesis-only" hidden><label>Phone (optional)</label>
+          <input data-meta="co_guide.phone" /></div>
+        <div class="th-field th-thesis-only" hidden><label>Email (optional)</label>
+          <input data-meta="co_guide.email" /></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="th-card">
+    <h3 class="th-h3">Informed-consent forms</h3>
+    <p class="th-sub" style="margin-top:0">
+      English is mandatory. Tick any additional Indian-language translations
+      you'd like generated by AI (review them before submitting to the IEC).
+      Translations take ~20-40 s each and are cached for the session.
+    </p>
+    <div class="th-block">
+      <h3>Languages</h3>
+      <div class="th-lang-grid" id="th-lang-grid"></div>
+    </div>
+    <div class="th-block">
+      <h3>Delivery</h3>
+      <div class="th-radio-row">
+        <label class="th-radio"><input type="radio" name="th-delivery" value="attached" checked />
+          <span><strong>Attach to thesis</strong><br><small>Consent forms appear at the end of the same .docx / .pdf.</small></span></label>
+        <label class="th-radio"><input type="radio" name="th-delivery" value="separate" />
+          <span><strong>Separate file</strong><br><small>Thesis stays consent-free; consent ships in a separate .docx + .pdf inside the zip.</small></span></label>
+        <label class="th-radio"><input type="radio" name="th-delivery" value="both" />
+          <span><strong>Both</strong><br><small>Consent appears at the end of the thesis <em>and</em> as a standalone file.</small></span></label>
+      </div>
+    </div>
+  </section>
+
+  <section class="th-card">
+    <h3 class="th-h3">Download</h3>
+    <p class="th-sub" style="margin-top:0">
+      The first download with a new language may take 20-40 s for translation.
+      Subsequent downloads are instant.
+    </p>
+    <div style="display:flex; flex-wrap:wrap; gap:10px">
+      <button id="th-dl-docx" class="th-btn th-btn-primary">⬇ Download Word (.docx)</button>
+      <button id="th-dl-pdf"  class="th-btn th-btn-primary">⬇ Download PDF</button>
+      <button id="th-dl-zip"  class="th-btn th-btn-primary">⬇ Download Both (.zip)</button>
+      <button id="th-dl-plag" class="th-btn th-btn-light">Send to Plagiarism Checker →</button>
+    </div>
+    <div id="th-dl-status" class="th-status info" style="display:none"></div>
+  </section>
+
+  <div style="margin-top:18px">
+    <a href="/thesis-module/dashboard.html" class="th-btn th-btn-light">← Dashboard</a>
+    <a href="/thesis-module/assets.html" class="th-btn th-btn-light">Manage figures</a>
+  </div>
+</main>
+
+<script src="/thesis-module/js/thesis-state.js"></script>
+<script>
+(function () {
+  var INDIAN = new Set(['phd-syn','md-ms-syn','inst-diss']);
+  var LANGS = [
+    { code:'en', label:'English',   native:'English',   mandatory:true },
+    { code:'hi', label:'Hindi',     native:'हिन्दी' },
+    { code:'ta', label:'Tamil',     native:'தமிழ்' },
+    { code:'te', label:'Telugu',    native:'తెలుగు' },
+    { code:'kn', label:'Kannada',   native:'ಕನ್ನಡ' },
+    { code:'ml', label:'Malayalam', native:'മലയാളം' },
+    { code:'mr', label:'Marathi',   native:'मराठी' },
+    { code:'bn', label:'Bengali',   native:'বাংলা' },
+    { code:'gu', label:'Gujarati',  native:'ગુજરાતી' },
+    { code:'pa', label:'Punjabi',   native:'ਪੰਜਾਬੀ' },
+    { code:'or', label:'Odia',      native:'ଓଡ଼ିଆ' },
+  ];
+
+  function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+  function wc(t){ return (String(t||'').match(/\b\w+\b/g) || []).length; }
+
+  function getDot(obj, path) {
+    return path.split('.').reduce((o,k) => (o ? o[k] : undefined), obj);
+  }
+  function setDot(obj, path, val) {
+    var keys = path.split('.');
+    var last = keys.pop();
+    var node = obj;
+    keys.forEach((k) => { if (typeof node[k] !== 'object' || node[k] === null) node[k] = {}; node = node[k]; });
+    node[last] = val;
+  }
+
+  function isIndianFormat(state) {
+    var fid = ((state.setup || {}).format_id || '').toLowerCase();
+    return INDIAN.has(fid);
+  }
+
+  function applyIndianVisibility(state) {
+    var on = isIndianFormat(state);
+    document.querySelectorAll('.th-thesis-only').forEach((el) => { el.hidden = !on; });
+  }
+
+  function bindMetaInputs() {
+    var s = ThesisState.get();
+    s.title_meta = s.title_meta || {};
+    document.querySelectorAll('input[data-meta]').forEach((inp) => {
+      var path = inp.dataset.meta;
+      var v = getDot(s.title_meta, path);
+      if (v != null) inp.value = String(v);
+      inp.addEventListener('input', () => {
+        ThesisState.patch((st) => {
+          st.title_meta = st.title_meta || {};
+          setDot(st.title_meta, path, inp.value);
+          return st;
+        });
+      });
+    });
+  }
+
+  function renderLangGrid() {
+    var s = ThesisState.get();
+    var consent = (s.consent = s.consent || { languages: [{code:'en',label:'English'}], delivery:'attached' });
+    var picked = new Set((consent.languages || []).map((l) => l.code));
+    picked.add('en');
+    var grid = document.getElementById('th-lang-grid');
+    grid.innerHTML = LANGS.map((l) => `
+      <label class="th-lang-cb ${l.mandatory?'is-locked':''}">
+        <input type="checkbox" data-code="${esc(l.code)}" ${picked.has(l.code)?'checked':''} ${l.mandatory?'disabled':''} />
+        <span>${esc(l.label)}</span>
+        <span class="th-lang-cb-native">${esc(l.native)}</span>
+      </label>
+    `).join('');
+    grid.querySelectorAll('input[data-code]').forEach((cb) => {
+      cb.addEventListener('change', () => {
+        ThesisState.patch((st) => {
+          st.consent = st.consent || { languages: [], delivery: 'attached' };
+          var sel = new Set([...grid.querySelectorAll('input[data-code]:checked')].map((x) => x.dataset.code));
+          sel.add('en');
+          st.consent.languages = LANGS.filter((l) => sel.has(l.code))
+                                      .map((l) => ({ code: l.code, label: l.label }));
+          return st;
+        });
+      });
+    });
+    // delivery
+    var del = (consent.delivery || 'attached');
+    document.querySelectorAll('input[name="th-delivery"]').forEach((r) => {
+      r.checked = (r.value === del);
+      r.addEventListener('change', () => {
+        ThesisState.patch((st) => {
+          st.consent = st.consent || { languages: [{code:'en',label:'English'}] };
+          st.consent.delivery = r.value;
+          return st;
+        });
+      });
+    });
+  }
+
+  function renderSummary() {
+    var s = ThesisState.get();
+    var refs = (s.references || []).length;
+    var totalWords = Object.values(s.chapters || {}).reduce((a,c) => a + wc(c.text), 0);
+    var pages = Math.max(1, Math.round(totalWords / 280));
+    var locks = Object.keys(s.locked_numbers || {}).length;
+    var assets = (s.assets && (s.assets.pictures||[]).length + (s.assets.certificates||[]).length + (s.assets.annexures||[]).length) || 0;
+    var langs = (s.consent && s.consent.languages || []).length || 1;
+    document.getElementById('th-summary').innerHTML = `
+      <div class="th-tile"><div class="th-tile-l">References</div><div class="th-tile-v">${refs}</div></div>
+      <div class="th-tile"><div class="th-tile-l">Words / Pages</div><div class="th-tile-v">${totalWords.toLocaleString()} / ~${pages}p</div></div>
+      <div class="th-tile"><div class="th-tile-l">Locked numbers</div><div class="th-tile-v">${locks}</div></div>
+      <div class="th-tile"><div class="th-tile-l">Figures attached</div><div class="th-tile-v">${assets}</div></div>
+      <div class="th-tile"><div class="th-tile-l">Consent languages</div><div class="th-tile-v">${langs}</div></div>
+    `;
+  }
+
+  function buildPayload() {
+    var s = ThesisState.get();
+    return {
+      state: s,
+      title_meta: s.title_meta || {},
+      consent: s.consent || { languages: [{code:'en',label:'English'}], delivery: 'attached' },
+      assets: s.assets || {},
+    };
+  }
+
+  function setStatus(kind, msg) {
+    var el = document.getElementById('th-dl-status');
+    el.style.display = '';
+    el.className = 'th-status ' + kind;
+    el.innerHTML = (kind === 'info' ? '<span class="th-spinner"></span>' : '') + esc(msg);
+  }
+
+  async function downloadBinary(path, ext, mime) {
+    setStatus('info', 'Building ' + ext.toUpperCase() + '… (consent translation may take 20-40 s the first time)');
+    try {
+      var r = await fetch('/api/thesis' + path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(buildPayload()),
+      });
+      if (!r.ok) {
+        var t = await r.text();
+        throw new Error(t || ('HTTP ' + r.status));
+      }
+      var blob = await r.blob();
+      var disp = r.headers.get('Content-Disposition') || '';
+      var m = /filename="?([^"]+)"?/.exec(disp);
+      var fname = (m && m[1]) || ('thesis.' + ext);
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url; a.download = fname;
+      document.body.appendChild(a); a.click();
+      setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1000);
+      setStatus('ok', 'Downloaded ' + fname + '.');
+    } catch (e) {
+      setStatus('err', 'Download failed: ' + e.message);
+    }
+  }
+
+  document.getElementById('th-dl-docx').addEventListener('click', () => downloadBinary('/export/docx', 'docx'));
+  document.getElementById('th-dl-pdf').addEventListener('click',  () => downloadBinary('/export/pdf',  'pdf'));
+  document.getElementById('th-dl-zip').addEventListener('click',  () => downloadBinary('/export/zip',  'zip'));
+  document.getElementById('th-dl-plag').addEventListener('click', async () => {
+    setStatus('info', 'Preparing plain text for the Plagiarism Checker…');
+    try {
+      var r = await fetch('/api/thesis/export/plaintext', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(buildPayload()),
+      });
+      var data = await r.json();
+      if (!r.ok) throw new Error(data.detail || ('HTTP ' + r.status));
+      try { sessionStorage.setItem('medras.plagiarism.prefill', data.text || ''); } catch (_) {}
+      setStatus('ok', 'Sent. Opening Plagiarism Checker…');
+      window.open('/plagiarism-module/checker.html', '_blank');
+    } catch (e) {
+      setStatus('err', 'Failed: ' + e.message);
+    }
+  });
+
+  (function init() {
+    var s = ThesisState.get();
+    s.consent = s.consent || { languages: [{code:'en',label:'English'}], delivery: 'attached' };
+    if (!s.title_meta) s.title_meta = {};
+    // Pre-fill study title from setup if blank
+    if (!s.title_meta.study_title && s.setup && s.setup.title) s.title_meta.study_title = s.setup.title;
+    if (!s.title_meta.institution && s.setup && s.setup.institution) s.title_meta.institution = s.setup.institution;
+    if (!s.title_meta.year && s.setup && s.setup.year) s.title_meta.year = s.setup.year;
+    ThesisState.patch(() => s);
+
+    applyIndianVisibility(s);
+    bindMetaInputs();
+    renderLangGrid();
+    renderSummary();
+  })();
+})();
+</script>
+</body>
+</html>

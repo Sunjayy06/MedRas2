@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Figures &amp; Annexures · Thesis · MedRAS</title>
+<link rel="stylesheet" href="/thesis-module/css/style.css" />
+<style>
+  .th-asset-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap:14px; margin-top:12px; }
+  .th-asset-card { border:1px solid var(--th-line); border-radius:10px; background:#fff; padding:10px; display:flex; flex-direction:column; gap:8px; }
+  .th-asset-card img { max-width:100%; max-height:140px; object-fit:contain; background:#f4f1e8; border-radius:6px; }
+  .th-asset-meta { font-size:12px; color:var(--th-text-soft); }
+  .th-asset-cap-input { width:100%; padding:6px 8px; font-size:13px; border:1px solid var(--th-line); border-radius:6px; }
+  .th-asset-chapter { font-size:12px; padding:4px 6px; border:1px solid var(--th-line); border-radius:6px; background:#fff; width:100%; }
+  .th-asset-bin { background:transparent; border:0; color:var(--th-amber); cursor:pointer; font-weight:700; }
+</style>
+</head>
+<body>
+<header class="th-header">
+  <a class="th-brand" href="/thesis-module/"><span class="th-brand-mark">T</span><span>MedRAS — Thesis Writing</span></a>
+  <nav class="th-nav"><a href="/thesis-module/dashboard.html">← Dashboard</a><a href="/thesis-module/export.html">Export →</a></nav>
+</header>
+
+<main class="th-shell">
+  <span class="th-eyebrow">Optional · Figures &amp; annexures</span>
+  <h1 class="th-h1">Add figures, photos and certificates</h1>
+  <p class="th-sub">
+    Upload PNG / JPEG images that should appear inside your thesis (study-flow
+    diagrams, consort flowcharts, scanned certificates, photographs of your
+    setup, annexure scans). Pick which chapter each image should land under.
+    <strong>Per-image cap 2 MB; ~3 MB total</strong> — your browser's local
+    storage is shared with chapter text, so please compress large scans
+    (e.g. with <a href="https://squoosh.app" target="_blank" rel="noopener">squoosh.app</a>)
+    before uploading. Saved locally in your browser — nothing is uploaded to
+    a server until you actually export.
+  </p>
+
+  <div class="th-card">
+    <h3 class="th-h3">Add an image</h3>
+    <div style="display:grid; grid-template-columns: 2fr 1fr 1fr; gap:10px; align-items:end">
+      <div>
+        <label class="th-label">Image file (PNG / JPEG / WebP, ≤ 2 MB)</label>
+        <input type="file" id="th-asset-file" accept="image/png,image/jpeg,image/webp" />
+      </div>
+      <div>
+        <label class="th-label">Bucket</label>
+        <select id="th-asset-bucket" class="th-asset-chapter">
+          <option value="pictures">Picture / figure</option>
+          <option value="certificates">Certificate / declaration</option>
+          <option value="annexures">Annexure scan</option>
+        </select>
+      </div>
+      <div>
+        <label class="th-label">Goes under chapter</label>
+        <select id="th-asset-chapter" class="th-asset-chapter"></select>
+      </div>
+    </div>
+    <div style="margin-top:10px">
+      <label class="th-label">Caption (shown under the image)</label>
+      <input id="th-asset-caption" class="th-asset-cap-input" placeholder="e.g. Figure 1. Study flow (CONSORT diagram)." />
+    </div>
+    <div style="margin-top:12px; display:flex; gap:10px; align-items:center">
+      <button id="th-asset-add" class="th-btn th-btn-primary">Add image</button>
+      <span id="th-asset-status" style="font-size:13px; color:var(--th-text-soft)"></span>
+    </div>
+  </div>
+
+  <div class="th-card" style="margin-top:14px">
+    <div style="display:flex; justify-content:space-between; align-items:center">
+      <h3 class="th-h3" style="margin:0">Your images <span id="th-asset-count" style="color:var(--th-text-soft); font-weight:500"></span></h3>
+      <button id="th-asset-clear" class="th-btn th-btn-light th-btn-sm">Clear all</button>
+    </div>
+    <div id="th-asset-grid" class="th-asset-grid"></div>
+    <p id="th-asset-empty" style="text-align:center; padding:24px; color:var(--th-text-soft)">No images yet.</p>
+  </div>
+
+  <div style="margin-top:18px">
+    <a href="/thesis-module/dashboard.html" class="th-btn th-btn-light">← Dashboard</a>
+    <a href="/thesis-module/export.html" class="th-btn th-btn-primary">Continue to Export →</a>
+  </div>
+</main>
+
+<script src="/thesis-module/js/thesis-state.js"></script>
+<script>
+(function () {
+  function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+  async function loadChapters() {
+    const sel = document.getElementById('th-asset-chapter');
+    let spine = window._th_spine;
+    if (!spine) {
+      const res = await ThesisState.api('/spine');
+      spine = res.spine; window._th_spine = spine;
+    }
+    sel.innerHTML = spine
+      .filter((c) => !['title_page','consent','references'].includes(c.id))
+      .map((c) => `<option value="${esc(c.id)}">${esc(c.label)}</option>`).join('');
+    // default to "annexures" if present
+    if ([...sel.options].some((o) => o.value === 'annexures')) sel.value = 'annexures';
+  }
+
+  function readFileAsDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result);
+      r.onerror = () => reject(r.error);
+      r.readAsDataURL(file);
+    });
+  }
+
+  function flatAssets() {
+    const s = ThesisState.get();
+    const a = s.assets || {};
+    const out = [];
+    ['pictures','certificates','annexures'].forEach((bucket) => {
+      (a[bucket] || []).forEach((item, i) => out.push({ bucket, i, item }));
+    });
+    return out;
+  }
+
+  function render() {
+    const flat = flatAssets();
+    const grid = document.getElementById('th-asset-grid');
+    const empty = document.getElementById('th-asset-empty');
+    document.getElementById('th-asset-count').textContent =
+      flat.length ? `· ${flat.length} image${flat.length===1?'':'s'}` : '';
+    if (!flat.length) {
+      grid.innerHTML = ''; empty.style.display = ''; return;
+    }
+    empty.style.display = 'none';
+    const spine = window._th_spine || [];
+    const chapterLabel = (id) => (spine.find((c) => c.id === id) || { label: id }).label;
+    grid.innerHTML = flat.map(({bucket, i, item}) => `
+      <div class="th-asset-card" data-bucket="${esc(bucket)}" data-i="${i}">
+        <img src="${esc(item.b64)}" alt="${esc(item.caption || '')}" />
+        <input class="th-asset-cap-input" data-act="caption"
+               value="${esc(item.caption || '')}" placeholder="Caption" />
+        <select class="th-asset-chapter" data-act="chapter">
+          ${spine.filter((c) => !['title_page','consent','references'].includes(c.id))
+                .map((c) => `<option value="${esc(c.id)}" ${c.id===item.chapter_id?'selected':''}>${esc(c.label)}</option>`).join('')}
+        </select>
+        <div class="th-asset-meta" style="display:flex; justify-content:space-between; align-items:center">
+          <span>${esc(bucket)} · ${(item.size_kb||0).toFixed(0)} KB</span>
+          <button class="th-asset-bin" data-act="remove" title="Remove">✗ remove</button>
+        </div>
+      </div>
+    `).join('');
+    grid.querySelectorAll('.th-asset-card').forEach((card) => {
+      const bucket = card.dataset.bucket;
+      const i = parseInt(card.dataset.i, 10);
+      card.querySelector('[data-act="caption"]').addEventListener('input', (e) => {
+        ThesisState.patch((s) => {
+          if (s.assets && s.assets[bucket] && s.assets[bucket][i]) {
+            s.assets[bucket][i].caption = e.target.value;
+          }
+          return s;
+        });
+      });
+      card.querySelector('[data-act="chapter"]').addEventListener('change', (e) => {
+        ThesisState.patch((s) => {
+          if (s.assets && s.assets[bucket] && s.assets[bucket][i]) {
+            s.assets[bucket][i].chapter_id = e.target.value;
+          }
+          return s;
+        });
+      });
+      card.querySelector('[data-act="remove"]').addEventListener('click', () => {
+        ThesisState.patch((s) => {
+          if (s.assets && s.assets[bucket]) s.assets[bucket].splice(i, 1);
+          return s;
+        });
+        render();
+      });
+    });
+  }
+
+  document.getElementById('th-asset-add').addEventListener('click', async () => {
+    const fileEl = document.getElementById('th-asset-file');
+    const file = fileEl.files && fileEl.files[0];
+    const status = document.getElementById('th-asset-status');
+    if (!file) { status.textContent = 'Pick a file first.'; return; }
+    if (!/^image\/(png|jpe?g|webp)$/i.test(file.type)) {
+      status.textContent = 'Only PNG / JPEG / WebP images are allowed.'; return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      status.textContent = 'That image is over 2 MB — please compress it first (e.g. squoosh.app).'; return;
+    }
+    // Total-cap guard — keep ~2 MB headroom under the ~5 MB sessionStorage limit
+    // for chapter text, references, and locks.
+    var totalKb = flatAssets().reduce((a, x) => a + (x.item.size_kb || 0), 0);
+    if (totalKb + (file.size / 1024) > 3 * 1024) {
+      status.textContent = 'Adding this would push your figure total above ~3 MB. Remove or compress an existing one first.'; return;
+    }
+    const bucket = document.getElementById('th-asset-bucket').value;
+    const chapter = document.getElementById('th-asset-chapter').value;
+    const caption = document.getElementById('th-asset-caption').value.trim();
+    status.textContent = 'Reading…';
+    try {
+      const b64 = await readFileAsDataUrl(file);
+      ThesisState.patch((s) => {
+        s.assets = s.assets || {};
+        s.assets[bucket] = s.assets[bucket] || [];
+        s.assets[bucket].push({
+          chapter_id: chapter,
+          caption: caption,
+          mime: file.type,
+          b64: b64,
+          size_kb: file.size / 1024,
+        });
+        return s;
+      });
+      status.textContent = 'Added.';
+      fileEl.value = '';
+      document.getElementById('th-asset-caption').value = '';
+      render();
+    } catch (e) {
+      status.textContent = 'Failed: ' + e.message;
+    }
+  });
+
+  document.getElementById('th-asset-clear').addEventListener('click', () => {
+    if (!confirm('Remove all images from your thesis assets? This cannot be undone.')) return;
+    ThesisState.patch((s) => { s.assets = { pictures: [], certificates: [], annexures: [] }; return s; });
+    render();
+  });
+
+  (async function init() {
+    await loadChapters();
+    render();
+  })();
+})();
+</script>
+</body>
+</html>

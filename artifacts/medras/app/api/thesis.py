@@ -16,11 +16,11 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, List
 
-from fastapi import APIRouter, File, HTTPException, Request, UploadFile
+from fastapi import APIRouter, File, HTTPException, Request, Response, UploadFile
 
 from app.core.limiter import limiter
 from app.services import (
-    thesis_compliance, thesis_formats, thesis_guidelines_parser,
+    thesis_compliance, thesis_export, thesis_formats, thesis_guidelines_parser,
     thesis_reference_library, thesis_section_writer,
 )
 from app.services.proposal_generator import GeneratorError
@@ -166,3 +166,84 @@ async def compliance_check(payload: Dict[str, Any]) -> Dict[str, Any]:
     if not isinstance(payload, dict):
         raise HTTPException(status_code=400, detail="Payload must be a JSON object.")
     return thesis_compliance.check(payload)
+
+
+# ---------------------------------------------------------------------------
+# Export
+# ---------------------------------------------------------------------------
+
+def _export_filename(payload: Dict[str, Any], ext: str) -> str:
+    state = payload.get("state") or {}
+    tm = payload.get("title_meta") or state.get("title_meta") or {}
+    setup = state.get("setup") or {}
+    name = (tm.get("study_title") or setup.get("topic") or "thesis").strip()
+    import re as _re
+    safe = _re.sub(r"[^A-Za-z0-9._-]+", "_", name)[:60] or "thesis"
+    return f"{safe}.{ext}"
+
+
+@router.post("/export/docx")
+@limiter.limit("12/minute")
+async def export_docx(request: Request, payload: Dict[str, Any]) -> Response:
+    """Body: ``{state, title_meta?, consent?, assets?}``. Returns DOCX bytes."""
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail="Payload must be a JSON object.")
+    try:
+        data = thesis_export.build_docx(payload)
+    except Exception as exc:                                      # noqa: BLE001
+        log.exception("thesis docx export failed")
+        raise HTTPException(status_code=500, detail=f"Word export failed: {exc}")
+    fname = _export_filename(payload, "docx")
+    return Response(
+        content=data,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
+
+
+@router.post("/export/pdf")
+@limiter.limit("12/minute")
+async def export_pdf(request: Request, payload: Dict[str, Any]) -> Response:
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail="Payload must be a JSON object.")
+    try:
+        data = thesis_export.build_pdf(payload)
+    except Exception as exc:                                      # noqa: BLE001
+        log.exception("thesis pdf export failed")
+        raise HTTPException(status_code=500, detail=f"PDF export failed: {exc}")
+    fname = _export_filename(payload, "pdf")
+    return Response(
+        content=data,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
+
+
+@router.post("/export/zip")
+@limiter.limit("8/minute")
+async def export_zip(request: Request, payload: Dict[str, Any]) -> Response:
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail="Payload must be a JSON object.")
+    try:
+        data = thesis_export.build_zip(payload)
+    except Exception as exc:                                      # noqa: BLE001
+        log.exception("thesis zip export failed")
+        raise HTTPException(status_code=500, detail=f"Bundle export failed: {exc}")
+    fname = _export_filename(payload, "zip")
+    return Response(
+        content=data,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
+
+
+@router.post("/export/plaintext")
+@limiter.limit("20/minute")
+async def export_plaintext(request: Request, payload: Dict[str, Any]) -> Dict[str, str]:
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail="Payload must be a JSON object.")
+    try:
+        return {"text": thesis_export.build_plaintext(payload)}
+    except Exception as exc:                                      # noqa: BLE001
+        log.exception("thesis plaintext export failed")
+        raise HTTPException(status_code=500, detail=f"Plaintext export failed: {exc}")

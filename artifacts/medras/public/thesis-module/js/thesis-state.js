@@ -35,9 +35,42 @@
   }
   function _write(state) {
     state.updated_at = new Date().toISOString();
-    sessionStorage.setItem(KEY, JSON.stringify(state));
+    var payload;
+    try {
+      payload = JSON.stringify(state);
+    } catch (e) {
+      // Circular ref or unserialisable value — surface, do nothing.
+      console && console.warn && console.warn('ThesisState: serialise failed', e);
+      return;
+    }
+    try {
+      sessionStorage.setItem(KEY, payload);
+    } catch (e) {
+      // Browser sessionStorage hard cap (~5 MB per origin) — most
+      // commonly hit when a researcher attaches large figures. Surface
+      // a clear toast so they know to compress / drop assets, then
+      // best-effort store everything except `assets` so chapter text /
+      // references / locks still survive the page reload.
+      if (e && (e.name === 'QuotaExceededError' || e.code === 22)) {
+        try {
+          var lite = Object.assign({}, state, {
+            assets: { pictures: [], certificates: [], annexures: [],
+                      __overflow: true }
+          });
+          sessionStorage.setItem(KEY, JSON.stringify(lite));
+        } catch (_) { /* even the lite write failed — give up silently */ }
+        if (window.ThesisState && typeof window.ThesisState.toast === 'function') {
+          window.ThesisState.toast(
+            'Browser storage is full — compress or remove some figures, ' +
+            'then re-attach them. Your chapter text was kept safe.', 5000);
+        }
+        return;
+      }
+      console && console.warn && console.warn('ThesisState: storage write failed', e);
+      return;
+    }
     // Mirror to localStorage so a tab refresh doesn't lose work.
-    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (_) {}
+    try { localStorage.setItem(KEY, payload); } catch (_) {}
   }
   function _newId() { return 'th_' + Math.random().toString(36).slice(2, 12); }
 
