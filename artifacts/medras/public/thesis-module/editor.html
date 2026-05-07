@@ -12,9 +12,21 @@
   <nav class="th-nav">
     <a href="/thesis-module/dashboard.html">← Dashboard</a>
     <a href="/thesis-module/references.html">References</a>
+    <a href="/thesis-module/compliance.html">Compliance</a>
+    <a href="/thesis-module/export.html">Export</a>
     <a href="/">MedRAS</a>
   </nav>
 </header>
+<div class="th-stepbar">
+  <span class="th-step is-done">1 · Setup</span>
+  <span class="th-step is-done">2 · Guidelines</span>
+  <span class="th-step is-done">3 · References</span>
+  <span class="th-step is-done">4 · Data &amp; Stats</span>
+  <span class="th-step is-done">5 · Dashboard</span>
+  <span class="th-step is-active">6 · Editor</span>
+  <span class="th-step">7 · Compliance</span>
+  <span class="th-step">8 · Export</span>
+</div>
 
 <div class="th-editor">
   <!-- LEFT: outline + chapter linked refs -->
@@ -44,6 +56,13 @@
 
   <!-- RIGHT: helper strip + AI suggestions -->
   <aside class="th-pane">
+    <h4>What's next</h4>
+    <div style="display:flex; flex-direction:column; gap:6px; margin-bottom:14px">
+      <a id="th-attach-fig" class="th-btn th-btn-light th-btn-sm" href="/thesis-module/assets.html">📎 Attach figure to this chapter</a>
+      <a class="th-btn th-btn-light th-btn-sm" href="/thesis-module/compliance.html">✓ Pre-flight compliance</a>
+      <a class="th-btn th-btn-primary th-btn-sm" href="/thesis-module/compliance.html?then=export">⬇ Continue to Export</a>
+    </div>
+
     <h4>Helpers</h4>
     <div id="th-helper-strip"></div>
 
@@ -74,6 +93,9 @@
     spine = sp.spine;
     chapter = spine.find((c) => c.id === chapterId) || spine[0];
     chapterId = chapter.id;
+    // Wire the per-chapter "Attach figure" deep-link with the right ?chapter=
+    var fig = document.getElementById('th-attach-fig');
+    if (fig) fig.href = '/thesis-module/assets.html?chapter=' + encodeURIComponent(chapterId);
     renderSideChapters();
     renderSideLocks();
     renderSideRefs();

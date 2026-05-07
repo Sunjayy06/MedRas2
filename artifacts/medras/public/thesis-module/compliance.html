@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Compliance · Thesis · MedRAS</title>
+<link rel="stylesheet" href="/thesis-module/css/style.css" />
+<style>
+  .th-comp-summary { display:grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap:10px; margin:14px 0 18px; }
+  .th-comp-tile { background:#fff; border:1px solid var(--th-line); border-radius:10px; padding:12px 14px; }
+  .th-comp-tile .l { font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--th-text-soft); }
+  .th-comp-tile .v { font-size:22px; font-weight:700; }
+  .th-comp-tile.pass .v { color:var(--th-emerald-d); }
+  .th-comp-tile.warn .v { color:var(--th-amber); }
+  .th-comp-tile.fail .v { color:var(--th-danger); }
+  .th-comp-item { display:grid; grid-template-columns: 36px 1fr auto; gap:12px; padding:12px 14px; border-bottom:1px solid var(--th-line); align-items:start; }
+  .th-comp-icon { width:30px; height:30px; border-radius:50%; display:grid; place-items:center; font-weight:700; color:#fff; font-size:15px; }
+  .th-comp-icon.pass { background: var(--th-emerald-d); }
+  .th-comp-icon.warn { background: var(--th-amber); }
+  .th-comp-icon.fail { background: var(--th-danger); }
+  .th-comp-label { font-weight:600; color:var(--th-ink-900); }
+  .th-comp-detail { font-size:13px; color:var(--th-text-soft); margin-top:3px; }
+  .th-comp-empty { padding:32px; text-align:center; color:var(--th-text-soft); background:#fff; border:1px dashed var(--th-line); border-radius:10px; }
+  .th-spinner { display:inline-block; width:14px; height:14px; border:2px solid rgba(0,0,0,.15); border-top-color: var(--th-emerald); border-radius:50%; animation: th-spin .8s linear infinite; vertical-align:-2px; margin-right:6px; }
+  @keyframes th-spin { to { transform: rotate(360deg); } }
+  .th-gate { margin-top:18px; padding:14px 16px; border-radius:10px; background: #fff8e1; border:1px solid var(--th-gold); display:flex; gap:14px; align-items:center; flex-wrap:wrap; }
+  .th-gate.is-clear { background:#ecf6ed; border-color:var(--th-emerald); }
+</style>
+</head>
+<body>
+<header class="th-header">
+  <a class="th-brand" href="/thesis-module/"><span class="th-brand-mark">T</span><span>MedRAS — Thesis Writing</span></a>
+  <nav class="th-nav"><a href="/thesis-module/dashboard.html">Dashboard</a><a href="/">← MedRAS</a></nav>
+</header>
+<div class="th-stepbar">
+  <span class="th-step is-done">1 · Setup</span>
+  <span class="th-step is-done">2 · Guidelines</span>
+  <span class="th-step is-done">3 · References</span>
+  <span class="th-step is-done">4 · Data &amp; Stats</span>
+  <span class="th-step is-done">5 · Dashboard</span>
+  <span class="th-step is-done">6 · Editor</span>
+  <span class="th-step is-active">7 · Compliance</span>
+  <span class="th-step">8 · Export</span>
+</div>
+
+<main class="th-shell th-wide">
+  <a class="th-back-link" href="/thesis-module/dashboard.html">← Back to Dashboard</a>
+  <span class="th-eyebrow">Station 8 of 9 · Pre-flight</span>
+  <h1 class="th-h1" id="th-comp-title">Pre-flight compliance check</h1>
+  <p class="th-sub" id="th-comp-intro">
+    We re-run every guideline rule from your university's PDF (or the NBEMS
+    defaults) against the current draft — page count, references, verified
+    DOIs, body chapters at length, plagiarism, AI score, declarations, IEC
+    approval, title-page metadata, and figure placement. Fix any failures
+    here before you export.
+  </p>
+
+  <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px">
+    <button id="th-run" class="th-btn th-btn-primary">Run pre-flight check</button>
+    <a class="th-btn th-btn-light" href="/thesis-module/dashboard.html">← Dashboard</a>
+    <a class="th-btn th-btn-light" href="/thesis-module/assets.html">Manage figures</a>
+  </div>
+
+  <div id="th-comp-status" style="font-size:13px; color:var(--th-text-soft); margin-bottom:8px">Click "Run pre-flight check" to begin.</div>
+
+  <div id="th-comp-summary" class="th-comp-summary" style="display:none"></div>
+
+  <div id="th-comp-list" class="th-card" style="padding:0; display:none"></div>
+
+  <div id="th-comp-empty" class="th-comp-empty" style="display:none">No checks run yet.</div>
+
+  <div id="th-comp-gate" class="th-gate" style="display:none"></div>
+</main>
+
+<script src="/thesis-module/js/thesis-state.js"></script>
+<script>
+(function () {
+  function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+  function icon(st){ return st==='pass'?'✓':st==='warn'?'!':'✗'; }
+
+  // Honour ?then=export — the user clicked "Export thesis →" from the
+  // dashboard or editor and we're the gate before download. Adjust copy
+  // so they understand they're mid-flow, not just running an audit.
+  var exportIntent = (new URLSearchParams(location.search)).get('then') === 'export';
+  if (exportIntent) {
+    document.getElementById('th-comp-title').textContent = 'One last check before export';
+    document.getElementById('th-comp-intro').innerHTML =
+      'You\'re heading to <strong>Export</strong>. We run the 9 compliance rules ' +
+      'first so you don\'t download a thesis that fails review. Address any ' +
+      '<strong style="color:var(--th-danger)">failures</strong> below, then click ' +
+      '<strong>Continue to Export</strong>.';
+  }
+
+  async function run() {
+    var status = document.getElementById('th-comp-status');
+    status.innerHTML = '<span class="th-spinner"></span>Running 9 compliance rules…';
+    try {
+      var s = ThesisState.get();
+      var res = await ThesisState.api('/compliance-check', s);
+      renderSummary(res);
+      renderItems(res.items || []);
+      renderGate(res.summary || {});
+      status.textContent = 'Last run: ' + new Date().toLocaleString() + '.';
+    } catch (e) {
+      status.textContent = '';
+      ThesisState.toast('Compliance check failed: ' + e.message);
+    }
+  }
+
+  function renderSummary(res) {
+    var sum = res.summary || {};
+    var el = document.getElementById('th-comp-summary');
+    el.style.display = '';
+    el.innerHTML = `
+      <div class="th-comp-tile pass"><div class="l">Pass</div><div class="v">${sum.pass||0}</div></div>
+      <div class="th-comp-tile warn"><div class="l">Warnings</div><div class="v">${sum.warn||0}</div></div>
+      <div class="th-comp-tile fail"><div class="l">Failures</div><div class="v">${sum.fail||0}</div></div>
+      <div class="th-comp-tile"><div class="l">Pages (est.)</div><div class="v" style="color:var(--th-ink-900)">~${sum.pages_estimated||0}</div></div>
+      <div class="th-comp-tile"><div class="l">References</div><div class="v" style="color:var(--th-ink-900)">${sum.references||0}</div></div>
+    `;
+  }
+
+  function renderItems(items) {
+    var list = document.getElementById('th-comp-list');
+    var empty = document.getElementById('th-comp-empty');
+    if (!items.length) {
+      list.style.display = 'none';
+      empty.style.display = '';
+      empty.textContent = 'No issues found — your thesis is ready for export.';
+      return;
+    }
+    list.style.display = '';
+    empty.style.display = 'none';
+    list.innerHTML = items.map(function (it) {
+      return `
+        <div class="th-comp-item">
+          <div class="th-comp-icon ${esc(it.status)}">${icon(it.status)}</div>
+          <div>
+            <div class="th-comp-label">${esc(it.label)}</div>
+            <div class="th-comp-detail">${esc(it.detail || '')}</div>
+          </div>
+          <div>${it.fix ? `<a href="${esc(it.fix)}" class="th-btn th-btn-light th-btn-sm">Fix →</a>` : ''}</div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function renderGate(sum) {
+    var gate = document.getElementById('th-comp-gate');
+    gate.style.display = '';
+    var fails = sum.fail || 0;
+    var ctaLabel = exportIntent ? 'Continue to Export →' : 'Open Export →';
+    if (fails === 0) {
+      gate.classList.add('is-clear');
+      gate.innerHTML =
+        '<strong style="color:var(--th-emerald-d)">All checks cleared.</strong>' +
+        '<span style="color:var(--th-text-soft); font-size:13px">You can safely move on to Export.</span>' +
+        '<span style="flex:1"></span>' +
+        '<a id="th-gate-cta" href="/thesis-module/export.html" class="th-btn th-btn-primary">' + ctaLabel + '</a>';
+    } else {
+      gate.classList.remove('is-clear');
+      gate.innerHTML =
+        '<strong style="color:var(--th-amber)">' + fails + ' failure' + (fails===1?'':'s') + ' to fix.</strong>' +
+        '<span style="color:var(--th-text-soft); font-size:13px">Address the failures above. You can still export, but reviewers will likely flag these.</span>' +
+        '<span style="flex:1"></span>' +
+        '<a id="th-gate-cta" href="/thesis-module/export.html" class="th-btn th-btn-light">Export anyway →</a>';
+    }
+    // If the user came in with export-intent, scroll the gate into view
+    // and pulse the CTA so they know exactly what to click next.
+    if (exportIntent) {
+      var cta = document.getElementById('th-gate-cta');
+      if (cta) {
+        try { cta.focus({ preventScroll: true }); } catch (_) {}
+      }
+      gate.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }
+
+  document.getElementById('th-run').addEventListener('click', run);
+  // Auto-run on load if (a) there's any chapter content yet, or
+  // (b) the user explicitly arrived with export-intent (in which case
+  // they expect the gate to be ready immediately).
+  var s = ThesisState.get();
+  var hasContent = Object.values(s.chapters || {}).some(function (c) { return (c.text||'').trim(); });
+  if (hasContent || exportIntent) run();
+})();
+</script>
+</body>
+</html>

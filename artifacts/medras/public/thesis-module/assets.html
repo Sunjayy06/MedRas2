@@ -24,6 +24,7 @@
 <main class="th-shell">
   <span class="th-eyebrow">Optional · Figures &amp; annexures</span>
   <h1 class="th-h1">Add figures, photos and certificates</h1>
+  <div id="th-asset-deeplink-banner" style="display:none; padding:10px 14px; border-radius:8px; background:#ecf6ed; border:1px solid var(--th-emerald); margin:6px 0 10px; font-size:13.5px"></div>
   <p class="th-sub">
     Upload PNG / JPEG images that should appear inside your thesis (study-flow
     diagrams, consort flowcharts, scanned certificates, photographs of your
@@ -95,8 +96,21 @@
     sel.innerHTML = spine
       .filter((c) => !['title_page','consent','references'].includes(c.id))
       .map((c) => `<option value="${esc(c.id)}">${esc(c.label)}</option>`).join('');
-    // default to "annexures" if present
-    if ([...sel.options].some((o) => o.value === 'annexures')) sel.value = 'annexures';
+    // Honour ?chapter=<id> deep-link from the editor; otherwise default to
+    // "annexures" so scans land in the right back-matter bucket.
+    const want = (new URLSearchParams(location.search)).get('chapter');
+    if (want && [...sel.options].some((o) => o.value === want)) {
+      sel.value = want;
+      const ch = spine.find((c) => c.id === want);
+      const banner = document.getElementById('th-asset-deeplink-banner');
+      if (ch && banner) {
+        banner.style.display = '';
+        banner.innerHTML = '📎 Pre-selected chapter from the editor: <strong>' + esc(ch.label) + '</strong>. ' +
+          '<a href="/thesis-module/editor.html?ch=' + esc(want) + '">← Back to editor</a>';
+      }
+    } else if ([...sel.options].some((o) => o.value === 'annexures')) {
+      sel.value = 'annexures';
+    }
   }
 
   function readFileAsDataUrl(file) {

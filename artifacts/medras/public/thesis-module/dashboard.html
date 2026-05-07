@@ -17,20 +17,23 @@
   <span class="th-step is-done">3 · References</span>
   <span class="th-step is-done">4 · Data &amp; Stats</span>
   <span class="th-step is-active">5 · Dashboard</span>
+  <span class="th-step">6 · Editor</span>
+  <span class="th-step">7 · Compliance</span>
+  <span class="th-step">8 · Export</span>
 </div>
 
 <main class="th-shell th-wide">
   <div style="display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:14px; margin-bottom:18px">
     <div>
-      <span class="th-eyebrow">Station 5 of 9 · Home base</span>
+      <span class="th-eyebrow">Station 6 of 9 · Home base</span>
       <h1 class="th-h1" id="th-dash-title">Chapter Dashboard</h1>
       <p class="th-sub" id="th-dash-sub">Click any chapter to start writing. You can jump in / out in any order.</p>
     </div>
     <div style="display:flex; gap:8px; flex-wrap:wrap">
-      <button id="th-run-compliance" class="th-btn th-btn-ghost">Run pre-flight</button>
       <a class="th-btn th-btn-light" href="/thesis-module/assets.html">Figures &amp; annexures</a>
       <a class="th-btn th-btn-light" href="/plagiarism-module/checker.html" target="_blank">Plagiarism check ↗</a>
-      <a class="th-btn th-btn-primary" href="/thesis-module/export.html">Export thesis →</a>
+      <a class="th-btn th-btn-ghost" href="/thesis-module/compliance.html">Pre-flight check →</a>
+      <a class="th-btn th-btn-primary" href="/thesis-module/compliance.html?then=export">Export thesis →</a>
     </div>
   </div>
 
@@ -43,10 +46,6 @@
     <tbody></tbody>
   </table>
 
-  <div id="th-compliance-card" class="th-card" style="display:none; margin-top:18px">
-    <h3 class="th-h3">Pre-flight compliance</h3>
-    <div id="th-compliance-list"></div>
-  </div>
 </main>
 
 <script src="/thesis-module/js/thesis-state.js"></script>
@@ -135,35 +134,6 @@
       });
     });
   }
-
-  document.getElementById('th-run-compliance').addEventListener('click', async () => {
-    try {
-      const s = ThesisState.get();
-      const res = await ThesisState.api('/compliance-check', s);
-      const card = document.getElementById('th-compliance-card');
-      const list = document.getElementById('th-compliance-list');
-      card.style.display = '';
-      const icon = (st) => st === 'pass' ? '✓' : st === 'warn' ? '!' : '✗';
-      list.innerHTML = `
-        <div style="margin-bottom:10px; font-size:13.5px; color:var(--th-text-soft)">
-          ${res.summary.pass} pass · ${res.summary.warn} warnings · ${res.summary.fail} failures
-          · ~${res.summary.pages_estimated} pages · ${res.summary.references} references
-        </div>
-        ${res.items.map((it) => `
-          <div class="th-compliance-item">
-            <div class="th-compliance-icon ${it.status}">${icon(it.status)}</div>
-            <div>
-              <strong>${TC(it.label)}</strong>
-              <div style="font-size:12.5px; color:var(--th-text-soft); margin-top:2px">${TC(it.detail || '')}</div>
-            </div>
-            <div>${it.fix ? `<a href="${TC(it.fix)}" class="th-btn th-btn-light th-btn-sm">Fix</a>` : ''}</div>
-          </div>
-        `).join('')}
-      `;
-      card.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    } catch (e) { ThesisState.toast('Compliance check failed: ' + e.message); }
-  });
-  function TC(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 
   render();
 })();
