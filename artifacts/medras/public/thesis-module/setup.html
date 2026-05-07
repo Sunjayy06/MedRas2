@@ -24,8 +24,20 @@
 
 <main class="th-shell">
   <a class="th-back-link" href="/thesis-module/">← Back to start</a>
-  <span class="th-eyebrow">Station 2 of 9 · Setup</span>
-  <h1 class="th-h1">Tell us about your thesis</h1>
+  <span class="th-eyebrow" id="th-eyebrow">Station 2 of 9 · Setup</span>
+
+  <div id="th-intent-banner" class="th-card" style="display:none; margin-bottom:14px; padding:10px 14px; background:var(--th-paper-2); border-left:4px solid var(--th-emerald-d)">
+    <div style="display:flex; gap:14px; align-items:center; flex-wrap:wrap">
+      <span style="font-size:22px">✦</span>
+      <div style="flex:1; min-width:240px">
+        <strong id="th-intent-title">…</strong>
+        <div id="th-intent-meta" style="font-size:12.5px; color:var(--th-text-soft); margin-top:2px"></div>
+      </div>
+      <a href="/thesis-module/" style="font-size:13px; color:var(--th-emerald-d); text-decoration:none">change →</a>
+    </div>
+  </div>
+
+  <h1 class="th-h1" id="th-setup-h1">Tell us about your thesis</h1>
   <p class="th-sub">Just the basics — you can change anything later. We'll use this to render the title page, set headers, pick the right citation style, <strong>and to ground every AI draft in your actual study</strong>. The more context you give, the better your AI-suggested drafts will be.</p>
 
   <div id="th-import-bar" class="th-card" style="margin-bottom:14px; padding:12px 14px; background:var(--th-paper-2); display:none">
@@ -86,13 +98,18 @@
         <label>Researcher name</label>
         <input class="th-input" name="researcher" placeholder="Dr. …" />
       </div>
-      <div class="th-field">
+      <div class="th-field" data-thesis-only="1">
         <label>Guide</label>
         <input class="th-input" name="guide" placeholder="Dr. … " />
       </div>
-      <div class="th-field">
+      <div class="th-field" data-thesis-only="1">
         <label>Co-Guide (optional)</label>
         <input class="th-input" name="co_guide" />
+      </div>
+      <div class="th-field" data-article-only="1" style="display:none; grid-column: 1 / -1">
+        <label>Co-authors (optional, one per line)</label>
+        <textarea class="th-input" name="co_authors" rows="2"
+          placeholder="Dr. Jane Smith — Dept of Medicine&#10;Dr. Anil Kumar — Dept of Pathology"></textarea>
       </div>
       <div class="th-field">
         <label>Institution</label>
@@ -169,11 +186,58 @@
 </main>
 
 <script src="/thesis-module/js/thesis-state.js"></script>
+<script src="/thesis-module/js/writing-modes.js"></script>
 <script>
 (function () {
   const s = ThesisState.get();
   const form = document.getElementById('th-setup-form');
-  // Hydrate from saved setup
+
+  // ---------- Intent banner + mode-aware UI ----------
+  // The welcome page persists setup.mode ('thesis'|'article'),
+  // setup.role, setup.article_type and setup.targets. We surface that
+  // here as a coloured banner and adapt a couple of fields.
+  const setup0 = s.setup || {};
+  const targets = s.targets || null;
+  const mode = setup0.mode || 'thesis';
+  const role = WritingModes.roleById(setup0.role || '');
+  const typeRec = WritingModes.byId(setup0.target_id || (mode === 'article' ? setup0.article_type : 'pg_thesis'));
+  if (typeRec || role) {
+    document.getElementById('th-intent-banner').style.display = 'block';
+    document.getElementById('th-intent-title').textContent =
+      (mode === 'article' ? 'Article: ' : 'Thesis: ') + (typeRec ? typeRec.label : '—') +
+      (role ? '  ·  ' + role.label : '');
+    var metaBits = [];
+    if (typeRec) {
+      if (typeRec.guideline) metaBits.push('📝 ' + typeRec.guideline);
+      if (typeRec.word_min)  metaBits.push('📐 ' + (typeRec.word_min === typeRec.word_max
+          ? typeRec.word_min.toLocaleString() + ' words'
+          : typeRec.word_min.toLocaleString() + '–' + typeRec.word_max.toLocaleString() + ' words'));
+      else if (typeRec.page_min) metaBits.push('📐 ' + typeRec.page_min + '–' + typeRec.page_max + ' pages');
+      if (typeRec.citation_min) metaBits.push('📚 ' + typeRec.citation_min +
+          (typeRec.citation_max !== typeRec.citation_min ? '–' + typeRec.citation_max : '') + ' citations');
+      metaBits.push('🛡 plag <' + typeRec.plag_cap + '% · AI <' + typeRec.ai_cap + '%');
+    }
+    document.getElementById('th-intent-meta').textContent = metaBits.join(' · ');
+  }
+  // Headline + eyebrow swap for article mode
+  if (mode === 'article') {
+    document.getElementById('th-setup-h1').textContent = 'Tell us about your article';
+    document.getElementById('th-eyebrow').textContent = 'Setup · ' +
+      (typeRec ? typeRec.label : 'Article');
+    // Hide Guide / Co-Guide; show Co-authors
+    document.querySelectorAll('[data-thesis-only="1"]').forEach(function (el) { el.style.display = 'none'; });
+    document.querySelectorAll('[data-article-only="1"]').forEach(function (el) { el.style.display = ''; });
+    // Article doesn't use the same Indian-thesis format selector; default
+    // to "custom" silently and hide the row to reduce noise.
+    var fmt = form.elements.format;
+    if (fmt) {
+      fmt.value = 'custom';
+      var fmtField = fmt.closest('.th-field');
+      if (fmtField) fmtField.style.display = 'none';
+    }
+  }
+
+  // ---------- hydrate from saved setup ----------
   Object.entries(s.setup || {}).forEach(([k, v]) => {
     if (form.elements[k] && v != null) form.elements[k].value = v;
   });

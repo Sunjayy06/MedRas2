@@ -3,16 +3,36 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Thesis Writing Module · MedRAS</title>
-<meta name="description" content="Guided thesis writing — your data, your voice, your decisions. Every AI suggestion needs your click. Built for Indian MD / DNB / PhD." />
+<title>Thesis &amp; Article Writing · MedRAS</title>
+<meta name="description" content="Guided writing for Indian MD / DNB / PhD theses and journal-ready articles (Case Report, Case Series, Narrative / Systematic Review, Meta-analysis, Original Research, Monograph). Your data, your voice, your decisions." />
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2310b981'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-family='Inter,sans-serif' font-size='17' font-weight='800' fill='%230a1f1a'%3ET%3C/text%3E%3C/svg%3E" />
 <link rel="stylesheet" href="/thesis-module/css/style.css" />
+<style>
+  /* Local-only tweaks for the picker — kept inline to avoid bloating the global stylesheet. */
+  .pk-row { display:flex; flex-direction:column; gap:8px; margin:14px 0 0 }
+  .pk-row > strong { font-size:13px; color:var(--th-text-soft); text-transform:uppercase; letter-spacing:.04em }
+  .pk-opt { display:flex; gap:10px; align-items:flex-start; padding:10px 12px;
+            border:1px solid var(--th-line); border-radius:8px; cursor:pointer;
+            background:var(--th-paper); transition: border-color .12s, background .12s }
+  .pk-opt:hover { border-color: var(--th-emerald-d) }
+  .pk-opt input { margin-top:3px }
+  .pk-opt .pk-tt { font-weight:600; color:var(--th-ink-900) }
+  .pk-opt .pk-sub { font-size:12.5px; color:var(--th-text-soft); margin-top:2px; line-height:1.5 }
+  .pk-opt .pk-meta { font-size:12px; color:var(--th-text-soft); margin-top:4px;
+                     display:flex; flex-wrap:wrap; gap:10px }
+  .pk-opt .pk-meta span { display:inline-flex; align-items:center; gap:4px }
+  .pk-opt:has(input:checked) { border-color: var(--th-emerald-d);
+                               background: var(--th-paper-2); box-shadow: 0 0 0 2px var(--th-emerald-d) inset }
+  .pk-grid-2 { display:grid; grid-template-columns: 1fr 1fr; gap:8px }
+  @media (max-width: 720px) { .pk-grid-2 { grid-template-columns: 1fr } }
+  .pk-hidden { display:none }
+</style>
 </head>
 <body>
 <header class="th-header">
   <a class="th-brand" href="/thesis-module/">
     <span class="th-brand-mark">T</span>
-    <span>MedRAS — Thesis Writing</span>
+    <span>MedRAS — Thesis &amp; Article Writing</span>
   </a>
   <nav class="th-nav">
     <a href="/thesis-module/dashboard.html">Dashboard</a>
@@ -23,34 +43,76 @@
 <main class="th-shell">
   <section class="th-hero">
     <span class="th-eyebrow">A MedRAS module</span>
-    <h1>Your thesis. Your voice. Your decisions.</h1>
+    <h1>Your study. Your voice. Your decisions.</h1>
     <p>
-      A guided 9-station flow that turns your study data into a submission-ready
-      thesis. Every AI suggestion needs your explicit click. Numbers from your
-      study are locked in yellow — never altered. Built for NBEMS DNB,
-      Indian MD/MS and PhD, with university-rule overlays.
+      A guided flow for Indian MD / DNB / PhD theses <strong>and</strong> journal-ready
+      articles (Case Report, Case Series, Narrative / Systematic Review,
+      Meta-analysis, Original Research, Monograph). Every AI suggestion needs
+      your explicit click. Numbers from your study are locked in yellow —
+      never altered.
     </p>
   </section>
 
-  <h2 class="th-h2">What do you want to do today?</h2>
-
-  <div class="th-mode-grid">
-    <a class="th-mode-card" href="/thesis-module/setup.html" data-testid="card-fresh">
-      <span class="th-mode-num">1</span>
-      <span class="th-mode-title">Start a fresh thesis</span>
-      <span class="th-mode-desc">
-        9-station guided journey: setup → guidelines → references → data → dashboard → editor → compliance → export.
-      </span>
-    </a>
-
+  <h2 class="th-h2">Resume or start something new</h2>
+  <div class="th-mode-grid" style="margin-bottom:18px">
     <a class="th-mode-card" href="/thesis-module/dashboard.html" data-testid="card-resume">
-      <span class="th-mode-num">2</span>
-      <span class="th-mode-title">Resume my thesis</span>
+      <span class="th-mode-num">↻</span>
+      <span class="th-mode-title">Resume my work</span>
       <span class="th-mode-desc">
-        Jump straight back to the chapter dashboard. Auto-saved in your browser; survives refreshes.
+        Jump straight to the chapter dashboard. Auto-saved in your browser; survives refreshes.
       </span>
     </a>
   </div>
+
+  <form id="th-pick-form" class="th-card">
+    <h3 class="th-h3" style="margin-top:0">Start something new</h3>
+    <p style="margin:0 0 6px; color:var(--th-text-soft); font-size:14px">
+      Three quick questions so the editor knows what you're writing, who's writing it, and which reporting checklist to enforce.
+    </p>
+
+    <!-- 1. Mode -->
+    <div class="pk-row">
+      <strong>1 · What are you writing?</strong>
+      <div class="pk-grid-2">
+        <label class="pk-opt">
+          <input type="radio" name="mode" value="thesis" required />
+          <span>
+            <span class="pk-tt">A thesis</span>
+            <span class="pk-sub">Postgraduate thesis for MD / MS / DNB / PhD — full chapter spine, IEC, plagiarism &amp; AI gates, university-rule overlays.</span>
+          </span>
+        </label>
+        <label class="pk-opt">
+          <input type="radio" name="mode" value="article" />
+          <span>
+            <span class="pk-tt">A journal article</span>
+            <span class="pk-sub">Case report, case series, review, meta-analysis, original research, or monograph — built around the right reporting checklist.</span>
+          </span>
+        </label>
+      </div>
+    </div>
+
+    <!-- 2. Article-type sub-picker (revealed when mode=article) -->
+    <div class="pk-row pk-hidden" id="pk-article-row">
+      <strong>2 · Which article type?</strong>
+      <div id="pk-article-list" style="display:flex; flex-direction:column; gap:8px"></div>
+    </div>
+
+    <!-- 3. Role -->
+    <div class="pk-row">
+      <strong><span id="pk-role-num">2</span> · Who's writing it?</strong>
+      <select class="th-select" name="role" id="pk-role" required>
+        <option value="">— choose your role —</option>
+      </select>
+      <span style="font-size:12.5px; color:var(--th-text-soft)">
+        We use this to phrase declarations, certificates, and to pick the right title-page header (e.g. "submitted in partial fulfilment of MD…").
+      </span>
+    </div>
+
+    <div style="margin-top:18px; display:flex; gap:10px; justify-content:flex-end; align-items:center">
+      <span id="pk-summary" style="font-size:13px; color:var(--th-text-soft)"></span>
+      <button type="submit" class="th-btn th-btn-primary" data-testid="button-continue">Continue → Setup</button>
+    </div>
+  </form>
 
   <section class="th-card" style="margin-top:32px">
     <span class="th-eyebrow">How the upper hand is enforced</span>
@@ -59,12 +121,149 @@
       <li>Every AI suggestion appears as an inline track-change with a ✓ / ✗ — nothing auto-applies.</li>
       <li>Every number from your statistical output is locked in yellow and cannot be rewritten.</li>
       <li>AI never writes a sentence without an attached source from the retrieved papers.</li>
-      <li>Chapter dashboard with traffic-light progress; jump in/out in any order.</li>
+      <li>Chapter / section dashboard with traffic-light progress; jump in/out in any order.</li>
       <li>Helper buttons take you to the right MedRAS module (Sample Size, Stats, Plagiarism) when you need them.</li>
     </ul>
   </section>
 </main>
 
 <script src="/thesis-module/js/thesis-state.js"></script>
+<script src="/thesis-module/js/writing-modes.js"></script>
+<script>
+(function () {
+  var form = document.getElementById('th-pick-form');
+  var roleSel = document.getElementById('pk-role');
+  var articleRow  = document.getElementById('pk-article-row');
+  var articleList = document.getElementById('pk-article-list');
+  var summary = document.getElementById('pk-summary');
+  var roleNum = document.getElementById('pk-role-num');
+
+  // Hydrate roles
+  WritingModes.ROLES.forEach(function (r) {
+    var opt = document.createElement('option');
+    opt.value = r.id; opt.textContent = r.label;
+    roleSel.appendChild(opt);
+  });
+
+  // Hydrate article-type cards (hidden until mode=article)
+  WritingModes.ARTICLE_TYPES.forEach(function (t) {
+    var lbl = document.createElement('label');
+    lbl.className = 'pk-opt';
+    var sizeBit = t.word_min ? (t.word_min === t.word_max
+        ? (t.word_min.toLocaleString() + ' words')
+        : (t.word_min.toLocaleString() + '–' + t.word_max.toLocaleString() + ' words'))
+      : (t.page_min + '–' + t.page_max + ' pages');
+    var citeBit = t.citation_min === t.citation_max
+        ? (t.citation_min + ' citations')
+        : (t.citation_min + '–' + t.citation_max + ' citations');
+    lbl.innerHTML =
+      '<input type="radio" name="article_type" value="' + t.id + '" />' +
+      '<span style="flex:1">' +
+        '<span class="pk-tt">' + t.label + '</span>' +
+        '<span class="pk-sub">' + t.blurb + '</span>' +
+        '<span class="pk-meta">' +
+          '<span>📐 ' + sizeBit + '</span>' +
+          '<span>📚 ' + citeBit + '</span>' +
+          '<span>📝 ' + t.guideline + '</span>' +
+          '<span>🛡 plag &lt;' + t.plag_cap + '% · AI &lt;' + t.ai_cap + '%</span>' +
+          '<span>⏱ ~' + t.delivery_days + '</span>' +
+        '</span>' +
+      '</span>';
+    articleList.appendChild(lbl);
+  });
+
+  // Pre-fill from any existing draft state — applied ONCE on load.
+  // Re-applying inside refresh() (which runs on every change) would
+  // make article-type sticky and silently override the user's edits.
+  var s = ThesisState.get();
+  var preset = s.setup || {};
+  if (preset.mode) {
+    var modeEl = form.elements.mode;
+    for (var i = 0; i < modeEl.length; i++) if (modeEl[i].value === preset.mode) modeEl[i].checked = true;
+  }
+  if (preset.role) roleSel.value = preset.role;
+  // Article-type preset is applied just-in-time the first time the
+  // article row is revealed (since the radios live inside that row),
+  // and only if the user hasn't already picked something.
+  var presetArticleApplied = false;
+  function maybeApplyArticlePreset() {
+    if (presetArticleApplied || !preset.article_type) return;
+    var ats = form.elements.article_type;
+    if (!ats) return;
+    var anyChecked = false;
+    for (var i = 0; i < ats.length; i++) if (ats[i].checked) { anyChecked = true; break; }
+    if (anyChecked) { presetArticleApplied = true; return; }
+    for (var j = 0; j < ats.length; j++) if (ats[j].value === preset.article_type) {
+      ats[j].checked = true; presetArticleApplied = true; break;
+    }
+  }
+
+  function refresh() {
+    var fd = new FormData(form);
+    var mode = fd.get('mode');
+    var isArticle = mode === 'article';
+    articleRow.classList.toggle('pk-hidden', !isArticle);
+    roleNum.textContent = isArticle ? '3' : '2';
+    // Make article_type required when article picked
+    Array.prototype.forEach.call(form.elements.article_type || [], function (r) {
+      r.required = isArticle;
+    });
+    if (isArticle) maybeApplyArticlePreset();
+    // Live summary
+    var bits = [];
+    if (mode === 'thesis')  bits.push('Thesis');
+    if (mode === 'article') {
+      var t = WritingModes.byId(fd.get('article_type'));
+      bits.push(t ? t.label : 'Article (pick a type)');
+    }
+    var roleLabel = WritingModes.roleById(fd.get('role'));
+    if (roleLabel) bits.push(roleLabel.label.split(' (')[0]);
+    summary.textContent = bits.length ? '→ ' + bits.join(' · ') : '';
+  }
+  form.addEventListener('change', refresh);
+  refresh();
+
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var fd = new FormData(form);
+    var mode = fd.get('mode');
+    var article_type = mode === 'article' ? fd.get('article_type') : '';
+    var role = fd.get('role');
+    if (!mode || !role || (mode === 'article' && !article_type)) {
+      ThesisState.toast('Pick all the options first.');
+      return;
+    }
+    // Persist intent + the deliverable target so other pages can use it
+    var typeRec = WritingModes.byId(mode === 'article' ? article_type : 'pg_thesis');
+    ThesisState.patch(function (st) {
+      st.setup = Object.assign(st.setup || {}, {
+        mode: mode,
+        role: role,
+        article_type: article_type || '',
+        target_id: typeRec ? typeRec.id : '',
+      });
+      // Also stash the target deliverable so compliance / export can read
+      // it without re-walking the catalogue.
+      if (typeRec) {
+        st.targets = {
+          id: typeRec.id,
+          label: typeRec.label,
+          guideline: typeRec.guideline,
+          word_min: typeRec.word_min || null,
+          word_max: typeRec.word_max || null,
+          page_min: typeRec.page_min || null,
+          page_max: typeRec.page_max || null,
+          citation_min: typeRec.citation_min,
+          citation_max: typeRec.citation_max,
+          plag_cap: typeRec.plag_cap,
+          ai_cap: typeRec.ai_cap,
+        };
+      }
+      return st;
+    });
+    location.href = '/thesis-module/setup.html';
+  });
+})();
+</script>
 </body>
 </html>
