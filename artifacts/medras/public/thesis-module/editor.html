@@ -75,6 +75,7 @@
 </div>
 
 <script src="/thesis-module/js/thesis-state.js"></script>
+<script src="/thesis-module/js/writing-modes.js"></script>
 <script src="/thesis-module/js/track-changes.js"></script>
 <script>
 (function () {
@@ -89,7 +90,7 @@
   const esc = TrackChanges.escapeHtml;
 
   async function init() {
-    const sp = await ThesisState.api('/spine');
+    const sp = await ThesisState.api('/spine' + WritingModes.spineQuery((ThesisState.get().setup) || {}));
     spine = sp.spine;
     chapter = spine.find((c) => c.id === chapterId) || spine[0];
     chapterId = chapter.id;

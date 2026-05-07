@@ -63,6 +63,7 @@
 </main>
 
 <script src="/thesis-module/js/thesis-state.js"></script>
+<script src="/thesis-module/js/writing-modes.js"></script>
 <script>
 (function () {
   const RULE_LABELS = {
@@ -97,7 +98,7 @@
 
   document.getElementById('th-gd-defaults').addEventListener('click', async () => {
     try {
-      const res = await ThesisState.api('/spine');
+      const res = await ThesisState.api('/spine' + WritingModes.spineQuery((ThesisState.get().setup) || {}));
       ThesisState.patch((s) => { s.rules = res.rules; s.guideline_evidence = []; return s; });
       renderRules(res.rules);
       ThesisState.toast('Using NBEMS defaults.');

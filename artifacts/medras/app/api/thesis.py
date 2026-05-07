@@ -36,11 +36,48 @@ MAX_UPLOAD_BYTES = 30 * 1024 * 1024
 # ---------------------------------------------------------------------------
 
 @router.get("/spine")
-async def get_spine() -> Dict[str, Any]:
-    """Return the canonical chapter spine + NBEMS default rules."""
+async def get_spine(
+    mode: str = "thesis",
+    article_type: str = "",
+    design: str = "",
+    tier: str = "",
+    citation_style: str = "",
+) -> Dict[str, Any]:
+    """Return the right chapter spine for the writer.
+
+    * ``mode=thesis`` (default) → canonical Indian MD/DNB/PhD spine.
+    * ``mode=article`` → the spine for the matching reporting checklist
+      (CARE / CONSORT / STROBE / PRISMA / MOOSE / COREQ / IMRaD /
+      narrative), with per-section word budgets sized from the journal
+      tier (``t1``..``t4``, default ``t3``).
+    """
+    if (mode or "").strip().lower() == "article":
+        spine = thesis_formats.get_article_spine(article_type, design)
+        tier_targets = thesis_formats.get_tier_targets(tier)
+        spine = thesis_formats.apply_tier_to_spine(spine, tier_targets)
+        rules = dict(thesis_formats.DEFAULT_RULES)
+        rules["citation_style"] = (
+            (citation_style or "").strip().lower()
+            or tier_targets.get("default_citation_style", "vancouver")
+        )
+        rules["min_references"] = tier_targets.get("ref_min") or rules["min_references"]
+        if tier_targets.get("ref_max"):
+            rules["max_references"] = tier_targets["ref_max"]
+        rules["abstract_words"] = tier_targets.get("abstract_words")
+        rules["abstract_structured"] = tier_targets.get("abstract_structured")
+        rules["max_pages"] = None  # articles aren't page-capped, they're word-capped
+        return {
+            "spine":     spine,
+            "rules":     rules,
+            "tier":      tier_targets,
+            "checklist": thesis_formats.resolve_checklist(article_type, design),
+            "mode":      "article",
+            "version":   "v2-article-tier-aware",
+        }
     return {
         "spine":   thesis_formats.CHAPTER_SPINE,
         "rules":   thesis_formats.DEFAULT_RULES,
+        "mode":    "thesis",
         "version": "v1-indian-md-dnb-phd",
     }
 

@@ -207,16 +207,34 @@
       (mode === 'article' ? 'Article: ' : 'Thesis: ') + (typeRec ? typeRec.label : '—') +
       (role ? '  ·  ' + role.label : '');
     var metaBits = [];
-    if (typeRec) {
-      if (typeRec.guideline) metaBits.push('📝 ' + typeRec.guideline);
-      if (typeRec.word_min)  metaBits.push('📐 ' + (typeRec.word_min === typeRec.word_max
-          ? typeRec.word_min.toLocaleString() + ' words'
-          : typeRec.word_min.toLocaleString() + '–' + typeRec.word_max.toLocaleString() + ' words'));
-      else if (typeRec.page_min) metaBits.push('📐 ' + typeRec.page_min + '–' + typeRec.page_max + ' pages');
-      if (typeRec.citation_min) metaBits.push('📚 ' + typeRec.citation_min +
-          (typeRec.citation_max !== typeRec.citation_min ? '–' + typeRec.citation_max : '') + ' citations');
-      metaBits.push('🛡 plag <' + typeRec.plag_cap + '% · AI <' + typeRec.ai_cap + '%');
-    }
+    var t = targets || {};
+    // Prefer the live `targets` blob (populated by the welcome page from
+    // the chosen tier); fall back to typeRec defaults so old saves still
+    // render meaningfully.
+    var checklistId = setup0.checklist || (t && t.checklist) || (typeRec && typeRec.checklist) || '';
+    var ci = checklistId && WritingModes.CHECKLIST_INFO[checklistId];
+    if (ci) metaBits.push('📝 ' + ci.label + ' checklist');
+    else if (typeRec && typeRec.guideline) metaBits.push('📝 ' + typeRec.guideline);
+    var design = WritingModes.designById(setup0.design || '');
+    if (design) metaBits.push('🔬 ' + design.label);
+    if (t && t.tier_label) metaBits.push('🎯 ' + t.tier_label);
+    var w_min = (t && t.word_min) || (typeRec && typeRec.word_min);
+    var w_max = (t && t.word_max) || (typeRec && typeRec.word_max);
+    if (w_min) metaBits.push('📐 ' + w_min.toLocaleString() +
+        (w_max && w_max !== w_min ? '–' + w_max.toLocaleString() : '') + ' words');
+    else if (typeRec && typeRec.page_min)
+      metaBits.push('📐 ' + typeRec.page_min + '–' + typeRec.page_max + ' pages');
+    var c_min = (t && t.citation_min) || (typeRec && typeRec.citation_min);
+    var c_max = (t && t.citation_max) || (typeRec && typeRec.citation_max);
+    if (c_min) metaBits.push('📚 ' + c_min +
+        (c_max && c_max !== c_min ? '–' + c_max : '+') + ' refs');
+    var aw = t && t.abstract_words;
+    if (aw) metaBits.push('📄 abstract ' + aw + 'w ' + (t.abstract_structured ? 'structured' : 'unstructured'));
+    var cs = (t && t.citation_style) || setup0.citation_style;
+    if (cs) metaBits.push('✒ ' + cs.charAt(0).toUpperCase() + cs.slice(1));
+    var pc = (t && t.plag_cap) || (typeRec && typeRec.plag_cap);
+    var ac = (t && t.ai_cap)  || (typeRec && typeRec.ai_cap);
+    if (pc != null && ac != null) metaBits.push('🛡 plag <' + pc + '% · AI <' + ac + '%');
     document.getElementById('th-intent-meta').textContent = metaBits.join(' · ');
   }
   // Headline + eyebrow swap for article mode

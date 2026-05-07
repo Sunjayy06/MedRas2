@@ -97,6 +97,26 @@
       <div id="pk-article-list" style="display:flex; flex-direction:column; gap:8px"></div>
     </div>
 
+    <!-- 2b. Study-design picker (revealed only for Original Research) -->
+    <div class="pk-row pk-hidden" id="pk-design-row">
+      <strong>2b · What's your study design?</strong>
+      <span style="font-size:12.5px; color:var(--th-text-soft); margin-bottom:4px">
+        We use this to pick the right reporting checklist (CONSORT for trials, STROBE for observational, COREQ for qualitative). It changes the chapter list in the editor.
+      </span>
+      <select class="th-select" name="design" id="pk-design">
+        <option value="">— pick the design that matches your study —</option>
+      </select>
+    </div>
+
+    <!-- 2c. Journal tier (revealed when mode=article) -->
+    <div class="pk-row pk-hidden" id="pk-tier-row">
+      <strong>2c · Which tier of journal are you targeting?</strong>
+      <span style="font-size:12.5px; color:var(--th-text-soft); margin-bottom:4px">
+        Word counts, abstract format and reference targets all flow from this. You can change it later.
+      </span>
+      <div id="pk-tier-list" style="display:flex; flex-direction:column; gap:8px"></div>
+    </div>
+
     <!-- 3. Role -->
     <div class="pk-row">
       <strong><span id="pk-role-num">2</span> · Who's writing it?</strong>
@@ -135,8 +155,37 @@
   var roleSel = document.getElementById('pk-role');
   var articleRow  = document.getElementById('pk-article-row');
   var articleList = document.getElementById('pk-article-list');
+  var designRow   = document.getElementById('pk-design-row');
+  var designSel   = document.getElementById('pk-design');
+  var tierRow     = document.getElementById('pk-tier-row');
+  var tierList    = document.getElementById('pk-tier-list');
   var summary = document.getElementById('pk-summary');
   var roleNum = document.getElementById('pk-role-num');
+
+  // Hydrate design dropdown
+  WritingModes.ORIGINAL_RESEARCH_DESIGNS.forEach(function (d) {
+    var opt = document.createElement('option');
+    opt.value = d.id; opt.textContent = d.label + '  →  ' + (WritingModes.CHECKLIST_INFO[d.checklist] || {}).label;
+    designSel.appendChild(opt);
+  });
+  // Hydrate tier cards
+  WritingModes.JOURNAL_TIERS.forEach(function (t) {
+    var lbl = document.createElement('label');
+    lbl.className = 'pk-opt';
+    lbl.innerHTML =
+      '<input type="radio" name="tier" value="' + t.id + '" />' +
+      '<span style="flex:1">' +
+        '<span class="pk-tt">' + t.label + '</span>' +
+        '<span class="pk-sub">' + t.examples + '</span>' +
+        '<span class="pk-meta">' +
+          '<span>📐 ' + t.body_words_min.toLocaleString() + '–' + t.body_words_max.toLocaleString() + ' words</span>' +
+          '<span>📄 abstract ' + t.abstract_words + 'w ' + (t.abstract_structured ? '· structured' : '· unstructured') + '</span>' +
+          '<span>📚 ' + t.ref_min + (t.ref_max ? '–' + t.ref_max : '+') + ' refs</span>' +
+          '<span>🛡 plag &lt;' + t.plag_cap + '% · AI &lt;' + t.ai_cap + '%</span>' +
+        '</span>' +
+      '</span>';
+    tierList.appendChild(lbl);
+  });
 
   // Hydrate roles
   WritingModes.ROLES.forEach(function (r) {
@@ -145,28 +194,29 @@
     roleSel.appendChild(opt);
   });
 
-  // Hydrate article-type cards (hidden until mode=article)
+  // Hydrate article-type cards (hidden until mode=article). Word count /
+  // plag-cap / AI-cap are intentionally NOT shown here any more — those
+  // are now driven by the journal tier picked in question 2c so showing
+  // them on the type card would be misleading. Each card shows the
+  // reporting checklist + citation range + typical scope instead.
   WritingModes.ARTICLE_TYPES.forEach(function (t) {
     var lbl = document.createElement('label');
     lbl.className = 'pk-opt';
-    var sizeBit = t.word_min ? (t.word_min === t.word_max
-        ? (t.word_min.toLocaleString() + ' words')
-        : (t.word_min.toLocaleString() + '–' + t.word_max.toLocaleString() + ' words'))
-      : (t.page_min + '–' + t.page_max + ' pages');
     var citeBit = t.citation_min === t.citation_max
         ? (t.citation_min + ' citations')
         : (t.citation_min + '–' + t.citation_max + ' citations');
+    var sizeBit = t.page_min ? ('📐 ' + t.page_min + '–' + t.page_max + ' pages') : '';
+    var checklistInfo = WritingModes.CHECKLIST_INFO[t.checklist] || { label: t.guideline, desc: '' };
     lbl.innerHTML =
       '<input type="radio" name="article_type" value="' + t.id + '" />' +
       '<span style="flex:1">' +
         '<span class="pk-tt">' + t.label + '</span>' +
         '<span class="pk-sub">' + t.blurb + '</span>' +
         '<span class="pk-meta">' +
-          '<span>📐 ' + sizeBit + '</span>' +
+          '<span>📝 ' + checklistInfo.label + ' checklist</span>' +
           '<span>📚 ' + citeBit + '</span>' +
-          '<span>📝 ' + t.guideline + '</span>' +
-          '<span>🛡 plag &lt;' + t.plag_cap + '% · AI &lt;' + t.ai_cap + '%</span>' +
-          '<span>⏱ ~' + t.delivery_days + '</span>' +
+          (sizeBit ? '<span>' + sizeBit + '</span>' : '') +
+          '<span>⏱ typical scope ~' + t.delivery_days + '</span>' +
         '</span>' +
       '</span>';
     articleList.appendChild(lbl);
@@ -198,23 +248,52 @@
     }
   }
 
+  // Suggest a default tier the first time an article type is chosen, but
+  // never override a tier the researcher has already picked themselves.
+  var tierAutoApplied = false;
+  function maybeAutoPickTier(typeRec) {
+    if (tierAutoApplied || !typeRec || !typeRec.typical_tier) return;
+    var tiers = form.elements.tier;
+    if (!tiers) return;
+    var anyChecked = false;
+    for (var i = 0; i < tiers.length; i++) if (tiers[i].checked) { anyChecked = true; break; }
+    if (anyChecked) return;
+    for (var j = 0; j < tiers.length; j++) if (tiers[j].value === typeRec.typical_tier) {
+      tiers[j].checked = true; tierAutoApplied = true; break;
+    }
+  }
+
   function refresh() {
     var fd = new FormData(form);
     var mode = fd.get('mode');
     var isArticle = mode === 'article';
     articleRow.classList.toggle('pk-hidden', !isArticle);
+    var typeRec = isArticle ? WritingModes.byId(fd.get('article_type')) : null;
+    var asksDesign = !!(typeRec && typeRec.asks_design);
+    designRow.classList.toggle('pk-hidden', !asksDesign);
+    tierRow.classList.toggle('pk-hidden', !isArticle);
+    designSel.required = asksDesign;
+    Array.prototype.forEach.call(form.elements.article_type || [], function (r) { r.required = isArticle; });
+    Array.prototype.forEach.call(form.elements.tier || [],         function (r) { r.required = isArticle; });
     roleNum.textContent = isArticle ? '3' : '2';
-    // Make article_type required when article picked
-    Array.prototype.forEach.call(form.elements.article_type || [], function (r) {
-      r.required = isArticle;
-    });
-    if (isArticle) maybeApplyArticlePreset();
+    if (isArticle) {
+      maybeApplyArticlePreset();
+      if (typeRec) maybeAutoPickTier(typeRec);
+    }
     // Live summary
     var bits = [];
     if (mode === 'thesis')  bits.push('Thesis');
     if (mode === 'article') {
-      var t = WritingModes.byId(fd.get('article_type'));
-      bits.push(t ? t.label : 'Article (pick a type)');
+      bits.push(typeRec ? typeRec.label : 'Article (pick a type)');
+      if (asksDesign) {
+        var d = WritingModes.designById(fd.get('design'));
+        if (d) bits.push(d.label);
+      }
+      var checklistId = WritingModes.resolveChecklist(fd.get('article_type'), fd.get('design'));
+      var ci = WritingModes.CHECKLIST_INFO[checklistId];
+      if (ci) bits.push(ci.label);
+      var tierRec = WritingModes.tierById(fd.get('tier'));
+      if (tierRec) bits.push(tierRec.label.split(' — ')[0]);
     }
     var roleLabel = WritingModes.roleById(fd.get('role'));
     if (roleLabel) bits.push(roleLabel.label.split(' (')[0]);
@@ -228,35 +307,59 @@
     var fd = new FormData(form);
     var mode = fd.get('mode');
     var article_type = mode === 'article' ? fd.get('article_type') : '';
+    var design = mode === 'article' ? (fd.get('design') || '') : '';
+    var tier = mode === 'article' ? (fd.get('tier') || '') : '';
     var role = fd.get('role');
-    if (!mode || !role || (mode === 'article' && !article_type)) {
+    var typeRec = WritingModes.byId(mode === 'article' ? article_type : 'pg_thesis');
+    if (!mode || !role || (mode === 'article' && (!article_type || !tier))) {
       ThesisState.toast('Pick all the options first.');
       return;
     }
-    // Persist intent + the deliverable target so other pages can use it
-    var typeRec = WritingModes.byId(mode === 'article' ? article_type : 'pg_thesis');
+    if (mode === 'article' && typeRec && typeRec.asks_design && !design) {
+      ThesisState.toast('Pick a study design so we can use the right reporting checklist.');
+      return;
+    }
+    var checklist = mode === 'article'
+        ? WritingModes.resolveChecklist(article_type, design)
+        : '';
+    var tierRec = WritingModes.tierById(tier);
+    var citationStyle = (tierRec && tierRec.default_citation_style) || 'vancouver';
     ThesisState.patch(function (st) {
       st.setup = Object.assign(st.setup || {}, {
         mode: mode,
         role: role,
         article_type: article_type || '',
+        design: design || '',
+        tier: tier || '',
+        checklist: checklist,
+        citation_style: (st.setup && st.setup.citation_style) || citationStyle,
         target_id: typeRec ? typeRec.id : '',
       });
       // Also stash the target deliverable so compliance / export can read
-      // it without re-walking the catalogue.
+      // it without re-walking the catalogue. For articles the word /
+      // citation / plag caps now flow from the chosen tier; for theses
+      // they still come from the type record.
       if (typeRec) {
         st.targets = {
           id: typeRec.id,
           label: typeRec.label,
-          guideline: typeRec.guideline,
-          word_min: typeRec.word_min || null,
-          word_max: typeRec.word_max || null,
+          guideline: (mode === 'article' && checklist && WritingModes.CHECKLIST_INFO[checklist])
+            ? WritingModes.CHECKLIST_INFO[checklist].label
+            : typeRec.guideline,
+          checklist: checklist || null,
+          tier: tierRec ? tierRec.id : null,
+          tier_label: tierRec ? tierRec.label : null,
+          word_min: tierRec ? tierRec.body_words_min : (typeRec.word_min || null),
+          word_max: tierRec ? tierRec.body_words_max : (typeRec.word_max || null),
           page_min: typeRec.page_min || null,
           page_max: typeRec.page_max || null,
-          citation_min: typeRec.citation_min,
-          citation_max: typeRec.citation_max,
-          plag_cap: typeRec.plag_cap,
-          ai_cap: typeRec.ai_cap,
+          abstract_words: tierRec ? tierRec.abstract_words : null,
+          abstract_structured: tierRec ? tierRec.abstract_structured : null,
+          citation_min: tierRec ? tierRec.ref_min : typeRec.citation_min,
+          citation_max: tierRec ? tierRec.ref_max : typeRec.citation_max,
+          citation_style: citationStyle,
+          plag_cap: tierRec ? tierRec.plag_cap : typeRec.plag_cap,
+          ai_cap: tierRec ? tierRec.ai_cap : typeRec.ai_cap,
         };
       }
       return st;

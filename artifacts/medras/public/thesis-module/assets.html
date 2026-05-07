@@ -82,6 +82,7 @@
 </main>
 
 <script src="/thesis-module/js/thesis-state.js"></script>
+<script src="/thesis-module/js/writing-modes.js"></script>
 <script>
 (function () {
   function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
@@ -90,7 +91,7 @@
     const sel = document.getElementById('th-asset-chapter');
     let spine = window._th_spine;
     if (!spine) {
-      const res = await ThesisState.api('/spine');
+      const res = await ThesisState.api('/spine' + WritingModes.spineQuery((ThesisState.get().setup) || {}));
       spine = res.spine; window._th_spine = spine;
     }
     sel.innerHTML = spine
