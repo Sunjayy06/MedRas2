@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Setup · Thesis · MedRAS</title>
+<link rel="stylesheet" href="/thesis-module/css/style.css" />
+</head>
+<body>
+<header class="th-header">
+  <a class="th-brand" href="/thesis-module/"><span class="th-brand-mark">T</span><span>MedRAS — Thesis Writing</span></a>
+  <nav class="th-nav"><a href="/thesis-module/dashboard.html">Dashboard</a><a href="/">← MedRAS</a></nav>
+</header>
+<div class="th-stepbar">
+  <span class="th-step is-active">1 · Setup</span>
+  <span class="th-step">2 · Guidelines</span>
+  <span class="th-step">3 · References</span>
+  <span class="th-step">4 · Data &amp; Stats</span>
+  <span class="th-step">5 · Dashboard</span>
+</div>
+
+<main class="th-shell">
+  <a class="th-back-link" href="/thesis-module/">← Back to start</a>
+  <span class="th-eyebrow">Station 1 of 9</span>
+  <h1 class="th-h1">Tell us about your thesis</h1>
+  <p class="th-sub">Just the basics — you can change anything later. We'll use this to render the title page, set headers, and pick the right citation style.</p>
+
+  <form id="th-setup-form" class="th-card">
+    <div class="th-grid cols-2">
+      <div class="th-field">
+        <label>Thesis title</label>
+        <input class="th-input" name="title" required maxlength="400"
+          placeholder="A study of …" />
+      </div>
+      <div class="th-field">
+        <label>Format</label>
+        <select class="th-select" name="format" required>
+          <option value="indian-md">Indian MD / MS (university)</option>
+          <option value="indian-dnb">NBEMS DNB</option>
+          <option value="indian-phd">Indian PhD</option>
+          <option value="custom">Custom (define via guidelines upload)</option>
+        </select>
+      </div>
+      <div class="th-field">
+        <label>Domain</label>
+        <select class="th-select" name="domain">
+          <option value="">— let RAG auto-detect —</option>
+          <option value="medical_clinical">Medical / Clinical</option>
+          <option value="pharmacology">Pharmacology</option>
+          <option value="nursing">Nursing</option>
+          <option value="psychology">Psychology</option>
+          <option value="social_sciences">Social Sciences</option>
+          <option value="business_economics">Business / Economics</option>
+          <option value="engineering">Engineering</option>
+          <option value="computer_science">Computer Science</option>
+          <option value="law">Law</option>
+          <option value="education">Education</option>
+        </select>
+      </div>
+      <div class="th-field">
+        <label>Citation style</label>
+        <select class="th-select" name="citation_style">
+          <option value="vancouver">Vancouver / ICMJE</option>
+          <option value="apa">APA 7</option>
+          <option value="harvard">Harvard</option>
+          <option value="chicago">Chicago</option>
+          <option value="ieee">IEEE</option>
+          <option value="mla">MLA</option>
+        </select>
+      </div>
+      <div class="th-field">
+        <label>Researcher name</label>
+        <input class="th-input" name="researcher" placeholder="Dr. …" />
+      </div>
+      <div class="th-field">
+        <label>Guide</label>
+        <input class="th-input" name="guide" placeholder="Dr. … " />
+      </div>
+      <div class="th-field">
+        <label>Co-Guide (optional)</label>
+        <input class="th-input" name="co_guide" />
+      </div>
+      <div class="th-field">
+        <label>Institution</label>
+        <input class="th-input" name="institution" placeholder="Hospital / University" />
+      </div>
+      <div class="th-field">
+        <label>Year of submission</label>
+        <input class="th-input" name="year" type="number" min="2024" max="2035" value="2026" />
+      </div>
+      <div class="th-field">
+        <label>Target submission date (optional)</label>
+        <input class="th-input" name="submission_date" type="date" />
+      </div>
+    </div>
+
+    <div style="margin-top:8px; display:flex; gap:10px; justify-content:flex-end">
+      <button type="button" id="th-skip" class="th-btn th-btn-light">Skip — go to Dashboard</button>
+      <button type="submit" class="th-btn th-btn-primary" data-testid="button-next">Save & Next: Guidelines →</button>
+    </div>
+  </form>
+</main>
+
+<script src="/thesis-module/js/thesis-state.js"></script>
+<script>
+(function () {
+  const s = ThesisState.get();
+  const form = document.getElementById('th-setup-form');
+  // Hydrate from saved setup
+  Object.entries(s.setup || {}).forEach(([k, v]) => {
+    if (form.elements[k] && v != null) form.elements[k].value = v;
+  });
+
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const fd = new FormData(form);
+    const setup = {};
+    fd.forEach((v, k) => setup[k] = String(v).trim());
+    ThesisState.patch((st) => { st.setup = Object.assign(st.setup || {}, setup); return st; });
+    ThesisState.toast('Saved.');
+    location.href = '/thesis-module/guidelines.html';
+  });
+  document.getElementById('th-skip').addEventListener('click', () => {
+    location.href = '/thesis-module/dashboard.html';
+  });
+})();
+</script>
+</body>
+</html>

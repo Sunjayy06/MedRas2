@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Data &amp; Stats Import · Thesis · MedRAS</title>
+<link rel="stylesheet" href="/thesis-module/css/style.css" />
+</head>
+<body>
+<header class="th-header">
+  <a class="th-brand" href="/thesis-module/"><span class="th-brand-mark">T</span><span>MedRAS — Thesis Writing</span></a>
+  <nav class="th-nav"><a href="/thesis-module/dashboard.html">Dashboard</a><a href="/">← MedRAS</a></nav>
+</header>
+<div class="th-stepbar">
+  <span class="th-step is-done">1 · Setup</span>
+  <span class="th-step is-done">2 · Guidelines</span>
+  <span class="th-step is-done">3 · References</span>
+  <span class="th-step is-active">4 · Data &amp; Stats</span>
+  <span class="th-step">5 · Dashboard</span>
+</div>
+
+<main class="th-shell">
+  <a class="th-back-link" href="/thesis-module/references.html">← Back</a>
+  <span class="th-eyebrow">Station 4 of 9</span>
+  <h1 class="th-h1">Bring in your numbers</h1>
+  <p class="th-sub">
+    Add the figures from your study — sample sizes, p-values, prevalences, effect
+    sizes. Every value you save here is <strong style="background:var(--th-gold-soft); padding:0 4px">locked in yellow</strong>
+    across the entire thesis. The AI will write prose around them but cannot change them.
+  </p>
+
+  <div class="th-grid cols-2">
+    <div class="th-card">
+      <h3 class="th-h3">Option A — Use the Statistical Analysis Engine</h3>
+      <p style="font-size:13.5px; color:var(--th-text-soft); margin:0 0 12px">
+        Run your tests inside MedRAS so the results land here automatically.
+      </p>
+      <a class="th-btn th-btn-ghost" href="/analysis.html" target="_blank">Open Stats Engine ↗</a>
+    </div>
+
+    <div class="th-card">
+      <h3 class="th-h3">Option B — I already have my analysis</h3>
+      <p style="font-size:13.5px; color:var(--th-text-soft); margin:0 0 12px">
+        Paste a summary, table, or SPSS / R output below. Then add the key numbers as
+        locked values one by one.
+      </p>
+      <textarea id="th-stats-text" class="th-textarea" rows="4"
+        placeholder="e.g. n = 120; mean age 42.3 ± 8.1; primary outcome 38% vs 22% (p=0.012)"></textarea>
+    </div>
+  </div>
+
+  <div class="th-card">
+    <h3 class="th-h3">Locked numbers</h3>
+    <p style="font-size:13px; color:var(--th-text-soft); margin:0 0 8px">
+      Add a label and value. Use the same label phrase you'll use in your prose so
+      the locker can find it. Example: label <code>"sample size"</code>, value <code>"n=120"</code>.
+    </p>
+
+    <div class="th-grid cols-3" style="gap:8px">
+      <div class="th-field" style="margin-bottom:0">
+        <label>Label (what it is)</label>
+        <input id="th-lock-label" class="th-input" placeholder="primary outcome" />
+      </div>
+      <div class="th-field" style="margin-bottom:0">
+        <label>Value (verbatim)</label>
+        <input id="th-lock-value" class="th-input" placeholder="38% vs 22% (p=0.012)" />
+      </div>
+      <div style="display:flex; align-items:flex-end">
+        <button id="th-lock-add" class="th-btn th-btn-primary" style="width:100%">Add lock</button>
+      </div>
+    </div>
+
+    <div id="th-locks-row" class="th-locks-row" style="margin-top:14px"></div>
+
+    <details style="margin-top:10px">
+      <summary style="cursor:pointer; color:var(--th-text-soft); font-size:13px">
+        Quick-add common figures
+      </summary>
+      <div style="margin-top:8px; display:flex; flex-wrap:wrap; gap:6px">
+        <button class="th-btn th-btn-light th-btn-sm" data-quick="sample size">+ sample size</button>
+        <button class="th-btn th-btn-light th-btn-sm" data-quick="mean age">+ mean age</button>
+        <button class="th-btn th-btn-light th-btn-sm" data-quick="primary outcome">+ primary outcome</button>
+        <button class="th-btn th-btn-light th-btn-sm" data-quick="p-value">+ p-value</button>
+        <button class="th-btn th-btn-light th-btn-sm" data-quick="effect size">+ effect size</button>
+        <button class="th-btn th-btn-light th-btn-sm" data-quick="response rate">+ response rate</button>
+      </div>
+    </details>
+  </div>
+
+  <div class="th-card">
+    <h3 class="th-h3">Tables / charts — how should we lay them out?</h3>
+    <p style="font-size:13px; color:var(--th-text-soft); margin:0 0 10px">
+      If you uploaded raw stats output, we can either keep them as-is or
+      reorganise into clean IMRAD result tables when drafting Chapter V.
+    </p>
+    <label style="display:block; margin-bottom:6px">
+      <input type="radio" name="organize" value="asis" /> Use them as-is
+    </label>
+    <label style="display:block">
+      <input type="radio" name="organize" value="organize" checked /> Reorganise into IMRAD tables
+    </label>
+  </div>
+
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-top:18px">
+    <a href="/thesis-module/references.html" class="th-btn th-btn-light">← Back</a>
+    <a href="/thesis-module/dashboard.html" class="th-btn th-btn-primary" data-testid="button-next">Next: Chapter Dashboard →</a>
+  </div>
+</main>
+
+<script src="/thesis-module/js/thesis-state.js"></script>
+<script>
+(function () {
+  function renderLocks() {
+    const row = document.getElementById('th-locks-row');
+    const locks = ThesisState.get().locked_numbers || {};
+    const entries = Object.entries(locks);
+    if (!entries.length) { row.innerHTML = '<span style="color:var(--th-text-soft); font-size:13px; font-style:italic">No locks yet. Add your key numbers above.</span>'; return; }
+    row.innerHTML = entries.map(([k, v]) => `
+      <span class="th-lock-chip" data-label="${TC(k)}">
+        <strong>${TC(k)}:</strong> ${TC(v)}
+        <span class="th-lock-x" data-x="${TC(k)}">×</span>
+      </span>`).join('');
+    row.querySelectorAll('.th-lock-x').forEach((x) => {
+      x.addEventListener('click', () => {
+        ThesisState.unsetLock(x.dataset.x);
+        renderLocks();
+      });
+    });
+  }
+  function TC(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+  // Hydrate text + organize choice
+  const s = ThesisState.get();
+  if (s.stats_import) {
+    document.getElementById('th-stats-text').value = s.stats_import.raw_text || '';
+    const oc = s.stats_import.organize_choice || 'organize';
+    const radio = document.querySelector(`input[name=organize][value=${oc}]`);
+    if (radio) radio.checked = true;
+  }
+
+  document.getElementById('th-stats-text').addEventListener('input', (e) => {
+    ThesisState.patch((st) => {
+      st.stats_import = Object.assign(st.stats_import || {}, { raw_text: e.target.value });
+      return st;
+    });
+  });
+  document.querySelectorAll('input[name=organize]').forEach((r) => {
+    r.addEventListener('change', () => {
+      ThesisState.patch((st) => {
+        st.stats_import = Object.assign(st.stats_import || {}, { organize_choice: r.value });
+        return st;
+      });
+    });
+  });
+
+  document.getElementById('th-lock-add').addEventListener('click', () => {
+    const label = document.getElementById('th-lock-label').value.trim();
+    const value = document.getElementById('th-lock-value').value.trim();
+    if (!label || !value) { ThesisState.toast('Both label and value are required.'); return; }
+    ThesisState.setLock(label, value);
+    document.getElementById('th-lock-label').value = '';
+    document.getElementById('th-lock-value').value = '';
+    renderLocks();
+  });
+  document.querySelectorAll('button[data-quick]').forEach((b) => {
+    b.addEventListener('click', () => {
+      document.getElementById('th-lock-label').value = b.dataset.quick;
+      document.getElementById('th-lock-value').focus();
+    });
+  });
+
+  renderLocks();
+})();
+</script>
+</body>
+</html>

@@ -17,6 +17,7 @@ from .proposal import router as proposal_router
 from .references import router as references_router
 from .sample_size import router as sample_size_router
 from .stats import router as stats_router
+from .thesis import router as thesis_router
 
 router = APIRouter()
 router.include_router(health_router, tags=["system"])
@@ -27,3 +28,4 @@ router.include_router(plagiarism_router)
 router.include_router(outline_router)
 router.include_router(references_router)
 router.include_router(proposal_router)
+router.include_router(thesis_router)

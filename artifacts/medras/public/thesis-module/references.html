@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Reference Library · Thesis · MedRAS</title>
+<link rel="stylesheet" href="/thesis-module/css/style.css" />
+</head>
+<body>
+<header class="th-header">
+  <a class="th-brand" href="/thesis-module/"><span class="th-brand-mark">T</span><span>MedRAS — Thesis Writing</span></a>
+  <nav class="th-nav"><a href="/thesis-module/dashboard.html">Dashboard</a><a href="/">← MedRAS</a></nav>
+</header>
+<div class="th-stepbar">
+  <span class="th-step is-done">1 · Setup</span>
+  <span class="th-step is-done">2 · Guidelines</span>
+  <span class="th-step is-active">3 · References</span>
+  <span class="th-step">4 · Data &amp; Stats</span>
+  <span class="th-step">5 · Dashboard</span>
+</div>
+
+<main class="th-shell">
+  <a class="th-back-link" href="/thesis-module/guidelines.html">← Back</a>
+  <span class="th-eyebrow">Station 3 of 9</span>
+  <h1 class="th-h1">Build your reference library</h1>
+  <p class="th-sub">
+    Combine three sources: paste DOIs you already have, search for high-quality
+    papers in the right databases for your domain, or pull from your saved
+    library across past theses.
+    <strong id="th-min-ref-note"></strong>
+  </p>
+
+  <div class="th-grid cols-2">
+    <!-- Add by DOI -->
+    <div class="th-card">
+      <h3 class="th-h3">Add by DOI</h3>
+      <p style="font-size:13px; color:var(--th-text-soft); margin:0 0 8px">
+        Paste DOIs (one per line, or a paragraph — we'll find them).
+      </p>
+      <textarea id="th-doi-text" class="th-textarea" rows="4"
+        placeholder="10.1056/NEJMoa2034577&#10;10.1016/S0140-6736(20)32661-1"></textarea>
+      <div style="display:flex; gap:8px; margin-top:8px">
+        <button id="th-doi-add" class="th-btn th-btn-primary">Verify & add</button>
+        <span id="th-doi-status" style="font-size:13px; color:var(--th-text-soft); align-self:center"></span>
+      </div>
+    </div>
+
+    <!-- Search -->
+    <div class="th-card">
+      <h3 class="th-h3">Search the right databases</h3>
+      <p style="font-size:13px; color:var(--th-text-soft); margin:0 0 8px">
+        We auto-route to PubMed / Cochrane / IEEE / DOAJ etc based on your domain.
+        Distillation drops abstract-less, predatory and off-topic results.
+      </p>
+      <input id="th-search-q" class="th-input" placeholder="e.g. metformin in PCOS adolescents" />
+      <div style="display:flex; gap:8px; margin-top:8px">
+        <button id="th-search-go" class="th-btn th-btn-primary">Search</button>
+        <span id="th-search-status" style="font-size:13px; color:var(--th-text-soft); align-self:center"></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="th-card">
+    <div style="display:flex; align-items:baseline; gap:14px; margin-bottom:10px">
+      <h3 class="th-h3" style="margin:0">Your thesis library</h3>
+      <span id="th-lib-count" style="color:var(--th-text-soft); font-size:13px"></span>
+      <button id="th-import-saved" class="th-btn th-btn-light th-btn-sm" style="margin-left:auto">
+        Import from my saved library
+      </button>
+    </div>
+    <div id="th-lib-list">
+      <div class="th-empty">No references yet. Add some above.</div>
+    </div>
+  </div>
+
+  <div id="th-search-results" class="th-card" style="display:none">
+    <h3 class="th-h3">Search results — tick to add</h3>
+    <div id="th-search-list"></div>
+  </div>
+
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-top:18px">
+    <a href="/thesis-module/guidelines.html" class="th-btn th-btn-light">← Back</a>
+    <a href="/thesis-module/data.html" class="th-btn th-btn-primary" data-testid="button-next">Next: Data &amp; Stats →</a>
+  </div>
+</main>
+
+<script src="/thesis-module/js/thesis-state.js"></script>
+<script src="/thesis-module/js/track-changes.js"></script>
+<script>
+(function () {
+  const esc = TrackChanges.escapeHtml;
+
+  function refreshMinRefNote() {
+    const s = ThesisState.get();
+    const min = (s.rules && s.rules.min_references) || 100;
+    const have = (s.references || []).length;
+    const note = document.getElementById('th-min-ref-note');
+    note.textContent = ` Target: ≥${min} (you have ${have}).`;
+    note.style.color = (have >= min) ? 'var(--th-emerald-d)' : 'var(--th-amber)';
+  }
+
+  function refRowHtml(r) {
+    const authors = (r.authors || []).slice(0, 3).join(', ') +
+                    ((r.authors || []).length > 3 ? ' et al.' : '');
+    const year = r.year || 'n.d.';
+    const journal = r.journal || r.source || '';
+    const link = r.doi ? `https://doi.org/${esc(r.doi)}` : (r.url || '');
+    return `
+      <div class="th-ref-row" data-doi="${esc(r.doi || '')}">
+        <div style="font-weight:700; color:${r.verified ? 'var(--th-emerald-d)' : 'var(--th-amber)'}">
+          ${r.verified ? '✓' : '?'}
+        </div>
+        <div>
+          <div class="th-ref-title">${esc(r.title || 'Untitled')}</div>
+          <div class="th-ref-meta">
+            ${esc(authors)} · ${esc(year)} · ${esc(journal)}
+            ${link ? ` · <a href="${link}" target="_blank" rel="noopener">DOI</a>` : ''}
+            ${r.score != null ? ` · score ${r.score}` : ''}
+          </div>
+          ${r.summary ? `<div class="th-ref-summary">${esc(r.summary)}</div>` : ''}
+        </div>
+        <div class="th-ref-actions">
+          <button class="th-btn th-btn-light th-btn-sm" data-act="remove">Remove</button>
+        </div>
+      </div>`;
+  }
+
+  function renderLib() {
+    const s = ThesisState.get();
+    const list = document.getElementById('th-lib-list');
+    document.getElementById('th-lib-count').textContent =
+      `(${(s.references || []).length} references)`;
+    if (!s.references || !s.references.length) {
+      list.innerHTML = '<div class="th-empty">No references yet. Add some above.</div>';
+      refreshMinRefNote();
+      return;
+    }
+    list.innerHTML = s.references.map(refRowHtml).join('');
+    list.querySelectorAll('button[data-act=remove]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        const row = e.currentTarget.closest('.th-ref-row');
+        const doi = row.dataset.doi;
+        ThesisState.patch((st) => {
+          st.references = (st.references || []).filter((r) => (r.doi || '') !== doi);
+          return st;
+        });
+        renderLib();
+      });
+    });
+    refreshMinRefNote();
+  }
+
+  // ---------- DOI add ----------
+  document.getElementById('th-doi-add').addEventListener('click', async () => {
+    const text = document.getElementById('th-doi-text').value;
+    const status = document.getElementById('th-doi-status');
+    status.innerHTML = '<span class="th-loading"></span> Extracting DOIs…';
+    try {
+      const ext = await ThesisState.api('/references/extract-dois', { text });
+      const dois = ext.dois || [];
+      if (!dois.length) { status.textContent = 'No DOI found.'; return; }
+      status.innerHTML = `<span class="th-loading"></span> Verifying ${dois.length} DOI${dois.length>1?'s':''}…`;
+      const ver = await ThesisState.api('/references/verify-dois', { dois });
+      const verified = (ver.records || []).filter((r) => r.verified);
+      const failed = (ver.records || []).filter((r) => !r.verified);
+      ThesisState.addReferences(verified);
+      ThesisState.libSaveMany(verified);
+      status.textContent = `Added ${verified.length}` +
+        (failed.length ? `, ${failed.length} failed (not found in Crossref)` : '');
+      document.getElementById('th-doi-text').value = '';
+      renderLib();
+    } catch (e) { status.textContent = 'Error: ' + e.message; }
+  });
+
+  // ---------- Search ----------
+  document.getElementById('th-search-go').addEventListener('click', async () => {
+    const q = document.getElementById('th-search-q').value.trim();
+    if (!q) return;
+    const status = document.getElementById('th-search-status');
+    status.innerHTML = '<span class="th-loading"></span> Searching…';
+    try {
+      const setup = (ThesisState.get().setup) || {};
+      const res = await ThesisState.api('/references/search', {
+        topic: q, domain_hint: setup.domain || undefined, limit: 25,
+      });
+      status.textContent = `${(res.records || []).length} results · domain: ${res.domain}`;
+      const wrap = document.getElementById('th-search-results');
+      const list = document.getElementById('th-search-list');
+      wrap.style.display = '';
+      if (!res.records || !res.records.length) {
+        list.innerHTML = '<div class="th-empty">Nothing relevant found. Try different terms.</div>';
+        return;
+      }
+      list.innerHTML = res.records.map((r, i) => `
+        <div class="th-ref-row" data-i="${i}">
+          <div><input type="checkbox" data-pick="${i}" /></div>
+          <div>
+            <div class="th-ref-title">${esc(r.title || '')}</div>
+            <div class="th-ref-meta">
+              ${esc((r.authors || []).slice(0,3).join(', '))} · ${esc(r.year || 'n.d.')}
+              · ${esc(r.journal || r.source || '')} · score ${r.score}
+            </div>
+            ${r.summary ? `<div class="th-ref-summary">${esc(r.summary)}</div>` : ''}
+          </div>
+          <div></div>
+        </div>`).join('') + `
+        <div style="margin-top:10px; text-align:right">
+          <button id="th-add-picked" class="th-btn th-btn-primary">Add selected</button>
+        </div>`;
+      // Attach picker
+      list.querySelector('#th-add-picked').addEventListener('click', () => {
+        const picked = [];
+        list.querySelectorAll('input[data-pick]:checked').forEach((cb) => {
+          const r = res.records[parseInt(cb.dataset.pick, 10)];
+          if (r) picked.push({ ...r, verified: !!r.doi });
+        });
+        if (!picked.length) { ThesisState.toast('Tick at least one.'); return; }
+        ThesisState.addReferences(picked);
+        ThesisState.libSaveMany(picked);
+        renderLib();
+        ThesisState.toast(`Added ${picked.length} references.`);
+      });
+    } catch (e) { status.textContent = 'Search failed: ' + e.message; }
+  });
+
+  // ---------- Import from saved library ----------
+  document.getElementById('th-import-saved').addEventListener('click', async () => {
+    const all = await ThesisState.libAll();
+    if (!all.length) { ThesisState.toast('Your saved library is empty. References you add here will be remembered for next time.'); return; }
+    const cur = new Set((ThesisState.get().references || []).map((r) => (r.doi||'').toLowerCase()));
+    const fresh = all.filter((r) => !cur.has((r.doi||'').toLowerCase()));
+    if (!fresh.length) { ThesisState.toast('All saved references are already in this thesis.'); return; }
+    ThesisState.addReferences(fresh);
+    renderLib();
+    ThesisState.toast(`Imported ${fresh.length} from your saved library.`);
+  });
+
+  renderLib();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Section Editor · Thesis · MedRAS</title>
+<link rel="stylesheet" href="/thesis-module/css/style.css" />
+</head>
+<body>
+<header class="th-header">
+  <a class="th-brand" href="/thesis-module/dashboard.html"><span class="th-brand-mark">T</span><span>MedRAS — Thesis Editor</span></a>
+  <nav class="th-nav">
+    <a href="/thesis-module/dashboard.html">← Dashboard</a>
+    <a href="/thesis-module/references.html">References</a>
+    <a href="/">MedRAS</a>
+  </nav>
+</header>
+
+<div class="th-editor">
+  <!-- LEFT: outline + chapter linked refs -->
+  <aside class="th-pane">
+    <h4>Chapters</h4>
+    <div id="th-side-chapters" style="font-size:13px"></div>
+
+    <h4 style="margin-top:18px">Locked numbers</h4>
+    <div id="th-side-locks" class="th-locks-row" style="margin:0 0 10px"></div>
+    <a class="th-btn th-btn-light th-btn-sm" href="/thesis-module/data.html" style="display:block; text-align:center">Manage locks →</a>
+
+    <h4 style="margin-top:18px">References (<span id="th-side-ref-count">0</span>)</h4>
+    <div id="th-side-refs" style="font-size:12.5px"></div>
+  </aside>
+
+  <!-- CENTER: editor + diff preview -->
+  <section class="th-pane th-pane-center">
+    <div class="th-editor-toolbar">
+      <span class="th-current" id="th-cur-label">…</span>
+      <span id="th-wc" style="font-size:12.5px; color:var(--th-text-soft)"></span>
+      <button id="th-toggle-mode" class="th-btn th-btn-light th-btn-sm">Mode: Write</button>
+      <button id="th-save" class="th-btn th-btn-primary th-btn-sm">Save</button>
+    </div>
+    <div id="th-editor-canvas" class="th-editor-canvas" contenteditable="true"
+         spellcheck="true" data-testid="editor"></div>
+  </section>
+
+  <!-- RIGHT: helper strip + AI suggestions -->
+  <aside class="th-pane">
+    <h4>Helpers</h4>
+    <div id="th-helper-strip"></div>
+
+    <h4 style="margin-top:16px">AI suggestions</h4>
+    <div id="th-suggest-status" style="font-size:12.5px; color:var(--th-text-soft); margin-bottom:8px">
+      Click "AI: Suggest improvements" or "AI: Draft this section" — every change still needs your ✓.
+    </div>
+    <div id="th-suggest-list"></div>
+  </aside>
+</div>
+
+<script src="/thesis-module/js/thesis-state.js"></script>
+<script src="/thesis-module/js/track-changes.js"></script>
+<script>
+(function () {
+  const params = new URLSearchParams(location.search);
+  let chapterId = params.get('ch') || 'introduction';
+  let spine = null;
+  let chapter = null;
+  let mode = 'write'; // 'write' | 'review'
+  let suggestions = [];
+  let pendingDraft = null;   // {text, sources_count} — staged AI draft awaiting researcher's ✓
+  let pendingDraftMeta = null;
+  const esc = TrackChanges.escapeHtml;
+
+  async function init() {
+    const sp = await ThesisState.api('/spine');
+    spine = sp.spine;
+    chapter = spine.find((c) => c.id === chapterId) || spine[0];
+    chapterId = chapter.id;
+    renderSideChapters();
+    renderSideLocks();
+    renderSideRefs();
+    renderHelpers();
+    renderEditor();
+    document.getElementById('th-cur-label').textContent = chapter.label;
+  }
+
+  function renderSideChapters() {
+    const s = ThesisState.get();
+    document.getElementById('th-side-chapters').innerHTML = spine.map((ch) => {
+      const c = (s.chapters || {})[ch.id] || {};
+      const w = (String(c.text||'').match(/\b\w+\b/g) || []).length;
+      const cur = ch.id === chapterId;
+      const dot = w > 0 ? 'var(--th-emerald-d)' : 'var(--th-line)';
+      return `<a href="/thesis-module/editor.html?ch=${encodeURIComponent(ch.id)}"
+        style="display:flex; align-items:center; gap:6px; padding:5px 6px;
+        border-radius:6px; color:${cur?'var(--th-ink-900)':'var(--th-text)'};
+        background:${cur?'var(--th-paper-2)':'transparent'}; font-weight:${cur?600:400}">
+        <span style="width:7px;height:7px;border-radius:50%;background:${dot};display:inline-block"></span>
+        ${esc(ch.label)}
+      </a>`;
+    }).join('');
+  }
+
+  function renderSideLocks() {
+    const locks = ThesisState.get().locked_numbers || {};
+    const el = document.getElementById('th-side-locks');
+    const entries = Object.entries(locks);
+    if (!entries.length) { el.innerHTML = '<span style="font-size:12px; color:var(--th-text-soft); font-style:italic">No locks set</span>'; return; }
+    el.innerHTML = entries.map(([k, v]) =>
+      `<span class="th-lock-chip"><strong>${esc(k)}:</strong> ${esc(v)}</span>`).join('');
+  }
+
+  function renderSideRefs() {
+    const refs = ThesisState.get().references || [];
+    document.getElementById('th-side-ref-count').textContent = refs.length;
+    const el = document.getElementById('th-side-refs');
+    if (!refs.length) { el.innerHTML = '<span class="th-empty" style="padding:8px; display:block">Add references in Station 3.</span>'; return; }
+    el.innerHTML = refs.slice(0, 30).map((r, i) => `
+      <div style="padding:6px 0; border-bottom:1px solid var(--th-line)">
+        <div style="font-size:11px; color:var(--th-text-soft)">[CITE_${i+1}]</div>
+        <div style="font-weight:600">${esc((r.title || '').slice(0,90))}${(r.title||'').length>90?'…':''}</div>
+        <div style="color:var(--th-text-soft)">${esc((r.authors||[])[0] || '')} (${esc(r.year || 'n.d.')})</div>
+      </div>`).join('') + (refs.length > 30 ? `<div style="padding-top:6px; color:var(--th-text-soft); font-style:italic">+ ${refs.length-30} more</div>` : '');
+  }
+
+  function renderHelpers() {
+    const helpers = chapter.helpers || [];
+    const map = {
+      ai_draft: { icon: '✦', label: 'AI: Draft this section', act: 'draft' },
+      rag_cite: { icon: '⌕', label: 'Suggest real citations', act: 'cite' },
+      summarise_refs: { icon: '☰', label: 'Summarise my references', act: 'summarise' },
+      compare_lit: { icon: '⇄', label: 'Compare to literature', act: 'compare' },
+      sample_size: { icon: 'n', label: 'Open Sample Size Calculator', act: 'sample_size' },
+      stats_engine: { icon: 'σ', label: 'Open Stats Engine', act: 'stats' },
+      study_builder: { icon: '◫', label: 'Open Study Builder', act: 'study' },
+      plagiarism: { icon: '%', label: 'Check this section', act: 'plag' },
+      consent_translate: { icon: '🌐', label: 'Generate consent forms', act: 'consent' },
+      import_stats: { icon: '↓', label: 'Import stats output', act: 'data' },
+      scan_text: { icon: '🔍', label: 'Auto-extract abbreviations', act: 'scan' },
+    };
+    // Always include Improve when in review mode
+    const improve = { icon: '✎', label: 'AI: Suggest improvements', act: 'improve' };
+    const items = [improve].concat(helpers.map((h) => map[h]).filter(Boolean));
+    const el = document.getElementById('th-helper-strip');
+    el.innerHTML = items.map((it) => `
+      <button class="th-helper-btn" data-act="${it.act}">
+        <span class="th-helper-icon">${it.icon}</span><span>${esc(it.label)}</span>
+      </button>`).join('');
+    el.querySelectorAll('button[data-act]').forEach((b) => {
+      b.addEventListener('click', () => handleHelper(b.dataset.act));
+    });
+  }
+
+  // ---------- editor body ----------
+  function renderEditor() {
+    const c = ThesisState.getChapter(chapterId);
+    const canvas = document.getElementById('th-editor-canvas');
+    if (mode === 'write') {
+      canvas.contentEditable = 'true';
+      canvas.innerText = c.text || '';
+      updateWC();
+    } else {
+      canvas.contentEditable = 'false';
+      const locks = ThesisState.get().locked_numbers || {};
+      const baseText = c.text || '';
+      // If a draft is staged, render the existing text + a green
+      // "proposed insertion" block at the end with ✓ / ✗ controls.
+      // The researcher must explicitly accept before any text becomes
+      // part of their chapter.
+      if (pendingDraft) {
+        const baseHtml = baseText
+          ? '<span class="th-existing">' + TrackChanges.renderPlainInline(baseText, locks) + '</span>'
+          : '';
+        canvas.innerHTML =
+          baseHtml +
+          (baseText ? '<br><br>' : '') +
+          '<span class="th-diff-block" data-pending="1">' +
+            '<span class="th-diff-add">' + TrackChanges.renderPlainInline(pendingDraft, locks) + '</span>' +
+            '<span class="th-diff-actions" contenteditable="false">' +
+              '<button class="th-accept" data-pending-act="accept" title="Accept the entire AI draft and add it to your chapter">✓ accept whole draft</button>' +
+              '<button class="th-reject" data-pending-act="reject" title="Discard the AI draft">✗ discard</button>' +
+            '</span>' +
+          '</span>';
+        canvas.querySelectorAll('button[data-pending-act]').forEach((btn) => {
+          btn.addEventListener('click', (ev) => {
+            ev.preventDefault();
+            if (btn.dataset.pendingAct === 'accept') {
+              const next = baseText ? baseText + '\n\n' + pendingDraft : pendingDraft;
+              ThesisState.setChapter(chapterId, { text: next });
+              ThesisState.toast('Draft accepted into your chapter.');
+            } else {
+              ThesisState.toast('Draft discarded — your text was not changed.');
+            }
+            pendingDraft = null; pendingDraftMeta = null;
+            mode = 'write';
+            renderEditor(); renderSideChapters(); renderSuggestList();
+          });
+        });
+      } else {
+        TrackChanges.render(canvas, baseText, suggestions, (newText, remaining, info) => {
+          ThesisState.setChapter(chapterId, { text: newText });
+          suggestions = remaining;
+          renderEditor();
+          renderSuggestList();
+          if (info && info.accepted) ThesisState.toast('Accepted.');
+        }, locks);
+      }
+      updateWC();
+    }
+    document.getElementById('th-toggle-mode').textContent =
+      'Mode: ' + (mode === 'write' ? 'Write' : 'Review (' + (pendingDraft ? '1 pending draft' : suggestions.length) + ')');
+  }
+
+  function updateWC() {
+    const c = ThesisState.getChapter(chapterId);
+    const w = (String(c.text||'').match(/\b\w+\b/g) || []).length;
+    const t = chapter.target_words || 0;
+    document.getElementById('th-wc').textContent =
+      `${w} words${t ? ' / target ' + t : ''}`;
+  }
+
+  // Save while typing (write mode)
+  document.getElementById('th-editor-canvas').addEventListener('input', () => {
+    if (mode !== 'write') return;
+    const text = document.getElementById('th-editor-canvas').innerText;
+    ThesisState.setChapter(chapterId, { text });
+    updateWC();
+  });
+
+  document.getElementById('th-save').addEventListener('click', () => {
+    if (mode === 'write') {
+      const text = document.getElementById('th-editor-canvas').innerText;
+      ThesisState.setChapter(chapterId, { text });
+      ThesisState.toast('Saved.');
+      renderSideChapters();
+    } else {
+      ThesisState.toast('Saved automatically as you accept / reject.');
+    }
+  });
+
+  document.getElementById('th-toggle-mode').addEventListener('click', () => {
+    if (mode === 'write') {
+      // commit any pending edits before switching
+      const text = document.getElementById('th-editor-canvas').innerText;
+      ThesisState.setChapter(chapterId, { text });
+    }
+    mode = (mode === 'write') ? 'review' : 'write';
+    renderEditor();
+  });
+
+  // ---------- suggestions list (right pane) ----------
+  function renderSuggestList() {
+    const el = document.getElementById('th-suggest-list');
+    if (!suggestions.length) {
+      el.innerHTML = '<div class="th-empty" style="padding:10px">No active suggestions.</div>';
+      return;
+    }
+    el.innerHTML = suggestions.map((s, i) => `
+      <div class="th-suggest-card" data-i="${i}">
+        <span class="th-sg-kind">${esc(s.kind || 'edit')}</span>
+        <span class="th-sg-orig">${esc(s.original || '')}</span>
+        <span class="th-sg-sugg">${esc(s.suggested || '(delete)')}</span>
+        ${s.reason ? `<div class="th-sg-reason">${esc(s.reason)}</div>` : ''}
+        <div class="th-sg-actions">
+          <button class="th-btn th-btn-primary th-btn-sm" data-act="accept">Accept ✓</button>
+          <button class="th-btn th-btn-light th-btn-sm" data-act="reject">Reject ✗</button>
+        </div>
+      </div>
+    `).join('');
+    el.querySelectorAll('button[data-act]').forEach((b) => {
+      b.addEventListener('click', (e) => {
+        const card = e.currentTarget.closest('.th-suggest-card');
+        const i = parseInt(card.dataset.i, 10);
+        const sug = suggestions[i];
+        if (!sug) return;
+        let text = ThesisState.getChapter(chapterId).text || '';
+        if (b.dataset.act === 'accept') {
+          // Position-aware: refuse if the original substring is ambiguous
+          // (occurs more than once) — protects against mutating the
+          // wrong occurrence.
+          const off = TrackChanges.findUniqueOffsets(text, sug.original);
+          if (!off) {
+            ThesisState.toast('That sentence appears more than once — accept it from the inline editor (centre pane) so the right one is changed.');
+            return;
+          }
+          text = TrackChanges.acceptAt(text, off.start, off.end, sug.suggested);
+        }
+        ThesisState.setChapter(chapterId, { text });
+        suggestions = suggestions.filter((_, j) => j !== i);
+        renderEditor();
+        renderSuggestList();
+      });
+    });
+  }
+
+  // ---------- helper actions ----------
+  async function handleHelper(act) {
+    const s = ThesisState.get();
+    const setup = s.setup || {};
+    const cite = setup.citation_style || 'vancouver';
+    const topic = setup.title || chapter.label;
+    if (act === 'sample_size') { window.open('/sample-size.html', '_blank'); return; }
+    if (act === 'stats')       { window.open('/analysis.html', '_blank'); return; }
+    if (act === 'study')       { window.open('/#study-builder', '_blank'); return; }
+    if (act === 'plag') {
+      const text = ThesisState.getChapter(chapterId).text || '';
+      try { sessionStorage.setItem('medras.plagiarism.prefill', text); } catch(_){}
+      window.open('/plagiarism-module/checker.html', '_blank'); return;
+    }
+    if (act === 'consent')     { ThesisState.toast('Consent generation re-uses the proposal module — coming next phase.'); return; }
+    if (act === 'data')        { location.href = '/thesis-module/data.html'; return; }
+    if (act === 'cite' || act === 'summarise' || act === 'compare') {
+      ThesisState.toast('This helper is wired to the existing citation suggester — opening the Plagiarism module which already has it.');
+      window.open('/plagiarism-module/checker.html', '_blank');
+      return;
+    }
+    if (act === 'scan') {
+      const all = Object.values(s.chapters || {}).map((c) => c.text || '').join('\n');
+      const matches = Array.from(new Set((all.match(/\b[A-Z]{2,6}\b/g) || [])));
+      const cur = ThesisState.getChapter(chapterId).text || '';
+      const lines = matches.map((a) => a + ' — ').sort().join('\n');
+      ThesisState.setChapter(chapterId, { text: (cur ? cur + '\n' : '') + lines });
+      mode = 'write'; renderEditor(); renderSideChapters();
+      ThesisState.toast(`Found ${matches.length} candidate abbreviations.`);
+      return;
+    }
+
+    if (act === 'draft') {
+      // commit any pending edit first (so it's persisted before we stage)
+      if (mode === 'write') {
+        const text = document.getElementById('th-editor-canvas').innerText;
+        ThesisState.setChapter(chapterId, { text });
+      }
+      const status = document.getElementById('th-suggest-status');
+      status.innerHTML = '<span class="th-loading"></span> Drafting from RAG-grounded evidence…';
+      try {
+        const res = await ThesisState.api('/draft-section', {
+          chapter_id: chapterId,
+          topic, citation_style: cite,
+          locked_numbers: s.locked_numbers || {},
+          domain_hint: setup.domain || undefined,
+          extra_context: (s.stats_import && s.stats_import.raw_text) || undefined,
+        });
+        // Researcher-in-control: NEVER auto-insert. Stage the draft and
+        // require an explicit ✓ in Review mode.
+        pendingDraft = res.text;
+        pendingDraftMeta = { sources_count: (res.sources || []).length };
+        suggestions = [];
+        mode = 'review';
+        renderEditor(); renderSuggestList();
+        status.textContent = `Draft ready (${pendingDraftMeta.sources_count} sources). Click ✓ in the editor to accept, or ✗ to discard.`;
+      } catch (e) {
+        status.textContent = '';
+        ThesisState.toast('Draft failed: ' + e.message);
+      }
+      return;
+    }
+
+    if (act === 'improve') {
+      // commit pending edit
+      if (mode === 'write') {
+        const text = document.getElementById('th-editor-canvas').innerText;
+        ThesisState.setChapter(chapterId, { text });
+      }
+      const text = ThesisState.getChapter(chapterId).text || '';
+      if (!text.trim()) { ThesisState.toast('Write some text first, or click "AI: Draft this section".'); return; }
+      const status = document.getElementById('th-suggest-status');
+      status.innerHTML = '<span class="th-loading"></span> Reading your draft + retrieving evidence…';
+      try {
+        const res = await ThesisState.api('/improve-section', {
+          chapter_id: chapterId, current_text: text, topic,
+          citation_style: cite,
+          locked_numbers: s.locked_numbers || {},
+          domain_hint: setup.domain || undefined,
+        });
+        suggestions = res.suggestions || [];
+        if (!suggestions.length) {
+          status.textContent = 'No improvements suggested — your draft looks solid.';
+        } else {
+          status.textContent = `${suggestions.length} suggestions — review each and click ✓ or ✗.`;
+        }
+        mode = 'review'; renderEditor(); renderSuggestList();
+      } catch (e) {
+        status.textContent = '';
+        ThesisState.toast('Improve failed: ' + e.message);
+      }
+      return;
+    }
+  }
+
+  init();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Chapter Dashboard · Thesis · MedRAS</title>
+<link rel="stylesheet" href="/thesis-module/css/style.css" />
+</head>
+<body>
+<header class="th-header">
+  <a class="th-brand" href="/thesis-module/"><span class="th-brand-mark">T</span><span>MedRAS — Thesis Writing</span></a>
+  <nav class="th-nav"><a href="/thesis-module/setup.html">Setup</a><a href="/thesis-module/references.html">References</a><a href="/">← MedRAS</a></nav>
+</header>
+<div class="th-stepbar">
+  <span class="th-step is-done">1 · Setup</span>
+  <span class="th-step is-done">2 · Guidelines</span>
+  <span class="th-step is-done">3 · References</span>
+  <span class="th-step is-done">4 · Data &amp; Stats</span>
+  <span class="th-step is-active">5 · Dashboard</span>
+</div>
+
+<main class="th-shell th-wide">
+  <div style="display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:14px; margin-bottom:18px">
+    <div>
+      <span class="th-eyebrow">Station 5 of 9 · Home base</span>
+      <h1 class="th-h1" id="th-dash-title">Chapter Dashboard</h1>
+      <p class="th-sub" id="th-dash-sub">Click any chapter to start writing. You can jump in / out in any order.</p>
+    </div>
+    <div style="display:flex; gap:8px; flex-wrap:wrap">
+      <button id="th-run-compliance" class="th-btn th-btn-ghost">Run pre-flight</button>
+      <a class="th-btn th-btn-light" href="/plagiarism-module/checker.html" target="_blank">Plagiarism check ↗</a>
+    </div>
+  </div>
+
+  <div id="th-summary-row" class="th-grid cols-3" style="margin-bottom:14px"></div>
+
+  <table class="th-table" id="th-chapter-table">
+    <thead>
+      <tr><th>Chapter</th><th>Status</th><th>Words</th><th>Last edited</th><th></th></tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <div id="th-compliance-card" class="th-card" style="display:none; margin-top:18px">
+    <h3 class="th-h3">Pre-flight compliance</h3>
+    <div id="th-compliance-list"></div>
+  </div>
+</main>
+
+<script src="/thesis-module/js/thesis-state.js"></script>
+<script>
+(function () {
+  function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+  function wc(t){ return (String(t||'').match(/\b\w+\b/g) || []).length; }
+
+  function statusFor(ch, text) {
+    const w = wc(text);
+    const t = ch.target_words || 0;
+    if (!w) return { pill: 'red', label: 'Not started' };
+    if (t && w < t * 0.6) return { pill: 'amber', label: 'In progress' };
+    return { pill: 'green', label: 'Looks good' };
+  }
+
+  async function render() {
+    const s = ThesisState.get();
+    const setup = s.setup || {};
+    const title = setup.title || 'Untitled thesis';
+    document.getElementById('th-dash-title').textContent = title;
+    document.getElementById('th-dash-sub').textContent =
+      `${setup.researcher || 'Researcher TBD'} · ${setup.format || 'Indian MD/DNB/PhD'} · ${setup.year || ''}`;
+
+    // Summary row
+    const refs = (s.references || []).length;
+    const minRefs = (s.rules && s.rules.min_references) || 100;
+    const totalWords = Object.values(s.chapters || {}).reduce((a, c) => a + wc(c.text), 0);
+    const pages = Math.max(1, Math.round(totalWords / 280));
+    const maxPages = (s.rules && s.rules.max_pages) || 80;
+    const locks = Object.keys(s.locked_numbers || {}).length;
+    document.getElementById('th-summary-row').innerHTML = `
+      <div class="th-card th-flat" style="margin:0">
+        <div style="font-size:11px; text-transform:uppercase; color:var(--th-text-soft); letter-spacing:.05em">References</div>
+        <div style="font-size:24px; font-weight:700; color:${refs>=minRefs?'var(--th-emerald-d)':'var(--th-amber)'}">${refs}<span style="font-size:14px; color:var(--th-text-soft); font-weight:500"> / ${minRefs}</span></div>
+      </div>
+      <div class="th-card th-flat" style="margin:0">
+        <div style="font-size:11px; text-transform:uppercase; color:var(--th-text-soft); letter-spacing:.05em">Words / Pages</div>
+        <div style="font-size:24px; font-weight:700; color:${pages<=maxPages?'var(--th-ink-900)':'var(--th-amber)'}">${totalWords.toLocaleString()}<span style="font-size:14px; color:var(--th-text-soft); font-weight:500"> · ~${pages}p / ${maxPages}p</span></div>
+      </div>
+      <div class="th-card th-flat" style="margin:0">
+        <div style="font-size:11px; text-transform:uppercase; color:var(--th-text-soft); letter-spacing:.05em">Locked numbers</div>
+        <div style="font-size:24px; font-weight:700; color:var(--th-gold)">${locks}</div>
+      </div>
+    `;
+
+    // Fetch spine
+    let spine = window._th_spine;
+    if (!spine) {
+      const res = await ThesisState.api('/spine');
+      spine = res.spine; window._th_spine = spine;
+    }
+
+    // Build table rows
+    const tbody = document.querySelector('#th-chapter-table tbody');
+    let lastGroup = null;
+    const rows = [];
+    spine.forEach((ch) => {
+      if (ch.group !== lastGroup) {
+        rows.push(`<tr class="th-grp-head"><td colspan="5">${esc(ch.group === 'front' ? 'Front matter' : ch.group === 'body' ? 'Body chapters' : 'Back matter')}</td></tr>`);
+        lastGroup = ch.group;
+      }
+      const c = (s.chapters && s.chapters[ch.id]) || {};
+      const w = wc(c.text);
+      const st = statusFor(ch, c.text);
+      const target = ch.target_words ? `<span style="color:var(--th-text-soft)">/ ${ch.target_words}</span>` : '';
+      const last = c.last_edited ? new Date(c.last_edited).toLocaleString() : '—';
+      rows.push(`
+        <tr class="th-row-link th-grp-${ch.group}" data-ch="${esc(ch.id)}">
+          <td>
+            <strong style="color:var(--th-ink-900)">${esc(ch.label)}</strong>
+            <div style="font-size:12px; color:var(--th-text-soft); margin-top:2px">${esc(ch.description || '')}</div>
+          </td>
+          <td><span class="th-pill th-pill-${st.pill}">${esc(st.label)}</span></td>
+          <td>${w} ${target}</td>
+          <td style="font-size:12.5px; color:var(--th-text-soft)">${esc(last)}</td>
+          <td><a class="th-btn th-btn-light th-btn-sm" href="/thesis-module/editor.html?ch=${encodeURIComponent(ch.id)}">Open →</a></td>
+        </tr>
+      `);
+    });
+    tbody.innerHTML = rows.join('');
+    tbody.querySelectorAll('.th-row-link').forEach((tr) => {
+      tr.addEventListener('click', (e) => {
+        if (e.target.tagName === 'A' || e.target.tagName === 'BUTTON') return;
+        location.href = '/thesis-module/editor.html?ch=' + encodeURIComponent(tr.dataset.ch);
+      });
+    });
+  }
+
+  document.getElementById('th-run-compliance').addEventListener('click', async () => {
+    try {
+      const s = ThesisState.get();
+      const res = await ThesisState.api('/compliance-check', s);
+      const card = document.getElementById('th-compliance-card');
+      const list = document.getElementById('th-compliance-list');
+      card.style.display = '';
+      const icon = (st) => st === 'pass' ? '✓' : st === 'warn' ? '!' : '✗';
+      list.innerHTML = `
+        <div style="margin-bottom:10px; font-size:13.5px; color:var(--th-text-soft)">
+          ${res.summary.pass} pass · ${res.summary.warn} warnings · ${res.summary.fail} failures
+          · ~${res.summary.pages_estimated} pages · ${res.summary.references} references
+        </div>
+        ${res.items.map((it) => `
+          <div class="th-compliance-item">
+            <div class="th-compliance-icon ${it.status}">${icon(it.status)}</div>
+            <div>
+              <strong>${TC(it.label)}</strong>
+              <div style="font-size:12.5px; color:var(--th-text-soft); margin-top:2px">${TC(it.detail || '')}</div>
+            </div>
+            <div>${it.fix ? `<a href="${TC(it.fix)}" class="th-btn th-btn-light th-btn-sm">Fix</a>` : ''}</div>
+          </div>
+        `).join('')}
+      `;
+      card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } catch (e) { ThesisState.toast('Compliance check failed: ' + e.message); }
+  });
+  function TC(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+  render();
+})();
+</script>
+</body>
+</html>

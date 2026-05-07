@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>University Guidelines · Thesis · MedRAS</title>
+<link rel="stylesheet" href="/thesis-module/css/style.css" />
+</head>
+<body>
+<header class="th-header">
+  <a class="th-brand" href="/thesis-module/"><span class="th-brand-mark">T</span><span>MedRAS — Thesis Writing</span></a>
+  <nav class="th-nav"><a href="/thesis-module/dashboard.html">Dashboard</a><a href="/">← MedRAS</a></nav>
+</header>
+<div class="th-stepbar">
+  <span class="th-step is-done">1 · Setup</span>
+  <span class="th-step is-active">2 · Guidelines</span>
+  <span class="th-step">3 · References</span>
+  <span class="th-step">4 · Data &amp; Stats</span>
+  <span class="th-step">5 · Dashboard</span>
+</div>
+
+<main class="th-shell">
+  <a class="th-back-link" href="/thesis-module/setup.html">← Back</a>
+  <span class="th-eyebrow">Station 2 of 9</span>
+  <h1 class="th-h1">Drop your university's thesis guidelines</h1>
+  <p class="th-sub">
+    Optional but recommended. We'll auto-extract the page limit, font, line spacing,
+    margins, citation style, reference minimum and required declarations — so your
+    document conforms to your university's exact rules.
+  </p>
+
+  <div class="th-grid cols-2">
+    <div class="th-card">
+      <h3 class="th-h3">Upload guidelines (PDF / DOCX / TXT)</h3>
+      <input type="file" id="th-gd-file" accept=".pdf,.docx,.txt,.md" class="th-input" />
+      <div style="margin-top:10px; display:flex; gap:10px; align-items:center">
+        <button id="th-gd-parse" class="th-btn th-btn-primary">Parse rules</button>
+        <span id="th-gd-status" style="font-size:13px; color:var(--th-text-soft)"></span>
+      </div>
+      <div id="th-gd-evidence" class="th-evidence-list" style="display:none"></div>
+    </div>
+
+    <div class="th-card">
+      <h3 class="th-h3">Or use NBEMS defaults</h3>
+      <p style="font-size:13.5px; color:var(--th-text-soft); margin:0 0 12px">
+        From the official NBEMS thesis-submission guidelines: A4, Times New Roman 12 pt,
+        1.5 spacing, 1″ margins, 80-page max, ICMJE references, IEC mandatory.
+      </p>
+      <button id="th-gd-defaults" class="th-btn th-btn-ghost">Use NBEMS defaults</button>
+    </div>
+  </div>
+
+  <div id="th-gd-rules" class="th-card" style="display:none">
+    <h3 class="th-h3">Rules in effect</h3>
+    <div id="th-gd-rules-body" class="th-grid cols-3" style="font-size:13.5px"></div>
+    <div style="margin-top:18px; display:flex; gap:10px; justify-content:flex-end">
+      <a href="/thesis-module/references.html" class="th-btn th-btn-primary" data-testid="button-next">Next: References →</a>
+    </div>
+  </div>
+</main>
+
+<script src="/thesis-module/js/thesis-state.js"></script>
+<script>
+(function () {
+  const RULE_LABELS = {
+    max_pages: 'Max pages', min_pages: 'Min pages',
+    font_family: 'Font', font_size_pt: 'Font size',
+    line_spacing: 'Line spacing', margin_inches: 'Margin (inch)',
+    paper: 'Paper', citation_style: 'Citation style',
+    min_references: 'Min references', max_plagiarism_pct: 'Plagiarism cap (%)',
+    iec_required: 'IEC required', consent_required: 'Consent required',
+  };
+
+  function renderRules(rules) {
+    const wrap = document.getElementById('th-gd-rules');
+    const body = document.getElementById('th-gd-rules-body');
+    wrap.style.display = '';
+    body.innerHTML = Object.entries(RULE_LABELS).map(([k, label]) => {
+      const v = rules[k];
+      if (v === undefined || v === null) return '';
+      const val = (typeof v === 'boolean') ? (v ? 'Yes' : 'No') : String(v);
+      return '<div><strong style="color:var(--th-ink-900)">' + label +
+             '</strong><br><span style="color:var(--th-text-soft)">' +
+             TrackChangesEscape(val) + '</span></div>';
+    }).join('');
+  }
+  function TrackChangesEscape(s) {
+    return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  // If rules already set, show them
+  const existing = ThesisState.get().rules || {};
+  if (Object.keys(existing).length) renderRules(existing);
+
+  document.getElementById('th-gd-defaults').addEventListener('click', async () => {
+    try {
+      const res = await ThesisState.api('/spine');
+      ThesisState.patch((s) => { s.rules = res.rules; s.guideline_evidence = []; return s; });
+      renderRules(res.rules);
+      ThesisState.toast('Using NBEMS defaults.');
+    } catch (e) { ThesisState.toast('Failed: ' + e.message); }
+  });
+
+  document.getElementById('th-gd-parse').addEventListener('click', async () => {
+    const fileInput = document.getElementById('th-gd-file');
+    const f = fileInput.files && fileInput.files[0];
+    if (!f) { ThesisState.toast('Pick a file first.'); return; }
+    const status = document.getElementById('th-gd-status');
+    status.innerHTML = '<span class="th-loading"></span> Reading…';
+    try {
+      const fd = new FormData();
+      fd.append('file', f);
+      const res = await ThesisState.apiUpload('/parse-guidelines', fd);
+      ThesisState.patch((s) => {
+        s.rules = res.rules;
+        s.guideline_evidence = res.evidence || [];
+        return s;
+      });
+      renderRules(res.rules);
+      const ev = document.getElementById('th-gd-evidence');
+      ev.style.display = '';
+      ev.innerHTML = '<strong>Detected from your file:</strong><ul>' +
+        (res.evidence || []).map((e) => '<li>' + TrackChangesEscape(e) + '</li>').join('') +
+        '</ul>' + (res.defaults_used && res.defaults_used.length
+          ? '<div style="margin-top:6px; font-size:11.5px">Fell back to defaults for: ' +
+            res.defaults_used.join(', ') + '</div>' : '');
+      status.textContent = 'Done — review the rules below.';
+    } catch (e) {
+      status.textContent = '';
+      ThesisState.toast('Parse failed: ' + e.message);
+    }
+  });
+})();
+</script>
+</body>
+</html>

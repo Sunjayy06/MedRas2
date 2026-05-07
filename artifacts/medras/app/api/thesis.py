@@ -1,0 +1,168 @@
+"""Thesis Writing Module API.
+
+Endpoints
+---------
+* ``GET  /api/thesis/spine``                 — chapter spine + default rules
+* ``POST /api/thesis/parse-guidelines``      — multipart upload of uni rules PDF
+* ``POST /api/thesis/references/verify-dois``— bulk DOI verification
+* ``POST /api/thesis/references/search``     — distilled RAG search
+* ``POST /api/thesis/draft-section``         — RAG-grounded fresh section draft
+* ``POST /api/thesis/improve-section``       — sentence-level inline-diff suggestions
+* ``POST /api/thesis/compliance-check``      — pre-flight checks on full state
+* ``POST /api/thesis/extract-text``          — extract text from uploaded stats / data file
+"""
+from __future__ import annotations
+
+import logging
+from typing import Any, Dict, List
+
+from fastapi import APIRouter, File, HTTPException, Request, UploadFile
+
+from app.core.limiter import limiter
+from app.services import (
+    thesis_compliance, thesis_formats, thesis_guidelines_parser,
+    thesis_reference_library, thesis_section_writer,
+)
+from app.services.proposal_generator import GeneratorError
+
+log = logging.getLogger(__name__)
+router = APIRouter(prefix="/thesis", tags=["thesis"])
+
+MAX_UPLOAD_BYTES = 30 * 1024 * 1024
+
+
+# ---------------------------------------------------------------------------
+# Spine + defaults
+# ---------------------------------------------------------------------------
+
+@router.get("/spine")
+async def get_spine() -> Dict[str, Any]:
+    """Return the canonical chapter spine + NBEMS default rules."""
+    return {
+        "spine":   thesis_formats.CHAPTER_SPINE,
+        "rules":   thesis_formats.DEFAULT_RULES,
+        "version": "v1-indian-md-dnb-phd",
+    }
+
+
+# ---------------------------------------------------------------------------
+# Guidelines parser
+# ---------------------------------------------------------------------------
+
+@router.post("/parse-guidelines")
+@limiter.limit("10/minute")
+async def parse_guidelines(request: Request, file: UploadFile = File(...)) -> Dict[str, Any]:
+    """Upload a university thesis-guidelines PDF / DOCX / TXT and get back
+    the rules autofilled from it (plus any rules that fell back to defaults).
+    """
+    data = await file.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="Empty file.")
+    if len(data) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="File too large (>30 MB).")
+    try:
+        return thesis_guidelines_parser.parse_guidelines(file.filename or "", data)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+# ---------------------------------------------------------------------------
+# Reference library
+# ---------------------------------------------------------------------------
+
+@router.post("/references/verify-dois")
+@limiter.limit("20/minute")
+async def verify_dois(request: Request, payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Body: ``{dois: ["10.x/y", ...]}``  →  per-DOI verified record or
+    ``{verified: false, error: ...}``."""
+    dois: List[str] = payload.get("dois") or []
+    if not isinstance(dois, list):
+        raise HTTPException(status_code=400, detail="`dois` must be a list.")
+    dois = [str(d).strip() for d in dois if str(d).strip()][:60]
+    out = await thesis_reference_library.verify_dois(dois)
+    # Attach a one-line distilled summary for verified records
+    for r in out:
+        if r.get("verified"):
+            r["summary"] = thesis_reference_library.summarise(r)
+    return {"records": out}
+
+
+@router.post("/references/extract-dois")
+@limiter.limit("20/minute")
+async def extract_dois(request: Request, payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Body: ``{text: "..."}``  →  ``{dois: [...]}``. Used after the user
+    pastes text or uploads a PDF whose text the client has extracted."""
+    text = (payload.get("text") or "")
+    if not isinstance(text, str):
+        raise HTTPException(status_code=400, detail="`text` must be a string.")
+    return {"dois": thesis_reference_library.extract_dois(text[:200_000])}
+
+
+@router.post("/references/search")
+@limiter.limit("20/minute")
+async def references_search(request: Request, payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Body: ``{topic, domain_hint?, limit?}``."""
+    topic = (payload.get("topic") or "").strip()
+    if not topic:
+        raise HTTPException(status_code=400, detail="`topic` is required.")
+    domain_hint = payload.get("domain_hint")
+    limit = max(5, min(int(payload.get("limit") or 20), 40))
+    res = await thesis_reference_library.search(topic, domain_hint=domain_hint, limit=limit)
+    # Attach distilled summaries
+    for r in res.get("records", []):
+        r["summary"] = thesis_reference_library.summarise(r)
+    return res
+
+
+# ---------------------------------------------------------------------------
+# Section writer
+# ---------------------------------------------------------------------------
+
+@router.post("/draft-section")
+@limiter.limit("8/minute")
+async def draft_section(request: Request, payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Body: ``{chapter_id, topic, citation_style?, locked_numbers?,
+    extra_context?, domain_hint?}``."""
+    try:
+        result = await thesis_section_writer.draft_section(
+            chapter_id=payload.get("chapter_id") or "",
+            topic=payload.get("topic") or "",
+            citation_style=(payload.get("citation_style") or "vancouver"),
+            locked_numbers=payload.get("locked_numbers") or {},
+            extra_context=payload.get("extra_context"),
+            domain_hint=payload.get("domain_hint"),
+        )
+    except GeneratorError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return result
+
+
+@router.post("/improve-section")
+@limiter.limit("12/minute")
+async def improve_section(request: Request, payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Body: ``{chapter_id, topic, current_text, citation_style?,
+    locked_numbers?, domain_hint?}``."""
+    try:
+        result = await thesis_section_writer.improve_section(
+            chapter_id=payload.get("chapter_id") or "",
+            topic=payload.get("topic") or "",
+            current_text=payload.get("current_text") or "",
+            citation_style=(payload.get("citation_style") or "vancouver"),
+            locked_numbers=payload.get("locked_numbers") or {},
+            domain_hint=payload.get("domain_hint"),
+        )
+    except GeneratorError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Compliance
+# ---------------------------------------------------------------------------
+
+@router.post("/compliance-check")
+async def compliance_check(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Body: full thesis state JSON. Returns ``{items, summary}``."""
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail="Payload must be a JSON object.")
+    return thesis_compliance.check(payload)
