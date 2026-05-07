@@ -43,8 +43,21 @@ DEFAULT_LIMIT_PER_DB = 4
 DEFAULT_TOTAL_LIMIT = 18
 GEMINI_TIMEOUT_S = 90.0
 GEMINI_MAX_TOKENS = 6000
+EXTRA_CONTEXT_MAX_CHARS = 12_000  # hard server-side cap on researcher-supplied context
 
 _CITE_RE = re.compile(r"\[CITE_(\d+)\]")
+
+# Topics that obviously aren't a research question — chapter labels the
+# frontend used to fall back to before the title gate was added. We
+# refuse server-side too, with an actionable error, so any other client
+# (or a future regression) can't silently feed RAG garbage.
+_GENERIC_TOPIC_RE = re.compile(
+    r"^(chapter\s+[ivx0-9]+\b|introduction|background|literature\s+review|"
+    r"methods?|materials\s+and\s+methods|results?|discussion|conclusion|"
+    r"summary|abstract)\s*[—\-:.]*\s*(introduction|background|literature\s+review|"
+    r"methods?|results?|discussion|conclusion|summary)?\s*$",
+    re.I,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -236,8 +249,18 @@ async def draft_section(
     topic = (topic or "").strip()
     if not topic:
         raise GeneratorError("Topic is required to draft a section.")
+    if _GENERIC_TOPIC_RE.match(topic) or len(topic) < 12:
+        raise GeneratorError(
+            "The topic looks like a chapter label rather than your actual "
+            "research question. Open Setup and fill in the thesis title and "
+            "aim — the AI cannot draft a thesis from a chapter heading alone."
+        )
     if chapter_id not in _CHAPTER_BRIEFS:
         raise GeneratorError(f"Section '{chapter_id}' is not AI-draftable.")
+    if extra_context and len(extra_context) > EXTRA_CONTEXT_MAX_CHARS:
+        # Truncate rather than reject — a researcher with a large stats
+        # paste shouldn't lose a draft attempt over a soft cap.
+        extra_context = extra_context[:EXTRA_CONTEXT_MAX_CHARS] + "\n[…truncated]"
 
     # 1) RAG retrieval (distilled via the library's quality filter)
     search = await thesis_reference_library.search(

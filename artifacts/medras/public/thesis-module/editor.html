@@ -346,11 +346,38 @@
     }
 
     if (act === 'draft') {
+      // Hard gate: a chapter label is NOT a research topic. Without a real
+      // title, RAG returns junk and the AI drafts unsupported prose.
+      if (!setup.title) {
+        ThesisState.toast('Add your thesis title and aim in Setup first — the AI cannot draft "' + chapter.label + '" from a chapter label alone.', 5000);
+        setTimeout(function () { location.href = '/thesis-module/setup.html'; }, 1500);
+        return;
+      }
       // commit any pending edit first (so it's persisted before we stage)
       if (mode === 'write') {
         const text = document.getElementById('th-editor-canvas').innerText;
         ThesisState.setChapter(chapterId, { text });
       }
+      // Build a rich grounding block from everything the researcher told
+      // us in Setup + their imported proposal background + their stats
+      // import. The backend treats this as untrusted-evidence context.
+      const ctxParts = [];
+      if (setup.aim)               ctxParts.push('AIM: ' + setup.aim);
+      if (setup.primary_objective) ctxParts.push('OBJECTIVES:\n' + setup.primary_objective);
+      if (setup.hypothesis)        ctxParts.push('HYPOTHESIS: ' + setup.hypothesis);
+      if (setup.study_type)        ctxParts.push('STUDY TYPE: ' + setup.study_type);
+      if (setup.population)        ctxParts.push('POPULATION: ' + setup.population);
+      if (setup.setting)           ctxParts.push('SETTING: ' + setup.setting);
+      if (setup.study_period)      ctxParts.push('PERIOD: ' + setup.study_period);
+      if (setup._proposal_background) {
+        ctxParts.push('FROM THE RESEARCHER\'S APPROVED PROPOSAL:\n' +
+          String(setup._proposal_background).slice(0, 4000));
+      }
+      if (s.stats_import && s.stats_import.raw_text) {
+        ctxParts.push('RESEARCHER STATS OUTPUT:\n' +
+          String(s.stats_import.raw_text).slice(0, 3000));
+      }
+      const extraContext = ctxParts.length ? ctxParts.join('\n\n') : undefined;
       const status = document.getElementById('th-suggest-status');
       status.innerHTML = '<span class="th-loading"></span> Drafting from RAG-grounded evidence…';
       try {
@@ -359,7 +386,7 @@
           topic, citation_style: cite,
           locked_numbers: s.locked_numbers || {},
           domain_hint: setup.domain || undefined,
-          extra_context: (s.stats_import && s.stats_import.raw_text) || undefined,
+          extra_context: extraContext,
         });
         // Researcher-in-control: NEVER auto-insert. Stage the draft and
         // require an explicit ✓ in Review mode.
@@ -377,6 +404,10 @@
     }
 
     if (act === 'improve') {
+      if (!setup.title) {
+        ThesisState.toast('Add your thesis title in Setup first — improvement suggestions need a real research topic, not a chapter label.', 5000);
+        return;
+      }
       // commit pending edit
       if (mode === 'write') {
         const text = document.getElementById('th-editor-canvas').innerText;

@@ -26,7 +26,18 @@
   <a class="th-back-link" href="/thesis-module/">← Back to start</a>
   <span class="th-eyebrow">Station 2 of 9 · Setup</span>
   <h1 class="th-h1">Tell us about your thesis</h1>
-  <p class="th-sub">Just the basics — you can change anything later. We'll use this to render the title page, set headers, and pick the right citation style.</p>
+  <p class="th-sub">Just the basics — you can change anything later. We'll use this to render the title page, set headers, pick the right citation style, <strong>and to ground every AI draft in your actual study</strong>. The more context you give, the better your AI-suggested drafts will be.</p>
+
+  <div id="th-import-bar" class="th-card" style="margin-bottom:14px; padding:12px 14px; background:var(--th-paper-2); display:none">
+    <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap">
+      <span style="font-size:22px">↘</span>
+      <div style="flex:1; min-width:240px">
+        <strong>We found a MedRAS Proposal in this browser</strong>
+        <div style="font-size:13px; color:var(--th-text-soft)">Pull the title, aim, objective, hypothesis and background you already wrote there into this thesis.</div>
+      </div>
+      <button type="button" id="th-import-btn" class="th-btn th-btn-primary th-btn-sm">Import from my MedRAS Proposal</button>
+    </div>
+  </div>
 
   <form id="th-setup-form" class="th-card">
     <div class="th-grid cols-2">
@@ -97,6 +108,59 @@
       </div>
     </div>
 
+    <h3 class="th-h3" style="margin:20px 0 4px">Research context</h3>
+    <p style="font-size:13px; color:var(--th-text-soft); margin:0 0 12px">
+      These fields are passed to the AI every time you click <em>"AI: Draft this section"</em>. Without them, the AI will refuse — your thesis cannot be drafted from a chapter label alone.
+    </p>
+    <div class="th-grid cols-2">
+      <div class="th-field" style="grid-column: 1 / -1">
+        <label>Aim of the study <span style="color:var(--th-text-soft); font-weight:400">(one sentence)</span></label>
+        <input class="th-input" name="aim"
+          placeholder="To assess the prevalence of … among …" />
+      </div>
+      <div class="th-field" style="grid-column: 1 / -1">
+        <label>Primary objective(s) <span style="color:var(--th-text-soft); font-weight:400">(one per line)</span></label>
+        <textarea class="th-input" name="primary_objective" rows="3"
+          placeholder="1. To estimate …&#10;2. To compare …"></textarea>
+      </div>
+      <div class="th-field" style="grid-column: 1 / -1">
+        <label>Hypothesis <span style="color:var(--th-text-soft); font-weight:400">(if any)</span></label>
+        <textarea class="th-input" name="hypothesis" rows="2"
+          placeholder="H₁: Patients receiving … will show …"></textarea>
+      </div>
+      <div class="th-field">
+        <label>Study population</label>
+        <input class="th-input" name="population"
+          placeholder="e.g. Adults 18–65 with type-2 diabetes" />
+      </div>
+      <div class="th-field">
+        <label>Setting</label>
+        <input class="th-input" name="setting"
+          placeholder="e.g. Tertiary-care teaching hospital, Chennai" />
+      </div>
+      <div class="th-field">
+        <label>Study type</label>
+        <select class="th-select" name="study_type">
+          <option value="">— pick one —</option>
+          <option>Cross-sectional observational</option>
+          <option>Prospective cohort</option>
+          <option>Retrospective cohort</option>
+          <option>Case-control</option>
+          <option>Randomised controlled trial</option>
+          <option>Quasi-experimental</option>
+          <option>Qualitative</option>
+          <option>Mixed methods</option>
+          <option>Systematic review / meta-analysis</option>
+          <option>Other</option>
+        </select>
+      </div>
+      <div class="th-field">
+        <label>Study period <span style="color:var(--th-text-soft); font-weight:400">(optional)</span></label>
+        <input class="th-input" name="study_period"
+          placeholder="e.g. Jan 2025 – Dec 2025" />
+      </div>
+    </div>
+
     <div style="margin-top:8px; display:flex; gap:10px; justify-content:flex-end">
       <button type="button" id="th-skip" class="th-btn th-btn-light">Skip — go to Dashboard</button>
       <button type="submit" class="th-btn th-btn-primary" data-testid="button-next">Save & Next: Guidelines →</button>
@@ -114,11 +178,121 @@
     if (form.elements[k] && v != null) form.elements[k].value = v;
   });
 
+  // ---------- Import from MedRAS Proposal ----------
+  // Look for any sign that the user has used the proposal module in this
+  // browser. We read a handful of well-known sessionStorage keys; missing
+  // ones are simply ignored.
+  function _readJSON(key) {
+    try {
+      var raw = sessionStorage.getItem(key) || localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : null;
+    } catch (_) { return null; }
+  }
+  function _firstString(obj, paths) {
+    for (var i = 0; i < paths.length; i++) {
+      var v = obj; var ok = true;
+      var parts = paths[i].split('.');
+      for (var j = 0; j < parts.length; j++) {
+        if (v && typeof v === 'object' && parts[j] in v) { v = v[parts[j]]; }
+        else { ok = false; break; }
+      }
+      if (ok && v && typeof v === 'string' && v.trim()) return v.trim();
+    }
+    return '';
+  }
+  // Some proposal-module versions persist outline data under
+  // `intake.outline.sections` keyed by human section names ("Aim",
+  // "Objectives", "Hypothesis", …). Walk that bag case-insensitively
+  // and return the first non-empty match for any of the given labels.
+  function _fromOutlineSections(intake, labels) {
+    var sections = intake && intake.outline && intake.outline.sections;
+    if (!sections || typeof sections !== 'object') return '';
+    var lower = {};
+    Object.keys(sections).forEach(function (k) { lower[k.toLowerCase()] = sections[k]; });
+    for (var i = 0; i < labels.length; i++) {
+      var v = lower[labels[i].toLowerCase()];
+      if (v && typeof v === 'object' && 'text' in v) v = v.text;
+      if (typeof v === 'string' && v.trim()) return v.trim();
+    }
+    return '';
+  }
+  function detectProposal() {
+    var intake    = _readJSON('medras.proposal.intake')    || {};
+    var generated = _readJSON('medras.proposal.generated') || {};
+    var titlepage = _readJSON('medras.proposal.titlepage') || {};
+    var topic     = '';
+    try { topic = sessionStorage.getItem('medras.proposal.topic') ||
+                  localStorage.getItem('medras.proposal.topic') || ''; } catch (_) {}
+    if (!intake && !generated && !titlepage && !topic) return null;
+    // Walk a handful of plausible paths — different proposal-module
+    // versions stored these slightly differently. Falls back to the
+    // outline-sections case-insensitive walker for the modern layout.
+    var pull = {
+      title:        _firstString(intake, ['title', 'study_title', 'topic', 'outline.title']) ||
+                    _firstString(titlepage, ['study_title', 'title']) ||
+                    _firstString(generated, ['topic', 'title']) || topic,
+      aim:          _firstString(intake, ['aim', 'outline.aim', 'goals.aim']) ||
+                    _fromOutlineSections(intake, ['Aim', 'Aims', 'Goal']),
+      primary_objective:
+                    _firstString(intake, ['primary_objective', 'objective',
+                      'outline.primary_objective', 'outline.objectives', 'objectives']) ||
+                    _fromOutlineSections(intake, ['Primary Objective', 'Objectives',
+                      'Objective', 'Specific Objectives']),
+      hypothesis:   _firstString(intake, ['hypothesis', 'outline.hypothesis']) ||
+                    _fromOutlineSections(intake, ['Hypothesis', 'Hypotheses']),
+      population:   _firstString(intake, ['population', 'pico.population',
+                      'outline.population', 'p']) ||
+                    _fromOutlineSections(intake, ['Population', 'Participants',
+                      'Study Population', 'Subjects']),
+      setting:      _firstString(intake, ['setting', 'outline.setting']) ||
+                    _fromOutlineSections(intake, ['Setting', 'Study Setting']),
+      study_type:   _firstString(intake, ['study_type', 'design', 'outline.study_type']) ||
+                    _fromOutlineSections(intake, ['Study Type', 'Study Design', 'Design']),
+      study_period: _firstString(intake, ['study_period', 'period', 'outline.period']) ||
+                    _fromOutlineSections(intake, ['Study Period', 'Period', 'Duration']),
+    };
+    // The proposal's generated `background` is gold for AI grounding —
+    // stash it on the thesis state for the editor's draft handler.
+    var background = _firstString(generated, ['sections.background',
+      'sections.Background', 'background', 'sections.0.text']);
+    var hasAny = Object.values(pull).some(function (v) { return v && v.length; }) || background;
+    if (!hasAny) return null;
+    return { pull: pull, background: background };
+  }
+  var found = detectProposal();
+  if (found) {
+    document.getElementById('th-import-bar').style.display = 'block';
+    document.getElementById('th-import-btn').addEventListener('click', function () {
+      var filled = 0;
+      Object.entries(found.pull).forEach(function (kv) {
+        var k = kv[0], v = kv[1];
+        if (v && form.elements[k] && !String(form.elements[k].value || '').trim()) {
+          form.elements[k].value = v; filled++;
+        }
+      });
+      if (found.background) {
+        // Persist background separately so the editor can pass it as
+        // extra_context without bloating every form field.
+        ThesisState.patch(function (st) {
+          st.setup = st.setup || {};
+          st.setup._proposal_background = found.background;
+          return st;
+        });
+      }
+      ThesisState.toast('Imported ' + filled + ' field(s) from your MedRAS Proposal.');
+    });
+  }
+
   form.addEventListener('submit', (e) => {
     e.preventDefault();
     const fd = new FormData(form);
     const setup = {};
     fd.forEach((v, k) => setup[k] = String(v).trim());
+    if (!setup.title) {
+      ThesisState.toast('A thesis title is required — the AI cannot draft from a chapter label alone.');
+      form.elements.title.focus();
+      return;
+    }
     ThesisState.patch((st) => { st.setup = Object.assign(st.setup || {}, setup); return st; });
     ThesisState.toast('Saved.');
     location.href = '/thesis-module/guidelines.html';
