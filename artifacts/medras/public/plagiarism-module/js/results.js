@@ -119,4 +119,57 @@
     fnEl.classList.remove("is-hidden");
     fnEl.innerHTML = `File: <strong>${escapeHtml(result.filename)}</strong>`;
   }
+
+  // ---- Download report ----
+  const dlBtn = document.getElementById("pm-download-report");
+  if (dlBtn) {
+    dlBtn.addEventListener("click", async () => {
+      dlBtn.disabled = true;
+      const orig = dlBtn.innerHTML;
+      dlBtn.innerHTML = '<span class="pm-btn-icon" aria-hidden="true">⏳</span> Building report…';
+      try {
+        const docTitle = result.filename
+          ? result.filename.replace(/\.[^.]+$/, "") + " — Originality Report"
+          : "Originality Report";
+        const res = await fetch("/api/plagiarism/export-check-docx", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: docTitle,
+            filename: result.filename || null,
+            overall_score: result.overall_score || 0,
+            ai_likelihood: result.ai_likelihood || 0,
+            word_count: result.word_count || 0,
+            summary: result.summary || "",
+            flagged_passages: result.flagged_passages || [],
+            model_used: result.model_used || "",
+            checked_at: result.checked_at || null,
+          }),
+        });
+        if (!res.ok) {
+          let detail = `HTTP ${res.status}`;
+          try { const j = await res.json(); detail = j.detail || detail; } catch (_) {}
+          throw new Error(detail);
+        }
+        const blob = await res.blob();
+        let dlName = "originality_report.docx";
+        const cd = res.headers.get("Content-Disposition") || "";
+        const m = /filename="([^"]+)"/i.exec(cd);
+        if (m) dlName = m[1];
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = dlName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 1500);
+      } catch (err) {
+        alert("Download failed: " + (err && err.message ? err.message : err));
+      } finally {
+        dlBtn.disabled = false;
+        dlBtn.innerHTML = orig;
+      }
+    });
+  }
 })();

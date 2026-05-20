@@ -930,6 +930,214 @@ def export_docx(request: Request, payload: ExportDocxRequest):
 
 
 # ===========================================================================
+# /export-check-docx — Download originality-check results as a DOCX report
+# ===========================================================================
+
+class FlaggedPassageIn(BaseModel):
+    text: str = ""
+    reason: str = ""
+    severity: str = "medium"
+    suggestion: str = ""
+
+
+class ExportCheckDocxRequest(BaseModel):
+    title: str = Field(default="Originality Report", max_length=200)
+    filename: Optional[str] = None
+    overall_score: int = Field(default=0, ge=0, le=100)
+    ai_likelihood: int = Field(default=0, ge=0, le=100)
+    word_count: int = Field(default=0, ge=0)
+    summary: str = ""
+    flagged_passages: List[FlaggedPassageIn] = []
+    model_used: str = ""
+    checked_at: Optional[str] = None
+
+
+@router.post("/export-check-docx")
+@limiter.limit("20/minute")
+def export_check_docx(request: Request, payload: ExportCheckDocxRequest):
+    """Render an originality-check result as a formatted DOCX report.
+
+    Formatting matches the reduce-flow export: Times New Roman 12pt,
+    1.5 line spacing, justified, 1-inch margins, page-numbered footer.
+    """
+    try:
+        from docx import Document
+        from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_LINE_SPACING
+        from docx.oxml.ns import qn
+        from docx.oxml import OxmlElement
+        from docx.shared import Cm, Pt
+    except ImportError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail="DOCX export is unavailable: python-docx is not installed.",
+        ) from exc
+
+    doc = Document()
+
+    for section in doc.sections:
+        section.top_margin = Cm(2.54)
+        section.bottom_margin = Cm(2.54)
+        section.left_margin = Cm(2.54)
+        section.right_margin = Cm(2.54)
+
+    style = doc.styles["Normal"]
+    style.font.name = "Times New Roman"
+    style.font.size = Pt(12)
+
+    def _heading(text: str, size: float = 12.0) -> None:
+        p = doc.add_paragraph()
+        p.paragraph_format.space_before = Pt(12)
+        p.paragraph_format.space_after = Pt(6)
+        p.paragraph_format.keep_with_next = True
+        r = p.add_run(text)
+        r.font.name = "Times New Roman"
+        r.font.size = Pt(size)
+        r.bold = True
+
+    def _body(text: str) -> None:
+        for chunk in re.split(r"\n\s*\n+", text):
+            chunk = chunk.strip("\n")
+            if not chunk:
+                continue
+            p = doc.add_paragraph()
+            p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+            p.paragraph_format.line_spacing_rule = WD_LINE_SPACING.ONE_POINT_FIVE
+            p.paragraph_format.space_after = Pt(6)
+            for li, line in enumerate(chunk.split("\n")):
+                if li > 0:
+                    p.add_run().add_break()
+                r = p.add_run(line)
+                r.font.name = "Times New Roman"
+                r.font.size = Pt(12)
+
+    # Title
+    title_p = doc.add_paragraph()
+    title_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    t_run = title_p.add_run(payload.title or "Originality Report")
+    t_run.font.name = "Times New Roman"
+    t_run.font.size = Pt(16)
+    t_run.bold = True
+
+    if payload.checked_at:
+        sub_p = doc.add_paragraph()
+        sub_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        s_run = sub_p.add_run(f"Generated: {payload.checked_at}")
+        s_run.font.name = "Times New Roman"
+        s_run.font.size = Pt(11)
+        s_run.italic = True
+
+    doc.add_paragraph()  # spacer
+
+    # Scores table
+    _heading("Scores")
+    tbl = doc.add_table(rows=2, cols=3)
+    tbl.style = "Table Grid"
+    headers = ["Originality Risk", "AI-Likelihood", "Words Analysed"]
+    values = [
+        f"{payload.overall_score} / 100",
+        f"{payload.ai_likelihood} / 100",
+        f"{payload.word_count:,}",
+    ]
+    for ci, (hdr, val) in enumerate(zip(headers, values)):
+        for ri, txt in enumerate((hdr, val)):
+            cell = tbl.cell(ri, ci)
+            cell.paragraphs[0].clear()
+            p = cell.paragraphs[0]
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            r = p.add_run(txt)
+            r.font.name = "Times New Roman"
+            r.font.size = Pt(11)
+            if ri == 0:
+                r.bold = True
+
+    doc.add_paragraph()  # spacer after table
+
+    # Summary
+    if payload.summary:
+        _heading("Summary")
+        _body(payload.summary)
+
+    # Flagged passages
+    passages = payload.flagged_passages or []
+    _heading(f"Flagged Passages ({len(passages)})")
+    if passages:
+        for i, fp in enumerate(passages, 1):
+            ph = doc.add_paragraph()
+            ph.paragraph_format.space_before = Pt(8)
+            ph_r = ph.add_run(
+                f"{i}. [{(fp.severity or 'medium').upper()}]  {fp.reason or '—'}"
+            )
+            ph_r.font.name = "Times New Roman"
+            ph_r.font.size = Pt(11)
+            ph_r.bold = True
+
+            if fp.text:
+                qt = doc.add_paragraph()
+                qt.paragraph_format.left_indent = Cm(1.27)
+                qt.paragraph_format.space_after = Pt(3)
+                qt_r = qt.add_run(f'"{fp.text}"')
+                qt_r.font.name = "Times New Roman"
+                qt_r.font.size = Pt(11)
+                qt_r.italic = True
+
+            if fp.suggestion:
+                sg = doc.add_paragraph()
+                sg.paragraph_format.left_indent = Cm(1.27)
+                sg.paragraph_format.space_after = Pt(6)
+                sg_r = sg.add_run(f"Suggested rewrite: {fp.suggestion}")
+                sg_r.font.name = "Times New Roman"
+                sg_r.font.size = Pt(11)
+    else:
+        _body("No specific passages were flagged.")
+
+    # Engine footnote
+    if payload.model_used:
+        doc.add_paragraph()
+        fn = doc.add_paragraph()
+        fn_r = fn.add_run(f"Engine: {payload.model_used}")
+        fn_r.font.name = "Times New Roman"
+        fn_r.font.size = Pt(10)
+        fn_r.italic = True
+
+    # Page numbers in footer
+    for section in doc.sections:
+        footer = section.footer
+        fp_para = footer.paragraphs[0] if footer.paragraphs else footer.add_paragraph()
+        fp_para.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+        run = fp_para.add_run()
+        run.font.name = "Times New Roman"
+        run.font.size = Pt(10)
+        fld_begin = OxmlElement("w:fldChar")
+        fld_begin.set(qn("w:fldCharType"), "begin")
+        instr = OxmlElement("w:instrText")
+        instr.set(qn("xml:space"), "preserve")
+        instr.text = "PAGE"
+        fld_end = OxmlElement("w:fldChar")
+        fld_end.set(qn("w:fldCharType"), "end")
+        run._r.append(fld_begin)
+        run._r.append(instr)
+        run._r.append(fld_end)
+
+    buf = io.BytesIO()
+    doc.save(buf)
+    buf.seek(0)
+
+    base = _safe_filename(payload.filename or payload.title or "originality_report")
+    if base.lower().endswith(".docx"):
+        base = base[:-5]
+    download_name = f"{base}_report.docx"
+
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={
+            "Content-Disposition": f'attachment; filename="{download_name}"',
+            "Cache-Control": "no-store",
+        },
+    )
+
+
+# ===========================================================================
 # /suggest-citations — RAG-grounded citation suggestions
 # ===========================================================================
 
