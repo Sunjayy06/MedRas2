@@ -31,6 +31,11 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
+# Use Arial (with DejaVu Sans / Liberation Sans as fallback) for all graphs.
+# Must be set once at module load after plt is imported.
+plt.rcParams["font.family"] = "sans-serif"
+plt.rcParams["font.sans-serif"] = ["Arial", "Liberation Sans", "DejaVu Sans"]
+
 
 # ---------------------------------------------------------------------------
 # Helpers

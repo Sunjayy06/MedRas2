@@ -1237,6 +1237,35 @@ EXPORTERS = {
 # ===========================================================================
 
 
+def _strip_vertical_borders(table) -> None:
+    """Remove all vertical borders from a Word table (left, right, insideV)."""
+    tbl = table._tbl
+    tblPr = tbl.tblPr
+    if tblPr is None:
+        tblPr = OxmlElement("w:tblPr")
+        tbl.insert(0, tblPr)
+    # Remove any existing tblBorders element so we start clean
+    for old in tblPr.findall(qn("w:tblBorders")):
+        tblPr.remove(old)
+    tblBorders = OxmlElement("w:tblBorders")
+    # Keep horizontal borders only
+    for name in ("top", "bottom", "insideH"):
+        b = OxmlElement(f"w:{name}")
+        b.set(qn("w:val"), "single")
+        b.set(qn("w:sz"), "4")
+        b.set(qn("w:space"), "0")
+        b.set(qn("w:color"), "auto")
+        tblBorders.append(b)
+    for name in ("left", "right", "insideV"):
+        b = OxmlElement(f"w:{name}")
+        b.set(qn("w:val"), "none")
+        b.set(qn("w:sz"), "0")
+        b.set(qn("w:space"), "0")
+        b.set(qn("w:color"), "auto")
+        tblBorders.append(b)
+    tblPr.append(tblBorders)
+
+
 def _add_table_from_data(
     doc: Document,
     headers: List[str],
@@ -1249,6 +1278,7 @@ def _add_table_from_data(
     n_cols = len(headers)
     table = doc.add_table(rows=1, cols=n_cols)
     table.style = "Table Grid"
+    _strip_vertical_borders(table)
     hdr_cells = table.rows[0].cells
     for i, h in enumerate(headers):
         hdr_cells[i].text = str(h)
@@ -1534,6 +1564,7 @@ def generate_correlation_chapter_word(
         n_cols = 4
         tbl = doc.add_table(rows=1, cols=n_cols)
         tbl.style = "Table Grid"
+        _strip_vertical_borders(tbl)
         hdrs = ["Variable", "Test Used", "Statistic", "p-value"]
         hdr_cells = tbl.rows[0].cells
         for i, h in enumerate(hdrs):

@@ -1112,6 +1112,24 @@ async def run_correlation(
     corr_results = results_service.run_correlation_plan(
         entry.df, classifications, corr_plan
     )
+
+    # Build methods_text so the Word export has a populated Methods section
+    missing_actions = entry.meta.get("missing_decision_actions") or []
+    methods_lines = [
+        "All statistical analyses were performed using Python (scipy, statsmodels). "
+        "A two-tailed p-value < 0.05 was considered statistically significant. "
+        "Categorical variables were expressed as frequencies and percentages; "
+        "continuous variables as median (IQR) or mean ± SD depending on normality. "
+        "Associations between each predictor variable and the outcome were evaluated "
+        "using Chi-square or Fisher's exact test (categorical predictors), "
+        "and Mann-Whitney U or Kruskal-Wallis test (continuous/ordinal predictors)."
+    ]
+    if missing_actions:
+        methods_lines.append(
+            "Missing data were handled as follows: " + " ".join(missing_actions)
+        )
+    corr_results["methods_text"] = " ".join(methods_lines)
+
     entry.meta["correlation_results"] = corr_results
 
     return {"job_id": payload.job_id, "results": corr_results}
@@ -1192,6 +1210,8 @@ async def apply_missing_decisions(
     if actions_taken:
         dataset_store.replace_df(payload.job_id, df)
         entry.meta.pop("classifications", None)
+    # Persist the human-readable action log so the Methods section can include it
+    entry.meta["missing_decision_actions"] = actions_taken
     return {"status": "applied", "actions": actions_taken, "n_rows": len(df)}
 
 

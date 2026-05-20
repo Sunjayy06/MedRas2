@@ -1,0 +1,117 @@
+All six fixes are confirmed complete.
+
+Before we finish, do one thorough 
+sanity check on the entire system.
+
+Do not write any new code unless 
+you find a real bug. Only fix what 
+is actually broken.
+
+Check these things one by one:
+
+ONE — Run the full end to end flow 
+with srmc1.xlsx using this input:
+Study description: I am studying 
+ER expression in 113 thyroid cancer 
+patients to see if ER positivity 
+relates to gender age tumour type 
+lymph node metastasis and 
+extrathyroidal extension.
+Outcome field: P/N
+
+Confirm that study type is detected 
+as correlation, P/N is identified 
+as outcome, LVI is cleaned to Yes/No, 
+Size has numbers extracted, all 
+clinical variables are included, 
+Co-existing conditions triggers a 
+missing data decision card, the 
+plan shows a series of pairwise 
+tests not one single test, results 
+show correct graphs with no forest 
+plots, and the Word document has 
+table plus graph plus interpretation 
+for every variable.
+
+TWO — Check the Word document output:
+Open the generated Word file and 
+confirm these are all true:
+No forest plots anywhere except 
+if logistic or Cox regression ran.
+Every variable has its own section 
+with a table, a graph, and an 
+interpretation paragraph.
+The final summary table is present 
+sorted by p-value with significant 
+rows in bold.
+The Methods section mentions any 
+missing data decisions the user made.
+All graphs are 300 DPI with Arial 
+font and proper axis labels.
+Tables have no vertical lines.
+p-values are shown to 3 decimal 
+places and bold when below 0.05.
+
+THREE — Check the plan confirmation 
+screen between Step 3 and Step 5:
+Confirm it shows the study type, 
+outcome variable with value counts, 
+all included variables with types, 
+excluded variables with reasons, 
+and the list of tests that will run.
+Confirm the two buttons work: 
+looks correct proceeds to Step 5, 
+something needs changing opens the 
+correction panel.
+
+FOUR — Check the missing data flow:
+Upload a dataset with at least one 
+column that has more than 5 percent 
+missing values.
+Confirm the decision card appears 
+for that column.
+Confirm the continue button is 
+disabled until a decision is made.
+Confirm the decision is applied 
+to the data and recorded in the 
+Methods section of the Word document.
+
+FIVE — Check the Step 1 screen:
+Confirm only two options are shown.
+Option A uploads a proposal document.
+Option B shows one text area and 
+one outcome field with no other 
+questions.
+Confirm the study type detection 
+works for the thyroid cancer 
+description.
+
+SIX — Check the Gautham fracture 
+dataset as a comparison study:
+Upload that dataset and run a 
+comparison analysis.
+Confirm the existing comparison 
+study flow still works exactly 
+as before with no regression.
+Confirm Kruskal-Wallis runs for 
+Time to Union by AO Classification.
+Confirm the result matches what 
+SPSS would give.
+This makes sure the new correlation 
+fixes did not break the existing 
+comparison study logic.
+
+If everything passes report each 
+check as pass or fail with one 
+sentence explaining what was found.
+
+If anything fails fix it immediately 
+and re-run that specific check.
+
+When all six checks pass print:
+Sanity check complete. All systems 
+working correctly. MedRAS statistical 
+engine is ready for real user testing.
+
+Then stop completely and wait. 
+Do not start any new features.
