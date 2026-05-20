@@ -271,13 +271,16 @@ def _build_session(entry, results: Dict[str, Any], assignment: Dict[str, Any]) -
             f.write(png)
         caption = _sanitize_text(g.get("title") or f"Figure {i+1}", variables)
         graph_paths.append((path, caption))
+    # Forest plot is only embedded when the results dict explicitly carries one
+    # (i.e. logistic / Cox regression was run).  For correlation and standard
+    # observational studies forest_plot is None and this block is skipped.
     if results.get("forest_plot"):
         png = _strip_data_uri(results["forest_plot"])
         if png:
             path = os.path.join(tmpdir, "forest.png")
             with open(path, "wb") as f:
                 f.write(png)
-            graph_paths.append((path, "Forest plot of effect sizes"))
+            graph_paths.append((path, "Forest plot — odds / hazard ratios (95% CI)"))
 
     objective = ""
     if isinstance(intake, dict):

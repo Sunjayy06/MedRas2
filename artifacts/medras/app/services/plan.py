@@ -277,11 +277,18 @@ def generate_plan(
                 "columns": [outcome, cv],
             })
 
-    if tests:
+    # Forest plot is only appropriate for logistic / Cox regression
+    # (where the effect is an OR or HR with 95% CI). Never for standard
+    # comparison or correlation studies.
+    _fp_ids = {
+        "logistic_regression", "cox_regression",
+        "pc_binary_logistic", "pc_multinomial_logistic", "pc_probit", "pb_cox",
+    }
+    if tests and any(t["id"] in _fp_ids for t in tests):
         graphs.append({
             "id": "forest_plot",
-            "title": "Forest plot",
-            "why": "Effect sizes with 95% CI for every test that runs.",
+            "title": "Forest plot — odds / hazard ratios",
+            "why": "Odds or hazard ratios with 95% CI from regression models.",
             "columns": [outcome] + ([group] if group else []),
         })
 

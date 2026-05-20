@@ -1,0 +1,79 @@
+URGENT GRAPH FIX — DO THIS FIRST 
+BEFORE ANYTHING ELSE
+
+Open medras_results.docx which is 
+the current wrong output file I 
+attached.
+
+You will see forest plots in the 
+figures section. These are completely 
+wrong for this type of study. Forest 
+plots are only used in meta-analysis 
+and systematic reviews. They must 
+never appear in a standard 
+observational study or correlation 
+study like this thyroid cancer data.
+
+Remove every forest plot from the 
+export engine right now.
+
+Replace them using these exact rules:
+
+When the result is a Chi-square test 
+or Fisher exact test between two 
+categorical variables, the graph 
+must be a stacked bar chart showing 
+the percentage of positive and 
+negative outcome in each category 
+side by side.
+
+When the result is a Mann-Whitney 
+or t-test comparing a continuous 
+variable between two groups, the 
+graph must be a box plot showing 
+the distribution in each group with 
+individual data points overlaid.
+
+When showing the distribution of a 
+single categorical variable like 
+gender or tumour type, the graph 
+must be a pie chart if there are 
+two or three categories or a 
+horizontal bar chart if there are 
+four or more categories.
+
+When showing the distribution of a 
+single continuous variable like age 
+or tumour size, the graph must be 
+a histogram with a normal curve 
+drawn over it.
+
+When showing correlation between 
+two continuous variables, the graph 
+must be a scatter plot with a 
+regression line.
+
+The only situations where a forest 
+plot is correct are logistic 
+regression showing odds ratios and 
+Cox regression showing hazard ratios. 
+In all other situations use the 
+graph types listed above.
+
+Open the Chapter VI demo file I 
+attached and look at how graphs 
+appear there. Figure 1 shows age 
+distribution as a bar chart. 
+Figure 2 shows gender as a pie 
+chart. Figures comparing groups 
+show grouped bar charts. Follow 
+that same pattern exactly.
+
+Every graph must have a numbered 
+caption below it describing what 
+it shows. All graphs must be 300 
+DPI with clean axes and labels.
+
+Do not proceed to the other six 
+problems until the graph fix is 
+confirmed working.

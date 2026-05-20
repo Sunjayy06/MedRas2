@@ -39,7 +39,7 @@ import matplotlib.pyplot as plt
 
 def _fig_to_data_uri(fig) -> str:
     buf = io.BytesIO()
-    fig.savefig(buf, format="png", bbox_inches="tight", pad_inches=0.1, dpi=110)
+    fig.savefig(buf, format="png", bbox_inches="tight", pad_inches=0.15, dpi=300)
     plt.close(fig)
     return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
 
@@ -317,18 +317,43 @@ _RUNNERS = {
 
 
 def _boxplot(df, outcome, group) -> Optional[str]:
+    """Box plot with individual data points jittered over the boxes."""
     try:
+        import scipy.stats as _sp_stats  # noqa: F401 (already imported globally below)
         levels = [str(v) for v in df[group].dropna().unique()]
-        data = [pd.to_numeric(df.loc[df[group].astype(str) == lvl, outcome], errors="coerce").dropna()
-                for lvl in levels]
-        fig, ax = plt.subplots(figsize=(5.0, 3.6))
-        ax.boxplot(data, tick_labels=levels, patch_artist=True,
-                   boxprops=dict(facecolor="#bfd4ff", edgecolor="#2f6fed"),
-                   medianprops=dict(color="#103a6e"))
-        ax.set_ylabel(outcome)
-        ax.set_xlabel(group)
-        ax.set_title(f"{outcome} by {group}")
-        ax.grid(axis="y", alpha=0.3)
+        data = [
+            pd.to_numeric(df.loc[df[group].astype(str) == lvl, outcome], errors="coerce").dropna()
+            for lvl in levels
+        ]
+        fig, ax = plt.subplots(figsize=(5.5, 4.0))
+        bp = ax.boxplot(
+            data,
+            tick_labels=levels,
+            patch_artist=True,
+            widths=0.45,
+            boxprops=dict(facecolor="#dce9ff", edgecolor="#2f6fed", linewidth=1.4),
+            medianprops=dict(color="#103a6e", linewidth=2),
+            whiskerprops=dict(color="#2f6fed", linewidth=1.2),
+            capprops=dict(color="#2f6fed", linewidth=1.5),
+            flierprops=dict(marker="", markersize=0),
+        )
+        # Jittered data points
+        rng = np.random.default_rng(42)
+        for i, d in enumerate(data, start=1):
+            if len(d) == 0:
+                continue
+            jitter = rng.uniform(-0.18, 0.18, size=len(d))
+            ax.scatter(
+                np.full(len(d), i) + jitter, d,
+                color="#103a6e", alpha=0.45, s=18, zorder=3, linewidths=0,
+            )
+        ax.set_ylabel(clean_display_name(outcome), fontsize=10)
+        ax.set_xlabel(clean_display_name(group), fontsize=10)
+        ax.set_title(f"{clean_display_name(outcome)} by {clean_display_name(group)}", fontsize=11, fontweight="bold")
+        ax.grid(axis="y", alpha=0.3, linestyle="--")
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+        fig.tight_layout()
         return _fig_to_data_uri(fig)
     except Exception:
         plt.close("all")
@@ -336,15 +361,34 @@ def _boxplot(df, outcome, group) -> Optional[str]:
 
 
 def _histogram(df, outcome, _group=None) -> Optional[str]:
+    """Histogram with a fitted normal distribution curve overlaid."""
     try:
+        from scipy.stats import norm as _norm
         s = pd.to_numeric(df[outcome], errors="coerce").dropna()
-        fig, ax = plt.subplots(figsize=(5.0, 3.6))
-        ax.hist(s, bins=min(30, max(8, int(np.sqrt(len(s))))),
-                color="#bfd4ff", edgecolor="#2f6fed")
-        ax.set_xlabel(outcome)
-        ax.set_ylabel("Count")
-        ax.set_title(f"Distribution of {outcome}")
-        ax.grid(axis="y", alpha=0.3)
+        if len(s) < 3:
+            return None
+        n_bins = min(30, max(8, int(np.sqrt(len(s)))))
+        fig, ax = plt.subplots(figsize=(5.5, 4.0))
+        counts, bin_edges, _ = ax.hist(
+            s, bins=n_bins,
+            color="#bfd4ff", edgecolor="#2f6fed", alpha=0.85,
+            density=False,
+        )
+        # Overlay normal curve scaled to count area
+        mu, sigma = s.mean(), s.std()
+        if sigma > 0:
+            bin_width = bin_edges[1] - bin_edges[0]
+            x_curve = np.linspace(s.min() - sigma, s.max() + sigma, 200)
+            y_curve = _norm.pdf(x_curve, mu, sigma) * len(s) * bin_width
+            ax.plot(x_curve, y_curve, color="#c43838", lw=2, label=f"Normal (μ={mu:.1f}, σ={sigma:.1f})")
+            ax.legend(fontsize=8)
+        ax.set_xlabel(clean_display_name(outcome), fontsize=10)
+        ax.set_ylabel("Count", fontsize=10)
+        ax.set_title(f"Distribution of {clean_display_name(outcome)}", fontsize=11, fontweight="bold")
+        ax.grid(axis="y", alpha=0.3, linestyle="--")
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+        fig.tight_layout()
         return _fig_to_data_uri(fig)
     except Exception:
         plt.close("all")
@@ -352,27 +396,123 @@ def _histogram(df, outcome, _group=None) -> Optional[str]:
 
 
 def _stacked_bar(df, outcome, group) -> Optional[str]:
+    """Grouped percentage bar chart — % of each outcome level per group category."""
     try:
         ct = pd.crosstab(df[group].astype(str), df[outcome].astype(str))
-        fig, ax = plt.subplots(figsize=(5.0, 3.6))
-        ct.plot(kind="bar", stacked=True, ax=ax, colormap="Blues", edgecolor="#103a6e")
-        ax.set_ylabel("Count")
-        ax.set_xlabel(group)
-        ax.set_title(f"{outcome} by {group}")
-        ax.legend(title=outcome, fontsize=8)
+        pct = ct.div(ct.sum(axis=1), axis=0) * 100  # row-wise % (sum per group = 100)
+        n_groups = len(pct.index)
+        n_cats   = len(pct.columns)
+        fig, ax = plt.subplots(figsize=(max(5.0, n_groups * 0.9 + 1.5), 4.0))
+        x = np.arange(n_groups)
+        width = 0.65 / max(n_cats, 1)
+        colours = ["#2f6fed", "#c43838", "#f59e0b", "#10b981", "#8b5cf6"]
+        for j, col in enumerate(pct.columns):
+            offset = (j - (n_cats - 1) / 2) * width
+            bars = ax.bar(
+                x + offset, pct[col], width * 0.92,
+                label=str(col),
+                color=colours[j % len(colours)],
+                edgecolor="white",
+                linewidth=0.6,
+            )
+            # Percentage labels on bars ≥ 8 %
+            for bar in bars:
+                h = bar.get_height()
+                if h >= 8:
+                    ax.text(
+                        bar.get_x() + bar.get_width() / 2, h + 1.2,
+                        f"{h:.0f}%", ha="center", va="bottom", fontsize=7.5,
+                    )
+        ax.set_xticks(x)
+        ax.set_xticklabels(pct.index, fontsize=9, rotation=20 if n_groups > 4 else 0, ha="right")
+        ax.set_ylabel("Percentage (%)", fontsize=10)
+        ax.set_xlabel(clean_display_name(group), fontsize=10)
+        ax.set_ylim(0, 115)
+        ax.set_title(
+            f"{clean_display_name(outcome)} distribution by {clean_display_name(group)}",
+            fontsize=11, fontweight="bold",
+        )
+        ax.legend(title=clean_display_name(outcome), fontsize=8, framealpha=0.8)
+        ax.grid(axis="y", alpha=0.3, linestyle="--")
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+        fig.tight_layout()
         return _fig_to_data_uri(fig)
     except Exception:
         plt.close("all")
         return None
 
 
-def _forest_plot(test_results: List[Dict[str, Any]]) -> Optional[str]:
+def _pie_chart(df, col, _group=None) -> Optional[str]:
+    """Pie chart for a single categorical column with 2–3 distinct values."""
     try:
-        labels = []
-        effects = []
-        lows = []
-        highs = []
+        counts = df[col].astype(str).value_counts()
+        if len(counts) == 0:
+            return None
+        colours = ["#2f6fed", "#c43838", "#f59e0b", "#10b981"]
+        fig, ax = plt.subplots(figsize=(4.5, 4.0))
+        wedges, texts, autotexts = ax.pie(
+            counts.values,
+            labels=counts.index,
+            autopct="%1.1f%%",
+            colors=colours[: len(counts)],
+            startangle=90,
+            wedgeprops=dict(edgecolor="white", linewidth=1.5),
+        )
+        for at in autotexts:
+            at.set_fontsize(9)
+        ax.set_title(f"Distribution of {clean_display_name(col)}", fontsize=11, fontweight="bold")
+        fig.tight_layout()
+        return _fig_to_data_uri(fig)
+    except Exception:
+        plt.close("all")
+        return None
+
+
+def _horz_bar(df, col, _group=None) -> Optional[str]:
+    """Horizontal bar chart for a single categorical column with 4+ values."""
+    try:
+        counts = df[col].astype(str).value_counts().sort_values()
+        if len(counts) == 0:
+            return None
+        fig, ax = plt.subplots(figsize=(5.5, max(3.0, len(counts) * 0.45 + 1.0)))
+        colours = plt.cm.Blues(np.linspace(0.4, 0.85, len(counts)))  # type: ignore[attr-defined]
+        bars = ax.barh(counts.index, counts.values, color=colours, edgecolor="white")
+        for bar, val in zip(bars, counts.values):
+            ax.text(val + 0.3, bar.get_y() + bar.get_height() / 2,
+                    str(val), va="center", fontsize=8.5)
+        ax.set_xlabel("Count", fontsize=10)
+        ax.set_title(f"Distribution of {clean_display_name(col)}", fontsize=11, fontweight="bold")
+        ax.grid(axis="x", alpha=0.3, linestyle="--")
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+        fig.tight_layout()
+        return _fig_to_data_uri(fig)
+    except Exception:
+        plt.close("all")
+        return None
+
+
+# Test IDs that use logistic / Cox regression — the ONLY cases where a
+# forest plot showing odds/hazard ratios with 95% CI is appropriate.
+_FOREST_PLOT_TEST_IDS = frozenset({
+    "logistic_regression",
+    "cox_regression",
+    "pc_binary_logistic",
+    "pc_multinomial_logistic",
+    "pc_probit",
+    "pb_cox",
+})
+
+
+def _forest_plot(test_results: List[Dict[str, Any]]) -> Optional[str]:
+    """Forest plot — ONLY for logistic / Cox regression (OR / HR with 95% CI)."""
+    try:
+        labels, effects, lows, highs = [], [], [], []
         for t in test_results:
+            # Only include tests that produce odds/hazard ratios
+            if t.get("id") not in _FOREST_PLOT_TEST_IDS:
+                continue
             if t.get("effect_size") is None:
                 continue
             labels.append(t["title"])
@@ -383,18 +523,21 @@ def _forest_plot(test_results: List[Dict[str, Any]]) -> Optional[str]:
             highs.append(hi if hi is not None else t["effect_size"])
         if not labels:
             return None
-        fig, ax = plt.subplots(figsize=(6.5, max(2.0, 0.5 * len(labels) + 1.0)))
+        fig, ax = plt.subplots(figsize=(6.5, max(2.5, 0.55 * len(labels) + 1.2)))
         y = np.arange(len(labels))
         for i, (lo, hi, e) in enumerate(zip(lows, highs, effects)):
             ax.plot([lo, hi], [i, i], color="#2f6fed", lw=2)
-            ax.plot(e, i, marker="s", color="#2f6fed", markersize=10)
-        ax.axvline(0, color="#888", lw=1, ls="--")
+            ax.plot(e, i, marker="D", color="#2f6fed", markersize=9, zorder=3)
+        ax.axvline(1, color="#888", lw=1, ls="--")  # reference line at OR/HR = 1
         ax.set_yticks(y)
-        ax.set_yticklabels(labels)
+        ax.set_yticklabels(labels, fontsize=9)
         ax.invert_yaxis()
-        ax.set_xlabel("Effect size (95% CI shown when available)")
-        ax.set_title("Forest plot — effect sizes")
-        ax.grid(axis="x", alpha=0.3)
+        ax.set_xlabel("Odds Ratio / Hazard Ratio (95% CI)", fontsize=10)
+        ax.set_title("Forest plot — effect estimates", fontsize=11, fontweight="bold")
+        ax.grid(axis="x", alpha=0.3, linestyle="--")
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+        fig.tight_layout()
         return _fig_to_data_uri(fig)
     except Exception:
         plt.close("all")
@@ -805,11 +948,17 @@ def run_plan(
         "No tests were confirmed for this run."
     )
 
+    # Only generate a forest plot when the plan actually includes logistic / Cox
+    # regression tests.  For all other study types return None so export never
+    # embeds a spurious forest plot.
+    _has_forest_tests = any(
+        t.get("id") in _FOREST_PLOT_TEST_IDS for t in test_results
+    )
     return {
         "table_one": table_one,
         "tests": test_results,
         "graphs": graph_results,
-        "forest_plot": _forest_plot(test_results),
+        "forest_plot": _forest_plot(test_results) if _has_forest_tests else None,
         "methods_md": methods_md,
         "results_md": results_md,
         "correction_info": correction_info,
