@@ -739,12 +739,84 @@ def _rule_based_reply(kind: str, message: str, context: Dict[str, Any]) -> Dict[
     return _msg("Unknown chatbox.")
 
 
+_OPENAI_URL = "https://api.openai.com/v1/chat/completions"
+
+
+def _try_openai(kind: str, message: str, context: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Call OpenAI GPT-4o-mini; return a reply dict on success, None on any failure."""
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        return None
+
+    system = _SYSTEM_PROMPTS.get(kind)
+    if not system:
+        return None
+
+    user_content = (
+        _build_gemini_context(kind, context)
+        + "\n\nUser question: "
+        + message
+    )
+
+    body = json.dumps({
+        "model": "gpt-4o-mini",
+        "messages": [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user_content},
+        ],
+        "max_tokens": 400,
+        "temperature": 0.3,
+    }).encode("utf-8")
+
+    req = urllib.request.Request(
+        _OPENAI_URL,
+        data=body,
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        text = data["choices"][0]["message"]["content"].strip()
+        if not text:
+            return None
+    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, ValueError, KeyError, IndexError) as exc:
+        logger.info("OpenAI chatbox call failed (%s); trying Gemini.", exc)
+        return None
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Unexpected OpenAI chatbox error: %s", exc)
+        return None
+
+    if kind == "plan":
+        match = re.search(r'\{[^{}]*"action"[^{}]*\}', text, re.DOTALL)
+        if match:
+            try:
+                action = json.loads(match.group())
+                act = action.get("action")
+                tid = action.get("test_id")
+                if act in ("add_test", "remove_test") and isinstance(tid, str) and tid:
+                    reason = action.get("reason") or action.get("message") or ""
+                    return _action_msg(act, tid, reason)
+            except (ValueError, TypeError):
+                pass
+
+    return _msg(text)
+
+
 def reply(kind: str, message: str, context: Dict[str, Any]) -> Dict[str, Any]:
     # Boundary refusal stays at the gate so the LLM cannot violate it.
     if _is_calculation_request(message):
         if kind == "results":
             return _msg(REFUSE_RESULT_CHANGE)
         return _msg(REFUSE_CALCULATION)
+
+    # OpenAI GPT-4o-mini is primary; Gemini is fallback; rule-based is last resort.
+    openai_reply = _try_openai(kind, message, context)
+    if openai_reply is not None:
+        return openai_reply
 
     gemini = _try_gemini(kind, message, context)
     if gemini is not None:

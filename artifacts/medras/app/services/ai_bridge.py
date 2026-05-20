@@ -27,6 +27,7 @@ _GEMINI_URL = (
     "https://generativelanguage.googleapis.com/v1beta/"
     "models/gemini-2.0-flash:generateContent"
 )
+_OPENAI_URL = "https://api.openai.com/v1/chat/completions"
 _TIMEOUT = 20.0
 
 # Study-type keyword heuristics (used as fallback without Gemini)
@@ -101,6 +102,54 @@ def _fuzzy_match_column(hint: str, columns: List[str]) -> Optional[str]:
 # ---------------------------------------------------------------------------
 # Gemini call
 # ---------------------------------------------------------------------------
+
+
+def _call_openai(
+    description: str,
+    outcome_hint: str,
+    columns: List[str],
+) -> Optional[Dict[str, Any]]:
+    """Call OpenAI GPT-4o-mini to identify study type and outcome column."""
+    api_key = os.environ.get("OPENAI_API_KEY", "")
+    if not api_key:
+        return None
+
+    col_list = "\n".join(f"- {c}" for c in columns[:60])
+    prompt = (
+        f"You are a biostatistics assistant. A researcher uploaded an Excel dataset "
+        f"with the following column names:\n{col_list}\n\n"
+        f"They described their study as:\n\"{description}\"\n\n"
+        f"They said their outcome column is (approximately): \"{outcome_hint}\"\n\n"
+        "Return a JSON object with exactly these keys:\n"
+        '{"study_type": "<one of: correlation | comparison | diagnostic | survival | descriptive>", '
+        '"outcome_col": "<exact column name from the list above, or null>", '
+        '"confidence": <float 0.0 to 1.0>, '
+        '"reasoning": "<one plain English sentence explaining your choices>"}\n\n'
+        "Rules:\n"
+        "- outcome_col must be the EXACT column name string from the list, or null\n"
+        "- Respond ONLY with valid JSON, nothing else."
+    )
+
+    payload = {
+        "model": "gpt-4o-mini",
+        "messages": [{"role": "user", "content": prompt}],
+        "max_tokens": 256,
+        "temperature": 0.1,
+        "response_format": {"type": "json_object"},
+    }
+    try:
+        resp = httpx.post(
+            _OPENAI_URL,
+            json=payload,
+            headers={"Authorization": f"Bearer {api_key}"},
+            timeout=_TIMEOUT,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        text = data["choices"][0]["message"]["content"].strip()
+        return json.loads(text)
+    except Exception:
+        return None
 
 
 def _call_gemini(
@@ -187,10 +236,12 @@ def identify_study(
         "source":       "gemini" | "heuristic",
       }
     """
-    # Attempt Gemini first
+    # OpenAI GPT-4o-mini is primary; Gemini is fallback; heuristic is last resort.
     result = None
     if description.strip() or outcome_hint.strip():
-        result = _call_gemini(description, outcome_hint, columns)
+        result = _call_openai(description, outcome_hint, columns)
+        if not (result and isinstance(result, dict) and "study_type" in result):
+            result = _call_gemini(description, outcome_hint, columns)
 
     if result and isinstance(result, dict) and "study_type" in result:
         study_type = str(result.get("study_type") or "correlation").strip().lower()

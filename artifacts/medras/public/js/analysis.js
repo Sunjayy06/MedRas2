@@ -54,6 +54,9 @@ const state = {
   aiStudy: null,           // result from /ai-bridge
   corrResults: null,       // result from /run-correlation
 
+  // --- Task 2: Document correction versions ---
+  correctionVersions: [],  // [{version, timestamp, instructions, applied, skipped}]
+
   // --- Chatboxes 2/3/4 (PART 5) ---
   chatThreads: { normality: [], plan: [], results: [] },
   chatOpened:  { normality: false, plan: false, results: false },
@@ -4040,6 +4043,143 @@ function bindExport() {
   if (back) back.addEventListener("click", () => showScreen("results"));
   const restartBtn = screen.querySelector('[data-action="restart"]');
   if (restartBtn) restartBtn.addEventListener("click", restart);
+  bindCorrectionSystem();
+}
+
+/* ------------------------------------------------------------------ */
+/*  Task 2 — Plain-English document correction system                   */
+/* ------------------------------------------------------------------ */
+
+function bindCorrectionSystem() {
+  const applyBtn = document.getElementById("btn-apply-corrections");
+  if (!applyBtn) return;
+  applyBtn.addEventListener("click", async () => {
+    const input = document.getElementById("correction-input");
+    const instructions = (input && input.value.trim()) || "";
+    if (!instructions) {
+      setStatus(document.getElementById("correction-status"), "Please enter correction instructions first.", "error");
+      return;
+    }
+    if (!state.jobId) {
+      setStatus(document.getElementById("correction-status"), "No active analysis session — run an analysis first.", "error");
+      return;
+    }
+    await applyCorrectionInstructions(instructions);
+  });
+}
+
+async function applyCorrectionInstructions(instructions) {
+  const statusEl = document.getElementById("correction-status");
+  const resultsEl = document.getElementById("correction-results");
+  const applyBtn = document.getElementById("btn-apply-corrections");
+  if (applyBtn) applyBtn.disabled = true;
+  setStatus(statusEl, "Parsing corrections with AI\u2026", "loading");
+  if (resultsEl) resultsEl.style.display = "none";
+
+  try {
+    const data = await api("/apply-corrections", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ job_id: state.jobId, instructions }),
+    });
+
+    state.correctionVersions = state.correctionVersions || [];
+    state.correctionVersions.push({
+      version: data.version,
+      timestamp: new Date().toLocaleTimeString(),
+      instructions: instructions.slice(0, 80) + (instructions.length > 80 ? "\u2026" : ""),
+      applied: data.applied || [],
+      skipped: data.skipped || [],
+    });
+
+    const appliedEl = document.getElementById("correction-applied");
+    const skippedEl = document.getElementById("correction-skipped");
+    if (appliedEl) {
+      appliedEl.innerHTML = (data.applied && data.applied.length)
+        ? "<strong>\u2713 Applied:</strong><ul style='margin:0.25rem 0 0 1rem;padding:0;list-style:disc;'>"
+            + data.applied.map((a) => `<li>${escapeHtml(a)}</li>`).join("")
+            + "</ul>"
+        : "<em>No changes could be applied.</em>";
+    }
+    if (skippedEl) {
+      skippedEl.innerHTML = (data.skipped && data.skipped.length)
+        ? "<strong>\u26a0 Could not apply:</strong><ul style='margin:0.25rem 0 0 1rem;padding:0;list-style:disc;'>"
+            + data.skipped.map((s) => `<li>${escapeHtml(s)}</li>`).join("")
+            + "</ul>"
+        : "";
+    }
+    if (resultsEl) resultsEl.style.display = "block";
+
+    const totalApplied = (data.applied || []).length;
+    const totalSkipped = (data.skipped || []).length;
+    setStatus(statusEl,
+      `V${data.version} applied \u2014 ${totalApplied} change(s), ${totalSkipped} skipped. Re-download to get the corrected document.`,
+      "success");
+
+    renderCorrectionHistory();
+    const input = document.getElementById("correction-input");
+    if (input) input.value = "";
+  } catch (err) {
+    setStatus(statusEl, `Correction failed: ${err.message}`, "error");
+  } finally {
+    if (applyBtn) applyBtn.disabled = false;
+  }
+}
+
+async function renderCorrectionHistory() {
+  const histEl = document.getElementById("correction-history");
+  const listEl = document.getElementById("correction-history-list");
+  if (!histEl || !listEl || !state.jobId) return;
+
+  let versions = state.correctionVersions || [];
+  if (!versions.length) {
+    try {
+      const data = await api(`/correction-versions/${state.jobId}`);
+      versions = (data.versions || []).map((v) => ({
+        version: v.version,
+        timestamp: v.timestamp ? v.timestamp.replace("T", " ").replace("Z", " UTC") : "",
+        instructions: (v.instructions || "").slice(0, 80),
+        applied: v.applied || [],
+        skipped: v.skipped || [],
+      }));
+      state.correctionVersions = versions;
+    } catch (_) { return; }
+  }
+
+  if (!versions.length) { histEl.style.display = "none"; return; }
+
+  listEl.innerHTML = versions.slice().reverse().map((v) => `
+    <div style="padding:0.5rem 0;border-bottom:1px solid #eaecf4;">
+      <div style="display:flex;align-items:baseline;gap:0.5rem;flex-wrap:wrap;">
+        <span style="font-weight:600;color:#1a2e5a;">V${v.version}</span>
+        <span style="color:#888;">${escapeHtml(v.timestamp)}</span>
+        <button type="button" class="btn btn-tertiary" style="padding:0.1rem 0.5rem;font-size:0.75rem;"
+          onclick="restoreVersion(${v.version})">Restore</button>
+      </div>
+      <div style="margin-top:0.2rem;color:#333;">${escapeHtml(v.instructions)}</div>
+      <div style="color:#1a6e3a;font-size:0.78rem;">${v.applied.length} applied</div>
+      ${v.skipped.length ? `<div style="color:#8a5a0a;font-size:0.78rem;">${v.skipped.length} skipped</div>` : ""}
+    </div>
+  `).join("");
+  histEl.style.display = "block";
+}
+
+async function restoreVersion(versionNum) {
+  if (!state.jobId) return;
+  const statusEl = document.getElementById("correction-status");
+  setStatus(statusEl, `Restoring V${versionNum}\u2026`, "loading");
+  try {
+    await api("/restore-version", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ job_id: state.jobId, version: versionNum }),
+    });
+    setStatus(statusEl,
+      `Restored to V${versionNum}. Re-download to get that version of the document.`,
+      "success");
+  } catch (err) {
+    setStatus(statusEl, `Restore failed: ${err.message}`, "error");
+  }
 }
 
 async function downloadExport(format) {
@@ -4102,6 +4242,7 @@ function restart() {
   state.results = null;
   state.aiStudy = null;
   state.corrResults = null;
+  state.correctionVersions = [];
   state.chatThreads = { normality: [], plan: [], results: [] };
   state.chatOpened  = { normality: false, plan: false, results: false };
   ["normality", "plan", "results"].forEach((k) => {

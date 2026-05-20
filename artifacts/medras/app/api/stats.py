@@ -29,6 +29,7 @@ from app.services import (
     chatboxes,
     data_quality,
     dataset_store,
+    doc_correction,
     dummy_data,
     excel_loader,
     export as export_service,
@@ -1264,3 +1265,76 @@ async def analyze(request: Request, payload: AnalyzeRequest) -> Dict[str, Any]:
     if "error" in result:
         raise HTTPException(status_code=400, detail=result["error"])
     return result
+
+
+# ---------------------------------------------------------------------------
+# Task 2 — Plain-English document correction system
+# ---------------------------------------------------------------------------
+
+
+class CorrectionRequest(BaseModel):
+    job_id: str = Field(..., min_length=1, max_length=64)
+    instructions: str = Field(..., min_length=1, max_length=2000)
+
+
+@router.post("/apply-corrections")
+@limiter.limit("20/minute")
+async def apply_corrections(
+    request: Request, payload: CorrectionRequest,
+) -> Dict[str, Any]:
+    entry = dataset_store.get(payload.job_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Dataset expired or not found.")
+    results = entry.meta.get("results")
+    if not results:
+        raise HTTPException(
+            status_code=400,
+            detail="No results available — run the analysis first.",
+        )
+    inventory = doc_correction.get_document_inventory(entry, results)
+    actions = doc_correction._call_openai_correction(payload.instructions, inventory)
+    if actions is None:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Correction parsing unavailable — check that OPENAI_API_KEY is set "
+                "and the service is reachable."
+            ),
+        )
+    applied, skipped = doc_correction.apply_correction_actions(entry, actions)
+    version_num = doc_correction.record_correction_version(
+        entry, payload.instructions, applied, skipped,
+    )
+    return {
+        "version": version_num,
+        "applied": applied,
+        "skipped": skipped,
+        "total_actions": len(actions),
+    }
+
+
+@router.get("/correction-versions/{job_id}")
+async def correction_versions(job_id: str) -> Dict[str, Any]:
+    entry = dataset_store.get(job_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Dataset expired or not found.")
+    return {"versions": doc_correction.get_correction_versions(entry)}
+
+
+class RestoreVersionRequest(BaseModel):
+    job_id: str = Field(..., min_length=1, max_length=64)
+    version: int = Field(..., ge=1)
+
+
+@router.post("/restore-version")
+async def restore_correction_version(payload: RestoreVersionRequest) -> Dict[str, Any]:
+    entry = dataset_store.get(payload.job_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Dataset expired or not found.")
+    ok = doc_correction.restore_version(entry, payload.version)
+    if not ok:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Version {payload.version} not found.",
+        )
+    return {"status": "restored", "version": payload.version}

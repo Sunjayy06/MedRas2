@@ -298,6 +298,12 @@ def _build_session(entry, results: Dict[str, Any], assignment: Dict[str, Any]) -
         cleaning_actions.append(
             f"Merged sheets: {', '.join(meta['merged_sheets'])}.")
 
+    # Apply correction overrides: rename display names, pass hidden sections & notes
+    overrides: Dict[str, Any] = meta.get("correction_overrides") or {}
+    for raw_name, display_name in (overrides.get("variable_renames") or {}).items():
+        if raw_name in variables and display_name:
+            variables[raw_name]["display_name"] = str(display_name)
+
     return {
         "objective": str(objective) or "Not specified",
         "filename": meta.get("filename") or "Unknown",
@@ -315,6 +321,8 @@ def _build_session(entry, results: Dict[str, Any], assignment: Dict[str, Any]) -
         "results": results.get("tests") or [],
         "table_one": results.get("table_one") or {},
         "is_practice": bool(meta.get("is_dummy") or meta.get("is_practice_wizard")),
+        "hidden_sections": list(overrides.get("hidden_sections") or []),
+        "custom_notes": dict(overrides.get("custom_notes") or {}),
     }
 
 
@@ -784,12 +792,23 @@ def collect_limitations(session: Dict[str, Any], results: List[Dict[str, Any]]) 
 # ---------------------------------------------------------------------------
 
 
+def _add_custom_notes(doc: Document, session: Dict[str, Any], location: str) -> None:
+    """Insert any custom notes for the given location key."""
+    notes = (session.get("custom_notes") or {}).get(location) or []
+    for note in notes:
+        p = doc.add_paragraph()
+        run = p.add_run(f"\u26a0 Note: {note}")
+        run.italic = True
+        run.font.color.rgb = RGBColor(0x4A, 0x5E, 0x8A)
+
+
 def generate_report(session: Dict[str, Any], df: pd.DataFrame) -> Document:
     doc = Document()
     style = doc.styles["Normal"]
     style.font.name = "Calibri"
     style.font.size = Pt(11)
 
+    hidden: set = set(session.get("hidden_sections") or [])
     graph_paths = session.get("graph_paths", [])
     results = session.get("results", [])
 
@@ -824,29 +843,33 @@ def generate_report(session: Dict[str, Any], df: pd.DataFrame) -> Document:
         run = p.add_run(f"{label}: "); run.bold = True
         p.add_run(str(value))
     doc.add_page_break()
+    _add_custom_notes(doc, session, "after_cover")
 
     # ── 2. DATA SUMMARY ────────────────────────────────────────
-    doc.add_heading("Data Summary", 1)
-    variables = session.get("variables", {})
-    if variables:
-        table = doc.add_table(rows=1, cols=4)
-        for i, h in enumerate(("Variable", "Type", "Missing n", "Missing %")):
-            _set_header_text(table.rows[0].cells[i], h)
-        for col, info in variables.items():
-            c = table.add_row().cells
-            c[0].text = info.get("display_name", col)
-            c[1].text = info.get("type", "")
-            c[2].text = str(info.get("missing_n", 0))
-            c[3].text = f'{info.get("missing_pct", 0):.1f}%'
-        format_table(table)
-        add_caption(doc, "Table 1a. Variable summary.")
+    if "data_summary" not in hidden:
+        doc.add_heading("Data Summary", 1)
+        variables = session.get("variables", {})
+        if variables:
+            table = doc.add_table(rows=1, cols=4)
+            for i, h in enumerate(("Variable", "Type", "Missing n", "Missing %")):
+                _set_header_text(table.rows[0].cells[i], h)
+            for col, info in variables.items():
+                c = table.add_row().cells
+                c[0].text = info.get("display_name", col)
+                c[1].text = info.get("type", "")
+                c[2].text = str(info.get("missing_n", 0))
+                c[3].text = f'{info.get("missing_pct", 0):.1f}%'
+            format_table(table)
+            add_caption(doc, "Table 1a. Variable summary.")
 
-    cleaning = session.get("cleaning_actions", [])
-    if cleaning:
-        doc.add_heading("Data Cleaning", 2)
-        for action in cleaning:
-            doc.add_paragraph(action, style="List Bullet")
-    doc.add_page_break()
+        cleaning = session.get("cleaning_actions", [])
+        if cleaning:
+            doc.add_heading("Data Cleaning", 2)
+            for action in cleaning:
+                doc.add_paragraph(action, style="List Bullet")
+        doc.add_page_break()
+    else:
+        variables = session.get("variables", {})
 
     # ── 3. TABLE 1 ─────────────────────────────────────────────
     doc.add_heading("Table 1. Baseline Characteristics", 1)
@@ -854,59 +877,64 @@ def generate_report(session: Dict[str, Any], df: pd.DataFrame) -> Document:
     doc.add_page_break()
 
     # ── 4. NORMALITY ───────────────────────────────────────────
-    doc.add_heading("Normality Assessment", 1)
-    norm_results = session.get("normality_results", {})
-    if norm_results:
-        table = doc.add_table(rows=1, cols=5)
-        for i, h in enumerate(("Variable", "Test", "Statistic", "p-value", "Decision")):
-            _set_header_text(table.rows[0].cells[i], h)
-        for var, r in norm_results.items():
-            row = table.add_row().cells
-            row[0].text = variables.get(var, {}).get("display_name") or clean_display_name(var)
-            row[1].text = r.get("test", "")
-            row[2].text = _fmt(r.get("stat"))
-            row[3].text = fmt_p(r.get("p"))
-            decision = r.get("decision", "")
-            row[4].text = decision
-            if decision.startswith("Non-normal"):
-                for cell in row:
-                    for para in cell.paragraphs:
-                        for run in para.runs:
-                            run.font.color.rgb = RGBColor(0xA3, 0x2D, 0x2D)
-        format_table(table)
-        add_caption(doc, "Table 2. Normality assessment results.")
-        add_footnote(doc,
-                     "SW Shapiro-Wilk; KS Kolmogorov-Smirnov. "
-                     "p < 0.05 indicates non-normal distribution.")
-    else:
-        doc.add_paragraph("No continuous variables required normality assessment.")
-    doc.add_page_break()
-
-    # ── 5. PRIMARY ─────────────────────────────────────────────
-    doc.add_heading("Primary Analysis", 1)
-    primary = next((r for r in results
-                    if r.get("test_type") in _PRIMARY_TYPES and "error" not in r), None)
-    if primary:
-        build_result_table(doc, primary, session, table_num=3)
-    else:
-        doc.add_paragraph("No primary inferential comparison ran successfully.")
-    doc.add_page_break()
-
-    # ── 6. SECONDARY ───────────────────────────────────────────
-    secondary = [r for r in results
-                 if r.get("test_type") in _SECONDARY_TYPES and "error" not in r]
-    if secondary:
-        doc.add_heading("Secondary Analyses", 1)
-        table_num = 4
-        for r in secondary:
-            doc.add_heading(r.get("plan_name") or r.get("title") or r.get("test_type",""), 2)
-            build_result_table(doc, r, session, table_num=table_num)
-            table_num += 1
-            doc.add_paragraph()
+    if "normality" not in hidden:
+        doc.add_heading("Normality Assessment", 1)
+        norm_results = session.get("normality_results", {})
+        if norm_results:
+            table = doc.add_table(rows=1, cols=5)
+            for i, h in enumerate(("Variable", "Test", "Statistic", "p-value", "Decision")):
+                _set_header_text(table.rows[0].cells[i], h)
+            for var, r in norm_results.items():
+                row = table.add_row().cells
+                row[0].text = variables.get(var, {}).get("display_name") or clean_display_name(var)
+                row[1].text = r.get("test", "")
+                row[2].text = _fmt(r.get("stat"))
+                row[3].text = fmt_p(r.get("p"))
+                decision = r.get("decision", "")
+                row[4].text = decision
+                if decision.startswith("Non-normal"):
+                    for cell in row:
+                        for para in cell.paragraphs:
+                            for run in para.runs:
+                                run.font.color.rgb = RGBColor(0xA3, 0x2D, 0x2D)
+            format_table(table)
+            add_caption(doc, "Table 2. Normality assessment results.")
+            add_footnote(doc,
+                         "SW Shapiro-Wilk; KS Kolmogorov-Smirnov. "
+                         "p < 0.05 indicates non-normal distribution.")
+        else:
+            doc.add_paragraph("No continuous variables required normality assessment.")
         doc.add_page_break()
 
+    # ── 5. PRIMARY ─────────────────────────────────────────────
+    if "primary_analysis" not in hidden:
+        doc.add_heading("Primary Analysis", 1)
+        primary = next((r for r in results
+                        if r.get("test_type") in _PRIMARY_TYPES and "error" not in r), None)
+        if primary:
+            build_result_table(doc, primary, session, table_num=3)
+        else:
+            doc.add_paragraph("No primary inferential comparison ran successfully.")
+        _add_custom_notes(doc, session, "after_primary_analysis")
+        doc.add_page_break()
+
+    # ── 6. SECONDARY ───────────────────────────────────────────
+    if "secondary_analyses" not in hidden:
+        secondary = [r for r in results
+                     if r.get("test_type") in _SECONDARY_TYPES and "error" not in r]
+        if secondary:
+            doc.add_heading("Secondary Analyses", 1)
+            table_num = 4
+            for r in secondary:
+                doc.add_heading(r.get("plan_name") or r.get("title") or r.get("test_type",""), 2)
+                build_result_table(doc, r, session, table_num=table_num)
+                table_num += 1
+                doc.add_paragraph()
+            _add_custom_notes(doc, session, "after_secondary")
+            doc.add_page_break()
+
     # ── 7. FIGURES ─────────────────────────────────────────────
-    if graph_paths:
+    if "figures" not in hidden and graph_paths:
         doc.add_heading("Figures", 1)
         for i, (path, caption) in enumerate(graph_paths, 1):
             if not os.path.exists(path):
@@ -920,31 +948,35 @@ def generate_report(session: Dict[str, Any], df: pd.DataFrame) -> Document:
         doc.add_page_break()
 
     # ── 8. RESULTS NARRATIVE ───────────────────────────────────
-    doc.add_heading("Results Section", 1)
-    p = doc.add_paragraph(
-        "Copy the text below directly into your paper's Results section.")
-    if p.runs:
-        p.runs[0].italic = True
-    doc.add_paragraph(build_results_narrative(session, results))
-    doc.add_page_break()
+    if "results_narrative" not in hidden:
+        doc.add_heading("Results Section", 1)
+        p = doc.add_paragraph(
+            "Copy the text below directly into your paper's Results section.")
+        if p.runs:
+            p.runs[0].italic = True
+        doc.add_paragraph(build_results_narrative(session, results))
+        doc.add_page_break()
 
     # ── 9. METHODS ─────────────────────────────────────────────
-    doc.add_heading("Statistical Analysis", 1)
-    p = doc.add_paragraph(
-        "Copy the text below directly into your paper's Methods section.")
-    if p.runs:
-        p.runs[0].italic = True
-    doc.add_paragraph(build_methods_paragraph(session, results))
-    doc.add_page_break()
+    if "methods" not in hidden:
+        doc.add_heading("Statistical Analysis", 1)
+        p = doc.add_paragraph(
+            "Copy the text below directly into your paper's Methods section.")
+        if p.runs:
+            p.runs[0].italic = True
+        doc.add_paragraph(build_methods_paragraph(session, results))
+        _add_custom_notes(doc, session, "after_methods")
+        doc.add_page_break()
 
     # ── 10. LIMITATIONS ────────────────────────────────────────
-    doc.add_heading("Limitations and Notes", 1)
-    limitations = collect_limitations(session, results)
-    if limitations:
-        for lim in limitations:
-            doc.add_paragraph(lim, style="List Bullet")
-    else:
-        doc.add_paragraph("No major assumption violations or warnings detected.")
+    if "limitations" not in hidden:
+        doc.add_heading("Limitations and Notes", 1)
+        limitations = collect_limitations(session, results)
+        if limitations:
+            for lim in limitations:
+                doc.add_paragraph(lim, style="List Bullet")
+        else:
+            doc.add_paragraph("No major assumption violations or warnings detected.")
 
     return doc
 

@@ -1,0 +1,200 @@
+Let me check the current code first before writing the final prompt.I cannot read the Replit code directly from here. Based on everything built so far, I can answer your multiple outcome question and give you the final prompt.
+
+**On multiple outcomes — honest answer:**
+
+Currently the system is built for one outcome variable. The correlation study runs pairwise analysis of one outcome against every other variable. Multiple outcomes are not supported yet. A researcher studying both ER expression and tumour recurrence as two separate outcomes would need to run the analysis twice.
+
+Whether to add it now or later depends on how common it is for your users. For most standard medical studies one primary outcome is the norm. Secondary outcomes are usually analysed separately. I would not add it now — add it after launch when a real user requests it.
+
+Here is the final prompt covering everything:
+
+---
+
+```
+This is the final prompt for the 
+MedRAS statistical analysis engine. 
+Do everything in this prompt in one 
+session without stopping unless you 
+hit a real blocker. Use your best 
+judgment on implementation details.
+
+TASK 1 — OpenAI integration
+
+Add OpenAI GPT-4o-mini as the primary 
+AI provider across the entire system.
+
+Use this priority order everywhere 
+AI is called:
+First try OpenAI using OPENAI_API_KEY 
+from Replit Secrets.
+If OpenAI is not available try Gemini 
+using GEMINI_API_KEY.
+If neither is available use the 
+existing rule-based fallback.
+
+For all chatbox calls use GPT-4o-mini 
+with max 400 tokens and temperature 
+0.3.
+
+For the document correction feature 
+use GPT-4o-mini with max 500 tokens, 
+temperature 0.1, and response format 
+set to JSON object.
+
+Keep all existing system prompts and 
+boundary rules exactly as they are. 
+Only change which AI provider is 
+called first.
+
+TASK 2 — Plain English document 
+correction system
+
+Add a correction section to the 
+Export screen after the initial 
+document is downloaded.
+
+Show a text area where the researcher 
+types what changes they want in plain 
+English. No dropdowns. No forms. 
+Just one text area.
+
+Example placeholder text to show:
+Type your corrections here. For example:
+Change the Gender graph to a pie chart.
+Rename P/N to ER Expression Status 
+everywhere in the document.
+Merge the LVI table with the Extra 
+capsular extension table.
+Move the summary table to the top.
+My guide wants Age shown as mean and 
+SD not as ranges.
+
+Show one button below: Apply 
+corrections and regenerate document.
+
+When the user clicks the button:
+Send two things to OpenAI. First the 
+full list of what is currently in the 
+document including every table name, 
+graph name and type, section name, 
+and variable display name. Second 
+exactly what the user typed.
+
+Ask OpenAI to return a JSON array 
+of specific correction actions. Each 
+action has a type and parameters. 
+The valid action types are:
+change_graph_type with variable name 
+and new graph type.
+rename_variable with current name 
+and new name applied everywhere.
+merge_tables with the two table names.
+reorder_sections with the new order 
+as a list.
+change_table_format with table name 
+and format change description.
+hide_section with section name.
+change_axis_label with graph name, 
+axis, and new label.
+
+Python reads the JSON and executes 
+each action against the saved session 
+data and regenerates the document.
+
+After regenerating show the user a 
+plain English summary of what changed. 
+For example: changed Gender graph to 
+pie chart, renamed P/N to ER Expression 
+Status in 14 places.
+
+If OpenAI could not understand part 
+of the instruction highlight it in 
+amber and ask the user to rephrase 
+that part.
+
+Show a download button for the 
+corrected Word and PDF.
+
+Keep version history automatically. 
+Every download gets a version number 
+V1 V2 V3. Show previous versions 
+with date and time. Let the user 
+download any previous version or 
+restore it as the current one.
+
+The system prompt to send OpenAI:
+You are a document correction 
+assistant for a medical research 
+statistics platform. The researcher 
+has received feedback from their 
+supervisor and wants specific 
+corrections to their results document. 
+Read the document contents and the 
+correction instructions carefully. 
+Return a JSON array of correction 
+actions using only the action types 
+provided. If any instruction is 
+unclear include it in an unclear 
+array with the original text. Return 
+only valid JSON with no explanation.
+
+TASK 3 — Multiple outcomes question
+
+Currently the system supports one 
+primary outcome variable per analysis. 
+Do not change this for now. Instead 
+add a simple note on the plan 
+confirmation screen that says:
+This analysis uses one primary outcome 
+variable. To analyse a second outcome 
+variable start a new analysis session 
+and select the second outcome.
+
+This is the correct approach for 
+standard medical research. Do not 
+build multiple outcome support yet.
+
+TASK 4 — Final verification
+
+After completing tasks 1 and 2 run 
+these checks:
+
+Check one: Upload srmc1.xlsx, type 
+the thyroid cancer description, select 
+P/N as outcome, complete the full 
+analysis, download the Word document.
+
+Check two: In the correction text area 
+type this exactly: Change the Gender 
+graph to a pie chart and rename P/N 
+to ER Expression Status everywhere 
+in the document. Click apply. Confirm 
+OpenAI identifies two actions, Python 
+executes both, the corrected document 
+shows a pie chart for Gender and uses 
+ER Expression Status instead of P/N 
+throughout, and version history shows 
+V1 and V2.
+
+Check three: Confirm the chatboxes on 
+normality, plan, and results screens 
+now use OpenAI when the key is 
+available. Ask one chatbox a question 
+and confirm it responds correctly.
+
+Check four: Remove OPENAI_API_KEY 
+temporarily and confirm the system 
+falls back to Gemini without any 
+error shown to the user. Then restore 
+the key.
+
+When all four checks pass print:
+Final prompt complete. OpenAI 
+integrated. Document correction 
+system working. MedRAS statistical 
+analysis engine is fully complete 
+and ready for real user testing.
+
+Then stop completely and do not 
+start anything else.
+```

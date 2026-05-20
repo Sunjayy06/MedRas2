@@ -943,6 +943,10 @@
 
         <div id="ai-confirm-status" class="se-status" role="status" aria-live="polite" data-testid="status-ai-confirm"></div>
 
+        <p class="se-hint" style="margin-top:0.75rem;padding:0.6rem 0.85rem;background:#f0f4ff;border-left:3px solid #4a6eb5;border-radius:4px;font-size:0.82rem;" data-testid="note-primary-outcome">
+          <strong>One primary outcome per session.</strong> This analysis uses a single primary outcome variable. To analyse a second outcome variable, start a new analysis session and select the second outcome column.
+        </p>
+
         <div class="se-actions">
           <button type="button" class="btn btn-secondary" data-action="back-to-preview-from-ai">&larr; Back</button>
           <button type="button" class="btn btn-secondary" data-action="ai-confirm-skip-to-variables">Continue to Variables (standard flow) &rarr;</button>
@@ -1020,6 +1024,23 @@
         </div>
 
         <div id="export-status" class="se-status" role="status" aria-live="polite" data-testid="status-export"></div>
+
+        <!-- Task 2 — Plain-English correction system -->
+        <div class="se-correction-section" data-testid="correction-section" style="margin-top:2rem;padding:1.25rem 1.5rem;background:#f8f9fc;border:1px solid #dde3f0;border-radius:8px;">
+          <h3 style="margin:0 0 0.4rem;font-size:1rem;color:#1a2e5a;">Plain-English corrections</h3>
+          <p class="se-hint" style="margin:0 0 0.75rem;font-size:0.82rem;">Describe changes you want applied to the report — rename variables, hide sections, or add notes. Then re-download to get the corrected document.</p>
+          <textarea id="correction-input" rows="3" placeholder="e.g. &quot;Rename hb_pre to Haemoglobin (Pre-op). Hide the Limitations section. Add a note after Primary Analysis: This was a single-centre study.&quot;" style="width:100%;box-sizing:border-box;padding:0.6rem 0.75rem;border:1px solid #c5cde0;border-radius:5px;font-size:0.85rem;font-family:inherit;resize:vertical;" data-testid="input-correction"></textarea>
+          <button type="button" class="btn btn-secondary" id="btn-apply-corrections" style="margin-top:0.6rem;" data-testid="button-apply-corrections">Apply corrections &amp; regenerate</button>
+          <div id="correction-status" class="se-status" role="status" aria-live="polite" data-testid="status-corrections" style="margin-top:0.5rem;"></div>
+          <div id="correction-results" style="display:none;margin-top:0.75rem;" data-testid="correction-results">
+            <div id="correction-applied" style="color:#1a6e3a;font-size:0.82rem;margin-bottom:0.4rem;"></div>
+            <div id="correction-skipped" style="color:#8a5a0a;font-size:0.82rem;"></div>
+          </div>
+          <div id="correction-history" style="display:none;margin-top:1.1rem;" data-testid="correction-history">
+            <h4 style="margin:0 0 0.5rem;font-size:0.9rem;color:#1a2e5a;border-top:1px solid #dde3f0;padding-top:0.75rem;">Version history</h4>
+            <div id="correction-history-list" style="font-size:0.82rem;"></div>
+          </div>
+        </div>
 
         <div class="se-actions">
           <button type="button" class="btn btn-secondary" data-action="back-to-results" data-testid="button-export-back">&larr; Back to Results</button>
