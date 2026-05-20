@@ -10,7 +10,7 @@
     />
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%232f6fed'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-family='Inter,sans-serif' font-size='18' font-weight='700' fill='white'%3EM%3C/text%3E%3C/svg%3E" />
     <link rel="stylesheet" href="/css/style.css" />
-    <link rel="stylesheet" href="/css/analysis.css?v=2026050504" />
+    <link rel="stylesheet" href="/css/analysis.css?v=2026052001" />
   </head>
   <body>
     <header class="site-header" data-testid="site-header">
@@ -100,6 +100,72 @@
             <p>Generate a realistic clinical dataset and try the workflow.</p>
             <span class="se-entry-cta" aria-hidden="true">Generate &rarr;</span>
           </article>
+        </div>
+
+        <!-- ── Study description phase (shown after "upload" card click) ── -->
+        <div id="s1-study-phase" class="is-hidden">
+          <header class="se-screen-head" style="margin-top:1.5rem">
+            <h2>Tell me about your study</h2>
+            <p>Before uploading your data, help me understand your research. Choose one option below.</p>
+          </header>
+
+          <div class="se-study-split">
+            <!-- Option A: proposal document -->
+            <div class="se-study-panel" id="s1-panel-proposal">
+              <div class="se-study-panel-head">
+                <span class="se-study-panel-num">A</span>
+                <div>
+                  <strong>I have a proposal or synopsis document</strong>
+                  <p>Upload a Word, PDF, or text file. I'll extract the study details automatically.</p>
+                </div>
+              </div>
+              <label class="se-dropzone" id="s1-proposal-dropzone" style="cursor:pointer">
+                <input type="file" id="s1-proposal-file" accept=".pdf,.doc,.docx,.ppt,.pptx,.txt,.rtf,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain" hidden />
+                <span class="se-dropzone-icon" aria-hidden="true">📎</span>
+                <span class="se-dropzone-text"><strong>Click to upload</strong> or drag &amp; drop</span>
+                <span class="se-dropzone-sub" id="s1-proposal-status">PDF, Word, or plain text · Max 8&nbsp;MB</span>
+              </label>
+              <div id="s1-proposal-fields" class="is-hidden" style="margin-top:1rem">
+                <label class="se-field">
+                  <span>Study description <small style="font-weight:400">(extracted — edit if needed)</small></span>
+                  <textarea id="s1-prop-desc" rows="3" style="width:100%"></textarea>
+                </label>
+                <label class="se-field" style="margin-top:0.75rem">
+                  <span>Outcome variable <strong>exactly as it appears in your Excel column header</strong></span>
+                  <input type="text" id="s1-prop-outcome" placeholder="e.g. P/N, HbA1c, Outcome" style="width:100%" />
+                  <span class="se-hint">Copy the exact column name from your spreadsheet.</span>
+                </label>
+                <button type="button" class="btn btn-primary" id="s1-proposal-continue-btn" data-action="s1-continue-proposal" style="margin-top:1rem">Continue to upload data →</button>
+              </div>
+            </div>
+
+            <div class="se-study-divider" aria-hidden="true"><span>or</span></div>
+
+            <!-- Option B: free-text description -->
+            <div class="se-study-panel" id="s1-panel-describe">
+              <div class="se-study-panel-head">
+                <span class="se-study-panel-num">B</span>
+                <div>
+                  <strong>Describe my study in my own words</strong>
+                  <p>Write naturally about your research. No bullet points needed — just tell me what you're studying.</p>
+                </div>
+              </div>
+              <label class="se-field">
+                <span>Tell me about your study</span>
+                <textarea id="s1-study-desc" rows="5" placeholder="e.g. I am studying ER expression in 113 thyroid cancer patients. I want to see if ER positivity relates to gender, age, tumour type, lymph node metastasis, and extrathyroidal extension." style="width:100%"></textarea>
+              </label>
+              <label class="se-field" style="margin-top:0.75rem">
+                <span>Outcome variable <strong>exactly as it appears in your Excel column header</strong> <span style="color:#e55353;font-weight:700">*</span></span>
+                <input type="text" id="s1-outcome-hint" placeholder="e.g. P/N, HbA1c, Outcome, Allred Score" style="width:100%" />
+                <span class="se-hint">Copy the exact column name from your spreadsheet, including any punctuation.</span>
+              </label>
+              <button type="button" class="btn btn-primary" id="s1-describe-continue-btn" data-action="s1-continue-describe" disabled style="margin-top:1rem">Continue to upload data →</button>
+            </div>
+          </div>
+
+          <div style="margin-top:1.5rem">
+            <button type="button" class="btn btn-tertiary" data-action="s1-back">← Back</button>
+          </div>
         </div>
       </section>
 
@@ -640,6 +706,16 @@
               <tbody></tbody>
             </table>
           </div>
+        </details>
+
+        <!-- Section D — High missing data decision cards -->
+        <details class="se-disclose" id="dq-missing-wrap" style="display:none" open>
+          <summary>Section D · High missing data <span class="se-count" id="count-missing" data-testid="count-missing">0</span></summary>
+          <p class="se-hint" style="margin:0.5rem 1.25rem 1rem">
+            These columns have more than 5% missing values. You must choose what to do with each one before continuing.
+            All decisions are required — the <em>Continue</em> button stays disabled until every choice is made.
+          </p>
+          <div id="dq-missing-body" data-testid="dq-missing-body"></div>
         </details>
 
         <div id="quality-status" class="se-status" role="status" aria-live="polite" data-testid="status-quality"></div>

@@ -3,6 +3,9 @@
    Builds on the design tokens in style.css
    ============================================================ */
 
+/* Global utility — must come before any compound selector overrides */
+.is-hidden { display: none !important; }
+
 /* Practice-data banner + custom-wizard link --------------------------------- */
 .se-practice-banner {
   display: flex;
@@ -2625,4 +2628,150 @@ td.se-corr-p-sig {
 }
 .btn.btn-accent:hover {
   background: #0369a1;
+}
+
+/* ================================================================
+   Screen 1 — study description phase (Fix 1)
+   ================================================================ */
+.se-study-split {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 0;
+  align-items: start;
+  margin-top: 1rem;
+}
+@media (max-width: 768px) {
+  .se-study-split { grid-template-columns: 1fr; }
+  .se-study-divider { display: none; }
+}
+.se-study-panel {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1.5rem;
+}
+.se-study-panel-head {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  margin-bottom: 1.25rem;
+}
+.se-study-panel-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  background: #1e40af;
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.9rem;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.se-study-panel-head > div > strong {
+  display: block;
+  font-size: 1rem;
+  margin-bottom: 0.25rem;
+  color: #1e293b;
+}
+.se-study-panel-head > div > p {
+  font-size: 0.875rem;
+  color: #64748b;
+  margin: 0;
+}
+.se-study-divider {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 1.25rem;
+  color: #94a3b8;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+.se-study-divider span {
+  background: #f8fafc;
+  padding: 0.3rem 0.5rem;
+  border-radius: 99px;
+  border: 1px solid #e2e8f0;
+}
+.se-required {
+  color: #e55353;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+/* ================================================================
+   Step 4 Section D — missing-data decision cards (Fix 3)
+   ================================================================ */
+.se-missing-card {
+  margin: 0 1.25rem 1.25rem;
+  padding: 1rem 1.25rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+.se-missing-card.is-amber {
+  border-color: #fbbf24;
+  background: #fffbeb;
+}
+.se-missing-card-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+.se-missing-col {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: #1e293b;
+}
+.se-missing-badge {
+  font-size: 0.75rem;
+  background: #e2e8f0;
+  color: #475569;
+  border-radius: 99px;
+  padding: 0.15rem 0.55rem;
+  font-weight: 600;
+}
+.se-missing-badge.is-amber {
+  background: #fde68a;
+  color: #92400e;
+}
+.se-missing-warn {
+  font-size: 0.78rem;
+  color: #b45309;
+  font-weight: 600;
+}
+.se-missing-opts {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.se-missing-opt {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  cursor: pointer;
+  font-size: 0.875rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  transition: background 0.12s;
+}
+.se-missing-opt:hover:not(.is-disabled) {
+  background: #f1f5f9;
+}
+.se-missing-opt input[type="radio"] {
+  margin-top: 2px;
+  flex-shrink: 0;
+  accent-color: #2563eb;
+}
+.se-missing-opt.is-disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }

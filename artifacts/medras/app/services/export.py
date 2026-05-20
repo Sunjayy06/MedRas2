@@ -1327,17 +1327,17 @@ def generate_correlation_chapter_word(
     """
     doc = Document()
 
-    # Global style — Times New Roman 12
+    # Global style — Arial 12 (spec: Arial, axis labels min 11pt)
     style = doc.styles["Normal"]
-    style.font.name = "Times New Roman"
+    style.font.name = "Arial"
     style.font.size = Pt(12)
     from docx.oxml.ns import qn as _qn
     from docx.oxml import OxmlElement as _OXE
 
-    def _set_font(para):
+    def _set_font(para, size: int = 12):
         for run in para.runs:
-            run.font.name = "Times New Roman"
-            run.font.size = Pt(12)
+            run.font.name = "Arial"
+            run.font.size = Pt(size)
 
     # ── Cover ──────────────────────────────────────────────────────────────
     outcome_col = corr_results.get("outcome_col", "Outcome")
@@ -1382,24 +1382,96 @@ def generate_correlation_chapter_word(
         pred_display = clean_display_name(predictor)
         outcome_display = clean_display_name(outcome_col)
         test_result = pr.get("test_result") or {}
+        pred_type = pr.get("predictor_type", "nominal")
 
         # Skip failed pairs silently
         if "error" in test_result:
             continue
 
-        # Bold heading
+        # ── A. Descriptive distribution section ────────────────────────────
+        hdg_desc = doc.add_heading(f"Distribution of {pred_display}", 2)
+        for run in hdg_desc.runs:
+            run.bold = True
+            run.font.name = "Arial"
+
+        desc_table = pr.get("desc_table_data") or {"headers": [], "rows": []}
+        d_headers = desc_table.get("headers") or []
+        d_rows = desc_table.get("rows") or []
+
+        if pred_type == "scale":
+            desc_tbl_caption = (
+                f"Table {table_num}. Descriptive statistics for {pred_display}."
+            )
+        else:
+            desc_tbl_caption = (
+                f"Table {table_num}. Frequency distribution of {pred_display} (n, %)."
+            )
+
+        if d_headers and d_rows:
+            _add_table_from_data(doc, d_headers, d_rows)
+            cap_p = doc.add_paragraph(desc_tbl_caption)
+            cap_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            _set_font(cap_p, 9)
+            if cap_p.runs:
+                cap_p.runs[0].italic = True
+            table_num += 1
+
+        doc.add_paragraph()
+
+        desc_graph_uri = pr.get("desc_graph_uri")
+        if desc_graph_uri:
+            if pred_type == "scale":
+                desc_fig_caption = (
+                    f"Figure {fig_num}. Histogram of {pred_display} with normal curve overlay."
+                )
+            else:
+                n_cats = len(d_rows) - 1 if d_rows else 0
+                if n_cats <= 3:
+                    desc_fig_caption = f"Figure {fig_num}. Pie chart showing distribution of {pred_display}."
+                else:
+                    desc_fig_caption = f"Figure {fig_num}. Bar chart showing distribution of {pred_display}."
+            _inline_graph(doc, desc_graph_uri, desc_fig_caption)
+            fig_num += 1
+
+        # Brief descriptive interpretation
+        if pred_type == "scale" and d_rows:
+            mean_sd_row = next((r for r in d_rows if "Mean" in str(r[0])), None)
+            range_row = next((r for r in d_rows if "Range" in str(r[0])), None)
+            desc_interp = f"The distribution of {pred_display} is shown above."
+            if mean_sd_row:
+                desc_interp = f"The mean {pred_display} was {mean_sd_row[1]}."
+            if range_row:
+                desc_interp += f" Values ranged {range_row[1]}."
+        elif d_rows:
+            data_rows = [r for r in d_rows if str(r[0]).lower() != "total"]
+            if data_rows:
+                top = max(data_rows, key=lambda r: r[1] if isinstance(r[1], (int, float)) else 0)
+                desc_interp = (
+                    f"Among the patients studied, {top[0]} was the most common "
+                    f"category for {pred_display} (n={top[1]}, {top[2]}%)."
+                )
+            else:
+                desc_interp = f"The distribution of {pred_display} is shown above."
+        else:
+            desc_interp = f"The distribution of {pred_display} is shown above."
+
+        dp = doc.add_paragraph(desc_interp)
+        _set_font(dp)
+        doc.add_paragraph()
+
+        # ── B. Pairwise association section ────────────────────────────────
         hdg = doc.add_heading(
             f"Association of {pred_display} with {outcome_display}", 2
         )
         for run in hdg.runs:
             run.bold = True
+            run.font.name = "Arial"
 
         # Table
         table_data = pr.get("table_data") or {"headers": [], "rows": []}
         headers = table_data.get("headers") or []
         rows = table_data.get("rows") or []
 
-        pred_type = pr.get("predictor_type", "nominal")
         if pred_type == "scale":
             table_caption = (
                 f"Table {table_num}. Descriptive statistics for {pred_display} "
@@ -1415,9 +1487,9 @@ def generate_correlation_chapter_word(
             _add_table_from_data(doc, headers, rows)
             cap_p = doc.add_paragraph(table_caption)
             cap_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            _set_font(cap_p, 9)
             if cap_p.runs:
                 cap_p.runs[0].italic = True
-                cap_p.runs[0].font.size = Pt(9)
             table_num += 1
 
         doc.add_paragraph()  # spacer
@@ -1428,12 +1500,12 @@ def generate_correlation_chapter_word(
             if pred_type == "scale":
                 fig_caption = (
                     f"Figure {fig_num}. Box plot of {pred_display} "
-                    f"by {outcome_display}."
+                    f"by {outcome_display} with individual data points."
                 )
             else:
                 fig_caption = (
-                    f"Figure {fig_num}. Stacked bar chart showing distribution "
-                    f"of {pred_display} by {outcome_display}."
+                    f"Figure {fig_num}. Grouped percentage bar chart showing "
+                    f"distribution of {pred_display} by {outcome_display}."
                 )
             _inline_graph(doc, graph_uri, fig_caption)
             fig_num += 1

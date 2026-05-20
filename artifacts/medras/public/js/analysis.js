@@ -370,25 +370,126 @@ function bindScreen1() {
   $$(".se-entry-card.is-clickable").forEach((card) => {
     card.addEventListener("click", () => {
       const entry = card.dataset.entry;
-      if (entry !== "upload" && entry !== "practice") return;
-      state.entryChoice = entry;
-      // Pre-fill intake fields from any prior session in this tab.
-      if (state.intake) {
-        const choiceRadio = $(`input[name='intake-have'][value='${state.intake.what_you_have}']`);
-        if (choiceRadio) choiceRadio.checked = true;
-        if ($("#intake-objective")) $("#intake-objective").value = state.intake.objective || "";
-        if ($("#intake-sample-size")) $("#intake-sample-size").value = state.intake.sample_size || "";
-        if ($("#intake-outcomes")) $("#intake-outcomes").value = state.intake.outcomes || "";
-        if ($("#intake-independents")) $("#intake-independents").value = state.intake.independents || "";
-        if ($("#intake-instructions")) $("#intake-instructions").value = state.intake.instructions || "";
-      } else {
-        // Fresh session: clear any prior selection so Next stays disabled until user picks.
-        $$("input[name='intake-have']").forEach((r) => { r.checked = false; });
+      if (entry === "practice") {
+        state.entryChoice = "practice";
+        if (state.intake) {
+          const choiceRadio = $(`input[name='intake-have'][value='${state.intake.what_you_have}']`);
+          if (choiceRadio) choiceRadio.checked = true;
+        } else {
+          $$("input[name='intake-have']").forEach((r) => { r.checked = false; });
+        }
+        if (typeof bindIntake._reset === "function") bindIntake._reset();
+        showScreen("intake");
+        return;
       }
-      // Reset the wizard to question 1 every time we enter the intake screen.
-      if (typeof bindIntake._reset === "function") bindIntake._reset();
-      showScreen("intake");
+      if (entry === "upload") {
+        state.entryChoice = "upload";
+        // Show the inline study-description phase instead of the 5-question wizard
+        const phase = $("#s1-study-phase");
+        const grid = document.querySelector("#screen-1 .se-entry-grid");
+        const head  = document.querySelector("#screen-1 > .se-screen-head");
+        if (phase) phase.classList.remove("is-hidden");
+        if (grid)  grid.classList.add("is-hidden");
+        if (head)  head.classList.add("is-hidden");
+        // Restore prior session values if any
+        if (state.studyDesc && $("#s1-study-desc")) $("#s1-study-desc").value = state.studyDesc;
+        if (state.outcomeHint && $("#s1-outcome-hint")) {
+          $("#s1-outcome-hint").value = state.outcomeHint;
+          const btn = $("#s1-describe-continue-btn");
+          if (btn) btn.disabled = false;
+        }
+      }
     });
+  });
+
+  // Back button — restore the entry grid
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest('[data-action="s1-back"]')) return;
+    const phase = $("#s1-study-phase");
+    const grid  = document.querySelector("#screen-1 .se-entry-grid");
+    const head  = document.querySelector("#screen-1 > .se-screen-head");
+    if (phase) phase.classList.add("is-hidden");
+    if (grid)  grid.classList.remove("is-hidden");
+    if (head)  head.classList.remove("is-hidden");
+  });
+
+  // Enable/disable the describe-path continue button based on outcome field
+  const outcomeInput = $("#s1-outcome-hint");
+  const describeBtn  = $("#s1-describe-continue-btn");
+  if (outcomeInput && describeBtn) {
+    outcomeInput.addEventListener("input", () => {
+      describeBtn.disabled = outcomeInput.value.trim() === "";
+    });
+  }
+
+  // Describe-path continue
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest('[data-action="s1-continue-describe"]')) return;
+    const desc = ($("#s1-study-desc")?.value || "").trim();
+    const hint = ($("#s1-outcome-hint")?.value || "").trim();
+    if (!hint) { alert("Please enter the exact column header for your outcome variable."); return; }
+    state.studyDesc   = desc;
+    state.outcomeHint = hint;
+    // Mirror into state.intake so the AI bridge can consume it downstream
+    state.intake = Object.assign({}, state.intake || {}, {
+      objectives: desc,
+      outcomes:   hint,
+    });
+    showScreen("2a");
+  });
+
+  // Proposal-path continue
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest('[data-action="s1-continue-proposal"]')) return;
+    const desc = ($("#s1-prop-desc")?.value || "").trim();
+    const hint = ($("#s1-prop-outcome")?.value || "").trim();
+    if (!hint) { alert("Please enter the exact column header for your outcome variable."); return; }
+    state.studyDesc   = desc;
+    state.outcomeHint = hint;
+    state.intake = Object.assign({}, state.intake || {}, {
+      objectives: desc,
+      outcomes:   hint,
+    });
+    showScreen("2a");
+  });
+
+  _bindS1ProposalUpload();
+}
+
+function _bindS1ProposalUpload() {
+  const dropzone  = $("#s1-proposal-dropzone");
+  const fileInput = $("#s1-proposal-file");
+  const status    = $("#s1-proposal-status");
+  const fields    = $("#s1-proposal-fields");
+  if (!dropzone || !fileInput) return;
+
+  dropzone.addEventListener("click", (e) => {
+    // Prevent double-trigger when clicking the label itself
+    if (e.target === fileInput) return;
+    fileInput.click();
+  });
+
+  fileInput.addEventListener("change", async () => {
+    const file = fileInput.files[0];
+    if (!file) return;
+    if (status) status.textContent = `Uploading ${file.name}…`;
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const r = await fetch("/api/stats/intake", { method: "POST", body: fd });
+      const data = r.ok ? await r.json() : {};
+      const descField    = $("#s1-prop-desc");
+      const outcomeField = $("#s1-prop-outcome");
+      if (descField) descField.value = (
+        data.objective || data.objectives || data.objective_text || ""
+      );
+      if (outcomeField) outcomeField.value = data.outcomes || "";
+      if (fields) fields.classList.remove("is-hidden");
+      if (status) status.textContent = `✓ ${file.name} loaded`;
+    } catch (e) {
+      if (fields) fields.classList.remove("is-hidden");
+      if (status) status.textContent = `Could not parse automatically (${e.message}). Please fill fields manually.`;
+    }
   });
 }
 
@@ -2769,6 +2870,9 @@ function renderQuality() {
     tC.innerHTML = "";
   }
 
+  // ---- Section D — high missing data decisions ----
+  renderMissingDecisions();
+
   // ---- Sticky button visibility (Fix 5) ----
   // The two sticky buttons live outside the screen markup so we toggle
   // them centrally from here. They're only on-screen for Step 4 and only
@@ -2776,11 +2880,110 @@ function renderQuality() {
   _toggleStickyStep4Buttons(!allClean);
 }
 
+/* ------------------------------------------------------------------ */
+/*  Missing-data decision cards (Section D of Step 4)                  */
+/* ------------------------------------------------------------------ */
+
+function renderMissingDecisions() {
+  // state.classifications records use: .column (name), .missing (count), .missing_pct, .detected_type
+  const cols = (state.classifications || []).filter((c) => (c.missing_pct || 0) > 5);
+  const wrap    = document.getElementById("dq-missing-wrap");
+  const countEl = document.getElementById("count-missing");
+  const body    = document.getElementById("dq-missing-body");
+  if (!wrap || !body) return;
+
+  if (cols.length === 0) {
+    wrap.style.display = "none";
+    return;
+  }
+
+  wrap.style.display = "";
+  if (countEl) countEl.textContent = cols.length;
+  state.missingDecisions = state.missingDecisions || {};
+
+  body.innerHTML = cols.map((col) => {
+    const colKey   = col.column;
+    const pct      = (col.missing_pct || 0).toFixed(1);
+    const isHigh   = col.missing_pct > 30;
+    const dtype    = col.detected_type || "";
+    const isNum    = dtype === "scale" || dtype === "ordinal" || dtype === "discrete";
+    const isCat    = dtype === "nominal" || dtype === "binary";
+    const existing = state.missingDecisions[colKey];
+    const colId    = colKey.replace(/[^a-zA-Z0-9]/g, "_");
+
+    const opt = (val, label, sub) =>
+      `<label class="se-missing-opt">
+        <input type="radio" name="md-${colId}" value="${val}"
+          ${existing === val ? "checked" : ""}
+          data-col="${escapeHtml(colKey)}"
+          class="se-missing-radio" />
+        <span><strong>${label}</strong>${sub ? ` — <em>${sub}</em>` : ""}</span>
+      </label>`;
+
+    return `
+      <div class="se-missing-card${isHigh ? " is-amber" : ""}" data-col="${escapeHtml(colKey)}">
+        <div class="se-missing-card-head">
+          <span class="se-missing-col">${escapeHtml(colKey)}</span>
+          <span class="se-missing-badge${isHigh ? " is-amber" : ""}">
+            ${col.missing ?? "?"} missing &bull; ${pct}%
+          </span>
+          ${isHigh ? `<span class="se-missing-warn">⚠ &gt;30% — exclusion recommended</span>` : ""}
+        </div>
+        <div class="se-missing-opts" role="radiogroup" aria-label="Decision for ${escapeHtml(colKey)}">
+          ${opt("exclude",       "Exclude",       "remove this variable from all analyses")}
+          ${opt("keep",          "Keep",          "note the missing rate in the report")}
+          ${isNum ? opt("impute_median", "Impute median", "fill missing values with the column median") : ""}
+          ${isCat ? opt("impute_mode",   "Impute mode",   "fill missing values with the most common value") : ""}
+        </div>
+      </div>`;
+  }).join("");
+
+  // Bind radio changes → update state + re-check gate
+  $$(".se-missing-radio").forEach((radio) => {
+    radio.addEventListener("change", () => {
+      state.missingDecisions[radio.dataset.col] = radio.value;
+      _updateMissingContinueGate();
+    });
+  });
+
+  _updateMissingContinueGate();
+}
+
+function _updateMissingContinueGate() {
+  const cols       = (state.classifications || []).filter((c) => (c.missing_pct || 0) > 5);
+  const allDecided = cols.every((c) => state.missingDecisions && state.missingDecisions[c.column]);
+  $$('[data-action="apply-quality"]').forEach((btn) => {
+    if (cols.length > 0) btn.disabled = !allDecided;
+  });
+  const sticky = document.querySelector('#dq-sticky-actions .se-sticky-continue');
+  if (sticky && cols.length > 0) sticky.disabled = !allDecided;
+}
+
 // Shared apply-quality logic so it can be wired both to the inline button
 // and to the clean-banner button without duplicating the network code.
 async function _applyQualityHandler() {
   const status = $("#quality-status");
-  setStatus(status, "Applying actions…", "loading");
+
+  // Step 0 — apply user's missing-data decisions before running quality fixes
+  const missingCols = (state.classifications || []).filter((c) => (c.missing_pct || 0) > 5);
+  if (missingCols.length > 0 && state.missingDecisions && Object.keys(state.missingDecisions).length > 0) {
+    setStatus(status, "Applying missing-data decisions…", "loading");
+    try {
+      await api("/apply-missing-decisions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          job_id: state.jobId,
+          decisions: state.missingDecisions,
+        }),
+      });
+    } catch (err) {
+      setStatus(status, `Could not apply missing-data decisions: ${err.message}`, "error");
+      return;
+    }
+  }
+
+  setStatus(status, "Applying quality actions…", "loading");
   try {
     const data = await api("/apply-quality", {
       method: "POST",

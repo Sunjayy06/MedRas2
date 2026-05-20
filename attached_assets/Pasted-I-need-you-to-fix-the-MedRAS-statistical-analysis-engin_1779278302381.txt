@@ -1,0 +1,448 @@
+I need you to fix the MedRAS statistical 
+analysis engine. Read everything carefully 
+before you start writing any code. Use 
+your best judgment on how to implement 
+each part. Do not touch normality.py, 
+chatboxes.py, or sample_size.py. Do not 
+rebuild anything that is already working.
+
+Here is the full picture of what I want 
+and why.
+
+A researcher uploads their Excel file. 
+They then tell the system about their 
+study either by uploading a proposal 
+document or by writing a description. 
+The system needs to understand what they 
+want even when they use informal language. 
+For example they might write ER expression 
+assessment but their Excel column is 
+called P/N. Or they might write association 
+study when they actually mean correlation. 
+The system needs to bridge that gap 
+intelligently, then hand over to Python 
+for all the statistics, then produce a 
+submission ready Word document that looks 
+like a real thesis chapter.
+
+Here are the six things that need fixing.
+
+FIRST THING — Simplify the starting screen
+
+Replace whatever is currently on the 
+first screen with just two options.
+
+Option one is for people who have a 
+research proposal or synopsis document. 
+They upload it as a Word, PDF, or text 
+file. The system reads the document and 
+automatically pulls out the study 
+objective, the variables they plan to 
+collect, the sample size, and the study 
+design. Show the user what was extracted 
+in a simple card they can edit and 
+correct. When they are happy they click 
+confirm.
+
+Option two is for people who want to 
+describe their study in their own words. 
+Show them one text area where they write 
+naturally about their study. No bullet 
+points, no structured form, just a 
+single open text box. Below that text 
+area show one more required field that 
+asks them how their outcome variable is 
+recorded in their Excel sheet. Tell them 
+to write exactly as it appears in the 
+column header, for example P/N or Allred 
+Score or HbA1c or Outcome. That is all. 
+No other questions on this screen.
+
+SECOND THING — Use AI to bridge the gap 
+between what users say and what is in 
+their Excel file
+
+This is the most important part. After 
+the user fills in the starting screen and 
+uploads their Excel file, the system 
+needs to figure out which column in the 
+Excel file is their outcome variable and 
+what kind of study they are describing.
+
+People do not always use precise 
+statistical language. Someone studying 
+ER expression might write association 
+study or expression pattern or 
+immunohistochemical assessment. Someone 
+with a P/N column might describe it as 
+ER positivity or receptor status or 
+expression outcome. The system needs 
+to handle all of these naturally.
+
+Here is how to do it. First try simple 
+text matching. Take what the user wrote 
+in the outcome field and compare it to 
+the column names in their Excel file 
+using case insensitive partial matching. 
+If P/N was typed and there is a column 
+called P/N then use it. If HbA1c was 
+typed and there is a column with that 
+name in any capitalisation then use it. 
+This handles the straightforward cases 
+without needing AI.
+
+If the simple matching does not find 
+a clear match then use Gemini. Send 
+Gemini two things. The complete list of 
+column names from the uploaded Excel 
+file. And the full description the user 
+wrote about their study plus what they 
+typed in the outcome field. Ask Gemini 
+to read both and tell you which single 
+column from the list is most likely 
+the outcome variable the user is 
+describing. Gemini returns one column 
+name. Python uses that column name as 
+the outcome. Gemini does nothing else. 
+No statistics, no test selection, just 
+identifying the correct column name.
+
+Also use Gemini to clarify the study 
+type when the user's language is 
+ambiguous. For example if someone writes 
+association of ER expression with 
+clinical parameters that sounds like 
+it could be descriptive or correlation. 
+Send the description to Gemini and ask 
+it to classify the study as one of five 
+types: correlation, comparison, 
+diagnostic, survival, or descriptive. 
+Gemini returns one word. Python uses 
+that word to decide which analysis 
+pathway to follow.
+
+After both the outcome column and study 
+type are identified, show the user a 
+confirmation card. Say something like 
+we understood this as a correlation 
+study and we identified your outcome 
+variable as P/N. All other columns will 
+be treated as independent variables. 
+Is this correct? Give them a yes button 
+and a let me correct this button. If 
+they correct it show a simple dropdown 
+of column names and a study type 
+selector. After they confirm, Python 
+takes over completely.
+
+All remaining columns that are not ID 
+columns and not excluded by the user 
+are automatically treated as independent 
+variables. The user does not assign them 
+one by one. Everything is included 
+automatically.
+
+THIRD THING — Ask users what to do 
+about missing data
+
+Currently the system silently notes 
+missing data in the limitations and 
+moves on. This is wrong. The user 
+must be asked before the analysis runs.
+
+In Step 3 on the missing data tab, 
+for every column that has more than 
+five percent of its values missing, 
+show a decision card. The card shows 
+the column name, how many values are 
+missing, and what percentage that is. 
+If more than thirty percent is missing 
+show an amber warning recommending 
+exclusion.
+
+Give the user four choices. First, 
+exclude this variable from the analysis 
+entirely. Second, keep it and mention 
+the missing rate in the report. Third, 
+fill the missing values with the median, 
+but only offer this for numeric columns. 
+Fourth, fill the missing values with 
+the most common value, but only offer 
+this for categorical columns.
+
+The button to continue to the next 
+step must stay disabled until the 
+user has made a choice for every 
+column with high missing data.
+
+Apply whatever the user chose to the 
+data immediately. Record every decision 
+and write it into the Methods section 
+of the final Word document. For example 
+the co-existing thyroid conditions 
+column had seventy one percent missing 
+data and was excluded from the analysis.
+
+If the Gemini API key is available, 
+use Gemini to write a plain English 
+explanation on each decision card 
+telling the user what each option 
+means and what the consequences are. 
+Gemini explains. The user decides. 
+Python applies.
+
+FOURTH THING — Clean messy data 
+automatically and never exclude 
+clinical variables
+
+Before classifying any variable, 
+run automatic cleaning on every 
+column. The goal is to include 
+everything, not to exclude things 
+because they look messy.
+
+First identify true ID columns. A 
+column is only an ID column if its 
+name contains words like serial number, 
+accession, registration, patient id, 
+or reg no. Or if its values follow a 
+pattern like 1234/2025 or sequential 
+numbers. Do not mark clinical variables 
+as ID just because they have text in them.
+
+Second standardise yes and no columns. 
+Look at every column's values. If a 
+column has a mixture of words that all 
+mean yes such as yes, present, positive, 
+found, detected, involved, angio yes, 
+lymphatic yes, angio greater than four 
+vessels, map all of them to Yes. If it 
+has words that mean no such as no, 
+absent, negative, not found, not 
+assigned, not involved, none, map all 
+of them to No. Keep the original values 
+in a backup column. Write what was done 
+in the cleaning log.
+
+Third extract numbers from columns that 
+have numbers mixed with text. For 
+example values like 2.4 cm or 0.5 cm T1a 
+or Right-2.8 contain a usable number. 
+Try to pull out the number from each 
+value. If more than sixty percent of 
+the values in a column successfully 
+yield a clean number, replace the column 
+with just the numbers, classify it as 
+a continuous variable, and keep the 
+original in a backup column.
+
+Fourth remove any existing logic that 
+excludes a column because it has messy 
+text, many categories, or long string 
+values. The only valid reasons to exclude 
+a variable are that it is a true ID 
+column or the user explicitly chose to 
+exclude it in the missing data step.
+
+After cleaning show a blue summary card 
+at the top of Step 3 listing every 
+cleaning action taken. The user must 
+click confirm before seeing the variable 
+table. If Gemini is available, add a 
+plain English sentence per action 
+explaining why it was done.
+
+FIFTH THING — Choose the correct 
+statistical tests
+
+After the study type is confirmed and 
+the outcome variable is identified, 
+Python decides which tests to run 
+based purely on the variable types 
+and the study type. No AI involvement 
+in test selection.
+
+If the study type is correlation, run 
+a separate analysis between the outcome 
+variable and every other variable in 
+the dataset. Skip only ID columns and 
+columns the user chose to exclude.
+
+For each pair decide the test like this. 
+If the outcome is binary or categorical 
+and the other variable is continuous, 
+run Mann-Whitney U and show a box plot. 
+If the outcome is binary or categorical 
+and the other variable is also 
+categorical, calculate expected counts 
+first. If any expected count is below 
+five run Fisher exact test. Otherwise 
+run Chi-square. Show a stacked bar chart. 
+If the outcome is binary or categorical 
+and the other variable is ordinal, run 
+Kruskal-Wallis and show a box plot. 
+If both variables are continuous, run 
+Pearson or Spearman based on normality 
+and show a scatter plot.
+
+Always run descriptive statistics for 
+every variable first before any 
+hypothesis testing. Always create a 
+summary table of all pairwise results 
+at the end sorted by p-value.
+
+If the study type is comparison, use 
+the existing test selection logic with 
+no changes. If the study type is 
+diagnostic, use the existing diagnostic 
+accuracy flow. If survival, use the 
+existing survival analysis flow. If 
+descriptive, run descriptive statistics 
+and graphs only with no hypothesis tests.
+
+SIXTH THING — Fix the Word document 
+to match a real thesis chapter
+
+The Word export currently looks nothing 
+like a real thesis chapter. Rebuild it 
+to match the structure of the Chapter V 
+and Chapter VI demo documents that were 
+provided.
+
+Every variable in the dataset gets its 
+own section. The section has a bold 
+table heading above the table, then the 
+table in journal format with no vertical 
+lines, then the correct graph below the 
+table, then an interpretation paragraph 
+of two to three sentences. Then a blank 
+line before the next section.
+
+For categorical variables the table 
+shows frequency and percentage per 
+category with the p-value in the last 
+row only. If there are two or three 
+categories show a pie chart. If there 
+are four or more show a bar chart. The 
+interpretation says which group was the 
+majority and whether the association 
+was significant.
+
+For continuous variables the table 
+shows range groups, frequency, 
+percentage, and mean plus standard 
+deviation. Show a histogram with a 
+normal curve overlay. The interpretation 
+states the mean and standard deviation 
+and whether the association was 
+significant.
+
+For every pairwise analysis between 
+the outcome and another variable show 
+a section with a table, the correct 
+graph, and an interpretation paragraph 
+that states the test used, the p-value, 
+and the direction of any significant 
+finding.
+
+The very last section before the 
+Methods paragraph must always be a 
+summary table showing every pairwise 
+analysis in one place. Columns are 
+variable name, test used, statistic, 
+p-value, and significant yes or no. 
+Sort by p-value smallest first. Make 
+rows with p below 0.05 bold.
+
+For graphs follow these rules strictly. 
+Categorical variable alone: pie chart 
+for two or three categories, bar chart 
+for four or more. Continuous variable 
+alone: histogram. Categorical compared 
+to binary outcome: stacked bar chart. 
+Continuous compared to binary outcome: 
+box plot with individual points. Two 
+continuous variables: scatter plot with 
+regression line. Logistic regression: 
+forest plot. Cox regression: forest plot. 
+Survival: Kaplan-Meier curve. Diagnostic 
+accuracy: ROC curve. Forest plots must 
+never appear for chi-square, t-test, 
+Mann-Whitney, ANOVA, Kruskal-Wallis, 
+Friedman, or correlation. Remove forest 
+plots from all of those permanently.
+
+All figures must be 300 DPI with Arial 
+font and axis labels at minimum 11 
+point size. Every figure has a caption 
+below it.
+
+TEST EVERYTHING WITH THIS DATASET
+
+After building all six fixes, test 
+using the file srmc1.xlsx which is 
+a thyroid cancer dataset with 113 
+patients and 15 columns.
+
+In the description box write: I am 
+studying ER expression in 113 thyroid 
+cancer patients. I want to see if ER 
+positivity relates to gender, age, 
+tumour type, lymph node metastasis, 
+and extrathyroidal extension.
+
+In the outcome field write: P/N
+
+Step 1 must detect correlation study 
+and identify P/N as the outcome. 
+The user confirms.
+
+Step 2 the Excel uploads, P/N is 
+confirmed as outcome, and the 
+confirmation card says all other 
+variables will be treated as 
+independent variables.
+
+Step 3 must show the LVI column was 
+cleaned to Yes/No and the Size column 
+had numbers extracted from text. The 
+variables Type, Involved Lobe, Size, 
+TNM, LVI, Extra capsular extension, 
+Gender, Age, and Procedure must all 
+be included and not excluded. The 
+Co-existing thyroid conditions column 
+must show a decision card because it 
+has 71 percent missing data. The user 
+selects exclude.
+
+Step 5 the analysis plan must show 
+a separate test for each variable 
+pairing: P/N with Gender, P/N with 
+Age, P/N with Type, P/N with LVI, 
+P/N with Extra capsular extension, 
+P/N with Allred Score. Not one single 
+test but a full series.
+
+Step 6 results must show stacked bar 
+charts for categorical variables and 
+box plots for Age. No forest plots 
+anywhere in the results.
+
+Step 7 the Word document must have 
+one section per variable with table 
+plus graph plus interpretation. The 
+final summary table must show all 
+associations sorted by p-value. The 
+Methods section must say that 
+Co-existing thyroid conditions was 
+excluded due to 71 percent missing 
+data. No forest plots anywhere 
+in the document.
+
+When all of this works correctly 
+print a message saying all six 
+problems are fixed and the thyroid 
+cancer dataset produces correct 
+results with a submission ready 
+document. Then stop and wait for 
+the next instruction.

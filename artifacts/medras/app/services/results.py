@@ -2182,6 +2182,38 @@ def _corr_interpretation(
     return text
 
 
+def _freq_table(df: pd.DataFrame, col: str) -> Dict[str, Any]:
+    """Frequency + percentage table for a single categorical column."""
+    counts = df[col].astype(str).value_counts()
+    total = int(counts.sum())
+    rows: List[Any] = [
+        [cat, int(cnt), f"{cnt / total * 100:.1f}"]
+        for cat, cnt in counts.items()
+    ]
+    rows.append(["Total", total, "100.0"])
+    return {"headers": [col, "n", "Percent (%)"], "rows": rows}
+
+
+def _standalone_descriptive_table(df: pd.DataFrame, col: str) -> Dict[str, Any]:
+    """Descriptive-statistics table for a single continuous column."""
+    s = pd.to_numeric(df[col], errors="coerce").dropna()
+    n = len(s)
+    if n == 0:
+        return {"headers": ["Statistic", "Value"], "rows": []}
+    return {
+        "headers": ["Statistic", "Value"],
+        "rows": [
+            ["n (valid)", str(n)],
+            ["Mean ± SD", f"{s.mean():.2f} ± {s.std():.2f}"],
+            [
+                "Median (IQR)",
+                f"{s.median():.2f} ({s.quantile(0.25):.2f}–{s.quantile(0.75):.2f})",
+            ],
+            ["Range", f"{s.min():.2f} – {s.max():.2f}"],
+        ],
+    }
+
+
 def run_correlation_plan(
     df: pd.DataFrame,
     classifications: List[Dict[str, Any]],
@@ -2229,11 +2261,30 @@ def run_correlation_plan(
             test_result = _run_chi_or_fisher(df, predictor, outcome_col)
 
         if "error" in test_result:
+            # Still compute standalone descriptive data so the Word report can
+            # render Section A (distribution) even when the association test fails
+            try:
+                _n_uniq = int(df[predictor].dropna().nunique())
+                if pred_type == "scale":
+                    _err_desc_graph = _histogram(df, predictor)
+                    _err_desc_table = _standalone_descriptive_table(df, predictor)
+                else:
+                    _err_desc_graph = (
+                        _pie_chart(df, predictor) if _n_uniq <= 3
+                        else _horz_bar(df, predictor)
+                    )
+                    _err_desc_table = _freq_table(df, predictor)
+            except Exception:
+                _err_desc_graph = None
+                _err_desc_table: Dict[str, Any] = {"headers": [], "rows": []}
             pair_results.append({
                 "predictor": predictor,
+                "predictor_type": pred_type,
                 "test_result": test_result,
                 "graph_uri": None,
                 "table_data": {"headers": [], "rows": []},
+                "desc_graph_uri": _err_desc_graph,
+                "desc_table_data": _err_desc_table,
                 "interpretation": f"Could not analyse {predictor}: {test_result['error']}",
                 "significant": False,
             })
@@ -2256,6 +2307,17 @@ def run_correlation_plan(
         pair_aug["outcome_col"] = outcome_col
         interpretation = _corr_interpretation(pair_aug, test_result, df)
 
+        # --- standalone descriptive graph + table (for Word per-variable section) ---
+        n_unique = int(df[predictor].dropna().nunique())
+        if pred_type == "scale":
+            desc_graph_uri: Optional[str] = _histogram(df, predictor)
+            desc_table_data: Dict[str, Any] = _standalone_descriptive_table(df, predictor)
+        else:
+            desc_graph_uri = (
+                _pie_chart(df, predictor) if n_unique <= 3 else _horz_bar(df, predictor)
+            )
+            desc_table_data = _freq_table(df, predictor)
+
         p = test_result.get("p")
         pair_results.append({
             "predictor": predictor,
@@ -2263,6 +2325,8 @@ def run_correlation_plan(
             "test_result": test_result,
             "graph_uri": graph_uri,
             "table_data": table_data,
+            "desc_graph_uri": desc_graph_uri,
+            "desc_table_data": desc_table_data,
             "interpretation": interpretation,
             "significant": bool(p is not None and p < 0.05),
         })
