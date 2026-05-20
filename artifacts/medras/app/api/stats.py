@@ -982,6 +982,12 @@ async def run_analysis(payload: RunAnalysisRequest) -> Dict[str, Any]:
         session=session_view,
     )
     entry.meta["results"] = res
+    _title = (entry.meta.get("study_description") or "").strip() or "Untitled analysis"
+    _var_count = sum(
+        1 for c in (entry.meta.get("classifications") or [])
+        if c.get("detected_type") not in ("id",)
+    )
+    dataset_store.mark_completed(payload.job_id, _title, _var_count)
     return {"job_id": payload.job_id, "results": res}
 
 
@@ -1041,6 +1047,8 @@ async def ai_bridge(request: Request, payload: AiBridgeRequest) -> Dict[str, Any
         classifications=classifications,
     )
     entry.meta["ai_study"] = result
+    if payload.description.strip():
+        entry.meta.setdefault("study_description", payload.description.strip())
     return result
 
 
@@ -1338,3 +1346,51 @@ async def restore_correction_version(payload: RestoreVersionRequest) -> Dict[str
             detail=f"Version {payload.version} not found.",
         )
     return {"status": "restored", "version": payload.version}
+
+
+# ---------------------------------------------------------------------------
+# Session history — recent analyses + restore
+# ---------------------------------------------------------------------------
+
+
+@router.get("/recent-sessions")
+async def recent_sessions() -> Dict[str, Any]:
+    """Return the last 5 completed analysis sessions for the home-screen history."""
+    return {"sessions": dataset_store.list_recent(5)}
+
+
+@router.get("/restore/{job_id}")
+async def restore_session(job_id: str) -> Dict[str, Any]:
+    """Touch a session (reset its 15-day TTL) and return metadata for the client.
+
+    The client uses the returned job_id to jump directly to the Export screen.
+    Returns 404 with a user-friendly message if the session has expired.
+    """
+    entry = dataset_store.get(job_id)
+    if entry is None:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                "This analysis has expired after 15 days. Please upload your "
+                "data again to run a new analysis. Your previous Word document "
+                "is still available if you saved it to your computer."
+            ),
+        )
+    title = (
+        getattr(entry, "session_title", None)
+        or entry.meta.get("study_description")
+        or "Untitled analysis"
+    )
+    var_count = (
+        getattr(entry, "variable_count", None)
+        or sum(
+            1 for c in (entry.meta.get("classifications") or [])
+            if c.get("detected_type") not in ("id",)
+        )
+    )
+    return {
+        "job_id": job_id,
+        "title": title,
+        "variable_count": var_count,
+        "expires_in_days": 15.0,
+    }

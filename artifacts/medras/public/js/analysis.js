@@ -4334,6 +4334,27 @@ function initApp() {
           console.warn("Could not load practice dataset:", err.message);
         });
     }
+    // If the user came here from the home-screen "Open and continue" button,
+    // restore their session and jump straight to the Export screen.
+    const restoreId = new URLSearchParams(window.location.search).get("restore");
+    if (restoreId) {
+      api(`/restore/${restoreId}`)
+        .then((data) => {
+          state.jobId = data.job_id;
+          // Mark as having results so the export screen behaves correctly.
+          state.results = state.results || { _restored: true };
+          showScreen("export");
+        })
+        .catch((_err) => {
+          setStatus(
+            $("#upload-status"),
+            "This analysis has expired after 15 days. Please upload your data again to run a new analysis. " +
+            "Your previous Word document is still available if you saved it to your computer.",
+            "error"
+          );
+        });
+    }
+
     document.documentElement.dataset.medrasInit = "ok";
   } catch (err) {
     document.documentElement.dataset.medrasInit = "error: " + err.message;

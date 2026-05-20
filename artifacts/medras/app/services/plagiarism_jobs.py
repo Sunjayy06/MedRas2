@@ -35,7 +35,7 @@ log = get_logger(__name__)
 # ---- tunables (kept in one place so tests can monkey-patch them) ----
 MAX_CONCURRENT_JOBS = 3
 MAX_TOTAL_BYTES = 500 * 1024 * 1024  # 500 MB across ALL jobs in memory
-JOB_TTL_SECONDS = 30 * 60            # remove finished jobs after 30 min
+JOB_TTL_SECONDS = 15 * 24 * 60 * 60  # remove finished jobs after 15 days
 SECTION_TIMEOUT_SECONDS = 60.0       # per-stage hard wall-clock cap
 # Circuit breaker: if this many sections in a row time out we abort the
 # rest of the job. Continuing would just waste compute (and possibly
@@ -112,8 +112,7 @@ class JobManager:
         stale = [
             jid for jid, j in self._jobs.items()
             if j.status in ("complete", "failed", "cancelled")
-            and j.completed_at is not None
-            and (now - j.completed_at) > JOB_TTL_SECONDS
+            and (now - j.updated_at) > JOB_TTL_SECONDS
         ]
         for jid in stale:
             log.info("plagiarism_jobs: evicting stale job %s", jid)
@@ -244,7 +243,39 @@ class JobManager:
     def get_job(self, job_id: str) -> Optional[JobState]:
         with self._lock:
             self._cleanup_stale_locked()
-            return self._jobs.get(job_id)
+            j = self._jobs.get(job_id)
+            if j is not None and j.status in ("complete", "failed", "cancelled"):
+                j.updated_at = time.time()
+            return j
+
+    def list_recent(self, n: int = 5) -> list:
+        """Return the last *n* completed jobs, most recent first.
+
+        Only includes jobs still within the 15-day TTL window.
+        Does NOT touch/reset any TTL.
+        """
+        now = time.time()
+        with self._lock:
+            completed = [
+                j for j in self._jobs.values()
+                if j.status == "complete"
+                and j.completed_at is not None
+                and (now - j.updated_at) <= JOB_TTL_SECONDS
+            ]
+        completed.sort(key=lambda j: j.completed_at or 0.0, reverse=True)
+        result = []
+        for j in completed[:n]:
+            expiry_secs = JOB_TTL_SECONDS - (now - j.updated_at)
+            result.append({
+                "job_id": j.job_id,
+                "title": j.title or "Untitled document",
+                "filename": j.filename or "",
+                "section_count": len(j.sections),
+                "completed_at": j.completed_at,
+                "expires_in_seconds": max(0.0, expiry_secs),
+                "expires_in_days": max(0.0, expiry_secs / 86400),
+            })
+        return result
 
     def cancel_job(self, job_id: str) -> bool:
         with self._lock:

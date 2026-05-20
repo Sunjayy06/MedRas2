@@ -1182,3 +1182,14 @@ async def suggest_citations_route(request: Request, payload: SuggestCitationsReq
         raise HTTPException(status_code=503,
                             detail=f"Citation suggestion service is unavailable: {exc}") from exc
     return result
+
+
+# ---------------------------------------------------------------------------
+# Session history — recent plagiarism checks
+# ---------------------------------------------------------------------------
+
+
+@router.get("/recent-sessions")
+async def plagiarism_recent_sessions() -> Dict[str, Any]:
+    """Return the last 5 completed plagiarism sessions for the home-screen history."""
+    return {"sessions": plagiarism_jobs.job_manager.list_recent(5)}

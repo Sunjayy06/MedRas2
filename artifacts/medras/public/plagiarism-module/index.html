@@ -59,6 +59,70 @@
         Powered by OpenAI &amp; Google Gemini. Heuristic scoring — not a
         match against a copyrighted database.
       </p>
+
+      <!-- Recent plagiarism checks -->
+      <section id="pm-recent-sessions" data-testid="pm-recent-sessions"
+               style="display:none;margin-top:2.5rem;">
+        <h2 style="font-size:1.15rem;font-weight:700;color:#fff;margin:0 0 0.35rem;">Recent checks</h2>
+        <p style="font-size:0.82rem;color:rgba(255,255,255,0.6);margin:0 0 1rem;">
+          Your last 5 completed sessions, kept for 15 days from the last access.
+        </p>
+        <div id="pm-recent-list"
+             style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:0.85rem;"></div>
+      </section>
+
+      <script>
+      (function () {
+        function escPm(s) {
+          return String(s == null ? "" : s)
+            .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+        }
+        function fmtDatePm(ts) {
+          if (!ts) return "—";
+          try { return new Date(ts * 1000).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }); }
+          catch (_) { return new Date(ts * 1000).toLocaleString(); }
+        }
+        function fmtExpiryPm(days) {
+          if (days <= 0) return { text: "Expired", color: "#ff9999", bold: true };
+          if (days < 1) return { text: "Expires today", color: "#ffc857", bold: true };
+          if (days < 2) return { text: "Expires tomorrow", color: "#ffc857", bold: true };
+          if (days <= 2) return { text: Math.ceil(days) + " days remaining", color: "#ffc857", bold: true };
+          return { text: Math.ceil(days) + " days remaining", color: "rgba(255,255,255,0.55)", bold: false };
+        }
+        async function loadRecentPlagiarism() {
+          try {
+            const res = await fetch("/api/plagiarism/recent-sessions");
+            if (!res.ok) return;
+            const data = await res.json();
+            const sessions = data.sessions || [];
+            if (!sessions.length) return;
+            const section = document.getElementById("pm-recent-sessions");
+            const list = document.getElementById("pm-recent-list");
+            if (!section || !list) return;
+            section.style.display = "";
+            list.innerHTML = sessions.map(function (s) {
+              const exp = fmtExpiryPm(s.expires_in_days || 0);
+              const href = "/plagiarism-module/reduce-results.html?restore=" + encodeURIComponent(s.job_id);
+              const secs = (s.section_count || 0) + " section" + (s.section_count !== 1 ? "s" : "");
+              const fname = s.filename ? " · " + escPm(s.filename) : "";
+              return '<div style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:10px;padding:1rem 1.1rem;display:flex;flex-direction:column;gap:0.4rem;">'
+                + '<div style="font-weight:600;font-size:0.92rem;color:#fff;line-height:1.3;">' + escPm(s.title) + '</div>'
+                + '<div style="font-size:0.78rem;color:rgba(255,255,255,0.55);">' + fmtDatePm(s.completed_at) + fname + '</div>'
+                + '<div style="font-size:0.78rem;color:rgba(255,255,255,0.55);">' + escPm(secs) + '</div>'
+                + '<div style="font-size:0.78rem;color:' + exp.color + ';font-weight:' + (exp.bold ? '600' : '400') + ';">' + exp.text + '</div>'
+                + '<a href="' + href + '" style="margin-top:0.35rem;display:inline-block;padding:0.42rem 0.9rem;background:#ffc857;color:#071430;border-radius:6px;font-size:0.8rem;font-weight:700;text-decoration:none;text-align:center;" data-testid="btn-open-pm-session-' + escPm(s.job_id) + '">Open and continue</a>'
+                + '</div>';
+            }).join("");
+          } catch (_) {}
+        }
+        if (document.readyState === "loading") {
+          document.addEventListener("DOMContentLoaded", loadRecentPlagiarism);
+        } else {
+          loadRecentPlagiarism();
+        }
+      })();
+      </script>
     </main>
 
     <footer class="pm-footer">© MedRAS — Medical Research Acceleration System</footer>

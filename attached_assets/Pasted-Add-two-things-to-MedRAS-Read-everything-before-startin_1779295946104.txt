@@ -1,0 +1,103 @@
+Add two things to MedRAS.
+Read everything before starting.
+Use your best judgment on implementation.
+
+THING 1 — Recent analyses on home screen
+
+Add a section on the home screen 
+called Recent analyses.
+
+Show the last 5 completed analysis 
+sessions as cards.
+
+Each card shows:
+The study description or title
+The date and time it was completed
+The number of variables analysed
+How many days are left before expiry
+A button that says Open and continue
+
+When the user clicks Open and continue 
+restore that session completely and 
+take them directly to the Export screen 
+where they can download again or make 
+corrections using the existing 
+correction feature.
+
+If a session is within 2 days of 
+expiring show the days remaining 
+note in amber as a gentle warning.
+
+If a session has already expired and 
+the user tries to open it show this 
+friendly message:
+This analysis has expired after 
+15 days. Please upload your data 
+again to run a new analysis. Your 
+previous Word document is still 
+available if you saved it to 
+your computer.
+
+Apply the same Recent analyses section 
+to the plagiarism checker home screen 
+showing the last 5 plagiarism check 
+sessions with the same card format.
+
+THING 2 — Session expiry set to 15 days
+
+Every saved session whether statistical 
+analysis or plagiarism checker must 
+be kept for exactly 15 days from the 
+date it was last accessed.
+
+Last accessed means any of these 
+actions reset the 15 day timer:
+User opens the session.
+User downloads a document.
+User applies a correction.
+User restores a version.
+User runs a plagiarism check.
+
+After 15 days of no activity the 
+session is automatically deleted 
+from the server.
+
+Show the expiry countdown on every 
+session card on the home screen.
+For example: 12 days remaining 
+or Expires tomorrow.
+
+VERIFY AFTER BUILDING
+
+Check one: Create a new analysis 
+session and confirm it appears on 
+the home screen with 15 days 
+remaining shown on the card.
+
+Check two: Open an existing session 
+from the home screen and confirm it 
+restores correctly and takes the 
+user to the Export screen with the 
+correction feature available.
+
+Check three: Simulate an expired 
+session and confirm the friendly 
+expiry message appears instead of 
+an error.
+
+Check four: Confirm that opening 
+a session resets the timer back 
+to 15 days.
+
+Check five: Confirm the plagiarism 
+checker sessions also appear on 
+the plagiarism home screen with 
+the same 15 day expiry.
+
+When all five checks pass print:
+Session history and 15 day expiry 
+complete. Users can return to any 
+analysis within 15 days and continue 
+from where they left off.
+
+Then stop and wait.

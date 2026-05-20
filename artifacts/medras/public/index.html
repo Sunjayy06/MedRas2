@@ -136,6 +136,75 @@
       <!-- ============================================================ -->
       <!-- MODULES GRID — Features                                       -->
       <!-- ============================================================ -->
+      <!-- ============================================================ -->
+      <!-- RECENT ANALYSES — session history                           -->
+      <!-- ============================================================ -->
+      <section id="recent-analyses" class="recent-analyses-section"
+               data-testid="recent-analyses-section"
+               style="display:none;padding:2.5rem 2rem 0;max-width:1280px;margin:0 auto;">
+        <header style="margin-bottom:1.25rem;">
+          <p class="home-eyebrow">Continue where you left off</p>
+          <h2 class="home-section-title" style="margin-bottom:0.35rem;">Recent analyses</h2>
+          <p class="home-section-sub" style="margin-top:0;">
+            Your last 5 completed sessions, kept for 15 days from the last access.
+          </p>
+        </header>
+        <div id="recent-analyses-list"
+             style="display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:1rem;"></div>
+      </section>
+
+      <script>
+      (function () {
+        function escRa(s) {
+          return String(s == null ? "" : s)
+            .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+        }
+        function fmtDate(ts) {
+          if (!ts) return "—";
+          try { return new Date(ts * 1000).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }); }
+          catch (_) { return new Date(ts * 1000).toLocaleString(); }
+        }
+        function fmtExpiry(days) {
+          if (days <= 0) return { text: "Expired", color: "#c43838", bold: true };
+          if (days < 1) return { text: "Expires today", color: "#b45d00", bold: true };
+          if (days < 2) return { text: "Expires tomorrow", color: "#b45d00", bold: true };
+          if (days <= 2) return { text: Math.ceil(days) + " days remaining", color: "#b45d00", bold: true };
+          return { text: Math.ceil(days) + " days remaining", color: "#5a6787", bold: false };
+        }
+        async function loadRecentAnalyses() {
+          try {
+            const res = await fetch("/api/stats/recent-sessions");
+            if (!res.ok) return;
+            const data = await res.json();
+            const sessions = data.sessions || [];
+            if (!sessions.length) return;
+            const section = document.getElementById("recent-analyses");
+            const list = document.getElementById("recent-analyses-list");
+            if (!section || !list) return;
+            section.style.display = "";
+            list.innerHTML = sessions.map(function (s) {
+              const exp = fmtExpiry(s.expires_in_days || 0);
+              const href = "/analysis.html?restore=" + encodeURIComponent(s.job_id);
+              const vars = (s.variable_count || 0) + " variable" + (s.variable_count !== 1 ? "s" : "") + " analysed";
+              return '<div style="background:#fff;border:1px solid #dde3f0;border-radius:10px;padding:1.1rem 1.25rem;display:flex;flex-direction:column;gap:0.45rem;box-shadow:0 1px 4px rgba(7,20,48,0.05);">'
+                + '<div style="font-weight:600;font-size:0.95rem;color:#1a2e5a;line-height:1.3;">' + escRa(s.title) + '</div>'
+                + '<div style="font-size:0.79rem;color:#5a6787;">' + fmtDate(s.completed_at) + '</div>'
+                + '<div style="font-size:0.79rem;color:#5a6787;">' + escRa(vars) + '</div>'
+                + '<div style="font-size:0.79rem;color:' + exp.color + ';font-weight:' + (exp.bold ? '600' : '400') + ';">' + exp.text + '</div>'
+                + '<a href="' + href + '" style="margin-top:0.4rem;display:inline-block;padding:0.45rem 1rem;background:#1a2e5a;color:#fff;border-radius:6px;font-size:0.82rem;font-weight:600;text-decoration:none;text-align:center;" data-testid="btn-open-session-' + escRa(s.job_id) + '">Open and continue</a>'
+                + '</div>';
+            }).join("");
+          } catch (_) {}
+        }
+        if (document.readyState === "loading") {
+          document.addEventListener("DOMContentLoaded", loadRecentAnalyses);
+        } else {
+          loadRecentAnalyses();
+        }
+      })();
+      </script>
+
       <section id="modules" class="modules-section">
         <header class="modules-head">
           <div>
