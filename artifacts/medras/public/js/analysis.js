@@ -3605,6 +3605,16 @@ const _STUDY_TYPE_LABELS = {
   descriptive: "Descriptive — prevalence, frequencies, profile",
 };
 
+// Plain-English type labels shown in the variables list
+const _CONFIRM_TYPE_LABELS = {
+  scale:    "continuous",
+  ordinal:  "ordinal",
+  nominal:  "categorical",
+  binary:   "binary (Yes / No)",
+  discrete: "count",
+};
+const _CONFIRM_SKIP_TYPES = new Set(["id", "date", "exclude"]);
+
 function renderAiConfirmScreen() {
   const ai = state.aiStudy || {};
   const studyType = ai.study_type || "correlation";
@@ -3645,6 +3655,97 @@ function renderAiConfirmScreen() {
 
   // Show/hide the "Run Pairwise Analysis" button
   _updateAiConfirmButtons();
+
+  // Populate the three detail panels for correlation studies
+  if (studyType === "correlation" && outCol) {
+    _renderAiConfirmDetails(outCol).catch(() => {});
+  } else {
+    // Hide all three panels if not a correlation study
+    ["ai-detail-counts", "ai-detail-vars", "ai-detail-tests"].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.classList.add("is-hidden");
+    });
+  }
+}
+
+async function _renderAiConfirmDetails(outCol) {
+  // Single API call — reused by all three sections
+  let countsData = null;
+  try {
+    countsData = await api(
+      `/value-counts/${encodeURIComponent(state.jobId)}?column=${encodeURIComponent(outCol)}`
+    );
+  } catch (_) {}
+
+  const outcomeCountMap = countsData ? (countsData.counts || {}) : {};
+  const outcomeTotal    = countsData ? (countsData.total  || 0) : 0;
+  const nOutcomeValues  = Object.keys(outcomeCountMap).length || 2;
+
+  // ── 1. Outcome value counts ──────────────────────────────────────────────
+  const countsWrap = document.getElementById("ai-detail-counts");
+  const countsBody = document.getElementById("ai-detail-counts-body");
+  if (countsWrap && countsBody) {
+    if (Object.keys(outcomeCountMap).length > 0) {
+      countsBody.innerHTML = Object.entries(outcomeCountMap)
+        .sort((a, b) => b[1] - a[1])
+        .map(([val, n]) =>
+          `<span class="se-ai-count-chip">${escapeHtml(val)} = ${n}</span>`
+        ).join("") +
+        `<span class="se-ai-count-chip" style="background:#f1f5f9;color:#475569">Total = ${outcomeTotal}</span>`;
+      countsWrap.classList.remove("is-hidden");
+    } else {
+      countsWrap.classList.add("is-hidden");
+    }
+  }
+
+  // ── 2. Included independent variables with types ─────────────────────────
+  const predictors = (state.classifications || []).filter(
+    (c) => c.column !== outCol && !_CONFIRM_SKIP_TYPES.has(c.detected_type)
+  );
+
+  const varsWrap = document.getElementById("ai-detail-vars");
+  const varsList = document.getElementById("ai-detail-vars-list");
+  if (varsWrap && varsList) {
+    if (predictors.length > 0) {
+      varsList.innerHTML = predictors.map((c) => {
+        const typeLabel = _CONFIRM_TYPE_LABELS[c.detected_type] || c.detected_type;
+        return `<li>
+          <span class="se-ai-detail-var-name">${escapeHtml(c.column)}</span>
+          <span class="se-ai-detail-var-type">${typeLabel}</span>
+        </li>`;
+      }).join("");
+      varsWrap.classList.remove("is-hidden");
+    } else {
+      varsWrap.classList.add("is-hidden");
+    }
+  }
+
+  // ── 3. Tests that will run ───────────────────────────────────────────────
+  const testsWrap = document.getElementById("ai-detail-tests");
+  const testsList = document.getElementById("ai-detail-tests-list");
+  if (testsWrap && testsList) {
+    if (predictors.length > 0) {
+      testsList.innerHTML = predictors.map((c) => {
+        const isContinuous = c.detected_type === "scale" ||
+                             c.detected_type === "ordinal" ||
+                             c.detected_type === "discrete";
+        let testName;
+        if (isContinuous) {
+          testName = nOutcomeValues <= 2
+            ? "Mann-Whitney U test"
+            : "Kruskal-Wallis test";
+        } else {
+          testName = "Chi-square / Fisher\u2019s exact test";
+        }
+        return `<li>
+          <span>${escapeHtml(outCol)} compared to <strong>${escapeHtml(c.column)}</strong> — ${testName}</span>
+        </li>`;
+      }).join("");
+      testsWrap.classList.remove("is-hidden");
+    } else {
+      testsWrap.classList.add("is-hidden");
+    }
+  }
 }
 
 function _updateAiConfirmButtons() {
@@ -3655,13 +3756,34 @@ function _updateAiConfirmButtons() {
   corrBtn.classList.toggle("is-hidden", !isCorr);
 }
 
+function _refreshAiDetailPanels() {
+  const typeSelect = document.getElementById("ai-study-type-select");
+  const colSelect  = document.getElementById("ai-outcome-col-select");
+  const studyType  = typeSelect ? typeSelect.value : "";
+  const outCol     = colSelect  ? colSelect.value  : "";
+  if (studyType === "correlation" && outCol) {
+    _renderAiConfirmDetails(outCol).catch(() => {});
+  } else {
+    ["ai-detail-counts", "ai-detail-vars", "ai-detail-tests"].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.classList.add("is-hidden");
+    });
+  }
+}
+
 function bindAiConfirm() {
   const screen = document.getElementById("screen-ai-confirm");
   if (!screen) return;
 
-  // Live update buttons as study type changes
+  // Live update buttons + detail panels as study type or outcome col changes
   const typeSelect = document.getElementById("ai-study-type-select");
-  if (typeSelect) typeSelect.addEventListener("change", _updateAiConfirmButtons);
+  if (typeSelect) typeSelect.addEventListener("change", () => {
+    _updateAiConfirmButtons();
+    _refreshAiDetailPanels();
+  });
+
+  const colSelectEl = document.getElementById("ai-outcome-col-select");
+  if (colSelectEl) colSelectEl.addEventListener("change", _refreshAiDetailPanels);
 
   // Back → preview
   const backBtn = screen.querySelector('[data-action="back-to-preview-from-ai"]');

@@ -19,7 +19,7 @@ from __future__ import annotations
 import io
 from typing import Any, Dict, List, Literal, Optional
 
-from fastapi import APIRouter, File, HTTPException, Request, UploadFile
+from fastapi import APIRouter, File, HTTPException, Query, Request, UploadFile
 from pydantic import BaseModel, Field
 
 from app.core.limiter import limiter
@@ -1156,6 +1156,27 @@ async def export_correlation(job_id: str) -> Response:
         ),
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+# ---------------------------------------------------------------------------
+# Outcome value counts (for plan confirmation screen)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/value-counts/{job_id}")
+async def value_counts(job_id: str, column: str = Query(..., min_length=1, max_length=200)) -> Dict[str, Any]:
+    entry = dataset_store.get(job_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Dataset expired or not found.")
+    if column not in entry.df.columns:
+        raise HTTPException(status_code=400, detail=f"Column '{column}' not found.")
+    raw = entry.df[column].dropna().astype(str).value_counts().to_dict()
+    total = int(entry.df[column].notna().sum())
+    return {
+        "column": column,
+        "total": total,
+        "counts": {str(k): int(v) for k, v in raw.items()},
+    }
 
 
 # ---------------------------------------------------------------------------

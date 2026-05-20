@@ -2488,6 +2488,55 @@ html[data-medras-init="ok"] .se-actions-fallback { display: none; }
   padding: 16px;
   margin: 0 0 20px;
 }
+.se-ai-detail {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin: 0 0 14px;
+}
+.se-ai-detail-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #5a7799;
+  margin-bottom: 10px;
+}
+.se-ai-count-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.se-ai-count-chip {
+  background: #dbeafe;
+  color: #1e40af;
+  padding: 3px 12px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.se-ai-detail-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.se-ai-detail-list li {
+  font-size: 13.5px;
+  color: #1e293b;
+  padding: 3px 0;
+  border-bottom: 1px solid #f1f5f9;
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+.se-ai-detail-list li:last-child { border-bottom: none; }
+.se-ai-detail-var-name { font-weight: 600; }
+.se-ai-detail-var-type {
+  font-size: 12px;
+  color: #64748b;
+  font-style: italic;
+}
 .se-field-row {
   display: flex;
   gap: 16px;
