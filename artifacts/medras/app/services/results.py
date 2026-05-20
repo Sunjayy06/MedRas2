@@ -1764,6 +1764,403 @@ def apply_correction_if_needed(results_list):
     return results_list, {'method': label, 'n_tests': n}
 
 
+# ===========================================================================
+# Correlation study runner — pairwise all-vs-outcome
+# ===========================================================================
+
+
+def _corr_crosstab_data(
+    df: pd.DataFrame,
+    predictor: str,
+    outcome: str,
+) -> Dict[str, Any]:
+    """Return a crosstab as {headers, rows} with counts and row-%.
+    Handles missing values by dropping them.
+    """
+    sub = df[[predictor, outcome]].dropna()
+    if sub.empty:
+        return {"headers": [], "rows": []}
+    ct = pd.crosstab(
+        sub[predictor].astype(str),
+        sub[outcome].astype(str),
+        margins=True,
+        margins_name="Total",
+    )
+    outcome_levels = [c for c in ct.columns if c != "Total"]
+    headers = [predictor] + outcome_levels + ["Total"]
+    rows = []
+    for idx in ct.index:
+        row_total = ct.loc[idx, "Total"]
+        cells = [str(idx)]
+        for lvl in outcome_levels:
+            n = int(ct.loc[idx, lvl])
+            pct = 100.0 * n / row_total if row_total else 0.0
+            cells.append(f"{n} ({pct:.1f}%)")
+        cells.append(str(int(row_total)))
+        rows.append(cells)
+    return {"headers": headers, "rows": rows}
+
+
+def _corr_descriptive_data(
+    df: pd.DataFrame,
+    predictor: str,
+    outcome: str,
+) -> Dict[str, Any]:
+    """Return per-outcome-group descriptive stats for a continuous predictor."""
+    sub = df[[predictor, outcome]].dropna()
+    sub[predictor] = pd.to_numeric(sub[predictor], errors="coerce")
+    sub = sub.dropna()
+    levels = sorted(sub[outcome].astype(str).unique())
+    headers = [outcome, "n", "Median", "IQR (Q1-Q3)", "Mean ± SD"]
+    rows = []
+    for lvl in levels:
+        vals = sub.loc[sub[outcome].astype(str) == lvl, predictor]
+        if vals.empty:
+            continue
+        q1, q3 = float(vals.quantile(0.25)), float(vals.quantile(0.75))
+        rows.append([
+            lvl,
+            str(len(vals)),
+            f"{float(vals.median()):.2f}",
+            f"{q1:.2f} – {q3:.2f}",
+            f"{float(vals.mean()):.2f} ± {float(vals.std()):.2f}",
+        ])
+    # Total row
+    all_vals = sub[predictor]
+    if not all_vals.empty:
+        q1a, q3a = float(all_vals.quantile(0.25)), float(all_vals.quantile(0.75))
+        rows.append([
+            "Total",
+            str(len(all_vals)),
+            f"{float(all_vals.median()):.2f}",
+            f"{q1a:.2f} – {q3a:.2f}",
+            f"{float(all_vals.mean()):.2f} ± {float(all_vals.std()):.2f}",
+        ])
+    return {"headers": headers, "rows": rows}
+
+
+def _run_chi_or_fisher(
+    df: pd.DataFrame, predictor: str, outcome: str
+) -> Dict[str, Any]:
+    """Chi-square with automatic fallback to Fisher's exact."""
+    import scipy.stats as _ss
+    sub = df[[predictor, outcome]].dropna()
+    ct = pd.crosstab(sub[predictor].astype(str), sub[outcome].astype(str))
+    if ct.empty or ct.shape[0] < 2 or ct.shape[1] < 2:
+        return {"error": "Insufficient categories for chi-square."}
+    # Use Fisher if 2×2 or expected cells < 5
+    use_fisher = ct.shape == (2, 2)
+    if not use_fisher:
+        from scipy.stats.contingency import expected_freq
+        try:
+            exp = expected_freq(ct.values)
+            if (exp < 5).mean() > 0.2:
+                use_fisher = ct.shape == (2, 2)
+        except Exception:
+            pass
+    try:
+        if use_fisher and ct.shape == (2, 2):
+            arr = ct.values.astype(float)
+            _, p = _ss.fisher_exact(arr)
+            stat = None
+            test_name = "Fisher's exact"
+            df_val = None
+        else:
+            chi2, p, df_val, _ = _ss.chi2_contingency(ct)
+            stat = float(chi2)
+            test_name = "Chi-square"
+            df_val = int(df_val)
+        # Cramér's V
+        n = int(sub.shape[0])
+        if stat is not None and n > 0:
+            phi2 = stat / n
+            r, k = ct.shape
+            cramers_v = float(np.sqrt(phi2 / min(r - 1, k - 1))) if min(r - 1, k - 1) > 0 else None
+        else:
+            cramers_v = None
+        return {
+            "test_name": test_name,
+            "stat": stat,
+            "p": float(p),
+            "df": df_val,
+            "cramers_v": cramers_v,
+            "n": n,
+        }
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
+def _run_mann_whitney(
+    df: pd.DataFrame, predictor: str, outcome: str
+) -> Dict[str, Any]:
+    """Mann-Whitney U for a continuous predictor vs a binary outcome."""
+    import scipy.stats as _ss
+    sub = df[[predictor, outcome]].dropna()
+    sub[predictor] = pd.to_numeric(sub[predictor], errors="coerce")
+    sub = sub.dropna()
+    levels = sorted(sub[outcome].astype(str).unique())
+    if len(levels) < 2:
+        return {"error": "Need at least two outcome levels for Mann-Whitney."}
+    g1 = sub.loc[sub[outcome].astype(str) == levels[0], predictor]
+    g2 = sub.loc[sub[outcome].astype(str) == levels[1], predictor]
+    if len(g1) < 2 or len(g2) < 2:
+        return {"error": "Insufficient data in one or more groups."}
+    try:
+        U, p = _ss.mannwhitneyu(g1, g2, alternative="two-sided")
+        # Rank-biserial correlation as effect size
+        n1, n2 = len(g1), len(g2)
+        rbc = float(1 - 2 * U / (n1 * n2))
+        return {
+            "test_name": "Mann-Whitney U",
+            "stat": float(U),
+            "p": float(p),
+            "rank_biserial": rbc,
+            "n1": n1,
+            "n2": n2,
+            "group_levels": levels,
+            "medians": {
+                levels[0]: float(g1.median()),
+                levels[1]: float(g2.median()),
+            },
+            "iqrs": {
+                levels[0]: (float(g1.quantile(0.25)), float(g1.quantile(0.75))),
+                levels[1]: (float(g2.quantile(0.25)), float(g2.quantile(0.75))),
+            },
+        }
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
+def _run_kruskal(
+    df: pd.DataFrame, predictor: str, outcome: str
+) -> Dict[str, Any]:
+    """Kruskal-Wallis for a continuous predictor vs a multi-level outcome."""
+    import scipy.stats as _ss
+    sub = df[[predictor, outcome]].dropna()
+    sub[predictor] = pd.to_numeric(sub[predictor], errors="coerce")
+    sub = sub.dropna()
+    levels = sorted(sub[outcome].astype(str).unique())
+    groups = [sub.loc[sub[outcome].astype(str) == lvl, predictor] for lvl in levels]
+    groups = [g for g in groups if len(g) >= 2]
+    if len(groups) < 2:
+        return {"error": "Insufficient groups for Kruskal-Wallis."}
+    try:
+        H, p = _ss.kruskal(*groups)
+        return {"test_name": "Kruskal-Wallis H", "stat": float(H), "p": float(p), "n": len(sub)}
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
+def _corr_interpretation(
+    pair: Dict[str, Any],
+    test_result: Dict[str, Any],
+    df: pd.DataFrame,
+) -> str:
+    """Build a plain-English interpretation paragraph for one predictor vs outcome."""
+    predictor = pair["predictor"]
+    outcome = pair["outcome_col"] if "outcome_col" in pair else pair.get("outcome", "")
+    pred_type = pair.get("predictor_type", "nominal")
+    p = test_result.get("p")
+    sig = "statistically significant" if (p is not None and p < 0.05) else "not statistically significant"
+    test_name = test_result.get("test_name", "the test")
+    n_total = int(df[[predictor, outcome]].dropna().shape[0])
+
+    outcome_levels = sorted(df[outcome].dropna().astype(str).unique().tolist())
+    predictor_levels = sorted(df[predictor].dropna().astype(str).unique().tolist())
+
+    if pred_type == "scale":
+        medians = test_result.get("medians", {})
+        iqrs = test_result.get("iqrs", {})
+        levels = test_result.get("group_levels") or outcome_levels[:2]
+        parts = []
+        for lvl in levels:
+            med = medians.get(lvl)
+            iqr = iqrs.get(lvl, (None, None))
+            if med is not None:
+                q1, q3 = iqr
+                if q1 is not None and q3 is not None:
+                    parts.append(f"{med:.2f} (IQR: {q1:.2f}\u2013{q3:.2f}) in the {outcome} = {lvl} group")
+                else:
+                    parts.append(f"{med:.2f} in the {outcome} = {lvl} group")
+        stat_val = test_result.get("stat")
+        stat_str = f"{stat_name} = {stat_val:.2f}, " if (stat_name := test_result.get("test_name","U").replace("Mann-Whitney U","U").replace("Kruskal-Wallis H","H")) and stat_val is not None else ""
+        text = (
+            f"Among the {n_total} patients analysed, the median {predictor} was "
+            + " and ".join(parts or ["not available"])
+            + f". The association was {sig} ({stat_str}p = {fmt_p(p)})."
+        )
+    else:
+        # Categorical predictor
+        sub = df[[predictor, outcome]].dropna()
+        ct = pd.crosstab(sub[predictor].astype(str), sub[outcome].astype(str))
+        n_all = len(sub)
+        # Describe distribution of outcome
+        outcome_desc_parts = []
+        for lvl in outcome_levels[:3]:
+            if lvl in ct.columns:
+                cnt = int(ct[lvl].sum())
+                pct = 100.0 * cnt / n_all if n_all else 0
+                outcome_desc_parts.append(f"{cnt} ({pct:.1f}%) were {outcome} = {lvl}")
+        outcome_desc = ", ".join(outcome_desc_parts) if outcome_desc_parts else ""
+        # Describe per-predictor breakdown (first outcome level, up to 4 predictor levels)
+        primary_outcome = outcome_levels[0] if outcome_levels else ""
+        breakdown_parts = []
+        for pred_lvl in predictor_levels[:4]:
+            if pred_lvl in ct.index and primary_outcome in ct.columns:
+                row_total = int(ct.loc[pred_lvl].sum())
+                n_pos = int(ct.loc[pred_lvl, primary_outcome])
+                pct_pos = 100.0 * n_pos / row_total if row_total else 0
+                breakdown_parts.append(
+                    f"among patients with {predictor} = {pred_lvl}, "
+                    f"{n_pos} of {row_total} ({pct_pos:.1f}%) had {outcome} = {primary_outcome}"
+                )
+        stat_val = test_result.get("stat")
+        df_val = test_result.get("df")
+        crv = test_result.get("cramers_v")
+        effect_str = f", Cramér's V = {crv:.3f}" if crv is not None else ""
+        stat_str = (
+            f"{test_name}: χ² = {stat_val:.3f}, df = {df_val}, p = {fmt_p(p)}{effect_str}"
+            if stat_val is not None
+            else f"{test_name}: p = {fmt_p(p)}{effect_str}"
+        )
+        text = (
+            f"Of the {n_all} patients studied"
+            + (f", {outcome_desc}" if outcome_desc else "")
+            + ". "
+            + ("; ".join(breakdown_parts[:3]) + ". " if breakdown_parts else "")
+            + f"The association between {predictor} and {outcome} was {sig} ({stat_str})."
+        )
+    return text
+
+
+def run_correlation_plan(
+    df: pd.DataFrame,
+    classifications: List[Dict[str, Any]],
+    correlation_plan: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Run all pairwise tests for a correlation study.
+
+    Returns::
+
+        {
+          "pairs": [{
+            "predictor":      str,
+            "test_result":    {test_name, stat, p, ...},
+            "graph_uri":      str | None,   # base64 PNG data URI
+            "table_data":     {headers, rows},
+            "interpretation": str,
+            "significant":    bool,
+          }, ...],
+          "summary_table": [{
+            "predictor": str, "test": str, "stat": str, "p": str, "significant": bool
+          }, ...],
+          "methods_text": str,
+        }
+    """
+    outcome_col = correlation_plan.get("outcome_col", "")
+    pairs_plan = correlation_plan.get("pairs") or []
+    pair_results: List[Dict[str, Any]] = []
+
+    for pair in pairs_plan:
+        predictor = pair["predictor"]
+        test_id = pair.get("test_id", "corr_chi_or_fisher")
+        graph_type = pair.get("graph_type", "stacked_bar")
+        pred_type = pair.get("predictor_type", "nominal")
+
+        # Skip columns not in df
+        if predictor not in df.columns or outcome_col not in df.columns:
+            continue
+
+        # Run test
+        if test_id == "corr_mann_whitney":
+            test_result = _run_mann_whitney(df, predictor, outcome_col)
+        elif test_id == "corr_kruskal":
+            test_result = _run_kruskal(df, predictor, outcome_col)
+        else:
+            test_result = _run_chi_or_fisher(df, predictor, outcome_col)
+
+        if "error" in test_result:
+            pair_results.append({
+                "predictor": predictor,
+                "test_result": test_result,
+                "graph_uri": None,
+                "table_data": {"headers": [], "rows": []},
+                "interpretation": f"Could not analyse {predictor}: {test_result['error']}",
+                "significant": False,
+            })
+            continue
+
+        # Generate graph
+        if graph_type == "boxplot":
+            graph_uri = _boxplot(df, predictor, outcome_col)
+        else:
+            graph_uri = _stacked_bar(df, outcome_col, predictor)
+
+        # Generate table
+        if pred_type == "scale":
+            table_data = _corr_descriptive_data(df, predictor, outcome_col)
+        else:
+            table_data = _corr_crosstab_data(df, predictor, outcome_col)
+
+        # Build interpretation
+        pair_aug = dict(pair)
+        pair_aug["outcome_col"] = outcome_col
+        interpretation = _corr_interpretation(pair_aug, test_result, df)
+
+        p = test_result.get("p")
+        pair_results.append({
+            "predictor": predictor,
+            "predictor_type": pred_type,
+            "test_result": test_result,
+            "graph_uri": graph_uri,
+            "table_data": table_data,
+            "interpretation": interpretation,
+            "significant": bool(p is not None and p < 0.05),
+        })
+
+    # Summary table sorted by p-value ascending
+    def _sort_key(pr):
+        p = pr["test_result"].get("p")
+        return p if p is not None else 1.0
+
+    sorted_pairs = sorted(pair_results, key=_sort_key)
+    summary_table = []
+    for pr in sorted_pairs:
+        tr = pr["test_result"]
+        p = tr.get("p")
+        stat = tr.get("stat")
+        summary_table.append({
+            "predictor": pr["predictor"],
+            "test": tr.get("test_name", ""),
+            "stat": f"{stat:.3f}" if stat is not None else "—",
+            "p": fmt_p(p) if p is not None else "—",
+            "significant": pr["significant"],
+        })
+
+    tests_used = sorted({pr["test_result"].get("test_name", "") for pr in pair_results
+                         if "error" not in pr["test_result"]})
+    _cat_tests = ", ".join(
+        t for t in tests_used if "chi" in t.lower() or "fisher" in t.lower()
+    ) or "chi-square or Fisher's exact test"
+    _cont_tests = ", ".join(
+        t for t in tests_used if "mann" in t.lower() or "kruskal" in t.lower()
+    ) or "Mann-Whitney U test"
+    methods_text = (
+        f"All statistical analyses were performed using Python (scipy). "
+        f"For each predictor variable, its association with {outcome_col} was tested independently. "
+        f"Categorical variables were compared using {_cat_tests}. "
+        f"Continuous variables were compared using {_cont_tests}. "
+        "A two-tailed p-value < 0.05 was considered statistically significant."
+    )
+
+    return {
+        "outcome_col": outcome_col,
+        "pairs": pair_results,
+        "summary_table": summary_table,
+        "methods_text": methods_text,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Reference accuracy check — invoked only via `python results.py`
 # ---------------------------------------------------------------------------

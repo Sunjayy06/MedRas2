@@ -752,6 +752,69 @@ def classify_dataframe(df: pd.DataFrame) -> List[Dict[str, Any]]:
     return [classify_column(df[col], col) for col in df.columns]
 
 
+# ---------------------------------------------------------------------------
+# Yes / No standardisation
+# ---------------------------------------------------------------------------
+
+_YES_WORDS = frozenset({
+    "yes", "y", "positive", "pos", "+", "present", "true", "1",
+    "present", "affected", "yes.", "reactive", "p", "detected",
+})
+_NO_WORDS = frozenset({
+    "no", "n", "negative", "neg", "-", "absent", "false", "0",
+    "not present", "no.", "non-reactive", "not detected", "nd",
+})
+
+
+def _is_yes_no_series(series: pd.Series) -> bool:
+    """Return True when ≥90% of non-null values map to yes/no words."""
+    non_null = series.dropna()
+    if len(non_null) == 0:
+        return False
+    all_words = _YES_WORDS | _NO_WORDS
+    mapped = non_null.astype(str).str.strip().str.lower().isin(all_words)
+    return float(mapped.mean()) >= 0.9
+
+
+def clean_yes_no_columns(df: pd.DataFrame) -> tuple[pd.DataFrame, Dict[str, str]]:
+    """Standardise yes/no columns to canonical 'Yes' / 'No' strings.
+
+    Columns where ≥90% of non-null values look like positive/negative words
+    are mapped:
+      * positive words (yes, present, positive, +, …) → 'Yes'
+      * negative words (no, absent, negative, −, …)  → 'No'
+
+    Returns ``(modified_df, notes)`` where ``notes`` maps affected column
+    names to a human-readable description of what was standardised.
+    """
+    notes: Dict[str, str] = {}
+    out = df.copy()
+    for col in df.columns:
+        s = df[col]
+        if pd.api.types.is_numeric_dtype(s):
+            continue
+        if not _is_yes_no_series(s):
+            continue
+        before = s.dropna().astype(str).str.strip().str.lower().unique().tolist()
+
+        def _map_yn(v) -> Any:
+            if pd.isna(v):
+                return v
+            w = str(v).strip().lower()
+            if w in _YES_WORDS:
+                return "Yes"
+            if w in _NO_WORDS:
+                return "No"
+            return v
+
+        out[col] = s.apply(_map_yn)
+        after = out[col].dropna().unique().tolist()
+        notes[col] = (
+            f"Standardised yes/no values: {before[:4]} → {after}."
+        )
+    return out, notes
+
+
 def encode_for_analysis(df: pd.DataFrame, classifications: List[Dict[str, Any]]) -> pd.DataFrame:
     """Apply user-confirmed classifications to a copy of the DataFrame.
 

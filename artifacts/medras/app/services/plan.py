@@ -694,3 +694,119 @@ def _add_phase_b_triggers(
                     'args': {'outcome': outcome, 'predictors': predictors},
                 },
             })
+
+
+# ---------------------------------------------------------------------------
+# Correlation study — pairwise all-vs-outcome plan
+# ---------------------------------------------------------------------------
+
+
+def generate_correlation_plan(
+    df: pd.DataFrame,
+    classifications: List[Dict[str, Any]],
+    outcome_col: str,
+) -> Dict[str, Any]:
+    """Generate a per-variable pairwise plan for a correlation study.
+
+    For each column that is not the outcome and not excluded/id/date,
+    pick the appropriate test and graph type based on variable types.
+
+    Returns::
+
+        {
+          "study_type":    "correlation",
+          "outcome_col":   str,
+          "outcome_levels": int,   # 2 for binary, >2 for multi-level
+          "pairs": [
+            {
+              "predictor":    str,
+              "predictor_type": "scale"|"ordinal"|"nominal",
+              "outcome_type": "binary"|"nominal"|"scale",
+              "test_id":      str,
+              "test_title":   str,
+              "graph_type":   "stacked_bar"|"boxplot",
+            },
+            ...
+          ],
+          "excluded": [{"column": str, "reason": str}, ...],
+        }
+    """
+    classes = _classification_lookup(classifications)
+    outcome_class = classes.get(outcome_col, {})
+    outcome_dtype = outcome_class.get("detected_type", "nominal")
+
+    # Determine whether outcome is binary, multi-level nominal, or scale
+    if outcome_dtype == "scale":
+        outcome_kind = "scale"
+    elif outcome_dtype in ("nominal", "ordinal"):
+        try:
+            n_levels = int(df[outcome_col].dropna().nunique())
+        except Exception:
+            n_levels = 2
+        outcome_kind = "binary" if n_levels == 2 else "nominal"
+    else:
+        outcome_kind = "nominal"
+
+    try:
+        outcome_levels = int(df[outcome_col].dropna().nunique())
+    except Exception:
+        outcome_levels = 2
+
+    pairs: List[Dict[str, Any]] = []
+    excluded: List[Dict[str, Any]] = []
+
+    for c in classifications:
+        col = c["column"]
+        if col == outcome_col:
+            continue
+        dtype = c.get("detected_type", "nominal")
+        if dtype in ("id", "date", "exclude"):
+            excluded.append({"column": col, "reason": dtype})
+            continue
+
+        # Pick test + graph based on predictor × outcome type combination
+        if dtype == "scale":
+            if outcome_kind in ("binary", "nominal"):
+                if outcome_levels == 2:
+                    test_id = "corr_mann_whitney"
+                    test_title = "Mann-Whitney U test"
+                else:
+                    test_id = "corr_kruskal"
+                    test_title = "Kruskal-Wallis H test"
+                graph_type = "boxplot"
+            else:
+                # scale × scale — Spearman (non-parametric default)
+                test_id = "corr_spearman"
+                test_title = "Spearman rank correlation"
+                graph_type = "scatter"
+            pred_kind = "scale"
+        elif dtype in ("nominal", "ordinal", "discrete"):
+            if outcome_kind in ("binary", "nominal", "scale"):
+                test_id = "corr_chi_or_fisher"
+                test_title = "Chi-square / Fisher's exact"
+                graph_type = "stacked_bar"
+            else:
+                test_id = "corr_chi_or_fisher"
+                test_title = "Chi-square / Fisher's exact"
+                graph_type = "stacked_bar"
+            pred_kind = "nominal"
+        else:
+            excluded.append({"column": col, "reason": f"unsupported type: {dtype}"})
+            continue
+
+        pairs.append({
+            "predictor": col,
+            "predictor_type": pred_kind,
+            "outcome_type": outcome_kind,
+            "test_id": test_id,
+            "test_title": test_title,
+            "graph_type": graph_type,
+        })
+
+    return {
+        "study_type": "correlation",
+        "outcome_col": outcome_col,
+        "outcome_levels": outcome_levels,
+        "pairs": pairs,
+        "excluded": excluded,
+    }

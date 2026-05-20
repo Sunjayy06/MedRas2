@@ -50,6 +50,10 @@ const state = {
   confirmedGraphs: null,   // Set<string>
   results: null,           // results-payload from /run-analysis
 
+  // --- Correlation study (new) ---
+  aiStudy: null,           // result from /ai-bridge
+  corrResults: null,       // result from /run-correlation
+
   // --- Chatboxes 2/3/4 (PART 5) ---
   chatThreads: { normality: [], plan: [], results: [] },
   chatOpened:  { normality: false, plan: false, results: false },
@@ -1715,8 +1719,40 @@ function bindPreview() {
       });
       ingestDataset(data);
       setStatus(status, "");
-      showScreen("3");
-      await loadVariablesData();
+
+      // Call the AI bridge to identify study type + outcome column.
+      // This never blocks navigation — errors fall back gracefully.
+      const description =
+        (state.intake && (state.intake.objectives || state.intake.instructions || "")) || "";
+      const outcomeHint =
+        (state.intake && (state.intake.outcomes || "")) || "";
+      try {
+        setStatus(status, "Analysing study type…", "loading");
+        const bridgeResult = await api("/ai-bridge", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            job_id: state.jobId,
+            description,
+            outcome_hint: outcomeHint,
+          }),
+        });
+        state.aiStudy = bridgeResult;
+      } catch (_) {
+        // AI bridge failure is non-fatal — show confirmation screen anyway
+        state.aiStudy = {
+          study_type: "correlation",
+          outcome_col: null,
+          confidence: 0,
+          reasoning: "Could not contact AI service. Please select manually.",
+          source: "heuristic",
+          all_predictors: state.columns.map((c) => c.column || c),
+        };
+      }
+
+      setStatus(status, "");
+      renderAiConfirmScreen();
+      showScreen("ai-confirm");
     } catch (err) {
       setStatus(status, `Could not confirm: ${err.message}`, "error");
     }
@@ -3355,6 +3391,317 @@ function bindChatboxes() {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Screen AI-CONFIRM — Study type + outcome column confirmation       */
+/* ------------------------------------------------------------------ */
+
+const _STUDY_TYPE_LABELS = {
+  correlation: "Correlation study — find which factors are associated with the outcome",
+  comparison:  "Comparison — compare groups (RCT, case-control, cohort)",
+  diagnostic:  "Diagnostic accuracy — sensitivity, specificity, ROC",
+  survival:    "Survival — time-to-event, Kaplan-Meier",
+  descriptive: "Descriptive — prevalence, frequencies, profile",
+};
+
+function renderAiConfirmScreen() {
+  const ai = state.aiStudy || {};
+  const studyType = ai.study_type || "correlation";
+  const outCol    = ai.outcome_col || "";
+  const reasoning = ai.reasoning  || "No reasoning provided.";
+  const source    = ai.source === "gemini" ? "AI (Gemini)" : "Heuristic (keyword-based)";
+
+  // Update display labels
+  const typeDisplay = document.getElementById("ai-study-type-display");
+  if (typeDisplay) typeDisplay.textContent = _STUDY_TYPE_LABELS[studyType] || studyType;
+
+  const colDisplay = document.getElementById("ai-outcome-col-display");
+  if (colDisplay) colDisplay.textContent = outCol || "Not detected — please select below";
+
+  const reasoningEl = document.getElementById("ai-reasoning-display");
+  if (reasoningEl) reasoningEl.textContent = reasoning;
+
+  const sourceEl = document.getElementById("ai-source-display");
+  if (sourceEl) sourceEl.textContent = source;
+
+  // Populate outcome column dropdown
+  const colSelect = document.getElementById("ai-outcome-col-select");
+  if (colSelect) {
+    colSelect.innerHTML = '<option value="">— select a column —</option>';
+    const cols = state.columns.map((c) => (typeof c === "string" ? c : c.column));
+    cols.forEach((col) => {
+      const opt = document.createElement("option");
+      opt.value = col;
+      opt.textContent = col;
+      if (col === outCol) opt.selected = true;
+      colSelect.appendChild(opt);
+    });
+  }
+
+  // Pre-select study type
+  const typeSelect = document.getElementById("ai-study-type-select");
+  if (typeSelect) typeSelect.value = studyType;
+
+  // Show/hide the "Run Pairwise Analysis" button
+  _updateAiConfirmButtons();
+}
+
+function _updateAiConfirmButtons() {
+  const typeSelect = document.getElementById("ai-study-type-select");
+  const corrBtn    = document.getElementById("btn-run-correlation");
+  if (!typeSelect || !corrBtn) return;
+  const isCorr = typeSelect.value === "correlation";
+  corrBtn.classList.toggle("is-hidden", !isCorr);
+}
+
+function bindAiConfirm() {
+  const screen = document.getElementById("screen-ai-confirm");
+  if (!screen) return;
+
+  // Live update buttons as study type changes
+  const typeSelect = document.getElementById("ai-study-type-select");
+  if (typeSelect) typeSelect.addEventListener("change", _updateAiConfirmButtons);
+
+  // Back → preview
+  const backBtn = screen.querySelector('[data-action="back-to-preview-from-ai"]');
+  if (backBtn) backBtn.addEventListener("click", () => showScreen("preview"));
+
+  // "Standard flow" → variables screen (skip correlation shortcut)
+  const skipBtn = screen.querySelector('[data-action="ai-confirm-skip-to-variables"]');
+  if (skipBtn) {
+    skipBtn.addEventListener("click", async () => {
+      const status = document.getElementById("ai-confirm-status");
+      const studyType = (document.getElementById("ai-study-type-select") || {}).value || "correlation";
+      const outCol    = (document.getElementById("ai-outcome-col-select") || {}).value || null;
+      setStatus(status, "Confirming…", "loading");
+      try {
+        await api("/confirm-study", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            job_id: state.jobId,
+            study_type: studyType,
+            outcome_col: outCol || null,
+          }),
+        });
+        setStatus(status, "");
+        showScreen("3");
+        await loadVariablesData();
+      } catch (err) {
+        setStatus(status, `Error: ${err.message}`, "error");
+      }
+    });
+  }
+
+  // "Run Pairwise Analysis" → correlation results
+  const corrBtn = document.getElementById("btn-run-correlation");
+  if (corrBtn) {
+    corrBtn.addEventListener("click", async () => {
+      const status    = document.getElementById("ai-confirm-status");
+      const typeSelect = document.getElementById("ai-study-type-select");
+      const colSelect  = document.getElementById("ai-outcome-col-select");
+      const studyType  = typeSelect ? typeSelect.value : "correlation";
+      const outCol     = colSelect ? colSelect.value : "";
+      if (!outCol) {
+        setStatus(status, "Please select an outcome column first.", "error");
+        return;
+      }
+      setStatus(status, "Confirming study setup…", "loading");
+      try {
+        await api("/confirm-study", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            job_id: state.jobId,
+            study_type: studyType,
+            outcome_col: outCol,
+          }),
+        });
+        setStatus(status, "Running pairwise analysis…", "loading");
+        corrBtn.disabled = true;
+        corrBtn.textContent = "Running…";
+        const result = await api("/run-correlation", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ job_id: state.jobId, outcome_col: outCol }),
+        });
+        state.corrResults = result.results;
+        setStatus(status, "");
+        renderCorrResults(outCol);
+        showScreen("corr-results");
+      } catch (err) {
+        setStatus(status, `Analysis failed: ${err.message}`, "error");
+      } finally {
+        corrBtn.disabled = false;
+        corrBtn.textContent = "Run Pairwise Analysis →";
+      }
+    });
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Screen CORR-RESULTS — Correlation analysis results renderer        */
+/* ------------------------------------------------------------------ */
+
+function renderCorrResults(outcomeCol) {
+  const res = state.corrResults;
+  if (!res) return;
+
+  const outcomeLabel = document.getElementById("corr-outcome-label");
+  if (outcomeLabel) outcomeLabel.textContent = outcomeCol || res.outcome_col || "the outcome";
+
+  const pairs = res.pairs || [];
+  const successful = pairs.filter((p) => !p.test_result?.error);
+  const nVarsEl = document.getElementById("corr-n-vars");
+  if (nVarsEl) nVarsEl.textContent = `${successful.length} variables analysed.`;
+
+  const body = document.getElementById("corr-results-body");
+  if (!body) return;
+  body.innerHTML = "";
+
+  // Per-variable accordion sections
+  successful.forEach((pair, idx) => {
+    const predictor = pair.predictor || "";
+    const tr        = pair.test_result || {};
+    const p         = tr.p;
+    const sig       = p !== undefined && p !== null && p < 0.05;
+    const pDisplay  = p !== undefined && p !== null
+      ? (p < 0.001 ? "< 0.001" : p.toFixed(3))
+      : "—";
+
+    const section = document.createElement("details");
+    section.className = "se-disclose se-corr-section" + (sig ? " se-corr-sig" : "");
+    section.open = (idx === 0);  // first one open by default
+
+    const summary = document.createElement("summary");
+    summary.innerHTML = `
+      <span class="se-corr-pred">${escapeHtml(predictor)}</span>
+      <span class="se-corr-test">${escapeHtml(tr.test_name || "")}</span>
+      <span class="se-corr-p ${sig ? "se-corr-p-sig" : ""}">p = ${pDisplay}</span>
+      ${sig ? '<span class="se-corr-sig-badge">★ p&lt;0.05</span>' : ""}
+    `;
+    section.appendChild(summary);
+
+    const inner = document.createElement("div");
+    inner.className = "se-corr-inner";
+
+    // Table
+    const td = pair.table_data || {};
+    if (td.headers && td.headers.length && td.rows && td.rows.length) {
+      const tableWrap = document.createElement("div");
+      tableWrap.className = "se-table-wrap se-corr-table-wrap";
+      const table = document.createElement("table");
+      table.className = "se-table se-corr-table";
+      const thead = document.createElement("thead");
+      thead.innerHTML = `<tr>${td.headers.map((h) => `<th>${escapeHtml(String(h))}</th>`).join("")}</tr>`;
+      table.appendChild(thead);
+      const tbody = document.createElement("tbody");
+      td.rows.forEach((row) => {
+        const tr_el = document.createElement("tr");
+        const isTotal = String(row[0]).trim().toLowerCase() === "total";
+        if (isTotal) tr_el.className = "se-corr-total-row";
+        row.forEach((cell) => {
+          const td_el = document.createElement("td");
+          td_el.textContent = String(cell);
+          tr_el.appendChild(td_el);
+        });
+        tbody.appendChild(tr_el);
+      });
+      table.appendChild(tbody);
+      tableWrap.appendChild(table);
+      inner.appendChild(tableWrap);
+    }
+
+    // Graph
+    if (pair.graph_uri) {
+      const figDiv = document.createElement("div");
+      figDiv.className = "se-corr-fig";
+      const img = document.createElement("img");
+      img.src = pair.graph_uri;
+      img.alt = `${predictor} vs ${outcomeCol}`;
+      img.className = "se-corr-img";
+      figDiv.appendChild(img);
+      inner.appendChild(figDiv);
+    }
+
+    // Interpretation
+    if (pair.interpretation) {
+      const interp = document.createElement("p");
+      interp.className = "se-corr-interpretation";
+      interp.textContent = pair.interpretation;
+      inner.appendChild(interp);
+    }
+
+    section.appendChild(inner);
+    body.appendChild(section);
+  });
+
+  // Failed pairs note
+  const failed = pairs.filter((p) => p.test_result?.error);
+  if (failed.length) {
+    const note = document.createElement("p");
+    note.className = "se-hint";
+    note.textContent = `${failed.length} variable(s) could not be analysed: ${failed.map((p) => p.predictor).join(", ")}.`;
+    body.appendChild(note);
+  }
+
+  // Summary table
+  const summarySection = document.getElementById("corr-summary-section");
+  const summaryTbody   = document.getElementById("corr-summary-tbody");
+  const summaryRows = res.summary_table || [];
+  if (summaryTbody && summaryRows.length) {
+    summaryTbody.innerHTML = "";
+    summaryRows.forEach((item) => {
+      const tr_el = document.createElement("tr");
+      if (item.significant) tr_el.className = "se-corr-sig-row";
+      tr_el.innerHTML = `
+        <td>${escapeHtml(item.predictor || "")}</td>
+        <td>${escapeHtml(item.test || "")}</td>
+        <td>${escapeHtml(item.stat || "—")}</td>
+        <td class="${item.significant ? "se-corr-p-sig" : ""}">${escapeHtml(item.p || "—")}</td>
+        <td>${item.significant ? "★ Yes" : "No"}</td>
+      `;
+      summaryTbody.appendChild(tr_el);
+    });
+    if (summarySection) summarySection.classList.remove("is-hidden");
+  }
+}
+
+function bindCorrResults() {
+  const screen = document.getElementById("screen-corr-results");
+  if (!screen) return;
+
+  const backBtn = screen.querySelector('[data-action="back-to-ai-confirm"]');
+  if (backBtn) backBtn.addEventListener("click", () => showScreen("ai-confirm"));
+
+  const exportBtn = document.getElementById("btn-export-corr-chapter");
+  if (exportBtn) {
+    exportBtn.addEventListener("click", async () => {
+      const status = document.getElementById("corr-export-status");
+      setStatus(status, "Building Word document…", "loading");
+      exportBtn.disabled = true;
+      try {
+        const res = await fetch(`${API_BASE}/export-correlation/${state.jobId}`);
+        if (!res.ok) {
+          const txt = await res.text();
+          throw new Error(txt || `HTTP ${res.status}`);
+        }
+        const blob = await res.blob();
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = "medras_correlation_chapter.docx";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setStatus(status, "Downloaded successfully.", "success");
+      } catch (err) {
+        setStatus(status, `Download failed: ${err.message}`, "error");
+      } finally {
+        exportBtn.disabled = false;
+      }
+    });
+  }
+}
+
+/* ------------------------------------------------------------------ */
 /*  Step 8 — Export                                                    */
 /* ------------------------------------------------------------------ */
 
@@ -3428,6 +3775,8 @@ function restart() {
   state.confirmedTests = null;
   state.confirmedGraphs = null;
   state.results = null;
+  state.aiStudy = null;
+  state.corrResults = null;
   state.chatThreads = { normality: [], plan: [], results: [] };
   state.chatOpened  = { normality: false, plan: false, results: false };
   ["normality", "plan", "results"].forEach((k) => {
@@ -3479,6 +3828,8 @@ function initApp() {
     bindScreen2C();
     bindCustomWizard();
     bindPreview();
+    bindAiConfirm();
+    bindCorrResults();
     bindScreen3();
     bindScreen4();
     bindSoon();

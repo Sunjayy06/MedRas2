@@ -2442,3 +2442,187 @@ html[data-medras-init="ok"] .se-actions-fallback { display: none; }
   color: #475569;
   font-size: 14px;
 }
+
+/* ============================================================
+   Screen AI-CONFIRM — study type + outcome column
+   ============================================================ */
+.se-ai-card {
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  border-left: 4px solid #0284c7;
+  border-radius: 10px;
+  padding: 18px 20px;
+  margin: 0 0 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.se-ai-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  font-size: 14px;
+}
+.se-ai-label {
+  flex: 0 0 140px;
+  font-weight: 600;
+  color: #0c4a6e;
+  padding-top: 1px;
+}
+.se-ai-value {
+  flex: 1;
+  color: #1e293b;
+  line-height: 1.5;
+}
+.se-ai-reasoning {
+  font-style: italic;
+  color: #475569;
+}
+.se-ai-edit-panel {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 16px;
+  margin: 0 0 20px;
+}
+.se-field-row {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.se-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  min-width: 200px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #334155;
+}
+.se-field select,
+.se-field input {
+  font-size: 14px;
+  padding: 8px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #f8fafc;
+  color: #1e293b;
+  width: 100%;
+}
+.se-hint {
+  font-size: 13px;
+  color: #64748b;
+  margin: 0 0 12px;
+}
+
+/* ============================================================
+   Screen CORR-RESULTS — pairwise correlation results
+   ============================================================ */
+.se-corr-section {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  margin: 0 0 12px;
+  overflow: hidden;
+}
+.se-corr-section > summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: #f8fafc;
+  cursor: pointer;
+  font-size: 14px;
+  flex-wrap: wrap;
+  user-select: none;
+  list-style: none;
+}
+.se-corr-section > summary::-webkit-details-marker { display: none; }
+.se-corr-section.se-corr-sig > summary {
+  background: #fefce8;
+  border-left: 4px solid #ca8a04;
+}
+.se-corr-pred {
+  font-weight: 700;
+  color: #1e293b;
+  flex: 1;
+  min-width: 120px;
+}
+.se-corr-test {
+  font-size: 12px;
+  color: #64748b;
+  background: #e2e8f0;
+  border-radius: 4px;
+  padding: 2px 7px;
+}
+.se-corr-p {
+  font-weight: 600;
+  color: #475569;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.se-corr-p.se-corr-p-sig {
+  color: #b45309;
+}
+.se-corr-sig-badge {
+  font-size: 11px;
+  font-weight: 700;
+  background: #fef3c7;
+  color: #92400e;
+  border-radius: 4px;
+  padding: 2px 7px;
+}
+.se-corr-inner {
+  padding: 14px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.se-corr-table-wrap {
+  max-height: 260px;
+  overflow-y: auto;
+}
+.se-corr-table {
+  font-size: 13px;
+}
+.se-corr-total-row {
+  font-weight: 700;
+  background: #f1f5f9;
+}
+.se-corr-fig {
+  text-align: center;
+}
+.se-corr-img {
+  max-width: 100%;
+  max-height: 320px;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+}
+.se-corr-interpretation {
+  font-size: 14px;
+  color: #334155;
+  line-height: 1.6;
+  margin: 0;
+  padding: 10px 14px;
+  background: #f8fafc;
+  border-radius: 6px;
+  border-left: 3px solid #94a3b8;
+}
+.se-corr-sig-row {
+  background: #fefce8;
+  font-weight: 600;
+}
+td.se-corr-p-sig {
+  color: #b45309;
+  font-weight: 700;
+}
+
+/* Btn accent variant used for the "Run Pairwise Analysis" primary CTA */
+.btn.btn-accent {
+  background: #0284c7;
+  color: #fff;
+  border: none;
+}
+.btn.btn-accent:hover {
+  background: #0369a1;
+}

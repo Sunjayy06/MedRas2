@@ -25,6 +25,7 @@ from pydantic import BaseModel, Field
 from app.core.limiter import limiter
 from app.core.logging import get_logger
 from app.services import (
+    ai_bridge as ai_bridge_service,
     chatboxes,
     data_quality,
     dataset_store,
@@ -1007,6 +1008,191 @@ async def export(job_id: str, fmt: str) -> Response:
         media_type=mime,
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+# ---------------------------------------------------------------------------
+# AI Bridge — study type + outcome column identification (T002)
+# ---------------------------------------------------------------------------
+
+
+class AiBridgeRequest(BaseModel):
+    job_id: str = Field(..., min_length=1, max_length=64)
+    description: str = Field(default="", max_length=2000)
+    outcome_hint: str = Field(default="", max_length=200)
+
+
+@router.post("/ai-bridge")
+@limiter.limit("15/minute")
+async def ai_bridge(request: Request, payload: AiBridgeRequest) -> Dict[str, Any]:
+    entry = dataset_store.get(payload.job_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Dataset expired or not found.")
+    classifications = (
+        entry.meta.get("classifications")
+        or variable_classifier.classify_dataframe(entry.df)
+    )
+    entry.meta["classifications"] = classifications
+    columns = list(entry.df.columns)
+    result = ai_bridge_service.identify_study(
+        description=payload.description,
+        outcome_hint=payload.outcome_hint,
+        columns=columns,
+        classifications=classifications,
+    )
+    entry.meta["ai_study"] = result
+    return result
+
+
+class ConfirmStudyRequest(BaseModel):
+    job_id: str = Field(..., min_length=1, max_length=64)
+    study_type: str = Field(..., max_length=50)
+    outcome_col: Optional[str] = Field(default=None, max_length=200)
+
+
+@router.post("/confirm-study")
+async def confirm_study(payload: ConfirmStudyRequest) -> Dict[str, Any]:
+    entry = dataset_store.get(payload.job_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Dataset expired or not found.")
+    if payload.outcome_col and payload.outcome_col not in entry.df.columns:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Column '{payload.outcome_col}' not found in dataset.",
+        )
+    entry.meta["confirmed_study_type"] = payload.study_type
+    entry.meta["confirmed_outcome_col"] = payload.outcome_col
+    # Apply yes/no standardisation whenever a study is confirmed (T004)
+    df, yn_notes = variable_classifier.clean_yes_no_columns(entry.df)
+    if yn_notes:
+        dataset_store.replace_df(payload.job_id, df)
+        entry.meta["yesno_cleaning_notes"] = yn_notes
+        entry.meta.pop("classifications", None)  # force re-classify on cleaned data
+    return {
+        "status": "confirmed",
+        "study_type": payload.study_type,
+        "outcome_col": payload.outcome_col,
+        "yesno_cleaned": list(yn_notes.keys()),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Run Correlation — pairwise all-vs-outcome (T005 / T006)
+# ---------------------------------------------------------------------------
+
+
+class RunCorrelationRequest(BaseModel):
+    job_id: str = Field(..., min_length=1, max_length=64)
+    outcome_col: str = Field(..., min_length=1, max_length=200)
+
+
+@router.post("/run-correlation")
+@limiter.limit("10/minute")
+async def run_correlation(
+    request: Request, payload: RunCorrelationRequest
+) -> Dict[str, Any]:
+    entry = dataset_store.get(payload.job_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Dataset expired or not found.")
+    if payload.outcome_col not in entry.df.columns:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Column '{payload.outcome_col}' not found in dataset.",
+        )
+    classifications = (
+        entry.meta.get("classifications")
+        or variable_classifier.classify_dataframe(entry.df)
+    )
+    entry.meta["classifications"] = classifications
+
+    corr_plan = plan_service.generate_correlation_plan(
+        entry.df, classifications, payload.outcome_col
+    )
+    entry.meta["correlation_plan"] = corr_plan
+
+    corr_results = results_service.run_correlation_plan(
+        entry.df, classifications, corr_plan
+    )
+    entry.meta["correlation_results"] = corr_results
+
+    return {"job_id": payload.job_id, "results": corr_results}
+
+
+@router.get("/export-correlation/{job_id}")
+async def export_correlation(job_id: str) -> Response:
+    entry = dataset_store.get(job_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Dataset expired or not found.")
+    corr_results = entry.meta.get("correlation_results")
+    if not corr_results:
+        raise HTTPException(
+            status_code=400,
+            detail="No correlation results found — run pairwise analysis first.",
+        )
+    docx_bytes = export_service.generate_correlation_chapter_word(entry, corr_results)
+    filename = f"medras_correlation_{job_id[:8]}.docx"
+    return Response(
+        content=docx_bytes,
+        media_type=(
+            "application/vnd.openxmlformats-officedocument"
+            ".wordprocessingml.document"
+        ),
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+# ---------------------------------------------------------------------------
+# Apply missing data decisions (T003)
+# ---------------------------------------------------------------------------
+
+
+class MissingDecision(BaseModel):
+    column: str = Field(..., min_length=1, max_length=200)
+    action: Literal["drop_rows", "impute_median", "impute_mode", "leave"] = "leave"
+
+
+class ApplyMissingRequest(BaseModel):
+    job_id: str = Field(..., min_length=1, max_length=64)
+    decisions: List[MissingDecision] = Field(default_factory=list, max_length=100)
+
+
+@router.post("/apply-missing-decisions")
+async def apply_missing_decisions(
+    payload: ApplyMissingRequest,
+) -> Dict[str, Any]:
+    entry = dataset_store.get(payload.job_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Dataset expired or not found.")
+    df = entry.df.copy()
+    actions_taken: List[str] = []
+    for dec in payload.decisions:
+        col = dec.column
+        if col not in df.columns:
+            continue
+        if dec.action == "drop_rows":
+            before = len(df)
+            df = df.dropna(subset=[col])
+            after = len(df)
+            actions_taken.append(
+                f"Dropped {before - after} rows with missing {col}."
+            )
+        elif dec.action == "impute_median":
+            med = pd.to_numeric(df[col], errors="coerce").median()
+            if pd.notna(med):
+                df[col] = pd.to_numeric(df[col], errors="coerce").fillna(med)
+                actions_taken.append(
+                    f"Imputed missing {col} with median ({med:.2f})."
+                )
+        elif dec.action == "impute_mode":
+            mode_val = df[col].mode()
+            if not mode_val.empty:
+                df[col] = df[col].fillna(mode_val.iloc[0])
+                actions_taken.append(
+                    f"Imputed missing {col} with mode ({mode_val.iloc[0]})."
+                )
+    if actions_taken:
+        dataset_store.replace_df(payload.job_id, df)
+        entry.meta.pop("classifications", None)
+    return {"status": "applied", "actions": actions_taken, "n_rows": len(df)}
 
 
 @router.post("/analyze")

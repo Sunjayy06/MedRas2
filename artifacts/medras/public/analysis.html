@@ -800,6 +800,107 @@
       </section>
 
       <!-- ===========================================================
+           SCREEN AI-CONFIRM · Study setup confirmation (correlation path)
+           =========================================================== -->
+      <section class="se-screen se-screen-narrow is-hidden" id="screen-ai-confirm" data-testid="screen-ai-confirm">
+        <header class="se-screen-head">
+          <h2>Step 2.5 · Study setup</h2>
+          <p>I've analysed your dataset. Confirm the study type and outcome column below.</p>
+        </header>
+
+        <div class="se-ai-card" id="ai-confirm-card" data-testid="ai-confirm-card">
+          <div class="se-ai-row">
+            <span class="se-ai-label">Study type detected</span>
+            <span class="se-ai-value" id="ai-study-type-display">—</span>
+          </div>
+          <div class="se-ai-row">
+            <span class="se-ai-label">Outcome column</span>
+            <span class="se-ai-value" id="ai-outcome-col-display">—</span>
+          </div>
+          <div class="se-ai-row">
+            <span class="se-ai-label">Reasoning</span>
+            <span class="se-ai-value se-ai-reasoning" id="ai-reasoning-display">—</span>
+          </div>
+          <div class="se-ai-row">
+            <span class="se-ai-label">Source</span>
+            <span class="se-ai-value" id="ai-source-display">—</span>
+          </div>
+        </div>
+
+        <div class="se-ai-edit-panel">
+          <p class="se-hint">Not right? Adjust below and re-confirm.</p>
+          <div class="se-field-row">
+            <label class="se-field">
+              <span>Study type</span>
+              <select id="ai-study-type-select">
+                <option value="correlation">Correlation — find which factors are associated with the outcome</option>
+                <option value="comparison">Comparison — compare groups (RCT, case-control, cohort)</option>
+                <option value="diagnostic">Diagnostic accuracy — sensitivity, specificity, ROC</option>
+                <option value="survival">Survival — time-to-event, Kaplan-Meier</option>
+                <option value="descriptive">Descriptive — prevalence, frequencies, profile</option>
+              </select>
+            </label>
+            <label class="se-field">
+              <span>Outcome column</span>
+              <select id="ai-outcome-col-select">
+                <option value="">— select a column —</option>
+              </select>
+            </label>
+          </div>
+        </div>
+
+        <div id="ai-confirm-status" class="se-status" role="status" aria-live="polite" data-testid="status-ai-confirm"></div>
+
+        <div class="se-actions">
+          <button type="button" class="btn btn-secondary" data-action="back-to-preview-from-ai">&larr; Back</button>
+          <button type="button" class="btn btn-secondary" data-action="ai-confirm-skip-to-variables">Continue to Variables (standard flow) &rarr;</button>
+          <button type="button" class="btn btn-primary is-hidden" id="btn-run-correlation" data-action="ai-confirm-run-correlation">Run Pairwise Analysis &rarr;</button>
+        </div>
+      </section>
+
+      <!-- ===========================================================
+           SCREEN CORR-RESULTS · Correlation analysis results
+           =========================================================== -->
+      <section class="se-screen is-hidden" id="screen-corr-results" data-testid="screen-corr-results">
+        <header class="se-screen-head">
+          <h2>Correlation Analysis Results</h2>
+          <p>Pairwise association of each predictor with <strong id="corr-outcome-label">the outcome</strong>. <span id="corr-n-vars"></span></p>
+        </header>
+
+        <div id="corr-results-status" class="se-status" role="status" aria-live="polite"></div>
+        <div id="corr-results-body" data-testid="corr-results-body">
+          <!-- Per-variable accordion sections filled by JS -->
+        </div>
+
+        <!-- Summary table -->
+        <div id="corr-summary-section" class="is-hidden">
+          <h3 class="se-section-label" style="margin-top:2rem">SUMMARY TABLE — sorted by p-value</h3>
+          <div class="se-table-wrap">
+            <table class="se-table" id="corr-summary-table">
+              <thead>
+                <tr>
+                  <th>Variable</th>
+                  <th>Test used</th>
+                  <th>Statistic</th>
+                  <th>p-value</th>
+                  <th>Significant?</th>
+                </tr>
+              </thead>
+              <tbody id="corr-summary-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="se-actions" style="margin-top:2rem">
+          <button type="button" class="btn btn-secondary" data-action="back-to-ai-confirm">&larr; Back to Setup</button>
+          <button type="button" class="btn btn-primary" id="btn-export-corr-chapter" data-action="export-corr-chapter">
+            Download Thesis Chapter (.docx)
+          </button>
+        </div>
+        <div id="corr-export-status" class="se-status" role="status" aria-live="polite"></div>
+      </section>
+
+      <!-- ===========================================================
            SCREEN EXPORT · Step 8
            =========================================================== -->
       <section class="se-screen se-screen-narrow is-hidden" id="screen-export" data-testid="screen-export">
@@ -843,6 +944,6 @@
       </div>
     </footer>
 
-    <script src="/js/analysis.js?v=2026050504" defer></script>
+    <script src="/js/analysis.js?v=2026050505" defer></script>
   </body>
 </html>
