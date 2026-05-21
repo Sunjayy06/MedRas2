@@ -1,0 +1,269 @@
+IMPORTANT PRODUCT PRINCIPLE UPDATE
+
+We must ensure MedRAS feels intelligent WITHOUT generating fake or misleading scientific information.
+
+The current dynamic workspace updates look visually good, but now we need to make the system trustworthy and authentic.
+
+Do NOT redesign the UI.
+Keep:
+
+* current cards
+* modals
+* hover interactions
+* animations
+* layout
+* existing structure
+
+Only improve authenticity, transparency, and source labeling.
+
+---
+
+## CORE PRODUCT RULE
+
+MedRAS should NEVER fabricate:
+
+* p-values
+* statistical significance
+* regression outputs
+* odds ratios
+* clinical conclusions
+* publication guarantees
+* acceptance probabilities stated as facts
+
+Instead:
+
+* use demo datasets
+* use estimated matches
+* explain why suggestions are made
+* clearly label simulated/demo content
+
+The system should feel:
+
+* intelligent
+* transparent
+* scientifically responsible
+* trustworthy
+
+---
+
+1. ADD DATA SOURCE BADGES
+
+---
+
+Every modal/card should show where information comes from.
+
+Create small lightweight badges such as:
+
+* Live Dataset
+* Demo Dataset
+* AI Interpretation
+* Verified Metadata
+* Simulated Activity
+
+Examples:
+
+Trend Report:
+[Demo Dataset] [AI Interpretation]
+
+Journal Finder:
+[Verified Metadata]
+
+Analytics:
+[Demo Statistical Output]
+
+Project Tracker:
+[Simulated Activity]
+
+Use subtle styling.
+Do NOT make badges visually loud.
+
+---
+
+2. TREND REPORT AUTHENTICITY
+
+---
+
+Current rotating trend updates should NOT feel randomly invented.
+
+Create a small curated pool of medically realistic demo trends.
+
+Use believable variables:
+
+* HbA1c
+* BMI
+* LDL
+* CRP
+* eGFR
+* Systolic BP
+
+Use medically realistic ranges and interpretations.
+
+Examples:
+
+* “HbA1c increased after Month 3 in demo cohort”
+* “CRP variability reduced post intervention”
+* “BMI decline stronger in female subgroup”
+
+Every insight should clearly indicate:
+“Generated from MedRAS demo dataset”
+
+Add:
+“AI-detected pattern”
+instead of definitive clinical claims.
+
+Do NOT use dramatic medical conclusions.
+
+---
+
+3. JOURNAL FINDER AUTHENTICITY
+
+---
+
+Do NOT display fake acceptance guarantees.
+
+Replace:
+“92% acceptance probability”
+
+With:
+“High methodological match”
+or
+“Strong scope alignment”
+
+Use realistic metadata only:
+
+* indexing
+* impact factor
+* APC estimate
+* review timeline
+
+Use local/static verified journal metadata.
+
+Add:
+“Estimated using journal scope similarity”
+
+If showing warnings:
+Use:
+“Potential indexing concern”
+instead of aggressive claims.
+
+---
+
+4. AI ASSISTANT AUTHENTICITY
+
+---
+
+Every statistical suggestion should include:
+“Why this was suggested”
+
+Examples:
+“Mann–Whitney U test recommended because:
+
+* non-normal distribution detected
+* sample size small”
+
+“Fisher’s Exact test suggested because expected cell counts are low”
+
+This makes the assistant feel evidence-driven.
+
+Avoid generic AI motivational language.
+
+The assistant should sound:
+
+* academic
+* precise
+* calm
+* research-oriented
+
+---
+
+5. ANALYTICS VIEW AUTHENTICITY
+
+---
+
+If there is NO uploaded user dataset:
+Clearly label outputs:
+“Demo statistical output”
+
+Do NOT fabricate:
+
+* exact p-values
+* OR values
+* hazard ratios
+
+Instead use:
+
+* sample/demo APA tables
+* educational outputs
+* simulated analysis labels
+
+If later connected to real datasets:
+these outputs can become real dynamically.
+
+Add:
+“AI interpretation generated from displayed statistical output”
+
+---
+
+6. PROJECT TRACKER
+
+---
+
+Project Tracker updates are acceptable as simulated UI activity.
+
+Examples:
+
+* “12 new entries uploaded”
+* “Cleaning initiated”
+* “Supervisor review pending”
+
+Label subtly:
+[Simulated Workflow Activity]
+
+---
+
+7. GLOBAL TRUST SYSTEM
+
+---
+
+The workspace should always answer:
+“Where did this insight come from?”
+
+Every intelligent insight must have one of:
+
+* demo dataset
+* verified metadata
+* uploaded dataset
+* AI interpretation
+* simulated workflow activity
+
+---
+
+8. VISUAL RULES
+
+---
+
+Keep everything lightweight.
+
+Use:
+
+* subtle badges
+* muted trust labels
+* calm academic tone
+
+Avoid:
+
+* fake “breaking news” style
+* exaggerated claims
+* overconfident AI wording
+* unrealistic medical predictions
+
+---
+
+## FINAL GOAL
+
+The final experience should feel like:
+
+“A scientifically responsible AI-powered medical research operating system”
+
+NOT:
+“A flashy dashboard generating fake medical intelligence”
