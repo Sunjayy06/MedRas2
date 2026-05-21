@@ -368,10 +368,7 @@
       <section id="dashboard-preview" class="dash-section" data-testid="dash-section">
         <header class="dash-head">
           <div>
-            <p class="home-eyebrow">
-              Inside MedRAS
-              <span class="sample-pill" data-testid="badge-sample-dash">Sample preview</span>
-            </p>
+            <p class="home-eyebrow">Inside MedRAS</p>
             <h2 class="home-section-title">Inside your MedRAS workspace</h2>
             <p class="home-section-sub">
               The dashboards, AI tools and panels you live in once your study is up and running.
@@ -388,78 +385,186 @@
         </header>
 
         <div class="dash-rail" data-rail="dash" data-testid="list-dash">
+
+          <!-- Card 1 — Trend report -->
           <article class="dash-card" data-testid="dash-card-1">
-            <div class="dash-mock">
-              <span class="dash-mock-title">Analytics</span>
-              <div class="dash-mock-bars">
-                <span style="height:40%"></span>
-                <span style="height:70%"></span>
-                <span style="height:55%"></span>
-                <span style="height:88%"></span>
-                <span style="height:62%"></span>
-                <span style="height:78%"></span>
+            <div class="dash-mock" style="padding:1rem 1rem 0.5rem;display:flex;flex-direction:column;gap:0.55rem;">
+              <span class="dash-mock-title">Trend report</span>
+              <div style="display:flex;gap:0.4rem;flex-wrap:wrap;margin-bottom:0.1rem;">
+                <span style="font-size:10px;background:#eff6ff;color:#1d4ed8;border-radius:4px;padding:2px 7px;font-weight:600;">Haemoglobin · 2019–2024</span>
+                <span style="font-size:10px;background:#f0fdf4;color:#15803d;border-radius:4px;padding:2px 7px;font-weight:600;">p &lt; 0.001</span>
               </div>
+              <!-- Mini SVG sparkline -->
+              <svg viewBox="0 0 200 60" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:54px;">
+                <polyline points="0,52 40,44 80,38 120,28 160,18 200,10"
+                          fill="none" stroke="#6366f1" stroke-width="2.5" stroke-linejoin="round"/>
+                <polyline points="0,52 40,44 80,38 120,28 160,18 200,10
+                                  200,60 0,60"
+                          fill="url(#trendGrad)" stroke="none"/>
+                <defs>
+                  <linearGradient id="trendGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="#6366f1" stop-opacity="0.18"/>
+                    <stop offset="100%" stop-color="#6366f1" stop-opacity="0"/>
+                  </linearGradient>
+                </defs>
+                <circle cx="200" cy="10" r="3.5" fill="#6366f1"/>
+                <text x="155" y="8" font-size="9" fill="#6366f1" font-weight="600">↑ 14.2 g/dL</text>
+              </svg>
+              <div style="display:flex;justify-content:space-between;font-size:9.5px;color:#94a3b8;margin-top:-4px;">
+                <span>2019</span><span>2020</span><span>2021</span><span>2022</span><span>2023</span><span>2024</span>
+              </div>
+              <p style="font-size:10px;color:#475569;margin:0.25rem 0 0;line-height:1.4;">
+                Mean Hb rose 1.8 g/dL over 5 years (Kendall τ = 0.94). Trend driven by post-COVID iron supplementation protocols.
+              </p>
             </div>
             <div class="dash-card-body">
-              <h3 class="dash-card-name">Analytics view</h3>
-              <p class="dash-card-desc">Sample chart of cohort distributions and statistical test outputs.</p>
+              <h3 class="dash-card-name">Trend report</h3>
+              <p class="dash-card-desc">Longitudinal trend analysis across study cohorts with significance testing — generated automatically from your Sigma results.</p>
             </div>
           </article>
 
+          <!-- Card 2 — Project tracker -->
           <article class="dash-card" data-testid="dash-card-2">
-            <div class="dash-mock">
+            <div class="dash-mock" style="padding:1rem;display:flex;flex-direction:column;gap:0.45rem;">
               <span class="dash-mock-title">Project tracker</span>
-              <div class="dash-mock-rows">
-                <span></span>
-                <span></span>
-                <span></span>
-                <span></span>
+              <div style="display:flex;flex-direction:column;gap:0.38rem;margin-top:0.2rem;">
+                <div style="display:flex;align-items:center;gap:0.5rem;background:#f8fafc;border-radius:6px;padding:0.38rem 0.5rem;">
+                  <span style="width:8px;height:8px;border-radius:50%;background:#22c55e;flex-shrink:0;"></span>
+                  <div style="flex:1;min-width:0;">
+                    <div style="font-size:10px;font-weight:600;color:#1e293b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Effect of metformin on HbA1c — RCT</div>
+                    <div style="font-size:9px;color:#64748b;">Analysis complete · Export ready</div>
+                  </div>
+                  <span style="font-size:9px;color:#15803d;font-weight:600;white-space:nowrap;">Step 8/8</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:0.5rem;background:#f8fafc;border-radius:6px;padding:0.38rem 0.5rem;">
+                  <span style="width:8px;height:8px;border-radius:50%;background:#f59e0b;flex-shrink:0;"></span>
+                  <div style="flex:1;min-width:0;">
+                    <div style="font-size:10px;font-weight:600;color:#1e293b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Maternal anaemia in tribal populations</div>
+                    <div style="font-size:9px;color:#64748b;">Proposal draft · Awaiting IEC approval</div>
+                  </div>
+                  <span style="font-size:9px;color:#b45309;font-weight:600;white-space:nowrap;">Step 6/8</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:0.5rem;background:#f8fafc;border-radius:6px;padding:0.38rem 0.5rem;">
+                  <span style="width:8px;height:8px;border-radius:50%;background:#6366f1;flex-shrink:0;"></span>
+                  <div style="flex:1;min-width:0;">
+                    <div style="font-size:10px;font-weight:600;color:#1e293b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Post-COVID pulmonary function — Cohort</div>
+                    <div style="font-size:9px;color:#64748b;">References verified · Writing in progress</div>
+                  </div>
+                  <span style="font-size:9px;color:#4f46e5;font-weight:600;white-space:nowrap;">Step 4/9</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:0.5rem;background:#f8fafc;border-radius:6px;padding:0.38rem 0.5rem;">
+                  <span style="width:8px;height:8px;border-radius:50%;background:#e2e8f0;flex-shrink:0;"></span>
+                  <div style="flex:1;min-width:0;">
+                    <div style="font-size:10px;font-weight:600;color:#94a3b8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Thyroid dysfunction in PCOS — planned</div>
+                    <div style="font-size:9px;color:#94a3b8;">Not started</div>
+                  </div>
+                  <span style="font-size:9px;color:#94a3b8;font-weight:600;white-space:nowrap;">Step 0/8</span>
+                </div>
               </div>
             </div>
             <div class="dash-card-body">
               <h3 class="dash-card-name">Project tracker</h3>
-              <p class="dash-card-desc">Sample list of active studies with status, milestones and the next action for each.</p>
+              <p class="dash-card-desc">All your active studies in one view — current module step, milestone status, and what needs attention next.</p>
             </div>
           </article>
 
+          <!-- Card 3 — AI assistant -->
           <article class="dash-card" data-testid="dash-card-3">
-            <div class="dash-mock">
+            <div class="dash-mock" style="padding:1rem;display:flex;flex-direction:column;gap:0.45rem;">
               <span class="dash-mock-title">AI assistant</span>
-              <span class="dash-mock-bubble is-user">Sample question to the assistant</span>
-              <span class="dash-mock-bubble">Sample reply with a structured methodology suggestion.</span>
+              <div style="display:flex;flex-direction:column;gap:0.4rem;margin-top:0.15rem;">
+                <div style="align-self:flex-end;background:#6366f1;color:#fff;border-radius:10px 10px 3px 10px;padding:0.4rem 0.65rem;font-size:10px;max-width:82%;line-height:1.4;">
+                  Which test should I use for two unpaired non-normal groups with n=28?
+                </div>
+                <div style="align-self:flex-start;background:#f1f5f9;color:#1e293b;border-radius:10px 10px 10px 3px;padding:0.4rem 0.65rem;font-size:10px;max-width:88%;line-height:1.4;">
+                  Use the <strong>Mann-Whitney U test</strong> (Wilcoxon rank-sum). With n=28 per group and non-normal distribution confirmed by Shapiro-Wilk (p&lt;0.05), a parametric t-test would be inappropriate. MedRAS Sigma will run this automatically.
+                </div>
+                <div style="align-self:flex-end;background:#6366f1;color:#fff;border-radius:10px 10px 3px 10px;padding:0.4rem 0.65rem;font-size:10px;max-width:82%;line-height:1.4;">
+                  How do I report the effect size for this?
+                </div>
+                <div style="align-self:flex-start;background:#f1f5f9;color:#1e293b;border-radius:10px 10px 10px 3px;padding:0.4rem 0.65rem;font-size:10px;max-width:88%;line-height:1.4;">
+                  Report <strong>r = Z / √N</strong> (rank-biserial correlation). Values: small ≥0.1, medium ≥0.3, large ≥0.5. Sigma includes this in the output table automatically.
+                </div>
+              </div>
             </div>
             <div class="dash-card-body">
               <h3 class="dash-card-name">AI assistant</h3>
-              <p class="dash-card-desc">Sample conversation with the planning assistant. Numbers always come from validated libraries.</p>
+              <p class="dash-card-desc">Ask methodology, statistics, or writing questions in plain language. Guidance is always grounded — AI never fabricates numbers or tests.</p>
             </div>
           </article>
 
+          <!-- Card 4 — Journal finder -->
           <article class="dash-card" data-testid="dash-card-4">
-            <div class="dash-mock">
+            <div class="dash-mock" style="padding:1rem;display:flex;flex-direction:column;gap:0.45rem;">
               <span class="dash-mock-title">Journal finder</span>
-              <div class="dash-mock-search">🔎 Sample query: cardiology RCT, q1 2026</div>
-              <div>
-                <span class="dash-mock-tag">Sample journal A</span>
-                <span class="dash-mock-tag">Sample journal B</span>
-                <span class="dash-mock-tag">Sample journal C</span>
+              <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:0.35rem 0.6rem;font-size:10px;color:#64748b;margin-bottom:0.1rem;">
+                🔎 Prospective RCT · Cardiology · India · Open access preferred
+              </div>
+              <div style="display:flex;flex-direction:column;gap:0.3rem;">
+                <div style="display:flex;align-items:center;justify-content:space-between;background:#f0fdf4;border-radius:6px;padding:0.35rem 0.55rem;">
+                  <div>
+                    <div style="font-size:10px;font-weight:700;color:#15803d;">Indian Heart Journal</div>
+                    <div style="font-size:9px;color:#64748b;">Elsevier · IF 1.6 · MEDLINE indexed</div>
+                  </div>
+                  <span style="font-size:9px;font-weight:700;color:#15803d;background:#dcfce7;border-radius:4px;padding:2px 6px;">96% match</span>
+                </div>
+                <div style="display:flex;align-items:center;justify-content:space-between;background:#f8fafc;border-radius:6px;padding:0.35rem 0.55rem;">
+                  <div>
+                    <div style="font-size:10px;font-weight:700;color:#1e293b;">BMC Cardiovascular Disorders</div>
+                    <div style="font-size:9px;color:#64748b;">Springer · IF 2.3 · Open access</div>
+                  </div>
+                  <span style="font-size:9px;font-weight:700;color:#4f46e5;background:#ede9fe;border-radius:4px;padding:2px 6px;">88% match</span>
+                </div>
+                <div style="display:flex;align-items:center;justify-content:space-between;background:#f8fafc;border-radius:6px;padding:0.35rem 0.55rem;">
+                  <div>
+                    <div style="font-size:10px;font-weight:700;color:#1e293b;">Journal of Cardiology</div>
+                    <div style="font-size:9px;color:#64748b;">Elsevier · IF 3.1 · Subscription</div>
+                  </div>
+                  <span style="font-size:9px;font-weight:700;color:#b45309;background:#fef3c7;border-radius:4px;padding:2px 6px;">74% match</span>
+                </div>
               </div>
             </div>
             <div class="dash-card-body">
               <h3 class="dash-card-name">Journal finder</h3>
-              <p class="dash-card-desc">Sample target-journal suggestions ranked by scope match and impact factor.</p>
+              <p class="dash-card-desc">Target journals ranked by scope match, impact factor, and open-access preference — pulled from your study type and topic automatically.</p>
             </div>
           </article>
 
+          <!-- Card 5 — Analytics view (Sigma output) -->
           <article class="dash-card" data-testid="dash-card-5">
-            <div class="dash-mock">
-              <span class="dash-mock-title">Trend report</span>
-              <div class="dash-mock-line"></div>
+            <div class="dash-mock" style="padding:1rem 1rem 0.5rem;display:flex;flex-direction:column;gap:0.45rem;">
+              <span class="dash-mock-title">Analytics · Sigma output</span>
+              <div style="font-size:9.5px;color:#64748b;margin:-0.1rem 0 0.2rem;">Haemoglobin (g/dL) — Group A vs Group B · Mann-Whitney U</div>
+              <!-- Bar chart -->
+              <div style="display:flex;align-items:flex-end;gap:0.35rem;height:52px;">
+                <div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex:1;">
+                  <span style="font-size:8.5px;color:#1e293b;font-weight:600;">11.2</span>
+                  <div style="width:100%;background:#6366f1;border-radius:3px 3px 0 0;height:38px;"></div>
+                  <span style="font-size:8.5px;color:#64748b;">Group A</span>
+                </div>
+                <div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex:1;">
+                  <span style="font-size:8.5px;color:#1e293b;font-weight:600;">13.7</span>
+                  <div style="width:100%;background:#22c55e;border-radius:3px 3px 0 0;height:52px;"></div>
+                  <span style="font-size:8.5px;color:#64748b;">Group B</span>
+                </div>
+                <div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex:1;">
+                  <span style="font-size:8.5px;color:#1e293b;font-weight:600;">12.4</span>
+                  <div style="width:100%;background:#94a3b8;border-radius:3px 3px 0 0;height:44px;"></div>
+                  <span style="font-size:8.5px;color:#64748b;">Control</span>
+                </div>
+              </div>
+              <div style="display:flex;gap:0.4rem;flex-wrap:wrap;margin-top:0.1rem;">
+                <span style="font-size:9px;background:#eff6ff;color:#1d4ed8;border-radius:4px;padding:2px 6px;font-weight:600;">U = 312, p = 0.003</span>
+                <span style="font-size:9px;background:#f0fdf4;color:#15803d;border-radius:4px;padding:2px 6px;font-weight:600;">r = 0.41 (medium)</span>
+                <span style="font-size:9px;background:#fef3c7;color:#92400e;border-radius:4px;padding:2px 6px;font-weight:600;">Shapiro-Wilk passed</span>
+              </div>
             </div>
             <div class="dash-card-body">
-              <h3 class="dash-card-name">Trend report</h3>
-              <p class="dash-card-desc">Sample longitudinal trend visualisation across study cohorts.</p>
+              <h3 class="dash-card-name">Analytics view</h3>
+              <p class="dash-card-desc">Normality-aware statistical tests with effect sizes, significance badges, and auto-generated result narratives — ready to paste into your manuscript.</p>
             </div>
           </article>
+
         </div>
       </section>
 
