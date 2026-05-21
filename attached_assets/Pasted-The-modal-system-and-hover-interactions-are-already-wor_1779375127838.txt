@@ -1,0 +1,250 @@
+The modal system and hover interactions are already working very well. Do NOT redesign or rebuild the current structure.
+
+Keep:
+
+* the hover overlay
+* “Explore →” interaction
+* the full-screen modal layout
+* left dark visualization panel
+* right white information panel
+* current animations and responsiveness
+* current accessibility behavior
+
+Only UPGRADE the intelligence, realism, and research depth of the content inside each modal and card.
+
+IMPORTANT:
+
+* Keep edits lightweight and efficient
+* Avoid huge generated datasets
+* Avoid unnecessary animations
+* Avoid large libraries
+* Do not change routing or architecture
+* Preserve current CSS structure as much as possible
+
+The goal is:
+The workspace should feel like a REAL medical research operating system actively helping researchers.
+
+---
+
+## GLOBAL IMPROVEMENTS ACROSS ALL MODALS
+
+Add subtle “alive” behaviors:
+
+* “Updated 2 mins ago”
+* “AI analyzed”
+* live status dots
+* small activity indicators
+* tiny system insights
+
+Make the UI feel:
+
+* intelligent
+* clinically realistic
+* publication-oriented
+* active and evolving
+
+Avoid generic placeholder text.
+
+---
+
+1. TREND REPORT MODAL
+
+---
+
+Current sparkline and graph are good.
+
+Enhance the left visualization panel with:
+
+* AI-generated interpretation box
+* trend severity indicator
+* subgroup comparison snippet
+* anomaly detection badge
+
+Examples:
+
+* “HbA1c rose significantly after Month 3”
+* “Treatment response weaker in age >50 subgroup”
+* “Unexpected variance spike detected”
+
+Add a compact section:
+“Trending in Research”
+with 3 realistic current-style trends:
+
+* GLP-1 obesity trials increasing
+* AI ECG interpretation studies rising
+* Continuous glucose monitoring publications accelerating
+
+Add a tiny “Detected automatically by MedRAS AI” label.
+
+On the right panel:
+Add:
+
+* “Use in publication-ready trend reporting”
+* “Supports longitudinal and repeated-measure datasets”
+
+---
+
+2. JOURNAL FINDER MODAL
+
+---
+
+Keep current ranked journal cards.
+
+Enhance them with:
+
+* acceptance probability
+* median review time
+* indexing badges (Scopus/PubMed)
+* APC fee estimate
+* open access badge if relevant
+
+Add expandable:
+“Why this journal matches your study”
+
+Example:
+
+* cohort design detected
+* logistic regression used
+* diabetes outcome focus matched
+
+Add warning badges for weak journals:
+
+* “Potential indexing concern”
+* “Low citation reliability”
+
+Add:
+“Recently published similar article”
+under top-ranked journal.
+
+Make it feel like publication intelligence, not a static list.
+
+---
+
+3. AI ASSISTANT MODAL
+
+---
+
+This should feel like a real research statistician.
+
+Improve conversation examples with:
+
+* context-aware statistical guidance
+* reviewer-style concerns
+* proactive warnings
+
+Examples:
+
+* “Expected cell count is low. Fisher’s Exact test recommended.”
+* “Current subgroup analysis may be underpowered.”
+* “Normality assumption violated in outcome variable.”
+
+Add:
+
+* “Explain Simply” mini toggle text
+* “Advanced statistical explanation”
+* “Reviewer concern detected”
+
+Add tiny typing indicators and timestamps.
+
+The assistant should feel:
+
+* academically intelligent
+* calm
+* publication-focused
+
+---
+
+4. PROJECT TRACKER MODAL
+
+---
+
+IMPORTANT:
+Do NOT redesign current tracker layout.
+The current structure already works well.
+
+Only enrich it.
+
+Add:
+
+* projected completion percentage
+* enrollment target vs achieved
+* expected submission date
+* AI risk indicator
+
+Examples:
+
+* “Enrollment pace below projected timeline”
+* “High risk of delayed analysis phase”
+* “12 new records uploaded today”
+
+Add a compact milestone timeline:
+
+* Ethics approval ✅
+* Data collection 🔄
+* Cleaning pending ⏳
+* Analysis queued ⏳
+
+Add:
+“Supervisor comments pending”
+or
+“Awaiting statistical review”
+
+This section should feel like a thesis command center.
+
+---
+
+5. ANALYTICS MODAL
+
+---
+
+Current APA-style results table is good.
+
+Enhance with:
+
+* confidence interval display
+* effect size interpretation
+* assumption validation badges
+* model quality indicators
+
+Examples:
+
+* “Normality assumption violated”
+* “Large effect size detected”
+* “Model fit acceptable”
+
+Add:
+“Suggested next analysis”
+Examples:
+
+* logistic regression
+* subgroup analysis
+* ROC analysis
+
+Add an AI interpretation panel:
+Example:
+“Treatment A demonstrated a clinically meaningful reduction in pain score compared to control.”
+
+Make this feel more advanced than SPSS output.
+
+---
+
+## VISUAL ENHANCEMENTS
+
+Add ONLY subtle premium touches:
+
+* soft glow on active cards
+* tiny pulsing live indicators
+* gentle hover transitions
+* subtle blur overlays
+* clean status chips
+
+DO NOT:
+
+* add heavy animations
+* change layout architecture
+* introduce large JS frameworks
+* slow down page performance
+
+The final experience should feel like:
+“Apple-level medical research intelligence UI”
+rather than a generic analytics dashboard.
