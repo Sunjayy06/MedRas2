@@ -448,9 +448,11 @@
     }
     el.appendChild(meta);
 
-    /* 6 — Sources */
+    /* 6 — Sources + citation export */
     if (d.papers && d.papers.length) {
       el.appendChild(buildSources(d.papers, d.sources_searched || []));
+      const exportRow = buildExportRow(d.papers);
+      if (exportRow) el.appendChild(exportRow);
     }
 
     /* 7 — Follow-up chips */
@@ -698,5 +700,162 @@
   }
 
   function scrollEnd() { raWrap.scrollTop = raWrap.scrollHeight; }
+
+  /* ══════════════════════════════════════════════════════════════════
+     CITATION EXPORT  (Phase 4 — all formats generated client-side)
+  ══════════════════════════════════════════════════════════════════ */
+
+  function buildExportRow(papers) {
+    /* Only include papers with a real title; skip uploaded-only papers for
+       BibTeX/RIS as they have no bibliographic metadata. */
+    const exportable = (papers || []).filter((p) => p.title && p.title.length > 3);
+    if (exportable.length < 1) return null;
+
+    const n    = exportable.length;
+    const row  = mk('div', 'export-row');
+    const lbl  = mk('span', 'export-label');
+    lbl.textContent = `Export ${n} citation${n !== 1 ? 's' : ''} as:`;
+    row.appendChild(lbl);
+
+    /* Format buttons */
+    [
+      { label:'BibTeX',     ext:'.bib', fn: _toBibtex    },
+      { label:'RIS',        ext:'.ris', fn: _toRis       },
+      { label:'Vancouver',  ext:'.txt', fn: _toVancouver },
+      { label:'Plain text', ext:'.txt', fn: _toPlainText },
+    ].forEach(({ label, ext, fn }) => {
+      const btn = mk('button', 'export-chip');
+      btn.textContent = label;
+      btn.addEventListener('click', () =>
+        _dlText(`medras-citations${ext}`, fn(exportable))
+      );
+      row.appendChild(btn);
+    });
+
+    /* Copy-Vancouver shortcut */
+    const copyBtn = mk('button', 'export-chip export-copy');
+    copyBtn.textContent = 'Copy Vancouver';
+    copyBtn.addEventListener('click', () => {
+      navigator.clipboard.writeText(_toVancouver(exportable))
+        .then(() => {
+          copyBtn.textContent = 'Copied \u2713';
+          setTimeout(() => { copyBtn.textContent = 'Copy Vancouver'; }, 2000);
+        })
+        .catch(() => {
+          /* clipboard blocked — fall back to download */
+          _dlText('medras-citations.txt', _toVancouver(exportable));
+        });
+    });
+    row.appendChild(copyBtn);
+
+    return row;
+  }
+
+  /* ── Format generators ── */
+
+  function _extractDoi(url) {
+    if (!url) return '';
+    const m = url.match(/doi\.org\/(.+)$/i);
+    return m ? decodeURIComponent(m[1]).trim() : '';
+  }
+
+  function _bibtexKey(p, idx) {
+    const last = (p.authors && p.authors[0])
+      ? p.authors[0].trim().split(/\s+/).pop().toLowerCase().replace(/[^a-z]/g, '')
+      : `ref${idx}`;
+    const yr   = p.year || 'nd';
+    const kw   = (p.title || '').toLowerCase()
+      .split(/\s+/)
+      .find((w) => w.length > 3 && !/^(the|and|for|with|from|that|this)$/.test(w))
+      || 'paper';
+    return `${last}${yr}${kw.replace(/[^a-z]/g, '').substring(0, 8)}`;
+  }
+
+  function _toBibtex(papers) {
+    return papers.map((p, i) => {
+      const doi     = _extractDoi(p.url);
+      const authors = (p.authors || []).join(' and ') || 'Unknown';
+      const key     = _bibtexKey(p, i + 1);
+      const lines   = [
+        `@article{${key},`,
+        `  author  = {${authors}},`,
+        `  title   = {${(p.title || '').replace(/[{}]/g, '')}},`,
+        `  journal = {${p.journal || ''}},`,
+        `  year    = {${p.year || ''}},`,
+      ];
+      if (doi)   lines.push(`  doi     = {${doi}},`);
+      if (p.url) lines.push(`  url     = {${p.url}},`);
+      lines.push('}');
+      return lines.join('\n');
+    }).join('\n\n');
+  }
+
+  function _toRis(papers) {
+    return papers.map((p) => {
+      const doi   = _extractDoi(p.url);
+      const lines = ['TY  - JOUR'];
+      (p.authors || []).forEach((a) => lines.push(`AU  - ${a}`));
+      lines.push(`TI  - ${p.title || ''}`);
+      if (p.journal) lines.push(`JO  - ${p.journal}`);
+      if (p.year)    lines.push(`PY  - ${p.year}`);
+      if (doi)       lines.push(`DO  - ${doi}`);
+      if (p.url)     lines.push(`UR  - ${p.url}`);
+      lines.push('ER  -');
+      return lines.join('\n');
+    }).join('\n\n');
+  }
+
+  function _fmtVancouverAuthors(authors) {
+    if (!authors || !authors.length) return '';
+    const fmt = authors.slice(0, 6).map((a) => {
+      const parts    = a.trim().split(/\s+/);
+      if (parts.length < 2) return a;
+      const last     = parts[parts.length - 1];
+      const initials = parts.slice(0, -1).map((n) => n[0].toUpperCase()).join('');
+      return `${last} ${initials}`;
+    });
+    if (authors.length > 6) fmt.push('et al');
+    return fmt.join(', ') + '.';
+  }
+
+  function _toVancouver(papers) {
+    return papers.map((p, i) => {
+      const auth = _fmtVancouverAuthors(p.authors || []);
+      const doi  = _extractDoi(p.url);
+      let   ref  = `${i + 1}. ${auth}${auth ? ' ' : ''}${p.title || 'Untitled'}.`;
+      if (p.journal) ref += ` ${p.journal}.`;
+      if (p.year)    ref += ` ${p.year}.`;
+      if (doi)       ref += ` doi: ${doi}`;
+      else if (p.url) ref += ` Available from: ${p.url}`;
+      return ref.trim();
+    }).join('\n');
+  }
+
+  function _toPlainText(papers) {
+    return papers.map((p, i) => {
+      const auth = (p.authors || []).slice(0, 3).join(', ')
+        + (p.authors && p.authors.length > 3 ? ' et al.' : '');
+      const doi  = _extractDoi(p.url);
+      let   ref  = `[${i + 1}] ${p.title || 'Untitled'}`;
+      if (auth)      ref += `. ${auth}`;
+      if (p.journal) ref += `. ${p.journal}`;
+      if (p.year)    ref += ` (${p.year})`;
+      if (doi)       ref += `. doi: ${doi}`;
+      else if (p.url) ref += `. ${p.url}`;
+      return ref;
+    }).join('\n\n');
+  }
+
+  function _dlText(filename, content) {
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
 
 })();

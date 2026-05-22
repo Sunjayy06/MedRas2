@@ -817,6 +817,44 @@ mark.stat-hl {
   color: #fff;
 }
 
+/* ── Citation export row ─────────────────────────── */
+.export-row {
+  display: flex;
+  align-items: center;
+  gap: .32rem;
+  flex-wrap: wrap;
+  padding: .45rem 0 .1rem;
+  border-top: 1px solid rgba(255,255,255,.04);
+}
+.export-label {
+  font-size: .67rem;
+  color: var(--muted2);
+  margin-right: .15rem;
+  white-space: nowrap;
+}
+.export-chip {
+  background: rgba(255,255,255,.04);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: .2rem .65rem;
+  font-size: .7rem;
+  font-weight: 500;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background .13s, color .13s, border-color .13s;
+  white-space: nowrap;
+}
+.export-chip:hover {
+  background: rgba(255,255,255,.08);
+  color: var(--text);
+  border-color: rgba(255,255,255,.2);
+}
+.export-copy {
+  border-color: rgba(8,145,178,.22);
+  color: var(--teal-lt);
+}
+.export-copy:hover { background: var(--teal-dim); color: #fff; }
+
 /* ── Animations ──────────────────────────────────── */
 .fade-in { animation: fi .22s ease; }
 @keyframes fi { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
