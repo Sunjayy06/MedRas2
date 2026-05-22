@@ -57,7 +57,7 @@ def get_or_create(session_id: Optional[str]) -> tuple[str, list[dict]]:
             sess["last_active"] = now
             return session_id, list(sess["turns"][-_HISTORY_FOR_CONTEXT:])
         new_id = str(uuid.uuid4())
-        _sessions[new_id] = {"turns": [], "last_active": now}
+        _sessions[new_id] = {"turns": [], "uploaded_papers": [], "last_active": now}
         log.debug("New session %s created", new_id)
         return new_id, []
 
@@ -74,3 +74,27 @@ def add_turn(session_id: str, question: str, answer_summary: str) -> None:
         if len(sess["turns"]) > _MAX_TURNS:
             sess["turns"] = sess["turns"][-_MAX_TURNS:]
         sess["last_active"] = time.time()
+
+
+def add_uploaded_paper(session_id: str, paper: dict) -> int:
+    """Store an uploaded paper in the session.
+
+    Returns the 1-based index of the paper within this session.
+    """
+    with _lock:
+        if session_id not in _sessions:
+            return 0
+        sess = _sessions[session_id]
+        if "uploaded_papers" not in sess:
+            sess["uploaded_papers"] = []
+        sess["uploaded_papers"].append(paper)
+        sess["last_active"] = time.time()
+        return len(sess["uploaded_papers"])
+
+
+def get_uploaded_papers(session_id: str) -> list[dict]:
+    """Return all uploaded papers stored in the session."""
+    with _lock:
+        if session_id not in _sessions:
+            return []
+        return list(_sessions[session_id].get("uploaded_papers", []))

@@ -140,6 +140,8 @@ advice like "consult a specialist". They should be the natural next research \
 question a curious clinician would ask.
 5. Keep summary to 2–3 sentences maximum.
 6. Use plain, precise academic English.
+7. Sources labelled "researcher-uploaded document" are papers the researcher \
+has directly provided — treat them as primary evidence and cite them where relevant.
 
 === BEGIN DISTILLED EVIDENCE ===
 {evidence}
@@ -174,10 +176,15 @@ def _evidence_block(papers: list[dict], distilled: dict[int, list[str]]) -> str:
         ev_type  = p.get("evidence_type", "")
         excerpts = distilled.get(i, [])
 
+        ev_label = (
+            "researcher-uploaded document"
+            if ev_type == "uploaded"
+            else (ev_type or "unknown")
+        )
         header = (
             f"[{i}] {authors}. \"{p.get('title', 'Untitled')}\". "
             f"{journal} ({year}). URL: {url}. "
-            f"Study type: {ev_type}."
+            f"Study type: {ev_label}."
         )
         if excerpts:
             excerpt_text = " | ".join(excerpts)

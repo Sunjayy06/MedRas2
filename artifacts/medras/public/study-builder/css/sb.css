@@ -309,9 +309,10 @@ body {
   border-radius: 20px;
   letter-spacing: .04em;
 }
-.tag-method { background: rgba(8,145,178,.16); color: var(--teal-lt); }
-.tag-count  { background: rgba(255,255,255,.06); color: var(--muted); }
-.tag-oa     { background: rgba(34,197,94,.12); color: #86efac; }
+.tag-method    { background: rgba(8,145,178,.16);  color: var(--teal-lt); }
+.tag-count     { background: rgba(255,255,255,.06); color: var(--muted); }
+.tag-oa        { background: rgba(34,197,94,.12);   color: #86efac; }
+.tag-uploaded  { background: rgba(139,92,246,.14);  color: #c4b5fd; }
 
 /* sources section */
 .sources-section { display: flex; flex-direction: column; gap: .5rem; }
@@ -343,6 +344,11 @@ body {
   padding: 1px 7px;
   color: var(--muted2);
 }
+.src-db-pill.pill-uploaded {
+  background: rgba(8,145,178,.12);
+  border-color: rgba(8,145,178,.28);
+  color: var(--teal-lt);
+}
 
 .src-cards {
   display: none;
@@ -361,6 +367,15 @@ body {
   gap: .2rem;
 }
 .sc-num { font-size: .65rem; color: rgba(8,145,178,.6); font-weight: 700; }
+.src-card-uploaded {
+  border-color: rgba(8,145,178,.28);
+  background: rgba(8,145,178,.05);
+}
+.ev-upload-note {
+  font-size: .68rem;
+  opacity: .7;
+  margin-left: .25rem;
+}
 .sc-title { font-size: .78rem; font-weight: 600; color: var(--text); text-decoration: none; line-height: 1.4; display: block; }
 .sc-title:hover { color: var(--teal-lt); }
 .sc-title-plain { font-size: .78rem; font-weight: 600; color: var(--text); line-height: 1.4; }
@@ -498,6 +513,133 @@ body {
   white-space: nowrap;
 }
 .new-chat-btn:hover { color: var(--text); border-color: rgba(255,255,255,.18); }
+
+/* ── Attach button ───────────────────────────────── */
+.attach-btn {
+  background: none;
+  border: none;
+  border-radius: 7px;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted2);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: color .14s, background .14s;
+}
+.attach-btn:hover {
+  color: var(--teal-lt);
+  background: var(--teal-dim);
+}
+.attach-btn.has-papers {
+  color: var(--teal-lt);
+}
+
+/* ── Attached papers bar ─────────────────────────── */
+.attached-papers-bar {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  padding: .32rem .85rem;
+  background: rgba(8,145,178,.08);
+  border: 1px solid rgba(8,145,178,.2);
+  border-radius: 8px;
+  margin-bottom: .4rem;
+  font-size: .72rem;
+  color: var(--teal-lt);
+}
+.attached-papers-bar svg { flex-shrink: 0; opacity: .7; }
+#attached-papers-label { font-weight: 700; }
+.ap-note { color: var(--muted2); font-weight: 400; }
+
+/* ── Upload progress pill (in thread) ───────────── */
+.upload-pill {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  padding: .7rem 1rem;
+  background: rgba(255,255,255,.04);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  max-width: 480px;
+}
+.up-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(8,145,178,.25);
+  border-top-color: var(--teal-lt);
+  border-radius: 50%;
+  animation: spin .75s linear infinite;
+  flex-shrink: 0;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.up-text {
+  font-size: .82rem;
+  color: var(--muted);
+}
+.up-text strong { color: var(--text); font-weight: 600; }
+
+/* ── Paper pill (in thread after upload) ─────────── */
+.paper-pill {
+  display: flex;
+  align-items: center;
+  gap: .85rem;
+  padding: .75rem 1rem;
+  background: rgba(8,145,178,.07);
+  border: 1px solid rgba(8,145,178,.22);
+  border-radius: 12px;
+  max-width: 520px;
+}
+.pp-icon {
+  font-size: 1.4rem;
+  flex-shrink: 0;
+  line-height: 1;
+}
+.pp-body { flex: 1; min-width: 0; }
+.pp-name {
+  font-size: .83rem;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: .18rem;
+}
+.pp-meta {
+  font-size: .72rem;
+  color: var(--muted);
+  line-height: 1.4;
+}
+.pp-badge {
+  font-size: .65rem;
+  font-weight: 800;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: var(--teal-lt);
+  background: var(--teal-dim);
+  border: 1px solid rgba(8,145,178,.28);
+  border-radius: 20px;
+  padding: .22rem .65rem;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.pp-error {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  padding: .55rem .85rem;
+  font-size: .8rem;
+  color: #f87171;
+  background: rgba(248,113,113,.07);
+  border: 1px solid rgba(248,113,113,.2);
+  border-radius: 9px;
+  max-width: 480px;
+}
+
+/* ── Uploaded source card accent ─────────────────── */
+.ev-uploaded { background: rgba(8,145,178,.18); color: #67e8f9; }
 
 /* ── Loading stage indicator ─────────────────────── */
 .loader-wrap {

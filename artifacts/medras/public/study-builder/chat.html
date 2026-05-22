@@ -107,10 +107,26 @@
 <!-- ── Input bar (shown during chat) ── -->
 <div class="chat-bar" id="chat-bar" style="display:none">
   <div class="chat-bar-inner">
+    <!-- Attached papers strip (shown when ≥1 paper uploaded) -->
+    <div class="attached-papers-bar" id="attached-papers-bar" style="display:none">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+      <span id="attached-papers-label">1 paper attached</span>
+      <span class="ap-note">· included in every answer</span>
+    </div>
+
     <div class="chat-input-wrap">
       <textarea class="chat-input" id="chat-input"
         placeholder="Ask a follow-up or a new question…"
         rows="1" autocomplete="off" spellcheck="true"></textarea>
+
+      <!-- Hidden file input -->
+      <input type="file" id="file-input" accept=".pdf,.docx,.txt" style="display:none">
+
+      <!-- Attach button -->
+      <button class="attach-btn" id="attach-btn" title="Attach a paper (PDF, DOCX, or TXT)">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+      </button>
+
       <button class="chat-send" id="chat-send" title="Send (Enter)">
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
       </button>

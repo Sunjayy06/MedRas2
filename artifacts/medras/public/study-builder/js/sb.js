@@ -1,20 +1,24 @@
-/* MedRAS Research Assistant — sb.js  (Phase 2: Conversational UX) */
+/* MedRAS Research Assistant — sb.js  (Phase 3: Paper upload) */
 (function () {
   'use strict';
 
   /* ── DOM ── */
-  const welcome     = document.getElementById('welcome');
-  const thread      = document.getElementById('thread');
-  const chatBar     = document.getElementById('chat-bar');
-  const welcomeInp  = document.getElementById('welcome-input');
-  const welcomeSend = document.getElementById('welcome-send');
-  const chatInp     = document.getElementById('chat-input');
-  const chatSend    = document.getElementById('chat-send');
-  const dbStrip     = document.getElementById('db-strip');
-  const newChatBtn  = document.getElementById('new-chat-btn');
-  const raWrap      = document.getElementById('ra-wrap');
+  const welcome              = document.getElementById('welcome');
+  const thread               = document.getElementById('thread');
+  const chatBar              = document.getElementById('chat-bar');
+  const welcomeInp           = document.getElementById('welcome-input');
+  const welcomeSend          = document.getElementById('welcome-send');
+  const chatInp              = document.getElementById('chat-input');
+  const chatSend             = document.getElementById('chat-send');
+  const dbStrip              = document.getElementById('db-strip');
+  const newChatBtn           = document.getElementById('new-chat-btn');
+  const raWrap               = document.getElementById('ra-wrap');
+  const attachBtn            = document.getElementById('attach-btn');
+  const fileInput            = document.getElementById('file-input');
+  const attachedPapersBar    = document.getElementById('attached-papers-bar');
+  const attachedPapersLabel  = document.getElementById('attached-papers-label');
 
-  /* ── Source / evidence labels ── */
+  /* ── Labels ── */
   const SRC_LABELS = {
     pubmed:'PubMed', cochrane:'Cochrane', europe_pmc:'Europe PMC',
     pmc:'PubMed Central', semantic_scholar:'Semantic Scholar',
@@ -22,10 +26,12 @@
     core:'CORE', medrxiv:'medRxiv', clinicaltrials:'ClinicalTrials.gov',
     doaj:'DOAJ', lens:'Lens.org', ieee:'IEEE Xplore',
     wos:'Web of Science', scopus:'Scopus',
+    uploaded:'Your uploaded paper',
   };
   const EV_LABELS = {
     systematic_review:'Sys. Review', rct:'RCT',
     observational:'Observational', guideline:'Guideline',
+    uploaded:'Uploaded Paper',
   };
   const GRADE_META = {
     HIGH:      { cls:'grade-high',     label:'HIGH EVIDENCE',      icon:'◆' },
@@ -34,10 +40,12 @@
     'VERY LOW':{ cls:'grade-verylow',  label:'VERY LOW EVIDENCE',  icon:'○' },
   };
 
-  /* ── Session state ── */
-  let sessionId = sessionStorage.getItem('sb.session_id') || null;
-  let busy      = false;
-  let inChat    = false;
+  /* ── Session & upload state ── */
+  let sessionId      = sessionStorage.getItem('sb.session_id') || null;
+  let busy           = false;
+  let inChat         = false;
+  let attachedPapers = [];   /* [{filename, wordCount, paperIndex}] */
+  let uploading      = false;
 
   /* ── Statistical highlight regex ── */
   const STAT_RE = /(\bp\s*[<>=≤≥]\s*0\.\d+\b|\bOR\s+[\d.]+\b|\bRR\s+[\d.]+\b|\bHR\s+[\d.]+\b|\bNNT\s+\d+\b|\bARR\s+[\d.]+%?\b|\bRRR\s+[\d.]+%?\b|95\s*%\s*CI[^,;.]{0,30}|\bCIs?\b\s*[\[(][\d., –\-]+[\])]|\bn\s*=\s*[\d,]+\b|\bN\s*=\s*[\d,]+\b|[\d.]+\s*%\s*(?:reduction|increase|improvement|decrease|sensitivity|specificity|accuracy)|\bSMD\s+[\d.]+\b|\bWMD\s+[\d.]+\b|\bMD\s+[\d.]+\b|\baOR\s+[\d.]+\b)/gi;
@@ -55,7 +63,7 @@
     el.style.height = Math.min(el.scrollHeight, 130) + 'px';
   }
   welcomeInp.addEventListener('input', () => autoResize(welcomeInp));
-  chatInp.addEventListener('input', () => autoResize(chatInp));
+  chatInp.addEventListener('input',   () => autoResize(chatInp));
 
   /* ── Keyboard shortcuts ── */
   welcomeInp.addEventListener('keydown', (e) => {
@@ -65,7 +73,7 @@
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitFromChat(); }
   });
   welcomeSend.addEventListener('click', submitFromWelcome);
-  chatSend.addEventListener('click', submitFromChat);
+  chatSend.addEventListener('click',   submitFromChat);
 
   /* ── Topic cards ── */
   document.querySelectorAll('.topic-card').forEach((btn) => {
@@ -75,12 +83,35 @@
     });
   });
 
+  /* ── Attach button ── */
+  attachBtn.addEventListener('click', () => {
+    if (!inChat || !sessionId) {
+      /* No session yet — give a gentle nudge */
+      chatInp.focus();
+      const orig = chatInp.placeholder;
+      chatInp.placeholder = 'Ask a question first to start a session, then attach papers.';
+      setTimeout(() => { chatInp.placeholder = orig; }, 3000);
+      return;
+    }
+    if (uploading) return;
+    fileInput.click();
+  });
+
+  fileInput.addEventListener('change', () => {
+    const file = fileInput.files[0];
+    fileInput.value = '';   /* reset so same file can be re-selected */
+    if (file) uploadPaper(file);
+  });
+
   /* ── New chat ── */
   newChatBtn.addEventListener('click', () => {
     thread.innerHTML = '';
-    sessionId = null;
+    sessionId      = null;
+    attachedPapers = [];
+    uploading      = false;
     sessionStorage.removeItem('sb.session_id');
     sessionStorage.removeItem('medras.nav.returnHint');
+    updateAttachedUI();
     switchToWelcome();
   });
 
@@ -116,7 +147,101 @@
     chatBar.style.display = 'none';
   }
 
-  /* ── Core ask ── */
+  /* ══════════════════════════════════════════════════════════════════
+     PAPER UPLOAD
+  ══════════════════════════════════════════════════════════════════ */
+
+  async function uploadPaper(file) {
+    uploading = true;
+    const progressEl = appendUploadProgress(file.name);
+
+    try {
+      const form = new FormData();
+      form.append('session_id', sessionId);
+      form.append('file', file);
+
+      const res = await fetch('/api/study-builder/upload-paper', {
+        method: 'POST',
+        body:   form,
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || `Upload failed (HTTP ${res.status})`);
+      }
+
+      const data = await res.json();
+
+      /* Replace spinner with success pill */
+      progressEl.remove();
+      appendPaperPill(data.filename, data.word_count, data.paper_index, data.preview);
+
+      attachedPapers.push({
+        filename:   data.filename,
+        wordCount:  data.word_count,
+        paperIndex: data.paper_index,
+      });
+      updateAttachedUI();
+
+    } catch (e) {
+      progressEl.remove();
+      appendPaperError(e.message);
+    } finally {
+      uploading = false;
+    }
+  }
+
+  function appendUploadProgress(filename) {
+    const el = mk('div', 'upload-pill fade-in');
+    el.innerHTML =
+      `<div class="up-spinner"></div>` +
+      `<div class="up-text">Extracting text from <strong>${esc(filename)}</strong>\u2026</div>`;
+    thread.appendChild(el);
+    scrollEnd();
+    return el;
+  }
+
+  function appendPaperPill(filename, wordCount, idx, preview) {
+    const el = mk('div', 'paper-pill fade-in');
+    el.innerHTML =
+      `<div class="pp-icon">&#128196;</div>` +
+      `<div class="pp-body">` +
+        `<div class="pp-name">${esc(filename)}</div>` +
+        `<div class="pp-meta">${Number(wordCount).toLocaleString()} words extracted` +
+          (preview ? ` &middot; &ldquo;${esc(preview.substring(0, 90))}&hellip;&rdquo;` : '') +
+        `</div>` +
+      `</div>` +
+      `<div class="pp-badge">Paper ${idx} attached</div>`;
+    thread.appendChild(el);
+    scrollEnd();
+    return el;
+  }
+
+  function appendPaperError(msg) {
+    const el = mk('div', 'pp-error fade-in');
+    el.innerHTML = `&#9888; ${esc(msg)}`;
+    thread.appendChild(el);
+    scrollEnd();
+    setTimeout(() => el.remove(), 6000);
+  }
+
+  function updateAttachedUI() {
+    const n = attachedPapers.length;
+    if (n === 0) {
+      attachedPapersBar.style.display = 'none';
+      attachBtn.classList.remove('has-papers');
+    } else {
+      attachedPapersBar.style.display = '';
+      attachedPapersLabel.textContent = `${n} paper${n > 1 ? 's' : ''} attached`;
+      attachBtn.classList.add('has-papers');
+      attachBtn.title = `${n} paper${n > 1 ? 's' : ''} attached — click to add another`;
+    }
+  }
+
+  /* ══════════════════════════════════════════════════════════════════
+     ASK  (unchanged from Phase 2 except session_id is sent)
+  ══════════════════════════════════════════════════════════════════ */
+
   async function ask(question) {
     busy = true;
     setSendState(true);
@@ -125,7 +250,6 @@
     const { aiEl, stageEl } = appendAIPlaceholder();
     scrollEnd();
 
-    /* Stage cycling timer */
     let stageIdx   = 0;
     const stageTmr = setInterval(() => {
       stageIdx = Math.min(stageIdx + 1, STAGES.length - 1);
@@ -136,10 +260,10 @@
       const body = { question };
       if (sessionId) body.session_id = sessionId;
 
-      const res  = await fetch('/api/study-builder/ask', {
-        method: 'POST',
+      const res = await fetch('/api/study-builder/ask', {
+        method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body:    JSON.stringify(body),
       });
       clearInterval(stageTmr);
 
@@ -154,14 +278,14 @@
         sessionId = data.session_id;
         sessionStorage.setItem('sb.session_id', sessionId);
         sessionStorage.setItem('medras.nav.returnHint', JSON.stringify({
-          module: 'helix',
-          label:  'your research question',
+          module: 'helix', label: 'your research question',
           url:    '/study-builder/chat.html',
         }));
       }
 
       await renderAIMessage(aiEl, data);
       updateDbStrip(data.sources_searched || []);
+
     } catch (e) {
       clearInterval(stageTmr);
       aiEl.innerHTML = `<div class="msg-error">&#9888; ${esc(e.message || 'Request failed — please try again.')}</div>`;
@@ -203,7 +327,7 @@
   async function renderAIMessage(el, d) {
     el.innerHTML = '';
 
-    /* 1 ── Evidence grade banner */
+    /* 1 — Evidence grade banner */
     const grade = (d.evidence_grade || 'VERY LOW').toUpperCase();
     const gm    = GRADE_META[grade] || GRADE_META['VERY LOW'];
     const banner = mk('div', `ev-banner ${gm.cls}`);
@@ -211,26 +335,30 @@
       `<span class="ev-icon">${gm.icon}</span>` +
       `<span class="ev-label">${gm.label}</span>` +
       `<span class="ev-expl">${esc(d.evidence_grade_explanation || '')}</span>`;
+    /* If uploaded papers contributed, note it */
+    if ((d.uploaded_count || 0) > 0) {
+      const note = mk('span', 'ev-upload-note');
+      note.textContent =
+        `\u00b7 ${d.uploaded_count} attached paper${d.uploaded_count > 1 ? 's' : ''} included`;
+      banner.appendChild(note);
+    }
     el.appendChild(banner);
 
-    /* 2 ── Summary (typewriter) */
+    /* 2 — Summary (typewriter) */
     const summaryWrap = mk('div', 'msg-ai-body');
     el.appendChild(summaryWrap);
     scrollEnd();
 
-    /* Extract just the summary paragraph (first paragraph of answer) */
-    const answerText  = d.answer || '';
-    const summaryText = extractSummary(answerText);
+    const summaryText = extractSummary(d.answer || '');
     await typewrite(summaryWrap, summaryText, 14);
 
-    /* 3 ── Structured sections (appear after typewriter) */
+    /* 3 — Structured sections */
 
     /* Key findings */
     const findings = d.key_findings || [];
     if (findings.length) {
       const section = mk('div', 'answer-section findings-section');
-      const h = mk('div', 'section-label');
-      h.textContent = 'Key findings';
+      const h = mk('div', 'section-label'); h.textContent = 'Key findings';
       section.appendChild(h);
       const list = mk('ul', 'findings-list');
       findings.forEach((f) => {
@@ -245,8 +373,8 @@
       el.appendChild(section);
     }
 
-    /* What agrees / What is debated — side by side if both exist */
-    const agrees  = d.what_agrees  || '';
+    /* Agrees / debated */
+    const agrees  = d.what_agrees     || '';
     const debated = d.what_is_debated || '';
     if (agrees || debated) {
       const row = mk('div', 'consensus-row');
@@ -275,77 +403,70 @@
         `<div class="contra-head">&#9888;&#xFE0E; Conflicting findings in this evidence</div>`;
       const ul = mk('ul', 'contra-list');
       contras.forEach((c) => {
-        const li = mk('li');
-        li.innerHTML = highlightStats(esc(c));
-        ul.appendChild(li);
+        const li = mk('li'); li.innerHTML = highlightStats(esc(c)); ul.appendChild(li);
       });
       callout.appendChild(ul);
       el.appendChild(callout);
     }
 
     /* Limitations */
-    const limits = d.limitations || '';
-    if (limits) {
+    if (d.limitations) {
       const lim = mk('div', 'limitations-note');
       lim.innerHTML =
-        `<span class="lim-label">Limitations:</span> ${highlightStats(esc(limits))}`;
+        `<span class="lim-label">Limitations:</span> ${highlightStats(esc(d.limitations))}`;
       el.appendChild(lim);
     }
 
-    /* 4 ── Action buttons */
-    const topic = encodeURIComponent((d.answer || '').substring(0, 120));
+    /* 4 — Action buttons */
     const actRow = mk('div', 'action-row');
-    const actions = [
-      { label: 'Take to Proposal Writer', url: '/proposal-module/', icon: '✦', primary: true },
+    [
+      { label: 'Take to Proposal Writer', url: '/proposal-module/',          icon: '✦', primary: true  },
       { label: 'Design a study on this',  url: '/study-builder/design.html', icon: '⊹', primary: false },
-      { label: 'Calculate sample size',   url: '/sample-size.html', icon: '∑', primary: false },
-    ];
-    actions.forEach(({ label, url, icon, primary }) => {
+      { label: 'Calculate sample size',   url: '/sample-size.html',          icon: '\u2211', primary: false },
+    ].forEach(({ label, url, icon, primary }) => {
       const btn = mk('a', `action-btn${primary ? ' action-btn-primary' : ''}`);
       btn.href = url;
       btn.innerHTML = `<span>${icon}</span> ${label}`;
-      /* Proposal handoff via sessionStorage */
       if (url.includes('proposal')) {
         btn.addEventListener('click', () => {
-          try {
-            sessionStorage.setItem('medras.proposal.intake.background_hint', d.answer || '');
-          } catch (_) {}
+          try { sessionStorage.setItem('medras.proposal.intake.background_hint', d.answer || ''); }
+          catch (_) {}
         });
       }
       actRow.appendChild(btn);
     });
     el.appendChild(actRow);
 
-    /* 5 ── Meta row */
+    /* 5 — Meta row */
     const meta = mk('div', 'msg-meta');
     addTag(meta, methodLabel(d.synthesis_method), 'tag-method');
     if (d.total_found > 0) addTag(meta, `${d.total_found} papers found`, 'tag-count');
     const oaCount = (d.papers || []).filter((p) => p.open_access).length;
     if (oaCount > 0) addTag(meta, `${oaCount} open access`, 'tag-oa');
+    if ((d.uploaded_count || 0) > 0) {
+      addTag(meta, `${d.uploaded_count} attached`, 'tag-uploaded');
+    }
     el.appendChild(meta);
 
-    /* 6 ── Sources (collapsible) */
+    /* 6 — Sources */
     if (d.papers && d.papers.length) {
       el.appendChild(buildSources(d.papers, d.sources_searched || []));
     }
 
-    /* 7 ── Follow-up chips (AI-generated) */
+    /* 7 — Follow-up chips */
     const questions = d.suggested_questions || [];
     if (questions.length) {
       const row = mk('div', 'followup-row');
       questions.forEach((q) => {
         const chip = mk('button', 'followup-chip');
         chip.textContent = q;
-        chip.addEventListener('click', () => {
-          chatInp.value = q;
-          submitFromChat();
-        });
+        chip.addEventListener('click', () => { chatInp.value = q; submitFromChat(); });
         row.appendChild(chip);
       });
       el.appendChild(row);
     }
 
-    /* 8 ── Disclaimer */
+    /* 8 — Disclaimer */
     const disc = mk('div', 'disclaimer');
     disc.textContent = d.disclaimer || '';
     el.appendChild(disc);
@@ -353,35 +474,27 @@
     scrollEnd();
   }
 
-  /* ── Typewriter effect ── */
+  /* ── Typewriter ── */
   function typewrite(container, text, msPerChar) {
     return new Promise((resolve) => {
       if (!text) { resolve(); return; }
-      /* Render as HTML then typewrite the visible text character by character */
-      const html   = renderMarkdown(text);
-      const tmp    = document.createElement('div');
+      const html    = renderMarkdown(text);
+      const tmp     = document.createElement('div');
       tmp.innerHTML = html;
-      const full   = tmp.innerHTML;
-
-      /* Strip tags to get char count, then reveal full html at each char boundary */
+      const full    = tmp.innerHTML;
       const plainLen = tmp.textContent.length;
       if (plainLen === 0) { container.innerHTML = full; resolve(); return; }
 
       let charIdx = 0;
-      /* Build a char-indexed reveal by inserting a marker and slicing */
-      const chars  = tmp.textContent;
-
       function step() {
-        charIdx += 2; /* 2 chars per frame for snappy feel */
+        charIdx += 2;
         if (charIdx >= plainLen) {
           container.innerHTML = full;
           highlightStatsDom(container);
           resolve();
           return;
         }
-        /* Reveal partial text — simple approach: show rendered HTML up to char boundary */
-        const partial = buildPartialHTML(tmp, charIdx);
-        container.innerHTML = partial;
+        container.innerHTML = buildPartialHTML(tmp, charIdx);
         scrollEnd();
         setTimeout(step, msPerChar);
       }
@@ -389,7 +502,6 @@
     });
   }
 
-  /* Build partial HTML by walking nodes and cutting at charIdx */
   function buildPartialHTML(root, limit) {
     let remaining = limit;
     function walk(node) {
@@ -401,14 +513,13 @@
       }
       if (node.nodeType !== Node.ELEMENT_NODE) return '';
       const tag   = node.tagName.toLowerCase();
-      let inner   = '';
+      let   inner = '';
       for (const child of node.childNodes) {
         inner += walk(child);
         if (remaining <= 0) break;
       }
       const attrs = Array.from(node.attributes)
-        .map((a) => ` ${a.name}="${a.value}"`)
-        .join('');
+        .map((a) => ` ${a.name}="${a.value}"`).join('');
       return `<${tag}${attrs}>${inner}</${tag}>`;
     }
     let out = '';
@@ -419,39 +530,30 @@
     return out;
   }
 
-  /* Extract the summary (first meaningful paragraph) from the full answer */
   function extractSummary(answerText) {
     const lines = answerText.split('\n');
-    let para = '';
     for (const line of lines) {
       const t = line.trim();
-      if (!t) { if (para) break; continue; }
-      if (t.startsWith('**') && t.endsWith('**')) break; /* section heading */
+      if (!t) continue;
+      if (t.startsWith('**') && t.endsWith('**')) break;
       if (t.startsWith('- ') || t.startsWith('* ')) break;
       if (t.startsWith('[') && t.match(/^\[\d+\]/)) break;
-      para = t;
-      break;
+      return t;
     }
-    return para || answerText.split('\n\n')[0] || answerText.substring(0, 300);
+    return answerText.split('\n\n')[0] || answerText.substring(0, 300);
   }
 
-  /* ── Statistical value highlighter ── */
+  /* ── Statistical highlighter ── */
   function highlightStats(escapedText) {
-    /* Input is already HTML-escaped — apply regex to highlight stat patterns */
-    return escapedText.replace(STAT_RE, (m) =>
-      `<mark class="stat-hl">${m}</mark>`
-    );
+    return escapedText.replace(STAT_RE, (m) => `<mark class="stat-hl">${m}</mark>`);
   }
 
   function highlightStatsDom(container) {
-    /* Walk text nodes and wrap stat patterns */
     const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, null);
     const toReplace = [];
     let node;
     while ((node = walker.nextNode())) {
-      if (STAT_RE.test(node.textContent)) {
-        toReplace.push(node);
-      }
+      if (STAT_RE.test(node.textContent)) toReplace.push(node);
       STAT_RE.lastIndex = 0;
     }
     toReplace.forEach((tn) => {
@@ -468,22 +570,20 @@
     const wrap  = mk('div', 'sources-section');
     const head  = mk('div', 'sources-head');
     const label = mk('span', 'src-toggle-label');
-    label.textContent = `▶ ${papers.length} sources`;
+    label.textContent = `\u25b6 ${papers.length} sources`;
     const pills = mk('div', 'src-db-pills');
     searched.forEach((s) => {
-      const p = mk('span', 'src-db-pill');
+      const p = mk('span', `src-db-pill${s === 'uploaded' ? ' pill-uploaded' : ''}`);
       p.textContent = SRC_LABELS[s] || s;
       pills.appendChild(p);
     });
     head.appendChild(label);
     head.appendChild(pills);
-
     const cards = mk('div', 'src-cards');
     papers.forEach((p, i) => cards.appendChild(buildSourceCard(p, i + 1)));
-
     head.addEventListener('click', () => {
       const open = cards.classList.toggle('open');
-      label.textContent = `${open ? '▼' : '▶'} ${papers.length} sources`;
+      label.textContent = `${open ? '\u25bc' : '\u25b6'} ${papers.length} sources`;
     });
     wrap.appendChild(head);
     wrap.appendChild(cards);
@@ -491,7 +591,7 @@
   }
 
   function buildSourceCard(p, num) {
-    const card = mk('div', 'src-card');
+    const card = mk('div', `src-card${p.source === 'uploaded' ? ' src-card-uploaded' : ''}`);
     card.id = `ref-${num}`;
 
     const n = mk('div', 'sc-num'); n.textContent = `[${num}]`; card.appendChild(n);
@@ -513,9 +613,11 @@
     if (p.open_access) {
       const oa = mk('span', 'oa-tag'); oa.textContent = 'OA'; meta.appendChild(oa);
     }
-    if (p.journal) { const j = mk('span'); j.textContent = p.journal; meta.appendChild(j); }
-    if (p.year)    { const y = mk('span'); y.textContent = p.year;    meta.appendChild(y); }
-    if (p.authors && p.authors.length) {
+    if (p.journal && p.source !== 'uploaded') {
+      const j = mk('span'); j.textContent = p.journal; meta.appendChild(j);
+    }
+    if (p.year) { const y = mk('span'); y.textContent = p.year; meta.appendChild(y); }
+    if (p.authors && p.authors.length && p.source !== 'uploaded') {
       const au = mk('span');
       au.textContent = p.authors.slice(0, 2).join(', ') + (p.authors.length > 2 ? ' et al.' : '');
       meta.appendChild(au);
@@ -533,7 +635,6 @@
   function renderMarkdown(raw) {
     if (!raw) return '';
     let text = esc(raw);
-    /* citations → superscript links */
     text = text.replace(/\[(\d+(?:,\s*\d+)*)\]/g, (_, nums) =>
       nums.split(',').map((n) => {
         const id = n.trim();
@@ -544,19 +645,17 @@
     text = text.replace(/^## (.+)$/gm,  '<h3>$1</h3>');
     text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
     text = text.replace(/\*(.+?)\*/g,     '<em>$1</em>');
-    text = text.replace(/((?:^[-•] .+\n?)+)/gm, (block) => {
+    text = text.replace(/((?:^[-\u2022] .+\n?)+)/gm, (block) => {
       const items = block.trim().split('\n')
-        .map((l) => `<li>${l.replace(/^[-•] /, '')}</li>`).join('');
+        .map((l) => `<li>${l.replace(/^[-\u2022] /, '')}</li>`).join('');
       return `<ul>${items}</ul>`;
     });
-    text = text
-      .split('\n\n')
-      .map((chunk) => {
-        chunk = chunk.trim();
-        if (!chunk) return '';
-        if (/^<(h[234]|ul|ol|div)/.test(chunk)) return chunk;
-        return `<p>${chunk.replace(/\n/g, '<br>')}</p>`;
-      }).join('\n');
+    text = text.split('\n\n').map((chunk) => {
+      chunk = chunk.trim();
+      if (!chunk) return '';
+      if (/^<(h[234]|ul|ol|div)/.test(chunk)) return chunk;
+      return `<p>${chunk.replace(/\n/g, '<br>')}</p>`;
+    }).join('\n');
     return text;
   }
 
@@ -573,8 +672,7 @@
   /* ── Helpers ── */
   function addTag(parent, text, cls) {
     const t = mk('span', `meta-tag ${cls}`);
-    t.textContent = text;
-    parent.appendChild(t);
+    t.textContent = text; parent.appendChild(t);
   }
 
   function methodLabel(m) {
@@ -599,8 +697,6 @@
     return e;
   }
 
-  function scrollEnd() {
-    raWrap.scrollTop = raWrap.scrollHeight;
-  }
+  function scrollEnd() { raWrap.scrollTop = raWrap.scrollHeight; }
 
 })();
