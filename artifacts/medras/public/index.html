@@ -11,8 +11,9 @@
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%237c3aed'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-family='Inter,sans-serif' font-size='18' font-weight='700' fill='white'%3EM%3C/text%3E%3C/svg%3E" />
     <link rel="stylesheet" href="/css/style.css?v=2026050144" />
     <link rel="stylesheet" href="/css/home.css?v=2026050144" />
+    <link rel="stylesheet" href="/css/medras-nav.css" />
   </head>
-  <body class="home">
+  <body class="home" data-medras-module="">
     <header class="site-header" data-testid="site-header">
       <div class="header-inner">
         <a href="/" class="brand" data-testid="link-home">
@@ -82,44 +83,44 @@
 
             <!-- Slide 3 — Proposal Generator -->
             <article class="slide slide--prop" data-testid="slide-prop">
-              <span class="slide-status">Module 04 · Coming soon</span>
-              <span class="slide-pill">Proposal Generator</span>
+              <span class="slide-status">Module 04 · Available</span>
+              <span class="slide-pill">Prologue — Proposal Writer</span>
               <h2 class="slide-keyword">Write your proposal.</h2>
               <p class="slide-tagline">
                 Draft ICMR, ethics committee, and university research proposals
                 directly from your methodology. No template hunting. No blank
                 page.
               </p>
-              <a class="slide-btn is-disabled" href="#" aria-disabled="true"
-                 data-testid="link-slide-prop">Notify me →</a>
+              <a class="slide-btn" href="/proposal-module/"
+                 data-testid="link-slide-prop">Open module →</a>
             </article>
 
             <!-- Slide 4 — Thesis Writer -->
             <article class="slide slide--write" data-testid="slide-write">
-              <span class="slide-status">Module 05 · Coming soon</span>
-              <span class="slide-pill">Thesis &amp; Article Writer</span>
+              <span class="slide-status">Module 05 · Available</span>
+              <span class="slide-pill">Scriptorium — Thesis &amp; Articles</span>
               <h2 class="slide-keyword">Write your paper.</h2>
               <p class="slide-tagline">
-                Compile a structured manuscript with auto-generated tables,
-                validated references, and APA-compliant formatting — ready to
-                submit.
+                Guided 9-station flow for Indian MD / DNB / PhD theses and
+                journal-ready articles — AI-assisted drafting with locked
+                numbers, track changes, and compliance checks.
               </p>
-              <a class="slide-btn is-disabled" href="#" aria-disabled="true"
-                 data-testid="link-slide-write">Notify me →</a>
+              <a class="slide-btn" href="/thesis-module/"
+                 data-testid="link-slide-write">Open module →</a>
             </article>
 
             <!-- Slide 5 — Plagiarism -->
             <article class="slide slide--verify" data-testid="slide-verify">
-              <span class="slide-status">Module 06 · Coming soon</span>
-              <span class="slide-pill">Plagiarism &amp; Compliance</span>
+              <span class="slide-status">Module 06 · Available</span>
+              <span class="slide-pill">Novus — Plagiarism &amp; AI Reduction</span>
               <h2 class="slide-keyword">Verify before you submit.</h2>
               <p class="slide-tagline">
-                Originality scoring, citation verification, and academic
-                integrity checks — aligned with Turnitin, iThenticate, and
+                Originality scoring, AI-likelihood detection, and a 3-stage
+                rewrite pipeline — aligned with Turnitin, iThenticate, and
                 Aarjav standards.
               </p>
-              <a class="slide-btn is-disabled" href="#" aria-disabled="true"
-                 data-testid="link-slide-verify">Notify me →</a>
+              <a class="slide-btn" href="/plagiarism-module/"
+                 data-testid="link-slide-verify">Open module →</a>
             </article>
 
           </div>
@@ -333,7 +334,7 @@
             <span class="life-icon" style="background:#fffbeb;">📝</span>
             <h3 class="life-name">Proposal &amp; approval</h3>
             <p class="life-desc">Draft ICMR and ethics proposals from your methodology automatically.</p>
-            <span class="life-status" data-state="coming-soon">Coming soon</span>
+            <span class="life-status" data-state="available">Available now</span>
           </article>
 
           <article class="life-card" data-testid="life-card-4">
@@ -357,7 +358,7 @@
             <span class="life-icon" style="background:#f0fdfa;">✅</span>
             <h3 class="life-name">Draft &amp; verify</h3>
             <p class="life-desc">Manuscript compiled in APA, then plagiarism and compliance checked before submission.</p>
-            <span class="life-status" data-state="coming-soon">Coming soon</span>
+            <span class="life-status" data-state="available">Available now</span>
           </article>
         </div>
       </section>
@@ -756,6 +757,7 @@
 
     <script src="/js/app.js?v=2026050144" defer></script>
     <script src="/js/home.js?v=2026050144" defer></script>
+    <script src="/js/medras-nav.js" defer></script>
     <script>
     (function () {
       /* ── visual HTML for each card (left panel of modal) ── */
