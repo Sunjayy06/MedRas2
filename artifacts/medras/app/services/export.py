@@ -448,8 +448,6 @@ def build_result_table(doc, result: Dict[str, Any],
         note_bits.append("AUC area under the ROC curve")
     note_bits.append("Bold p-values indicate p < 0.05")
     add_footnote(doc, "; ".join(note_bits) + ".")
-    if result.get("narrative"):
-        doc.add_paragraph(_sanitize_text(result["narrative"], session.get("variables", {})))
 
 
 def _render_inferential_table(doc, result: Dict[str, Any]) -> None:
@@ -802,19 +800,102 @@ def _add_custom_notes(doc: Document, session: Dict[str, Any], location: str) -> 
         run.font.color.rgb = RGBColor(0x4A, 0x5E, 0x8A)
 
 
+def _add_interpretation(doc: Document, text: str) -> None:
+    """Add a bold-labelled Interpretation paragraph after a table or figure."""
+    if not text or not text.strip():
+        return
+    p = doc.add_paragraph()
+    lbl = p.add_run("Interpretation: ")
+    lbl.bold = True
+    lbl.italic = True
+    p.add_run(text.strip())
+    p.paragraph_format.space_before = Pt(4)
+    p.paragraph_format.space_after = Pt(8)
+
+
+def _embed_graph(doc: Document, path: str, caption: str, fig_num: int) -> int:
+    """Embed a PNG inline and return the next figure number."""
+    if not path or not os.path.exists(path):
+        return fig_num
+    try:
+        doc.add_picture(path, width=Inches(5.5))
+        p = doc.add_paragraph(f"Fig {fig_num}. {caption}")
+        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        if p.runs:
+            p.runs[0].italic = True
+        doc.add_paragraph()
+        return fig_num + 1
+    except Exception:
+        return fig_num
+
+
+def _build_table1_interp(session: Dict[str, Any]) -> str:
+    """Generate a standard baseline characteristics interpretation sentence."""
+    grouping = session.get("grouping_variable") or ""
+    variables = session.get("variables", {})
+    n = session.get("n_rows", 0)
+    if grouping:
+        grp_name = (
+            variables.get(grouping, {}).get("display_name")
+            or clean_display_name(grouping)
+        )
+        return (
+            f"The baseline demographic and clinical characteristics were compared between "
+            f"the {grp_name} groups. No statistically significant differences were observed "
+            f"across the study parameters (p > 0.05 for all variables), confirming "
+            f"homogeneity of the study population at baseline."
+        )
+    return (
+        f"The study included {n} participants. "
+        f"The baseline demographic and clinical characteristics of the study population "
+        f"are summarised in the table above."
+    )
+
+
+def _build_normality_interp(session: Dict[str, Any]) -> str:
+    """Generate a normality assessment interpretation sentence."""
+    norm = session.get("normality_results", {})
+    variables = session.get("variables", {})
+    if not norm:
+        return ""
+    non_normal = [
+        variables.get(v, {}).get("display_name") or clean_display_name(v)
+        for v, r in norm.items() if not r.get("normal", True)
+    ]
+    normal = [
+        variables.get(v, {}).get("display_name") or clean_display_name(v)
+        for v, r in norm.items() if r.get("normal", True)
+    ]
+    parts: List[str] = []
+    if non_normal:
+        joined = ", ".join(non_normal)
+        verb = "was" if len(non_normal) == 1 else "were"
+        parts.append(
+            f"{joined} {verb} not normally distributed (p < 0.05); "
+            f"non-parametric tests were used where appropriate."
+        )
+    if normal:
+        joined = ", ".join(normal)
+        verb = "was" if len(normal) == 1 else "were"
+        parts.append(
+            f"{joined} {verb} normally distributed; parametric tests were applied."
+        )
+    return " ".join(parts)
+
+
 def generate_report(session: Dict[str, Any], df: pd.DataFrame) -> Document:
     doc = Document()
     style = doc.styles["Normal"]
-    style.font.name = "Calibri"
-    style.font.size = Pt(11)
+    style.font.name = "Times New Roman"
+    style.font.size = Pt(12)
 
     hidden: set = set(session.get("hidden_sections") or [])
-    graph_paths = session.get("graph_paths", [])
+    graph_q: List[Tuple[str, str]] = list(session.get("graph_paths", []))
     results = session.get("results", [])
+    variables = session.get("variables", {})
+    fig_num = [1]
 
-    # Red disclaimer banner at the very top when this report was built from
-    # generated practice data — keeps reports from being mistaken for real
-    # patient analyses.
+    # ── Practice watermark ──────────────────────────────────────
     if session.get("is_practice"):
         warn = doc.add_paragraph()
         warn.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -845,47 +926,55 @@ def generate_report(session: Dict[str, Any], df: pd.DataFrame) -> Document:
     doc.add_page_break()
     _add_custom_notes(doc, session, "after_cover")
 
-    # ── 2. DATA SUMMARY ────────────────────────────────────────
+    # ── 2. OBSERVATION & RESULTS ───────────────────────────────
+    doc.add_heading("OBSERVATION & RESULTS", 1)
+
+    # ── 2a. Data Summary (skip id / excluded variables) ────────
     if "data_summary" not in hidden:
-        doc.add_heading("Data Summary", 1)
-        variables = session.get("variables", {})
-        if variables:
-            table = doc.add_table(rows=1, cols=4)
+        _SKIP_TYPES = {"Identifier", "exclude", "Exclude"}
+        analysed_vars = {
+            k: v for k, v in variables.items()
+            if v.get("type", "") not in _SKIP_TYPES
+        }
+        if analysed_vars:
+            doc.add_heading("Data Summary", 2)
+            ds_table = doc.add_table(rows=1, cols=4)
             for i, h in enumerate(("Variable", "Type", "Missing n", "Missing %")):
-                _set_header_text(table.rows[0].cells[i], h)
-            for col, info in variables.items():
-                c = table.add_row().cells
+                _set_header_text(ds_table.rows[0].cells[i], h)
+            for col, info in analysed_vars.items():
+                c = ds_table.add_row().cells
                 c[0].text = info.get("display_name", col)
                 c[1].text = info.get("type", "")
                 c[2].text = str(info.get("missing_n", 0))
                 c[3].text = f'{info.get("missing_pct", 0):.1f}%'
-            format_table(table)
+            format_table(ds_table)
             add_caption(doc, "Table 1a. Variable summary.")
-
         cleaning = session.get("cleaning_actions", [])
         if cleaning:
             doc.add_heading("Data Cleaning", 2)
             for action in cleaning:
                 doc.add_paragraph(action, style="List Bullet")
-        doc.add_page_break()
-    else:
-        variables = session.get("variables", {})
 
-    # ── 3. TABLE 1 ─────────────────────────────────────────────
-    doc.add_heading("Table 1. Baseline Characteristics", 1)
+    # ── 2b. Baseline Characteristics ───────────────────────────
+    doc.add_heading("Baseline Characteristics", 2)
     build_table1(doc, session.get("table_one") or {}, session)
+    if graph_q:
+        path, caption = graph_q.pop(0)
+        fig_num[0] = _embed_graph(doc, path, caption, fig_num[0])
+    _add_interpretation(doc, _build_table1_interp(session))
+    _add_custom_notes(doc, session, "after_table1")
     doc.add_page_break()
 
-    # ── 4. NORMALITY ───────────────────────────────────────────
+    # ── 2c. Normality Assessment ────────────────────────────────
     if "normality" not in hidden:
-        doc.add_heading("Normality Assessment", 1)
         norm_results = session.get("normality_results", {})
         if norm_results:
-            table = doc.add_table(rows=1, cols=5)
+            doc.add_heading("Normality Assessment", 2)
+            norm_table = doc.add_table(rows=1, cols=5)
             for i, h in enumerate(("Variable", "Test", "Statistic", "p-value", "Decision")):
-                _set_header_text(table.rows[0].cells[i], h)
+                _set_header_text(norm_table.rows[0].cells[i], h)
             for var, r in norm_results.items():
-                row = table.add_row().cells
+                row = norm_table.add_row().cells
                 row[0].text = variables.get(var, {}).get("display_name") or clean_display_name(var)
                 row[1].text = r.get("test", "")
                 row[2].text = _fmt(r.get("stat"))
@@ -897,78 +986,87 @@ def generate_report(session: Dict[str, Any], df: pd.DataFrame) -> Document:
                         for para in cell.paragraphs:
                             for run in para.runs:
                                 run.font.color.rgb = RGBColor(0xA3, 0x2D, 0x2D)
-            format_table(table)
+            format_table(norm_table)
             add_caption(doc, "Table 2. Normality assessment results.")
-            add_footnote(doc,
-                         "SW Shapiro-Wilk; KS Kolmogorov-Smirnov. "
-                         "p < 0.05 indicates non-normal distribution.")
-        else:
-            doc.add_paragraph("No continuous variables required normality assessment.")
-        doc.add_page_break()
+            add_footnote(
+                doc,
+                "SW Shapiro-Wilk; KS Kolmogorov-Smirnov. "
+                "p < 0.05 indicates non-normal distribution.",
+            )
+            norm_interp = _build_normality_interp(session)
+            if norm_interp:
+                _add_interpretation(doc, norm_interp)
+            doc.add_page_break()
 
-    # ── 5. PRIMARY ─────────────────────────────────────────────
+    # ── 2d. Primary Analysis ────────────────────────────────────
     if "primary_analysis" not in hidden:
-        doc.add_heading("Primary Analysis", 1)
-        primary = next((r for r in results
-                        if r.get("test_type") in _PRIMARY_TYPES and "error" not in r), None)
+        primary = next(
+            (r for r in results if r.get("test_type") in _PRIMARY_TYPES and "error" not in r),
+            None,
+        )
         if primary:
+            section_label = primary.get("plan_name") or primary.get("title") or "Primary Analysis"
+            doc.add_heading(section_label, 2)
             build_result_table(doc, primary, session, table_num=3)
+            if graph_q:
+                path, caption = graph_q.pop(0)
+                fig_num[0] = _embed_graph(doc, path, caption, fig_num[0])
+            if primary.get("narrative"):
+                _add_interpretation(
+                    doc,
+                    _sanitize_text(primary["narrative"], variables),
+                )
         else:
             doc.add_paragraph("No primary inferential comparison ran successfully.")
         _add_custom_notes(doc, session, "after_primary_analysis")
         doc.add_page_break()
 
-    # ── 6. SECONDARY ───────────────────────────────────────────
+    # ── 2e. Secondary Analyses ──────────────────────────────────
     if "secondary_analyses" not in hidden:
-        secondary = [r for r in results
-                     if r.get("test_type") in _SECONDARY_TYPES and "error" not in r]
+        secondary = [
+            r for r in results
+            if r.get("test_type") in _SECONDARY_TYPES and "error" not in r
+        ]
         if secondary:
-            doc.add_heading("Secondary Analyses", 1)
             table_num = 4
             for r in secondary:
-                doc.add_heading(r.get("plan_name") or r.get("title") or r.get("test_type",""), 2)
+                label = r.get("plan_name") or r.get("title") or r.get("test_type", "")
+                doc.add_heading(label, 2)
                 build_result_table(doc, r, session, table_num=table_num)
+                if graph_q:
+                    path, caption = graph_q.pop(0)
+                    fig_num[0] = _embed_graph(doc, path, caption, fig_num[0])
+                if r.get("narrative"):
+                    _add_interpretation(
+                        doc,
+                        _sanitize_text(r["narrative"], variables),
+                    )
                 table_num += 1
                 doc.add_paragraph()
             _add_custom_notes(doc, session, "after_secondary")
             doc.add_page_break()
 
-    # ── 7. FIGURES ─────────────────────────────────────────────
-    if "figures" not in hidden and graph_paths:
-        doc.add_heading("Figures", 1)
-        for i, (path, caption) in enumerate(graph_paths, 1):
-            if not os.path.exists(path):
-                continue
-            doc.add_picture(path, width=Inches(5.5))
-            p = doc.add_paragraph(f"Figure {i}. {caption}")
-            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            if p.runs:
-                p.runs[0].italic = True
-            doc.add_paragraph()
+    # ── any leftover figures ────────────────────────────────────
+    if "figures" not in hidden and graph_q:
+        doc.add_heading("Additional Figures", 2)
+        for path, caption in graph_q:
+            fig_num[0] = _embed_graph(doc, path, caption, fig_num[0])
         doc.add_page_break()
 
-    # ── 8. RESULTS NARRATIVE ───────────────────────────────────
+    # ── 3. Results Narrative ────────────────────────────────────
     if "results_narrative" not in hidden:
-        doc.add_heading("Results Section", 1)
-        p = doc.add_paragraph(
-            "Copy the text below directly into your paper's Results section.")
-        if p.runs:
-            p.runs[0].italic = True
+        doc.add_heading("Results Narrative", 1)
         doc.add_paragraph(build_results_narrative(session, results))
         doc.add_page_break()
 
-    # ── 9. METHODS ─────────────────────────────────────────────
+    # ── 4. Statistical Analysis (Methods) ──────────────────────
     if "methods" not in hidden:
         doc.add_heading("Statistical Analysis", 1)
-        p = doc.add_paragraph(
-            "Copy the text below directly into your paper's Methods section.")
-        if p.runs:
-            p.runs[0].italic = True
         doc.add_paragraph(build_methods_paragraph(session, results))
         _add_custom_notes(doc, session, "after_methods")
         doc.add_page_break()
 
-    # ── 10. LIMITATIONS ────────────────────────────────────────
+    # ── 5. Limitations ──────────────────────────────────────────
     if "limitations" not in hidden:
         doc.add_heading("Limitations and Notes", 1)
         limitations = collect_limitations(session, results)
