@@ -176,13 +176,19 @@ body {
   border-radius: 50%;
   display: inline-block;
 }
+.ws-label {
+  font-size: .63rem; font-weight: 700; letter-spacing: .05em;
+  text-transform: uppercase; color: rgba(226,232,240,.25);
+  margin-right: .1rem;
+}
 .ws-key-note { font-size: .65rem; color: var(--teal-lt); vertical-align: super; }
 .ws-key-note-text {
   width: 100%;
-  font-size: .66rem;
-  color: var(--muted2);
-  margin-top: -.3rem;
+  font-size: .65rem;
+  color: rgba(226,232,240,.18);
+  margin-top: -.4rem;
   padding-left: .1rem;
+  font-style: italic;
 }
 
 /* topic grid */

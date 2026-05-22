@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import datetime
+import json
 import logging
 import math
 import os
 import re
+import urllib.parse
 import xml.etree.ElementTree as ET
 from typing import Any
 
@@ -396,6 +398,279 @@ async def _search_who_iris(query: str, client: httpx.AsyncClient, n: int = 3) ->
         return []
 
 
+# ── PubMed Central (full-text open access) ───────────────────────────────────
+async def _search_pmc(query: str, client: httpx.AsyncClient, n: int = 5) -> list[dict]:
+    ncbi_key = os.environ.get("NCBI_API_KEY", "")
+    params: dict[str, Any] = {"db": "pmc", "term": query, "retmax": n,
+                               "retmode": "json", "sort": "relevance"}
+    if ncbi_key:
+        params["api_key"] = ncbi_key
+    try:
+        r = await client.get(NCBI_ESEARCH, params=params, timeout=_TIMEOUT)
+        r.raise_for_status()
+        ids = r.json().get("esearchresult", {}).get("idlist", [])
+        if not ids:
+            return []
+        sp: dict[str, Any] = {"db": "pmc", "id": ",".join(ids), "retmode": "json"}
+        if ncbi_key:
+            sp["api_key"] = ncbi_key
+        sr = await client.get(
+            "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi",
+            params=sp, timeout=_TIMEOUT)
+        sr.raise_for_status()
+        result = sr.json().get("result", {})
+        papers = []
+        for pmcid in ids:
+            item = result.get(pmcid, {})
+            title = (item.get("title") or "").strip()
+            if not title:
+                continue
+            doi = pmid = ""
+            for aid in item.get("articleids", []):
+                if aid.get("idtype") == "doi":
+                    doi = aid.get("value", "")
+                elif aid.get("idtype") == "pubmed":
+                    pmid = aid.get("value", "")
+            journal   = item.get("source", "")
+            year_str  = item.get("pubdate", "")
+            year      = int(year_str[:4]) if year_str and len(year_str) >= 4 else 0
+            authors   = [a.get("name", "") for a in item.get("authors", [])[:3]]
+            papers.append({
+                "title": title, "abstract": "",
+                "journal": journal, "year": year, "authors": authors,
+                "doi": doi, "pmid": pmid, "citation_count": 0,
+                "source": "pmc",
+                "url": f"https://www.ncbi.nlm.nih.gov/pmc/articles/PMC{pmcid}/",
+                "evidence_type": classify_evidence(title, journal),
+                "open_access": True,
+            })
+        return papers
+    except Exception as exc:
+        log.warning("PMC failed: %s", exc)
+        return []
+
+
+# ── ClinicalTrials.gov ────────────────────────────────────────────────────────
+async def _search_clinicaltrials(query: str, client: httpx.AsyncClient, n: int = 5) -> list[dict]:
+    params = {"query.term": query, "pageSize": n, "format": "json"}
+    try:
+        r = await client.get("https://clinicaltrials.gov/api/v2/studies",
+                             params=params, timeout=_TIMEOUT)
+        r.raise_for_status()
+        papers = []
+        for study in r.json().get("studies", []):
+            ps      = study.get("protocolSection", {})
+            id_mod  = ps.get("identificationModule", {})
+            desc    = ps.get("descriptionModule", {})
+            status  = ps.get("statusModule", {})
+            design  = ps.get("designModule", {})
+            nct_id  = id_mod.get("nctId", "")
+            title   = (id_mod.get("briefTitle") or "").strip()
+            if not title:
+                continue
+            abstract   = (desc.get("briefSummary") or "").strip()
+            start_date = (status.get("startDateStruct") or {}).get("date", "")
+            year       = int(start_date[:4]) if start_date and len(start_date) >= 4 else 0
+            stype      = (design.get("studyType") or "").upper()
+            ev_type    = "rct" if "INTERVENTIONAL" in stype else "observational"
+            papers.append({
+                "title": title, "abstract": abstract,
+                "journal": "ClinicalTrials.gov", "year": year,
+                "authors": [], "doi": "", "pmid": "",
+                "citation_count": 0, "source": "clinicaltrials",
+                "url": f"https://clinicaltrials.gov/study/{nct_id}" if nct_id else "",
+                "evidence_type": ev_type, "open_access": True,
+            })
+        return papers
+    except Exception as exc:
+        log.warning("ClinicalTrials.gov failed: %s", exc)
+        return []
+
+
+# ── DOAJ (Directory of Open Access Journals) ──────────────────────────────────
+async def _search_doaj(query: str, client: httpx.AsyncClient, n: int = 5) -> list[dict]:
+    encoded = urllib.parse.quote(query)
+    url     = f"https://doaj.org/api/v2/search/articles/{encoded}"
+    params  = {"pageSize": n, "page": 1}
+    try:
+        r = await client.get(url, params=params, timeout=_TIMEOUT)
+        r.raise_for_status()
+        papers = []
+        for item in r.json().get("results", []):
+            bib     = item.get("bibjson", {})
+            title   = (bib.get("title") or "").strip()
+            if not title:
+                continue
+            abstract  = (bib.get("abstract") or "").strip()
+            j_info    = bib.get("journal", {})
+            journal   = j_info.get("title", "") if isinstance(j_info, dict) else ""
+            year_raw  = bib.get("year", "")
+            year      = int(str(year_raw)) if str(year_raw).isdigit() else 0
+            doi       = ""
+            for ident in bib.get("identifier", []):
+                if ident.get("type") == "doi":
+                    doi = ident.get("id", "")
+            authors   = [(a.get("name") or "") for a in bib.get("author", [])[:3]]
+            links     = bib.get("link", [])
+            paper_url = links[0].get("url", "") if links else ""
+            if not paper_url and doi:
+                paper_url = f"https://doi.org/{doi}"
+            papers.append({
+                "title": title, "abstract": abstract,
+                "journal": journal, "year": year, "authors": authors,
+                "doi": doi, "pmid": "", "citation_count": 0,
+                "source": "doaj", "url": paper_url,
+                "evidence_type": classify_evidence(title, journal),
+                "open_access": True,
+            })
+        return papers
+    except Exception as exc:
+        log.warning("DOAJ failed: %s", exc)
+        return []
+
+
+# ── Lens.org ──────────────────────────────────────────────────────────────────
+async def _search_lens(query: str, client: httpx.AsyncClient, n: int = 5) -> list[dict]:
+    lens_key = os.environ.get("LENS_API_KEY", "")
+    if not lens_key:
+        return []
+    headers = {"Authorization": f"Bearer {lens_key}", "Content-Type": "application/json"}
+    payload = {
+        "query": {
+            "bool": {
+                "should": [
+                    {"match": {"title": query}},
+                    {"match": {"abstract": query}},
+                ],
+                "minimum_should_match": 1,
+            }
+        },
+        "size": n,
+        "sort": [{"scholarly_citations_count": "desc"}],
+        "include": ["title", "authors", "abstract", "year_published",
+                    "source", "doi", "pmid", "scholarly_citations_count", "open_access"],
+    }
+    try:
+        r = await client.post("https://api.lens.org/scholarly/search",
+                              headers=headers, content=json.dumps(payload),
+                              timeout=_TIMEOUT)
+        r.raise_for_status()
+        papers = []
+        for item in r.json().get("data", []):
+            title   = (item.get("title") or "").strip()
+            if not title:
+                continue
+            doi     = (item.get("doi") or "").replace("https://doi.org/", "").strip()
+            pmid    = str(item.get("pmid") or "")
+            src     = item.get("source") or {}
+            journal = (src.get("title") or "") if isinstance(src, dict) else ""
+            authors = [(a.get("display_name") or "")
+                       for a in (item.get("authors") or [])[:3]
+                       if isinstance(a, dict)]
+            papers.append({
+                "title": title,
+                "abstract": (item.get("abstract") or "").strip(),
+                "journal": journal,
+                "year": item.get("year_published") or 0,
+                "authors": authors, "doi": doi, "pmid": pmid,
+                "citation_count": item.get("scholarly_citations_count") or 0,
+                "source": "lens",
+                "url": f"https://doi.org/{doi}" if doi else "",
+                "evidence_type": classify_evidence(title, journal),
+                "open_access": bool(item.get("open_access")),
+            })
+        return papers
+    except Exception as exc:
+        log.warning("Lens.org failed: %s", exc)
+        return []
+
+
+# ── IEEE Xplore ───────────────────────────────────────────────────────────────
+async def _search_ieee(query: str, client: httpx.AsyncClient, n: int = 4) -> list[dict]:
+    api_key = os.environ.get("IEEE_API_KEY", "")
+    if not api_key:
+        return []
+    params = {"querytext": query, "max_records": n, "apikey": api_key,
+              "format": "json", "start_record": 1}
+    try:
+        r = await client.get("https://ieeexplore.ieee.org/rest/search",
+                             params=params, timeout=_TIMEOUT)
+        r.raise_for_status()
+        papers = []
+        for item in r.json().get("articles", []):
+            title = (item.get("title") or "").strip()
+            if not title:
+                continue
+            doi   = item.get("doi", "")
+            pub   = item.get("publication_title", "")
+            papers.append({
+                "title": title,
+                "abstract": (item.get("abstract") or "").strip(),
+                "journal": pub,
+                "year": item.get("publication_year") or 0,
+                "authors": [(a.get("full_name") or "")
+                            for a in (item.get("authors", {}).get("authors") or [])[:3]],
+                "doi": doi, "pmid": "",
+                "citation_count": 0,
+                "source": "ieee",
+                "url": item.get("html_url") or (f"https://doi.org/{doi}" if doi else ""),
+                "evidence_type": classify_evidence(title, pub),
+                "open_access": item.get("access_type") == "OPEN_ACCESS",
+            })
+        return papers
+    except Exception as exc:
+        log.warning("IEEE Xplore failed: %s", exc)
+        return []
+
+
+# ── Web of Science (Clarivate WoS Starter) ────────────────────────────────────
+async def _search_wos(query: str, client: httpx.AsyncClient, n: int = 5) -> list[dict]:
+    wos_key = os.environ.get("WOS_API_KEY", "")
+    if not wos_key:
+        return []
+    headers = {"X-ApiKey": wos_key, "Accept": "application/json"}
+    params  = {"q": f"TS=({query})", "db": "WOK", "limit": n, "page": 1}
+    try:
+        r = await client.get(
+            "https://api.clarivate.com/apis/wos-starter/v1/documents",
+            params=params, headers=headers, timeout=_TIMEOUT)
+        r.raise_for_status()
+        papers = []
+        for item in r.json().get("hits", []):
+            title = ""
+            for t in (item.get("title") or {}).get("value", []):
+                if t:
+                    title = t.strip()
+                    break
+            if not title:
+                continue
+            src       = item.get("source") or {}
+            journal   = src.get("sourceTitle", "")
+            year_raw  = src.get("publishYear")
+            year      = int(year_raw) if year_raw else 0
+            doi       = ""
+            for ident in (item.get("identifiers") or {}).get("doi", []):
+                doi = ident.strip()
+                break
+            authors = [(a.get("displayName") or "")
+                       for a in (item.get("authors") or {}).get("authors", [])[:3]]
+            cites = (item.get("citations") or {}).get("timesCited", 0) or 0
+            papers.append({
+                "title": title, "abstract": "",
+                "journal": journal, "year": year, "authors": authors,
+                "doi": doi, "pmid": "",
+                "citation_count": cites,
+                "source": "wos",
+                "url": f"https://doi.org/{doi}" if doi else "",
+                "evidence_type": classify_evidence(title, journal),
+                "open_access": False,
+            })
+        return papers
+    except Exception as exc:
+        log.warning("Web of Science failed: %s", exc)
+        return []
+
+
 # ── Scopus (Elsevier) ────────────────────────────────────────────────────────
 async def _search_scopus(query: str, client: httpx.AsyncClient, n: int = 6) -> list[dict]:
     api_key = os.environ.get("SCOPUS_API_KEY", "")
@@ -497,10 +772,22 @@ def _score(p: dict) -> float:
 
 
 SOURCE_LABELS = {
-    "pubmed": "PubMed", "cochrane": "Cochrane", "europe_pmc": "Europe PMC",
-    "semantic_scholar": "Semantic Scholar", "openalex": "OpenAlex",
-    "who_iris": "WHO IRIS", "crossref": "Crossref", "core": "CORE",
-    "medrxiv": "medRxiv", "scopus": "Scopus",
+    "pubmed":           "PubMed",
+    "cochrane":         "Cochrane",
+    "europe_pmc":       "Europe PMC",
+    "semantic_scholar": "Semantic Scholar",
+    "openalex":         "OpenAlex",
+    "who_iris":         "WHO IRIS",
+    "crossref":         "Crossref",
+    "core":             "CORE",
+    "medrxiv":          "medRxiv",
+    "pmc":              "PubMed Central",
+    "clinicaltrials":   "ClinicalTrials.gov",
+    "doaj":             "DOAJ",
+    "lens":             "Lens.org",
+    "ieee":             "IEEE Xplore",
+    "wos":              "Web of Science",
+    "scopus":           "Scopus",
 }
 
 
@@ -517,11 +804,18 @@ async def multi_source_search(query: str, top_n: int = 10) -> dict:
             _search_crossref(query, client),
             _search_core(query, client),
             _search_medrxiv(query, client),
+            _search_pmc(query, client),
+            _search_clinicaltrials(query, client),
+            _search_doaj(query, client),
+            _search_lens(query, client),
+            _search_ieee(query, client),
+            _search_wos(query, client),
             _search_scopus(query, client),
             return_exceptions=True,
         )
     labels = ["pubmed", "cochrane", "europe_pmc", "semantic_scholar",
-              "openalex", "who_iris", "crossref", "core", "medrxiv", "scopus"]
+              "openalex", "who_iris", "crossref", "core", "medrxiv",
+              "pmc", "clinicaltrials", "doaj", "lens", "ieee", "wos", "scopus"]
     papers:      list[dict] = []
     sources_hit: set[str]   = set()
     for label, res in zip(labels, results):

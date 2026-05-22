@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-  <title>Research Assistant — MedRAS Study Builder</title>
+  <title>Research Assistant — MedRAS Study Builder (16 Databases)</title>
   <link rel="stylesheet" href="/study-builder/css/sb.css"/>
 </head>
 <body>
@@ -26,7 +26,7 @@
   <!-- ── Welcome state ── -->
   <div class="welcome" id="welcome">
     <div class="welcome-inner">
-      <div class="welcome-badge">Powered by 9 academic databases</div>
+      <div class="welcome-badge">Powered by 16 academic databases</div>
       <h1 class="welcome-h">What do you want to research?</h1>
       <p class="welcome-sub">Ask any medical or research question. Every answer is grounded in published literature — cited, verifiable, no hallucination.</p>
 
@@ -40,18 +40,28 @@
       </div>
 
       <div class="welcome-sources">
+        <span class="ws-label">Free &amp; always active:</span>
         <span class="ws-dot" style="background:#3b82f6"></span>PubMed
         <span class="ws-dot" style="background:#8b5cf6"></span>Cochrane
         <span class="ws-dot" style="background:#06b6d4"></span>Europe PMC
+        <span class="ws-dot" style="background:#22c55e"></span>PubMed Central
         <span class="ws-dot" style="background:#f97316"></span>Semantic Scholar
-        <span class="ws-dot" style="background:#22c55e"></span>OpenAlex
-        <span class="ws-dot" style="background:#10b981"></span>WHO IRIS
+        <span class="ws-dot" style="background:#10b981"></span>OpenAlex
+        <span class="ws-dot" style="background:#0ea5e9"></span>WHO IRIS
         <span class="ws-dot" style="background:#e879f9"></span>Crossref
         <span class="ws-dot" style="background:#facc15"></span>CORE
         <span class="ws-dot" style="background:#f43f5e"></span>medRxiv
-        <span class="ws-dot" style="background:#fb923c"></span>Scopus<span class="ws-key-note">*</span>
+        <span class="ws-dot" style="background:#a78bfa"></span>ClinicalTrials.gov
+        <span class="ws-dot" style="background:#34d399"></span>DOAJ
       </div>
-      <div class="ws-key-note-text">* Scopus requires an institutional API key</div>
+      <div class="welcome-sources" style="margin-top:-.8rem">
+        <span class="ws-label">With API key:</span>
+        <span class="ws-dot" style="background:#fb923c"></span>Scopus<span class="ws-key-note">†</span>
+        <span class="ws-dot" style="background:#818cf8"></span>Web of Science<span class="ws-key-note">†</span>
+        <span class="ws-dot" style="background:#38bdf8"></span>IEEE Xplore<span class="ws-key-note">†</span>
+        <span class="ws-dot" style="background:#4ade80"></span>Lens.org<span class="ws-key-note">†</span>
+      </div>
+      <div class="ws-key-note-text">† Requires institutional/free API key (SCOPUS_API_KEY · WOS_API_KEY · IEEE_API_KEY · LENS_API_KEY)</div>
 
       <div class="topics-label">Or explore a topic</div>
       <div class="topic-grid">

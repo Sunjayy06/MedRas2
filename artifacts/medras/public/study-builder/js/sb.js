@@ -15,10 +15,22 @@
   const raWrap      = document.getElementById('ra-wrap');
 
   const SRC_LABELS = {
-    pubmed:'PubMed', cochrane:'Cochrane', europe_pmc:'Europe PMC',
-    semantic_scholar:'Semantic Scholar', openalex:'OpenAlex',
-    who_iris:'WHO IRIS', crossref:'Crossref', core:'CORE', medrxiv:'medRxiv',
-    scopus:'Scopus',
+    pubmed:           'PubMed',
+    cochrane:         'Cochrane',
+    europe_pmc:       'Europe PMC',
+    pmc:              'PubMed Central',
+    semantic_scholar: 'Semantic Scholar',
+    openalex:         'OpenAlex',
+    who_iris:         'WHO IRIS',
+    crossref:         'Crossref',
+    core:             'CORE',
+    medrxiv:          'medRxiv',
+    clinicaltrials:   'ClinicalTrials.gov',
+    doaj:             'DOAJ',
+    lens:             'Lens.org',
+    ieee:             'IEEE Xplore',
+    wos:              'Web of Science',
+    scopus:           'Scopus',
   };
   const EV_LABELS = {
     systematic_review:'Sys. Review', rct:'RCT',
