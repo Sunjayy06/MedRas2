@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
+from .folio import router as folio_router
 from .health import router as health_router
 from .outline import router as outline_router
 from .plagiarism import router as plagiarism_router
@@ -17,6 +18,7 @@ from .study_design import router as study_design_router
 from .thesis import router as thesis_router
 
 router = APIRouter()
+router.include_router(folio_router)
 router.include_router(health_router, tags=["system"])
 router.include_router(sample_size_router)
 router.include_router(stats_router)

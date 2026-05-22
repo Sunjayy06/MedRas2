@@ -65,6 +65,13 @@
       sessionKey: null,
     },
     {
+      id:    'folio',
+      label: 'Folio',
+      title: 'Document Management',
+      url:   '/folio-module/',
+      sessionKey: 'folio.doc',
+    },
+    {
       id:      'compass',
       label:   'Compass',
       title:   'Journal Finder — Coming soon',

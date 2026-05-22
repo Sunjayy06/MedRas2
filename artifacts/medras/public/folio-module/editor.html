@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Folio Editor · MedRAS</title>
+  <link rel="stylesheet" href="/css/medras-nav.css">
+  <link rel="stylesheet" href="css/folio.css">
+</head>
+<body data-medras-module="folio">
+
+<div id="medras-nav"></div>
+
+<!-- ── Editor layout ─────────────────────────────────────────────── -->
+<div class="fl-editor-layout">
+
+  <!-- Left: section outline -->
+  <aside class="fl-outline-panel">
+    <div class="fl-outline-head">
+      <div class="fl-outline-head-title">Sections</div>
+    </div>
+    <div class="fl-outline-list" id="outline-list"></div>
+    <div class="fl-outline-foot">
+      <div class="fl-outline-doc-title" id="outline-doc-title">—</div>
+    </div>
+  </aside>
+
+  <!-- Centre: document canvas -->
+  <main class="fl-doc-panel">
+    <div class="fl-doc-toolbar">
+      <input class="fl-doc-title-input" id="doc-title-input" placeholder="Document title…" autocomplete="off">
+      <div class="fl-toolbar-sep"></div>
+      <button class="fl-toolbar-btn" id="btn-add-section" title="Add a new section">+ Section</button>
+      <button class="fl-toolbar-btn" id="btn-feedback" title="Paste guide feedback">🗂 Guide feedback</button>
+      <div class="fl-toolbar-sep"></div>
+      <button class="fl-toolbar-btn is-primary" id="btn-export">↓ Export DOCX</button>
+      <button class="fl-toolbar-btn" id="btn-home" title="Back to Folio home" style="margin-left:auto">← Back</button>
+    </div>
+    <div class="fl-doc-scroll" id="doc-scroll">
+      <div class="fl-page" id="doc-page"></div>
+    </div>
+  </main>
+
+  <!-- Right: reference panel -->
+  <aside class="fl-ref-panel">
+    <div class="fl-ref-head">
+      <div class="fl-ref-head-row">
+        <span class="fl-ref-head-title">References</span>
+        <span class="fl-ref-count" id="ref-count">0 refs</span>
+      </div>
+      <div class="fl-style-tabs" id="style-tabs">
+        <button class="fl-style-tab is-active" data-style="vancouver">Vancouver</button>
+        <button class="fl-style-tab" data-style="apa">APA</button>
+        <button class="fl-style-tab" data-style="harvard">Harvard</button>
+      </div>
+    </div>
+    <div class="fl-ref-list" id="ref-list"></div>
+    <div class="fl-ref-foot">
+      <button class="fl-ref-foot-btn" id="btn-copy-refs">Copy all references</button>
+    </div>
+  </aside>
+</div>
+
+<!-- ── Feedback modal ────────────────────────────────────────────── -->
+<div class="fl-modal-overlay hidden" id="feedback-overlay">
+  <div class="fl-modal">
+    <div class="fl-modal-title">Guide Feedback</div>
+    <p class="fl-modal-sub">
+      Paste your supervisor's comments in plain English. Folio will read them, show you exactly what
+      it understood, and apply every change after your confirmation.
+    </p>
+    <textarea id="feedback-text" placeholder="e.g. Remove references 45 to 75, move the conclusion before limitations, add a section on ethical considerations…"></textarea>
+    <div id="ops-preview" style="display:none">
+      <p style="font-size:12px;font-weight:600;color:var(--fl-muted);margin:14px 0 6px;text-transform:uppercase;letter-spacing:.06em;">Folio understood these changes:</p>
+      <div class="fl-ops-list" id="ops-list"></div>
+    </div>
+    <div class="fl-modal-actions">
+      <button class="fl-modal-btn" id="feedback-cancel">Cancel</button>
+      <button class="fl-modal-btn is-primary" id="feedback-parse" style="min-width:120px">Parse feedback</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Toast ─────────────────────────────────────────────────────── -->
+<div class="fl-toast" id="toast"></div>
+
+<script src="/js/medras-nav.js"></script>
+<script src="js/folio-core.js"></script>
+<script src="js/folio-editor.js"></script>
+</body>
+</html>

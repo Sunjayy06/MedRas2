@@ -3415,6 +3415,36 @@ function bindResults() {
   if (back) back.addEventListener("click", () => showScreen("plan"));
   const cont = screen.querySelector('[data-action="continue-to-export"]');
   if (cont) cont.addEventListener("click", () => showScreen("export"));
+
+  /* ── Take to Folio ─────────────────────────────────────────────── */
+  const folioBtn = document.getElementById("btn-take-to-folio");
+  if (folioBtn) {
+    folioBtn.addEventListener("click", () => {
+      /* Collect rendered text from the results pane */
+      const pane = document.getElementById("results-pane");
+      const resultsText = pane ? (pane.innerText || pane.textContent || "") : "";
+
+      /* Build a minimal Sigma payload for Folio */
+      const sigma = {
+        title: (document.title || "Analysis Results").replace(/\s*·.*$/, "").trim(),
+        results: resultsText.slice(0, 8000),
+        methods: "",
+      };
+
+      /* Supplement with state if available (state object may be on window) */
+      try {
+        const saved = sessionStorage.getItem("medras.sigma.state");
+        if (saved) {
+          const st = JSON.parse(saved);
+          if (st.methods) sigma.methods = st.methods;
+          if (st.title)   sigma.title   = st.title;
+        }
+      } catch (_) { /* ignore */ }
+
+      sessionStorage.setItem("folio.import.from_sigma", JSON.stringify(sigma));
+      window.open("/folio-module/", "_blank");
+    });
+  }
 }
 
 /* ------------------------------------------------------------------ */
