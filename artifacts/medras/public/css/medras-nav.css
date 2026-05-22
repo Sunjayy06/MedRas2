@@ -98,6 +98,27 @@ html.mn-active body {
   border-bottom-color: #2f6fed;
 }
 
+/* ── Coming-soon placeholder items ─────────────────────────────── */
+.mn-item-soon {
+  opacity: .38;
+  cursor: default;
+  pointer-events: none;
+}
+.mn-soon-pill {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  background: rgba(255,255,255,.1);
+  color: rgba(255,255,255,.5);
+  border-radius: 4px;
+  padding: 1px 4px;
+  line-height: 1.4;
+  vertical-align: middle;
+  margin-left: 1px;
+}
+
 /* ── Session-in-progress dot ────────────────────────────────────── */
 .mn-dot {
   display: inline-block;

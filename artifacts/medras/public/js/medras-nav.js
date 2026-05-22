@@ -64,6 +64,22 @@
       url:   '/plagiarism-module/',
       sessionKey: null,
     },
+    {
+      id:      'compass',
+      label:   'Compass',
+      title:   'Journal Finder — Coming soon',
+      url:     null,
+      sessionKey: null,
+      soon:    true,
+    },
+    {
+      id:      'oracle',
+      label:   'Oracle',
+      title:   'AI Research Assistant — Coming soon',
+      url:     null,
+      sessionKey: null,
+      soon:    true,
+    },
   ];
 
   /* ── Detect active module from <body data-medras-module="..."> ── */
@@ -112,15 +128,24 @@
       var isActive  = mod.id === active;
       var inSession = hasSession(mod);
 
-      var a = document.createElement('a');
-      a.href = mod.url;
-      a.className = 'mn-item' + (isActive ? ' mn-item-active' : '');
+      var a = document.createElement(mod.soon ? 'span' : 'a');
+      if (!mod.soon) a.href = mod.url;
+      a.className = 'mn-item' +
+        (isActive ? ' mn-item-active' : '') +
+        (mod.soon ? ' mn-item-soon' : '');
       a.setAttribute('title', mod.title);
-      a.setAttribute('aria-current', isActive ? 'page' : 'false');
+      if (!mod.soon) a.setAttribute('aria-current', isActive ? 'page' : 'false');
 
       var labelSpan = document.createElement('span');
       labelSpan.textContent = mod.label;
       a.appendChild(labelSpan);
+
+      if (mod.soon) {
+        var pill = document.createElement('span');
+        pill.className = 'mn-soon-pill';
+        pill.textContent = 'soon';
+        a.appendChild(pill);
+      }
 
       if (inSession) {
         var dot = document.createElement('span');
