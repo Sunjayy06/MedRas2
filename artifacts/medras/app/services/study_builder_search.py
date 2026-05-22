@@ -1,4 +1,4 @@
-"""Study Builder — multi-source academic literature search."""
+"""Study Builder — multi-source academic literature search (RAG layer)."""
 
 from __future__ import annotations
 
@@ -15,16 +15,19 @@ import httpx
 
 log = logging.getLogger(__name__)
 
-_TIMEOUT      = 5.0
+_TIMEOUT      = 6.0
 _UA           = "MedRAS/1.0 (academic research assistant; mailto:research@medras.local)"
 _CURRENT_YEAR = datetime.datetime.now().year
 
-NCBI_ESEARCH  = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
-NCBI_EFETCH   = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"
-EPMC_BASE     = "https://www.ebi.ac.uk/europepmc/webservices/rest/search"
-S2_BASE       = "https://api.semanticscholar.org/graph/v1/paper/search"
-OPENALEX_BASE = "https://api.openalex.org/works"
-WHO_IRIS_BASE = "https://iris.who.int/rest/search"
+NCBI_ESEARCH   = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
+NCBI_EFETCH    = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"
+EPMC_BASE      = "https://www.ebi.ac.uk/europepmc/webservices/rest/search"
+S2_BASE        = "https://api.semanticscholar.org/graph/v1/paper/search"
+OPENALEX_BASE  = "https://api.openalex.org/works"
+WHO_IRIS_BASE  = "https://iris.who.int/rest/search"
+CROSSREF_BASE  = "https://api.crossref.org/works"
+CORE_BASE      = "https://api.core.ac.uk/v3/search/works"
+MEDRXIV_BASE   = "https://api.medrxiv.org/details/medrxiv"
 
 
 def classify_evidence(title: str, journal: str = "", source: str = "") -> str:
@@ -51,7 +54,8 @@ def _reconstruct_abstract(inv: dict | None) -> str:
     return " ".join(pos[i] for i in sorted(pos))
 
 
-async def _search_pubmed(query: str, client: httpx.AsyncClient, n: int = 6) -> list[dict]:
+# ── PubMed ──────────────────────────────────────────────────────────────────
+async def _search_pubmed(query: str, client: httpx.AsyncClient, n: int = 7) -> list[dict]:
     ncbi_key = os.environ.get("NCBI_API_KEY", "")
     params: dict[str, Any] = {"db": "pubmed", "term": query, "retmax": n,
                                "retmode": "json", "sort": "relevance"}
@@ -110,12 +114,14 @@ def _parse_pubmed_xml(xml_text: str) -> list[dict]:
                 "citation_count": 0, "source": "pubmed",
                 "url": f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/" if pmid else "",
                 "evidence_type": classify_evidence(title, journal),
+                "open_access": False,
             })
         except Exception:
             continue
     return papers
 
 
+# ── Europe PMC ──────────────────────────────────────────────────────────────
 async def _search_europe_pmc(query: str, client: httpx.AsyncClient, n: int = 5) -> list[dict]:
     params = {"query": query, "format": "json", "resultType": "core",
               "pageSize": n, "sort": "CITED"}
@@ -135,8 +141,8 @@ async def _search_cochrane(query: str, client: httpx.AsyncClient, n: int = 4) ->
     try:
         r = await client.get(EPMC_BASE, params=params, timeout=_TIMEOUT)
         r.raise_for_status()
-        papers = [_epmc_paper(i, "cochrane_via_epmc")
-                  for i in r.json().get("resultList", {}).get("result", [])]
+        papers = [_epmc_paper(i, "cochrane") for i in
+                  r.json().get("resultList", {}).get("result", [])]
         for p in papers:
             p["evidence_type"] = "systematic_review"
         return papers
@@ -160,13 +166,15 @@ def _epmc_paper(item: dict, source: str) -> dict:
         "citation_count": int(item.get("citedByCount", 0) or 0),
         "source": source, "url": url,
         "evidence_type": classify_evidence(title, journal, source),
+        "open_access": bool(item.get("isOpenAccess") == "Y"),
     }
 
 
-async def _search_semantic_scholar(query: str, client: httpx.AsyncClient, n: int = 5) -> list[dict]:
+# ── Semantic Scholar ─────────────────────────────────────────────────────────
+async def _search_semantic_scholar(query: str, client: httpx.AsyncClient, n: int = 6) -> list[dict]:
     s2_key  = os.environ.get("SEMANTIC_SCHOLAR_KEY", "")
     params  = {"query": query,
-               "fields": "title,authors,abstract,year,venue,citationCount,externalIds",
+               "fields": "title,authors,abstract,year,venue,citationCount,externalIds,isOpenAccess",
                "limit": n}
     headers = {"X-API-KEY": s2_key} if s2_key else {}
     try:
@@ -187,6 +195,7 @@ async def _search_semantic_scholar(query: str, client: httpx.AsyncClient, n: int
                 "source": "semantic_scholar",
                 "url": f"https://doi.org/{doi}" if doi else "",
                 "evidence_type": classify_evidence(title, item.get("venue", "")),
+                "open_access": bool(item.get("isOpenAccess")),
             })
         return papers
     except Exception as exc:
@@ -194,11 +203,12 @@ async def _search_semantic_scholar(query: str, client: httpx.AsyncClient, n: int
         return []
 
 
+# ── OpenAlex ─────────────────────────────────────────────────────────────────
 async def _search_openalex(query: str, client: httpx.AsyncClient, n: int = 5) -> list[dict]:
     params = {
         "search": query, "per-page": n,
         "select": ("title,authorships,publication_year,primary_location,"
-                   "abstract_inverted_index,cited_by_count,ids"),
+                   "abstract_inverted_index,cited_by_count,ids,open_access"),
         "mailto": "research@medras.local",
     }
     try:
@@ -214,6 +224,8 @@ async def _search_openalex(query: str, client: httpx.AsyncClient, n: int = 5) ->
             loc      = item.get("primary_location") or {}
             journal  = (loc.get("source") or {}).get("display_name", "")
             title    = (item.get("title") or "").strip()
+            oa       = (item.get("open_access") or {})
+            oa_url   = oa.get("oa_url", "")
             papers.append({
                 "title": title,
                 "abstract": _reconstruct_abstract(item.get("abstract_inverted_index")),
@@ -223,8 +235,9 @@ async def _search_openalex(query: str, client: httpx.AsyncClient, n: int = 5) ->
                 "doi": doi, "pmid": pmid,
                 "citation_count": item.get("cited_by_count") or 0,
                 "source": "openalex",
-                "url": f"https://doi.org/{doi}" if doi else "",
+                "url": oa_url or (f"https://doi.org/{doi}" if doi else ""),
                 "evidence_type": classify_evidence(title, journal),
+                "open_access": bool(oa.get("is_oa")),
             })
         return papers
     except Exception as exc:
@@ -232,6 +245,122 @@ async def _search_openalex(query: str, client: httpx.AsyncClient, n: int = 5) ->
         return []
 
 
+# ── Crossref ─────────────────────────────────────────────────────────────────
+async def _search_crossref(query: str, client: httpx.AsyncClient, n: int = 5) -> list[dict]:
+    params = {
+        "query": query, "rows": n,
+        "select": "DOI,title,author,published,container-title,abstract,is-referenced-by-count",
+        "mailto": "research@medras.local",
+        "filter": "type:journal-article",
+    }
+    try:
+        r = await client.get(CROSSREF_BASE, params=params, timeout=_TIMEOUT)
+        r.raise_for_status()
+        papers = []
+        for item in r.json().get("message", {}).get("items", []):
+            doi   = item.get("DOI", "")
+            titles = item.get("title") or []
+            title = titles[0] if titles else ""
+            if not title:
+                continue
+            journals = item.get("container-title") or []
+            journal  = journals[0] if journals else ""
+            pub  = item.get("published") or {}
+            dp   = (pub.get("date-parts") or [[0]])[0]
+            year = dp[0] if dp else 0
+            authors = []
+            for a in (item.get("author") or [])[:3]:
+                fn = a.get("given", "")
+                ln = a.get("family", "")
+                if ln:
+                    authors.append(f"{ln} {fn}".strip())
+            abstract = re.sub(r"<[^>]+>", "", item.get("abstract") or "").strip()
+            papers.append({
+                "title": title.strip(), "abstract": abstract,
+                "journal": journal, "year": year, "authors": authors,
+                "doi": doi, "pmid": "",
+                "citation_count": item.get("is-referenced-by-count") or 0,
+                "source": "crossref",
+                "url": f"https://doi.org/{doi}" if doi else "",
+                "evidence_type": classify_evidence(title, journal),
+                "open_access": False,
+            })
+        return papers
+    except Exception as exc:
+        log.warning("Crossref failed: %s", exc)
+        return []
+
+
+# ── CORE (Open Access) ────────────────────────────────────────────────────────
+async def _search_core(query: str, client: httpx.AsyncClient, n: int = 4) -> list[dict]:
+    core_key = os.environ.get("CORE_API_KEY", "")
+    headers  = {"Authorization": f"Bearer {core_key}"} if core_key else {}
+    params   = {"q": query, "limit": n, "fields": "title,authors,abstract,yearPublished,doi,downloadUrl,journals"}
+    try:
+        r = await client.get(CORE_BASE, params=params, headers=headers, timeout=_TIMEOUT)
+        r.raise_for_status()
+        papers = []
+        for item in r.json().get("results", []):
+            title = (item.get("title") or "").strip()
+            if not title:
+                continue
+            doi   = item.get("doi", "") or ""
+            doi   = doi.replace("https://doi.org/","").strip()
+            jlist = item.get("journals") or []
+            journal = jlist[0].get("title","") if jlist else ""
+            papers.append({
+                "title": title,
+                "abstract": (item.get("abstract") or "").strip(),
+                "journal": journal,
+                "year": item.get("yearPublished") or 0,
+                "authors": [(a.get("name","") if isinstance(a,dict) else str(a))
+                            for a in (item.get("authors") or [])[:3]],
+                "doi": doi, "pmid": "",
+                "citation_count": 0,
+                "source": "core",
+                "url": item.get("downloadUrl","") or (f"https://doi.org/{doi}" if doi else ""),
+                "evidence_type": classify_evidence(title, journal),
+                "open_access": True,
+            })
+        return papers
+    except Exception as exc:
+        log.warning("CORE failed: %s", exc)
+        return []
+
+
+# ── medRxiv preprints ─────────────────────────────────────────────────────────
+async def _search_medrxiv(query: str, client: httpx.AsyncClient, n: int = 3) -> list[dict]:
+    cursor   = 0
+    endpoint = f"{MEDRXIV_BASE}/{query}/{cursor}"
+    try:
+        r = await client.get(endpoint, timeout=_TIMEOUT)
+        r.raise_for_status()
+        papers = []
+        for item in (r.json().get("collection") or [])[:n]:
+            title = (item.get("title") or "").strip()
+            if not title:
+                continue
+            doi   = item.get("doi", "")
+            papers.append({
+                "title": title,
+                "abstract": (item.get("abstract") or "").strip(),
+                "journal": "medRxiv (preprint)",
+                "year": int(str(item.get("date","0"))[:4]) if item.get("date") else 0,
+                "authors": [item.get("authors","").split(";")[0].strip()],
+                "doi": doi, "pmid": "",
+                "citation_count": 0,
+                "source": "medrxiv",
+                "url": f"https://www.medrxiv.org/content/{doi}" if doi else "",
+                "evidence_type": "observational",
+                "open_access": True,
+            })
+        return papers
+    except Exception as exc:
+        log.warning("medRxiv failed: %s", exc)
+        return []
+
+
+# ── WHO IRIS ──────────────────────────────────────────────────────────────────
 async def _search_who_iris(query: str, client: httpx.AsyncClient, n: int = 3) -> list[dict]:
     params = {"query": query, "scope": "/", "expand": "metadata", "limit": n, "offset": 0}
     try:
@@ -258,6 +387,7 @@ async def _search_who_iris(query: str, client: httpx.AsyncClient, n: int = 3) ->
                 "source": "who_iris",
                 "url": f"https://iris.who.int/handle/{handle}" if handle else "",
                 "evidence_type": "guideline",
+                "open_access": True,
             })
         return papers
     except Exception as exc:
@@ -265,6 +395,7 @@ async def _search_who_iris(query: str, client: httpx.AsyncClient, n: int = 3) ->
         return []
 
 
+# ── Dedup + rank ──────────────────────────────────────────────────────────────
 def _norm(t: str) -> str:
     return re.sub(r"[^a-z0-9]", "", t.lower())
 
@@ -291,17 +422,29 @@ def _deduplicate(papers: list[dict]) -> list[dict]:
 def _score(p: dict) -> float:
     year  = p.get("year") or 0
     cites = p.get("citation_count") or 0
-    recency = max(0.0, 1.0 - 0.08 * (_CURRENT_YEAR - year)) if year else 0.0
-    base    = 0.6 * recency + 0.4 * min(math.log1p(cites) / 10.0, 1.0)
+    recency = max(0.0, 1.0 - 0.07 * (_CURRENT_YEAR - year)) if year else 0.0
+    base    = 0.55 * recency + 0.35 * min(math.log1p(cites) / 10.0, 1.0)
     etype   = p.get("evidence_type", "")
     if etype == "systematic_review":
-        base += 0.4
+        base += 0.40
     elif etype == "guideline":
-        base += 0.15
+        base += 0.20
+    elif etype == "rct":
+        base += 0.10
+    if p.get("open_access"):
+        base += 0.03
     return base
 
 
-async def multi_source_search(query: str, top_n: int = 8) -> dict:
+SOURCE_LABELS = {
+    "pubmed": "PubMed", "cochrane": "Cochrane", "europe_pmc": "Europe PMC",
+    "semantic_scholar": "Semantic Scholar", "openalex": "OpenAlex",
+    "who_iris": "WHO IRIS", "crossref": "Crossref", "core": "CORE",
+    "medrxiv": "medRxiv",
+}
+
+
+async def multi_source_search(query: str, top_n: int = 10) -> dict:
     hdrs = {"User-Agent": _UA}
     async with httpx.AsyncClient(headers=hdrs, follow_redirects=True) as client:
         results = await asyncio.gather(
@@ -311,10 +454,13 @@ async def multi_source_search(query: str, top_n: int = 8) -> dict:
             _search_semantic_scholar(query, client),
             _search_openalex(query, client),
             _search_who_iris(query, client),
+            _search_crossref(query, client),
+            _search_core(query, client),
+            _search_medrxiv(query, client),
             return_exceptions=True,
         )
-    labels = ["pubmed", "cochrane_via_epmc", "europe_pmc",
-              "semantic_scholar", "openalex", "who_iris"]
+    labels = ["pubmed", "cochrane", "europe_pmc", "semantic_scholar",
+              "openalex", "who_iris", "crossref", "core", "medrxiv"]
     papers:      list[dict] = []
     sources_hit: set[str]   = set()
     for label, res in zip(labels, results):
@@ -325,5 +471,9 @@ async def multi_source_search(query: str, top_n: int = 8) -> dict:
             log.warning("Source %s: %s", label, res)
     deduped = _deduplicate(papers)
     ranked  = sorted(deduped, key=_score, reverse=True)[:top_n]
-    return {"papers": ranked, "sources_searched": sorted(sources_hit),
-            "total_found": len(deduped)}
+    return {
+        "papers": ranked,
+        "sources_searched": sorted(sources_hit),
+        "sources_hit": len(sources_hit),
+        "total_found": len(deduped),
+    }
