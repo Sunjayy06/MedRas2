@@ -18,6 +18,16 @@
   const attachedPapersBar    = document.getElementById('attached-papers-bar');
   const attachedPapersLabel  = document.getElementById('attached-papers-label');
 
+  /* ── Folio DOM ── */
+  const folioPanelEl   = document.getElementById('folio-panel');
+  const folioToggleBtn = document.getElementById('folio-toggle-btn');
+  const folioBadge     = document.getElementById('folio-badge');
+  const folioCount     = document.getElementById('folio-count');
+  const folioCloseBtn  = document.getElementById('folio-close-btn');
+  const folioList      = document.getElementById('folio-list');
+  const folioEmpty     = document.getElementById('folio-empty');
+  const folioFoot      = document.getElementById('folio-foot');
+
   /* ── Labels ── */
   const SRC_LABELS = {
     pubmed:'PubMed', cochrane:'Cochrane', europe_pmc:'Europe PMC',
@@ -46,6 +56,9 @@
   let inChat         = false;
   let attachedPapers = [];   /* [{filename, wordCount, paperIndex}] */
   let uploading      = false;
+
+  /* ── Folio state (persisted to sessionStorage) ── */
+  let folioItems = JSON.parse(sessionStorage.getItem('sb.folio') || '[]');
 
   /* ── Statistical highlight regex ── */
   const STAT_RE = /(\bp\s*[<>=≤≥]\s*0\.\d+\b|\bOR\s+[\d.]+\b|\bRR\s+[\d.]+\b|\bHR\s+[\d.]+\b|\bNNT\s+\d+\b|\bARR\s+[\d.]+%?\b|\bRRR\s+[\d.]+%?\b|95\s*%\s*CI[^,;.]{0,30}|\bCIs?\b\s*[\[(][\d., –\-]+[\])]|\bn\s*=\s*[\d,]+\b|\bN\s*=\s*[\d,]+\b|[\d.]+\s*%\s*(?:reduction|increase|improvement|decrease|sensitivity|specificity|accuracy)|\bSMD\s+[\d.]+\b|\bWMD\s+[\d.]+\b|\bMD\s+[\d.]+\b|\baOR\s+[\d.]+\b)/gi;
@@ -109,11 +122,41 @@
     sessionId      = null;
     attachedPapers = [];
     uploading      = false;
+    folioItems     = [];
     sessionStorage.removeItem('sb.session_id');
     sessionStorage.removeItem('medras.nav.returnHint');
+    sessionStorage.removeItem('sb.folio');
     updateAttachedUI();
+    _renderFolio();
+    _updateFolioToggle();
+    folioPanelEl.classList.remove('open');
     switchToWelcome();
   });
+
+  /* ── Folio toggle / close ── */
+  folioToggleBtn.addEventListener('click', () => folioPanelEl.classList.toggle('open'));
+  folioCloseBtn.addEventListener('click',  () => folioPanelEl.classList.remove('open'));
+
+  /* ── Folio export buttons ── */
+  document.getElementById('folio-exp-bibtex').addEventListener('click', () =>
+    _dlText('folio-citations.bib', _toBibtex(folioItems)));
+  document.getElementById('folio-exp-ris').addEventListener('click', () =>
+    _dlText('folio-citations.ris', _toRis(folioItems)));
+  document.getElementById('folio-exp-van').addEventListener('click', () =>
+    _dlText('folio-citations.txt', _toVancouver(folioItems)));
+  document.getElementById('folio-copy-van').addEventListener('click', () => {
+    const btn = document.getElementById('folio-copy-van');
+    navigator.clipboard.writeText(_toVancouver(folioItems))
+      .then(() => {
+        btn.textContent = 'Copied \u2713';
+        setTimeout(() => { btn.textContent = 'Copy'; }, 2200);
+      })
+      .catch(() => _dlText('folio-citations.txt', _toVancouver(folioItems)));
+  });
+
+  /* Initialise from any session-restored folio data */
+  _renderFolio();
+  _updateFolioToggle();
 
   /* ── Submit handlers ── */
   function submitFromWelcome() {
@@ -630,6 +673,20 @@
     const src = mk('span', 'src-tag');
     src.textContent = SRC_LABELS[p.source] || p.source || ''; meta.appendChild(src);
     card.appendChild(meta);
+
+    /* Bookmark / pin button */
+    const pinBtn = mk('button', `pin-btn${_isPinned(p) ? ' pinned' : ''}`);
+    pinBtn.title = _isPinned(p) ? 'Remove from Folio' : 'Save to Folio';
+    if (p.url) pinBtn.dataset.url = p.url.trim();
+    pinBtn.innerHTML =
+      '<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">' +
+      '<path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>';
+    pinBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      _togglePin(p, pinBtn);
+    });
+    card.appendChild(pinBtn);
+
     return card;
   }
 
@@ -844,6 +901,110 @@
       else if (p.url) ref += `. ${p.url}`;
       return ref;
     }).join('\n\n');
+  }
+
+  /* ══════════════════════════════════════════════════════════════════
+     FOLIO  (Phase 5 — saved-papers sidebar)
+  ══════════════════════════════════════════════════════════════════ */
+
+  function _folioKey(p) {
+    return ((p.url || p.title || '').trim().toLowerCase()).substring(0, 120);
+  }
+
+  function _isPinned(p) {
+    const k = _folioKey(p);
+    return folioItems.some((x) => _folioKey(x) === k);
+  }
+
+  function _togglePin(paperData, triggerBtn) {
+    const k   = _folioKey(paperData);
+    const idx = folioItems.findIndex((x) => _folioKey(x) === k);
+    if (idx >= 0) {
+      folioItems.splice(idx, 1);
+    } else {
+      folioItems.push({ ...paperData, _pinnedAt: Date.now() });
+      /* Open panel briefly so the user sees the paper land */
+      folioPanelEl.classList.add('open');
+    }
+    sessionStorage.setItem('sb.folio', JSON.stringify(folioItems));
+    _renderFolio();
+    _updateFolioToggle();
+    /* Sync the button that was just clicked (covers papers with no URL) */
+    if (triggerBtn) {
+      const nowPinned = _isPinned(paperData);
+      triggerBtn.classList.toggle('pinned', nowPinned);
+      triggerBtn.title = nowPinned ? 'Remove from Folio' : 'Save to Folio';
+    }
+  }
+
+  function _updateFolioToggle() {
+    const n = folioItems.length;
+    if (n === 0) {
+      folioToggleBtn.style.display = 'none';
+    } else {
+      folioToggleBtn.style.display = '';
+      folioBadge.textContent = String(n);
+      folioBadge.classList.remove('badge-pulse');
+      void folioBadge.offsetWidth;   /* force reflow to restart animation */
+      folioBadge.classList.add('badge-pulse');
+    }
+  }
+
+  function _renderFolio() {
+    const n = folioItems.length;
+    folioCount.textContent = n > 0 ? `${n} saved` : '';
+
+    if (n === 0) {
+      folioEmpty.style.display = '';
+      folioList.style.display  = 'none';
+      folioFoot.style.display  = 'none';
+      return;
+    }
+    folioEmpty.style.display = 'none';
+    folioList.style.display  = '';
+    folioFoot.style.display  = '';
+
+    folioList.innerHTML = '';
+    folioItems.forEach((p) => folioList.appendChild(_buildFolioItem(p)));
+
+    /* Sync pin-btn states across all source cards in the thread */
+    document.querySelectorAll('.pin-btn[data-url]').forEach((btn) => {
+      const pinned = folioItems.some((x) => (x.url || '').trim() === btn.dataset.url.trim());
+      btn.classList.toggle('pinned', pinned);
+      btn.title = pinned ? 'Remove from Folio' : 'Save to Folio';
+    });
+  }
+
+  function _buildFolioItem(p) {
+    const item = mk('div', 'folio-item');
+
+    /* Top row: title + remove button */
+    const top = mk('div', 'fi-top');
+    const titleEl = p.url ? mk('a', 'fi-title') : mk('span', 'fi-title');
+    if (p.url) { titleEl.href = p.url; titleEl.target = '_blank'; titleEl.rel = 'noopener'; }
+    titleEl.textContent = p.title || 'Untitled';
+    top.appendChild(titleEl);
+
+    const rmBtn = mk('button', 'fi-remove');
+    rmBtn.title     = 'Remove from Folio';
+    rmBtn.innerHTML = '\u00d7';
+    rmBtn.addEventListener('click', () => _togglePin(p, null));
+    top.appendChild(rmBtn);
+    item.appendChild(top);
+
+    /* Meta row: evidence type · journal · year */
+    const meta = mk('div', 'fi-meta');
+    const ev   = mk('span', `ev-tag ev-${p.evidence_type || 'observational'}`);
+    ev.textContent = EV_LABELS[p.evidence_type] || 'Paper';
+    meta.appendChild(ev);
+
+    if (p.journal && p.source !== 'uploaded') {
+      const j = mk('span', 'fi-j'); j.textContent = p.journal; meta.appendChild(j);
+    }
+    if (p.year) { const y = mk('span', 'fi-y'); y.textContent = p.year; meta.appendChild(y); }
+    item.appendChild(meta);
+
+    return item;
   }
 
   function _dlText(filename, content) {

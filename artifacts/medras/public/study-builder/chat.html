@@ -133,7 +133,42 @@
     </div>
     <div class="chat-bar-meta">
       <span id="db-strip" class="db-strip"></span>
+      <button class="folio-toggle-btn" id="folio-toggle-btn" title="Saved papers (Folio)" style="display:none">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+        Folio <span class="folio-badge" id="folio-badge">0</span>
+      </button>
       <button class="new-chat-btn" id="new-chat-btn" title="New conversation">+ New</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Folio panel (right-side drawer) ── -->
+<div class="folio-panel" id="folio-panel">
+  <div class="folio-hdr">
+    <div class="folio-hdr-left">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="opacity:.7"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+      <span class="folio-title">Folio</span>
+      <span class="folio-count" id="folio-count"></span>
+    </div>
+    <button class="folio-close-btn" id="folio-close-btn" title="Close Folio">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+  <div class="folio-body" id="folio-body">
+    <div class="folio-empty" id="folio-empty">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="opacity:.3"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+      <p>Bookmark papers from any answer to build your reading list.</p>
+      <p class="fe-hint">Click the bookmark icon on any source card.</p>
+    </div>
+    <div class="folio-list" id="folio-list" style="display:none"></div>
+  </div>
+  <div class="folio-foot" id="folio-foot" style="display:none">
+    <span class="folio-foot-label">Export saved papers:</span>
+    <div class="folio-export-chips">
+      <button class="export-chip" id="folio-exp-bibtex">BibTeX</button>
+      <button class="export-chip" id="folio-exp-ris">RIS</button>
+      <button class="export-chip" id="folio-exp-van">Vancouver</button>
+      <button class="export-chip export-copy" id="folio-copy-van">Copy</button>
     </div>
   </div>
 </div>

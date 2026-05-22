@@ -817,6 +817,224 @@ mark.stat-hl {
   color: #fff;
 }
 
+/* ── Folio toggle button ─────────────────────────── */
+.folio-toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: .32rem;
+  background: rgba(8,145,178,.1);
+  border: 1px solid rgba(8,145,178,.25);
+  border-radius: 6px;
+  padding: .2rem .55rem;
+  font-size: .72rem;
+  font-weight: 600;
+  color: var(--teal-lt);
+  cursor: pointer;
+  transition: background .13s, border-color .13s;
+  white-space: nowrap;
+}
+.folio-toggle-btn:hover {
+  background: var(--teal-dim);
+  border-color: rgba(8,145,178,.45);
+}
+.folio-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  background: var(--teal-lt);
+  color: #0c2533;
+  border-radius: 20px;
+  font-size: .63rem;
+  font-weight: 800;
+  line-height: 1;
+}
+@keyframes badge-pulse {
+  0%   { transform: scale(1);   }
+  40%  { transform: scale(1.35); }
+  100% { transform: scale(1);   }
+}
+.folio-badge.badge-pulse { animation: badge-pulse .5s ease; }
+
+/* ── Folio panel (right drawer) ──────────────────── */
+.folio-panel {
+  position: fixed;
+  top: 48px;          /* below the nav bar */
+  right: 0;
+  bottom: 0;
+  width: 288px;
+  background: #0d1117;
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  z-index: 150;
+  transform: translateX(100%);
+  transition: transform .24s cubic-bezier(.4,0,.2,1);
+  box-shadow: -6px 0 28px rgba(0,0,0,.45);
+}
+.folio-panel.open { transform: translateX(0); }
+
+.folio-hdr {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: .75rem 1rem;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.folio-hdr-left {
+  display: flex;
+  align-items: center;
+  gap: .45rem;
+}
+.folio-title {
+  font-size: .82rem;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: .01em;
+}
+.folio-count {
+  font-size: .68rem;
+  color: var(--muted2);
+  font-weight: 400;
+}
+.folio-close-btn {
+  background: none;
+  border: none;
+  border-radius: 5px;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted2);
+  cursor: pointer;
+  transition: color .13s, background .13s;
+}
+.folio-close-btn:hover { color: var(--text); background: rgba(255,255,255,.06); }
+
+.folio-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: .6rem;
+}
+
+/* Empty state */
+.folio-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: .5rem;
+  padding: 2.5rem 1.2rem;
+  text-align: center;
+  color: var(--muted2);
+}
+.folio-empty p { font-size: .77rem; margin: 0; line-height: 1.5; }
+.fe-hint { font-size: .69rem !important; opacity: .65; }
+
+/* Folio items */
+.folio-list { display: flex; flex-direction: column; gap: .4rem; }
+.folio-item {
+  background: rgba(255,255,255,.03);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: .6rem .7rem;
+  transition: border-color .13s;
+}
+.folio-item:hover { border-color: rgba(8,145,178,.28); }
+
+.fi-top {
+  display: flex;
+  align-items: flex-start;
+  gap: .4rem;
+  margin-bottom: .3rem;
+}
+a.fi-title, span.fi-title {
+  flex: 1;
+  font-size: .76rem;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.4;
+  display: block;
+  text-decoration: none;
+}
+a.fi-title:hover { color: var(--teal-lt); }
+
+.fi-remove {
+  background: none;
+  border: none;
+  border-radius: 4px;
+  width: 18px;
+  height: 18px;
+  font-size: .9rem;
+  line-height: 1;
+  color: var(--muted2);
+  cursor: pointer;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color .13s, background .13s;
+}
+.fi-remove:hover { color: #f87171; background: rgba(248,113,113,.1); }
+
+.fi-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .22rem .4rem;
+}
+.fi-j, .fi-y {
+  font-size: .66rem;
+  color: var(--muted2);
+}
+
+/* Footer */
+.folio-foot {
+  border-top: 1px solid var(--border);
+  padding: .65rem .8rem;
+  flex-shrink: 0;
+}
+.folio-foot-label {
+  display: block;
+  font-size: .65rem;
+  color: var(--muted2);
+  margin-bottom: .4rem;
+}
+.folio-export-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .3rem;
+}
+
+/* ── Pin (bookmark) button on source cards ───────── */
+.pin-btn {
+  position: absolute;
+  top: .4rem;
+  right: .4rem;
+  background: rgba(255,255,255,.0);
+  border: none;
+  border-radius: 4px;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255,255,255,.2);
+  cursor: pointer;
+  transition: color .14s, background .14s;
+  flex-shrink: 0;
+}
+.pin-btn:hover { color: var(--teal-lt); background: var(--teal-dim); }
+.pin-btn.pinned { color: var(--teal-lt); }
+.pin-btn.pinned svg { filter: drop-shadow(0 0 3px rgba(8,145,178,.5)); }
+
+/* Source card needs position:relative for the absolute pin button */
+.src-card { position: relative; }
+
 /* ── Citation export row ─────────────────────────── */
 .export-row {
   display: flex;
