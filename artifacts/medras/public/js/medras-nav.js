@@ -73,9 +73,9 @@
       soon:    true,
     },
     {
-      id:      'oracle',
-      label:   'Oracle',
-      title:   'AI Research Assistant — Coming soon',
+      id:      'fieldwork',
+      label:   'Fieldwork',
+      title:   'Data Collection — Coming soon',
       url:     null,
       sessionKey: null,
       soon:    true,
