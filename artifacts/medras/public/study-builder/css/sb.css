@@ -499,6 +499,182 @@ body {
 }
 .new-chat-btn:hover { color: var(--text); border-color: rgba(255,255,255,.18); }
 
+/* ── Loading stage indicator ─────────────────────── */
+.loader-wrap {
+  display: flex;
+  align-items: center;
+  gap: .7rem;
+  padding: .2rem 0;
+}
+.stage-text {
+  font-size: .78rem;
+  color: var(--teal-lt);
+  animation: stage-fade 0.4s ease;
+}
+@keyframes stage-fade {
+  from { opacity: 0; transform: translateX(-4px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+/* ── Evidence grade banner ───────────────────────── */
+.ev-banner {
+  display: flex;
+  align-items: baseline;
+  gap: .5rem;
+  padding: .45rem .8rem;
+  border-radius: 8px;
+  font-size: .72rem;
+  border-left: 3px solid;
+  margin-bottom: .1rem;
+}
+.ev-icon  { font-size: .75rem; }
+.ev-label { font-weight: 800; letter-spacing: .06em; }
+.ev-expl  { color: inherit; opacity: .75; font-weight: 400; }
+
+.grade-high     { background: rgba(34,197,94,.1);   border-color: #22c55e; color: #86efac; }
+.grade-moderate { background: rgba(234,179,8,.1);   border-color: #eab308; color: #fde047; }
+.grade-low      { background: rgba(249,115,22,.1);  border-color: #f97316; color: #fdba74; }
+.grade-verylow  { background: rgba(148,163,184,.08);border-color: #64748b; color: #94a3b8; }
+
+/* ── Structured answer sections ──────────────────── */
+.answer-section {
+  display: flex;
+  flex-direction: column;
+  gap: .45rem;
+}
+.section-label {
+  font-size: .67rem;
+  font-weight: 800;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: var(--muted2);
+}
+.findings-list {
+  padding-left: 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: .35rem;
+}
+.finding-item {
+  font-size: .88rem;
+  line-height: 1.7;
+  color: var(--text);
+}
+
+/* ── Consensus row (agrees / debated) ────────────── */
+.consensus-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: .7rem;
+}
+@media (max-width: 600px) { .consensus-row { grid-template-columns: 1fr; } }
+
+.consensus-box {
+  padding: .7rem .85rem;
+  border-radius: 9px;
+  border: 1px solid;
+}
+.agrees-box  { background: rgba(34,197,94,.06);  border-color: rgba(34,197,94,.2); }
+.debated-box { background: rgba(234,179,8,.06);  border-color: rgba(234,179,8,.2); }
+
+.consensus-label {
+  display: flex;
+  align-items: center;
+  gap: .35rem;
+  font-size: .65rem;
+  font-weight: 800;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  margin-bottom: .35rem;
+}
+.cl-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.dot-green { background: #22c55e; }
+.dot-amber { background: #eab308; }
+
+.consensus-text { font-size: .83rem; line-height: 1.65; color: var(--text); opacity: .88; }
+
+/* ── Contradiction callout ───────────────────────── */
+.contradiction-callout {
+  background: rgba(234,179,8,.08);
+  border: 1px solid rgba(234,179,8,.25);
+  border-left: 3px solid #eab308;
+  border-radius: 9px;
+  padding: .65rem .9rem;
+}
+.contra-head {
+  font-size: .72rem;
+  font-weight: 700;
+  color: #fde047;
+  margin-bottom: .4rem;
+  letter-spacing: .03em;
+}
+.contra-list {
+  padding-left: 1.1rem;
+  font-size: .82rem;
+  line-height: 1.65;
+  color: rgba(253,224,71,.85);
+}
+.contra-list li { margin-bottom: .2rem; }
+
+/* ── Limitations ─────────────────────────────────── */
+.limitations-note {
+  font-size: .8rem;
+  color: var(--muted);
+  line-height: 1.6;
+  padding: .5rem .8rem;
+  background: rgba(255,255,255,.03);
+  border-radius: 7px;
+  border: 1px solid var(--border);
+}
+.lim-label { font-weight: 700; color: var(--muted2); margin-right: .3rem; }
+
+/* ── Statistical highlight ───────────────────────── */
+mark.stat-hl {
+  background: rgba(8,145,178,.18);
+  color: var(--teal-lt);
+  border-radius: 3px;
+  padding: 0 3px;
+  font-weight: 600;
+  font-style: normal;
+}
+
+/* ── Action buttons ──────────────────────────────── */
+.action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .4rem;
+  padding-top: .1rem;
+}
+.action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  font-size: .76rem;
+  font-weight: 600;
+  padding: .32rem .8rem;
+  border-radius: 20px;
+  text-decoration: none;
+  border: 1px solid var(--border2);
+  color: var(--muted);
+  background: rgba(255,255,255,.04);
+  transition: background .14s, color .14s, border-color .14s;
+  cursor: pointer;
+}
+.action-btn:hover {
+  background: rgba(255,255,255,.08);
+  color: var(--text);
+  border-color: rgba(255,255,255,.2);
+}
+.action-btn-primary {
+  background: var(--teal-dim);
+  border-color: rgba(8,145,178,.35);
+  color: var(--teal-lt);
+}
+.action-btn-primary:hover {
+  background: rgba(8,145,178,.22);
+  color: #fff;
+}
+
 /* ── Animations ──────────────────────────────────── */
 .fade-in { animation: fi .22s ease; }
 @keyframes fi { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
