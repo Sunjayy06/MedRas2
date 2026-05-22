@@ -176,6 +176,14 @@ body {
   border-radius: 50%;
   display: inline-block;
 }
+.ws-key-note { font-size: .65rem; color: var(--teal-lt); vertical-align: super; }
+.ws-key-note-text {
+  width: 100%;
+  font-size: .66rem;
+  color: var(--muted2);
+  margin-top: -.3rem;
+  padding-left: .1rem;
+}
 
 /* topic grid */
 .topics-label {

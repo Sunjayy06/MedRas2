@@ -28,6 +28,7 @@ WHO_IRIS_BASE  = "https://iris.who.int/rest/search"
 CROSSREF_BASE  = "https://api.crossref.org/works"
 CORE_BASE      = "https://api.core.ac.uk/v3/search/works"
 MEDRXIV_BASE   = "https://api.medrxiv.org/details/medrxiv"
+SCOPUS_BASE    = "https://api.elsevier.com/content/search/scopus"
 
 
 def classify_evidence(title: str, journal: str = "", source: str = "") -> str:
@@ -395,6 +396,65 @@ async def _search_who_iris(query: str, client: httpx.AsyncClient, n: int = 3) ->
         return []
 
 
+# ── Scopus (Elsevier) ────────────────────────────────────────────────────────
+async def _search_scopus(query: str, client: httpx.AsyncClient, n: int = 6) -> list[dict]:
+    api_key = os.environ.get("SCOPUS_API_KEY", "")
+    if not api_key:
+        return []
+    headers = {
+        "X-ELS-APIKey": api_key,
+        "Accept": "application/json",
+    }
+    params = {
+        "query": query,
+        "count": n,
+        "field": "dc:title,dc:description,prism:publicationName,prism:coverDate,"
+                 "dc:creator,prism:doi,eid,citedby-count,openaccess",
+        "sort": "citedby-count",
+    }
+    try:
+        r = await client.get(SCOPUS_BASE, params=params, headers=headers, timeout=_TIMEOUT)
+        r.raise_for_status()
+        entries = (r.json()
+                   .get("search-results", {})
+                   .get("entry", []))
+        papers = []
+        for item in entries:
+            title = (item.get("dc:title") or "").strip()
+            if not title:
+                continue
+            doi   = (item.get("prism:doi") or "").strip()
+            eid   = (item.get("eid") or "").strip()
+            date  = item.get("prism:coverDate") or ""
+            year  = int(date[:4]) if date and len(date) >= 4 else 0
+            journal = (item.get("prism:publicationName") or "").strip()
+            creator = (item.get("dc:creator") or "").strip()
+            authors = [creator] if creator else []
+            cites   = int(item.get("citedby-count") or 0)
+            oa      = str(item.get("openaccess") or "0") == "1"
+            url = (f"https://doi.org/{doi}" if doi
+                   else f"https://www.scopus.com/record/display.uri?eid={eid}" if eid
+                   else "")
+            papers.append({
+                "title": title,
+                "abstract": (item.get("dc:description") or "").strip(),
+                "journal": journal,
+                "year": year,
+                "authors": authors,
+                "doi": doi,
+                "pmid": "",
+                "citation_count": cites,
+                "source": "scopus",
+                "url": url,
+                "evidence_type": classify_evidence(title, journal),
+                "open_access": oa,
+            })
+        return papers
+    except Exception as exc:
+        log.warning("Scopus failed: %s", exc)
+        return []
+
+
 # ── Dedup + rank ──────────────────────────────────────────────────────────────
 def _norm(t: str) -> str:
     return re.sub(r"[^a-z0-9]", "", t.lower())
@@ -440,7 +500,7 @@ SOURCE_LABELS = {
     "pubmed": "PubMed", "cochrane": "Cochrane", "europe_pmc": "Europe PMC",
     "semantic_scholar": "Semantic Scholar", "openalex": "OpenAlex",
     "who_iris": "WHO IRIS", "crossref": "Crossref", "core": "CORE",
-    "medrxiv": "medRxiv",
+    "medrxiv": "medRxiv", "scopus": "Scopus",
 }
 
 
@@ -457,10 +517,11 @@ async def multi_source_search(query: str, top_n: int = 10) -> dict:
             _search_crossref(query, client),
             _search_core(query, client),
             _search_medrxiv(query, client),
+            _search_scopus(query, client),
             return_exceptions=True,
         )
     labels = ["pubmed", "cochrane", "europe_pmc", "semantic_scholar",
-              "openalex", "who_iris", "crossref", "core", "medrxiv"]
+              "openalex", "who_iris", "crossref", "core", "medrxiv", "scopus"]
     papers:      list[dict] = []
     sources_hit: set[str]   = set()
     for label, res in zip(labels, results):
