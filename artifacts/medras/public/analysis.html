@@ -1058,5 +1058,67 @@
     </footer>
 
     <script src="/js/analysis.js?v=2026050505" defer></script>
+
+    <!-- MedRAS Study Builder prefill (Phase 6) -->
+    <script>
+    (function () {
+      var raw = sessionStorage.getItem('medras.sigma.prefill');
+      if (!raw) return;
+      try {
+        var pf = JSON.parse(raw);
+        if (!pf || (Date.now() - (pf.ts || 0)) > 10 * 60 * 1000) return;
+        sessionStorage.removeItem('medras.sigma.prefill');
+
+        function _showBanner(msg) {
+          var b = document.createElement('div');
+          b.style.cssText = 'position:fixed;top:62px;left:50%;transform:translateX(-50%);' +
+            'background:rgba(139,92,246,.12);border:1px solid rgba(139,92,246,.3);' +
+            'border-radius:8px;padding:.45rem 1rem;font-size:.77rem;color:#c4b5fd;' +
+            'z-index:9999;display:flex;gap:.6rem;align-items:center;max-width:94vw;' +
+            'box-shadow:0 4px 16px rgba(0,0,0,.35)';
+          b.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg> ' +
+            msg + ' <button onclick="this.parentNode.remove()" style="background:none;border:none;cursor:pointer;color:inherit;font-size:1rem;line-height:1;margin-left:.25rem">\u00d7</button>';
+          document.body.appendChild(b);
+          setTimeout(function () { if (b.parentNode) b.remove(); }, 9000);
+        }
+
+        window.addEventListener('DOMContentLoaded', function () {
+          setTimeout(function () {
+            /* Show the study-phase panel and fill the describe textarea */
+            var studyPhase = document.getElementById('s1-study-phase');
+            var descPanel  = document.getElementById('s1-panel-describe');
+            var propPanel  = document.getElementById('s1-panel-proposal');
+            if (studyPhase) {
+              studyPhase.classList.remove('is-hidden');
+              studyPhase.hidden = false;
+            }
+            if (descPanel) {
+              descPanel.classList.remove('is-hidden');
+              descPanel.hidden = false;
+            }
+            if (propPanel) {
+              propPanel.classList.add('is-hidden');
+              propPanel.hidden = true;
+            }
+
+            var ta = document.getElementById('s1-study-desc');
+            if (ta && pf.studyDesc) {
+              ta.value = pf.studyDesc;
+              ta.dispatchEvent(new Event('input'));
+            }
+            var continueBtn = document.getElementById('s1-describe-continue-btn');
+            if (continueBtn) continueBtn.removeAttribute('disabled');
+
+            var tests = (pf.detectedTests || []).join(', ');
+            _showBanner(
+              'Pre-filled from Research Assistant' +
+              (tests ? ' \u2014 suggested analysis: <strong>' + tests + '</strong>' : '') +
+              '. Upload your data to continue.'
+            );
+          }, 250);
+        });
+      } catch (_) {}
+    }());
+    </script>
   </body>
 </html>

@@ -776,5 +776,47 @@
     </footer>
 
     <script src="/js/sample-size.js" defer></script>
+
+    <!-- MedRAS Study Builder prefill (Phase 6) -->
+    <script>
+    (function () {
+      var raw = sessionStorage.getItem('medras.cohort.prefill');
+      if (!raw) return;
+      try {
+        var pf = JSON.parse(raw);
+        if (!pf || (Date.now() - (pf.ts || 0)) > 10 * 60 * 1000) return;
+        sessionStorage.removeItem('medras.cohort.prefill');
+
+        function _showBanner(msg) {
+          var b = document.createElement('div');
+          b.style.cssText = 'position:fixed;top:62px;left:50%;transform:translateX(-50%);' +
+            'background:rgba(6,182,212,.12);border:1px solid rgba(6,182,212,.3);' +
+            'border-radius:8px;padding:.45rem 1rem;font-size:.77rem;color:#67e8f9;' +
+            'z-index:9999;display:flex;gap:.6rem;align-items:center;max-width:94vw;' +
+            'box-shadow:0 4px 16px rgba(0,0,0,.35)';
+          b.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg> ' +
+            msg + ' <button onclick="this.parentNode.remove()" style="background:none;border:none;cursor:pointer;color:inherit;font-size:1rem;line-height:1;margin-left:.25rem">\u00d7</button>';
+          document.body.appendChild(b);
+          setTimeout(function () { if (b.parentNode) b.remove(); }, 9000);
+        }
+
+        window.addEventListener('DOMContentLoaded', function () {
+          /* Click the "Enter objective" card (Card A) */
+          var cardA = document.querySelector('[data-entry="A"]');
+          if (cardA) cardA.click();
+
+          setTimeout(function () {
+            var ta = document.getElementById('cardA-objective');
+            if (ta && pf.context) {
+              ta.value = pf.context;
+              ta.dispatchEvent(new Event('input'));
+              ta.dispatchEvent(new Event('change'));
+            }
+            _showBanner('Pre-filled from Research Assistant \u2014 review the objective then click <strong>Detect formula</strong>.');
+          }, 180);
+        });
+      } catch (_) {}
+    }());
+    </script>
   </body>
 </html>

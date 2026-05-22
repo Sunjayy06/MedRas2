@@ -50,6 +50,22 @@
     'VERY LOW':{ cls:'grade-verylow',  label:'VERY LOW EVIDENCE',  icon:'○' },
   };
 
+  /* ── Statistical test patterns (Phase 6) ── */
+  const _STAT_TESTS = [
+    { re: /\bt[\s-]test\b|student.s\s+t[\s-]test/i,              name: 't-test'              },
+    { re: /\bchi[\s-]?square\b|χ²|chi.squared\b/i,               name: 'chi-square'          },
+    { re: /\banova\b/i,                                           name: 'ANOVA'               },
+    { re: /\bmann[\s-]whitney\b|\bwilcoxon\b/i,                   name: 'Mann-Whitney'        },
+    { re: /\blogistic\s+regression\b/i,                           name: 'logistic regression' },
+    { re: /\blinear\s+regression\b/i,                             name: 'linear regression'   },
+    { re: /\bcox\s+(?:regression|model)\b/i,                      name: 'Cox regression'      },
+    { re: /\bkaplan[\s-]meier\b|\bsurvival\s+analysis\b/i,        name: 'Kaplan-Meier'        },
+    { re: /\bpearson\b|\bspearman\b|\bcorrelation\s+analysis\b/i, name: 'correlation'         },
+    { re: /\broc\s+(?:curve|analysis)\b|\bauroc\b/i,              name: 'ROC analysis'        },
+    { re: /\bkruskal[\s-]wallis\b/i,                              name: 'Kruskal-Wallis'      },
+    { re: /\bmcnemar\b|\bfisher.s\s+exact\b/i,                   name: "Fisher's exact"      },
+  ];
+
   /* ── Session & upload state ── */
   let sessionId      = sessionStorage.getItem('sb.session_id') || null;
   let busy           = false;
@@ -326,7 +342,7 @@
         }));
       }
 
-      await renderAIMessage(aiEl, data);
+      await renderAIMessage(aiEl, data, question);
       updateDbStrip(data.sources_searched || []);
 
     } catch (e) {
@@ -367,7 +383,7 @@
   }
 
   /* ── Main renderer (structured) ── */
-  async function renderAIMessage(el, d) {
+  async function renderAIMessage(el, d, question) {
     el.innerHTML = '';
 
     /* 1 — Evidence grade banner */
@@ -479,6 +495,12 @@
       actRow.appendChild(btn);
     });
     el.appendChild(actRow);
+
+    /* 4b — Contextual statistical callout */
+    const statHints = _extractStatHints(d.answer, d.key_findings);
+    if (statHints.hasSampleSize || statHints.hasStatTest) {
+      el.appendChild(_buildStatCallout(statHints, question || '', d.answer));
+    }
 
     /* 5 — Meta row */
     const meta = mk('div', 'msg-meta');
@@ -901,6 +923,159 @@
       else if (p.url) ref += `. ${p.url}`;
       return ref;
     }).join('\n\n');
+  }
+
+  /* ══════════════════════════════════════════════════════════════════
+     STATISTICAL CONTEXT  (Phase 6 — contextual tool deep-links)
+  ══════════════════════════════════════════════════════════════════ */
+
+  function _extractStatHints(answerText, keyFindings) {
+    const combined = [
+      answerText || '',
+      ...((keyFindings || []).map((f) => (f.finding || ''))),
+    ].join(' ');
+
+    const hints = {
+      hasSampleSize:    false,
+      hasStatTest:      false,
+      sampleSizeParams: {},
+      detectedParams:   [],
+      detectedTests:    [],
+    };
+
+    /* ── Sample size params ── */
+    const toNum = (s) => s ? s.replace('%', '').trim() : null;
+
+    /* Explicit p1 / p2 */
+    const p1m = combined.match(/\bp1\s*[=:≈]\s*(0\.\d+|\d{1,3}(?:\.\d+)?%?)/i);
+    const p2m = combined.match(/\bp2\s*[=:≈]\s*(0\.\d+|\d{1,3}(?:\.\d+)?%?)/i);
+    if (p1m) {
+      hints.sampleSizeParams.p1 = toNum(p1m[1]);
+      hints.detectedParams.push(`p\u2081 \u2248 ${p1m[1]}`);
+      hints.hasSampleSize = true;
+    }
+    if (p2m) {
+      hints.sampleSizeParams.p2 = toNum(p2m[1]);
+      hints.detectedParams.push(`p\u2082 \u2248 ${p2m[1]}`);
+      hints.hasSampleSize = true;
+    }
+
+    /* Power */
+    const pwrm = combined.match(/\b(\d{2,3})\s*%\s*power\b/i)
+      || combined.match(/\bpower\s+of\s+(?:0\.)(\d{1,2})\b/i);
+    if (pwrm) {
+      const pw = pwrm[1] ? (parseFloat(pwrm[1]) <= 1 ? String(Math.round(parseFloat('0.' + pwrm[1]) * 100)) : pwrm[1]) : '80';
+      hints.sampleSizeParams.power = pw;
+      hints.detectedParams.push(`${pw}% power`);
+      hints.hasSampleSize = true;
+    }
+
+    /* Alpha / significance level */
+    const alm = combined.match(/\balpha\s*[=:≈]\s*(0\.\d{2})\b/i)
+      || combined.match(/significance\s+level\s+of\s+(0\.\d{2})\b/i)
+      || combined.match(/\bp\s*[<>]\s*(0\.0[15])\b/i);
+    if (alm) {
+      hints.sampleSizeParams.alpha = alm[1];
+      hints.detectedParams.push(`\u03b1 = ${alm[1]}`);
+      hints.hasSampleSize = true;
+    }
+
+    /* NNT — implies comparative RCT, useful for sample size context */
+    const nntm = combined.match(/\bNNT\s*(?:=|of)?\s*(\d{1,4})\b/i);
+    if (nntm) {
+      hints.detectedParams.push(`NNT = ${nntm[1]}`);
+      hints.hasSampleSize = true;
+    }
+
+    /* OR / RR / HR as effect size proxies */
+    const orm = combined.match(/\bOR\s+([\d.]+)\b/);
+    if (orm && parseFloat(orm[1]) !== 1) {
+      hints.detectedParams.push(`OR = ${orm[1]}`);
+      hints.hasSampleSize = hints.hasSampleSize || true;
+    }
+
+    /* n = X or sample size of X */
+    const nm = combined.match(/\bn\s*=\s*(\d{2,5})\b/i)
+      || combined.match(/\bsample\s+size\s+of\s+(\d{2,5})\b/i);
+    if (nm) {
+      hints.sampleSizeParams.n = nm[1];
+      hints.detectedParams.push(`n = ${nm[1]}`);
+      hints.hasSampleSize = true;
+    }
+
+    /* ── Statistical tests ── */
+    _STAT_TESTS.forEach(({ re, name }) => {
+      if (re.test(combined) && !hints.detectedTests.includes(name)) {
+        hints.detectedTests.push(name);
+        hints.hasStatTest = true;
+      }
+    });
+
+    return hints;
+  }
+
+  function _buildStatCallout(hints, question, answerText) {
+    const box = mk('div', 'stat-callout');
+
+    /* Header */
+    const head = mk('div', 'stc-head');
+    head.innerHTML =
+      '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+      'stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">' +
+      '<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>' +
+      '<span>Statistical tools for this question</span>';
+    box.appendChild(head);
+
+    /* Detected chips */
+    const all = [...hints.detectedParams, ...hints.detectedTests];
+    if (all.length) {
+      const row = mk('div', 'stc-chip-row');
+      all.forEach((label) => {
+        const chip = mk('span', 'stc-chip'); chip.textContent = label; row.appendChild(chip);
+      });
+      box.appendChild(row);
+    }
+
+    /* Action links */
+    const btnRow = mk('div', 'stc-btn-row');
+
+    if (hints.hasSampleSize) {
+      const a = mk('a', 'stc-btn stc-btn-cohort');
+      a.href = '/sample-size.html';
+      a.innerHTML = '\u03a3 Calculate sample size <span class="stc-arrow">\u2192</span>';
+      a.addEventListener('click', () => {
+        try {
+          sessionStorage.setItem('medras.cohort.prefill', JSON.stringify({
+            objective: question,
+            context:   `Research question: ${question}\n\n${(answerText || '').substring(0, 600)}`,
+            params:    hints.sampleSizeParams,
+            detected:  hints.detectedParams,
+            ts:        Date.now(),
+          }));
+        } catch (_) {}
+      });
+      btnRow.appendChild(a);
+    }
+
+    if (hints.hasStatTest) {
+      const a = mk('a', 'stc-btn stc-btn-sigma');
+      a.href = '/analysis.html';
+      a.innerHTML = '\u2248 Open analysis engine <span class="stc-arrow">\u2192</span>';
+      a.addEventListener('click', () => {
+        try {
+          sessionStorage.setItem('medras.sigma.prefill', JSON.stringify({
+            studyDesc:     `Research question: ${question}\n\nSuggested analyses: ${hints.detectedTests.join(', ')}.`,
+            detectedTests: hints.detectedTests,
+            context:       (answerText || '').substring(0, 600),
+            ts:            Date.now(),
+          }));
+        } catch (_) {}
+      });
+      btnRow.appendChild(a);
+    }
+
+    box.appendChild(btnRow);
+    return box;
   }
 
   /* ══════════════════════════════════════════════════════════════════
