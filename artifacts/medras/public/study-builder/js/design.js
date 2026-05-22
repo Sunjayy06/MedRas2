@@ -481,7 +481,7 @@
         population: state.pico.P||'', setting: state.methodology.study_setting||'',
         study_period: state.methodology.study_period||'',
       }));
-      window.location.href = '/proposal-module/intake.html';
+      window.location.href = '/proposal-module/role.html';
     });
 
     document.getElementById('btn-send-thesis')?.addEventListener('click', () => {
