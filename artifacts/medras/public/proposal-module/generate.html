@@ -6,6 +6,7 @@
     <title>Step 6 · Generate · Prologue · MedRAS</title>
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%237aa2ff'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-family='Inter,sans-serif' font-size='17' font-weight='800' fill='%23071430'%3EP%3C/text%3E%3C/svg%3E" />
     <link rel="stylesheet" href="/proposal-module/css/style.css?v=2026050606" />
+    <link rel="stylesheet" href="/css/medras-nav.css" />
     <style>
       .gen-grid { display:grid; grid-template-columns: minmax(0,1fr) 360px; gap:24px; align-items:start; margin-top:18px; }
       @media (max-width: 980px) { .gen-grid { grid-template-columns: 1fr; } }
@@ -50,7 +51,7 @@
       .gen-manual-note strong { color:#cfe0ff; }
     </style>
   </head>
-  <body data-testid="page-prop-generate">
+  <body data-testid="page-prop-generate" data-medras-module="prologue">
     <header class="prop-header">
       <a href="/proposal-module/" class="prop-brand" data-testid="link-prop-home">
         <span class="prop-brand-mark">P</span>
@@ -158,5 +159,6 @@
 
     <script src="/proposal-module/js/proposal-state.js?v=2026050605"></script>
     <script src="/proposal-module/js/generate.js?v=2026050602"></script>
+    <script src="/js/medras-nav.js" defer></script>
   </body>
 </html>

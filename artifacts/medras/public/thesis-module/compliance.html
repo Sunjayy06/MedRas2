@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Compliance · Scriptorium · MedRAS</title>
 <link rel="stylesheet" href="/thesis-module/css/style.css" />
+<link rel="stylesheet" href="/css/medras-nav.css" />
 <style>
   .th-comp-summary { display:grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap:10px; margin:14px 0 18px; }
   .th-comp-tile { background:#fff; border:1px solid var(--th-line); border-radius:10px; padding:12px 14px; }
@@ -27,7 +28,7 @@
   .th-gate.is-clear { background:#ecf6ed; border-color:var(--th-emerald); }
 </style>
 </head>
-<body>
+<body data-medras-module="scriptorium" data-medras-module="scriptorium">
 <header class="th-header">
   <a class="th-brand" href="/thesis-module/"><span class="th-brand-mark">S</span><span>MedRAS — Scriptorium</span></a>
   <nav class="th-nav"><a href="/thesis-module/dashboard.html">Dashboard</a><a href="/">← MedRAS</a></nav>
@@ -185,5 +186,6 @@
   if (hasContent || exportIntent) run();
 })();
 </script>
+<script src="/js/medras-nav.js" defer></script>
 </body>
 </html>

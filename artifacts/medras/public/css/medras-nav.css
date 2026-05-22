@@ -1,0 +1,136 @@
+/* ═══════════════════════════════════════════════════════════════════
+   MedRAS Global Navigation Bar  — Phase 7
+   Sits above every module's own header as a fixed 36 px strip.
+   Uses its own namespaced class prefix (mn-) to avoid any conflicts.
+═══════════════════════════════════════════════════════════════════ */
+
+/* Push page body content below the bar */
+html.mn-active {
+  scroll-padding-top: 36px;
+}
+html.mn-active body {
+  padding-top: 36px;
+}
+
+/* ── Bar container ─────────────────────────────────────────────── */
+.mn-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 36px;
+  z-index: 10000;
+  background: #060d1f;
+  border-bottom: 1px solid rgba(255,255,255,.07);
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  gap: 0;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Wordmark ──────────────────────────────────────────────────── */
+.mn-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  text-decoration: none;
+  color: #fff;
+  flex-shrink: 0;
+  margin-right: 14px;
+}
+.mn-logo-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  background: #2f6fed;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: -.5px;
+  line-height: 1;
+}
+.mn-logo-text {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .01em;
+  color: rgba(255,255,255,.85);
+}
+.mn-logo:hover .mn-logo-text { color: #fff; }
+
+/* ── Module links ──────────────────────────────────────────────── */
+.mn-modules {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 1;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.mn-modules::-webkit-scrollbar { display: none; }
+
+.mn-item {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 10px;
+  height: 36px;
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(255,255,255,.52);
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+  transition: color .12s, border-color .12s;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.mn-item:hover {
+  color: rgba(255,255,255,.88);
+}
+.mn-item-active {
+  color: #fff;
+  font-weight: 600;
+  border-bottom-color: #2f6fed;
+}
+
+/* ── Session-in-progress dot ────────────────────────────────────── */
+.mn-dot {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #22d3ee;
+  flex-shrink: 0;
+  animation: mn-pulse 2.4s ease-in-out infinite;
+}
+@keyframes mn-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: .35; }
+}
+
+/* ── Right: all-tools link ─────────────────────────────────────── */
+.mn-right {
+  margin-left: 10px;
+  flex-shrink: 0;
+}
+.mn-home {
+  font-size: 11.5px;
+  font-weight: 500;
+  color: rgba(255,255,255,.38);
+  text-decoration: none;
+  padding: 0 4px;
+  transition: color .12s;
+}
+.mn-home:hover { color: rgba(255,255,255,.75); }
+
+/* ── Responsive: hide labels on very narrow screens ─────────────── */
+@media (max-width: 520px) {
+  .mn-logo-text { display: none; }
+  .mn-item      { padding: 0 8px; font-size: 11px; }
+  .mn-home      { display: none; }
+}
