@@ -1,0 +1,233 @@
+I am going to give you one clear 
+instruction. Read everything carefully. 
+Plan each piece thoughtfully. Then 
+build one piece at a time and stop 
+after each piece so I can check it 
+before you continue.
+
+Here is what I want done across 
+two areas.
+
+AREA ONE — MAKE THE STUDY BUILDER 
+FEEL LIKE TALKING TO AN INTELLIGENT 
+RESEARCH COLLEAGUE
+
+Right now it feels like a search engine. 
+Someone types a question, gets a 
+summary of papers, and that is it. 
+This is not addictive. A researcher 
+who has had a long shift will not 
+come back to this.
+
+What I want instead is this feeling. 
+The researcher types a question. The 
+system understands what they are 
+really asking, not just the words. 
+It searches the right databases for 
+the right information. It reads what 
+it found and gives a clear intelligent 
+answer that feels like a knowledgeable 
+senior colleague explained it. The 
+answer remembers what was discussed 
+before in the same conversation. The 
+researcher can ask follow up questions 
+naturally. The answer streams word 
+by word so it feels alive. Every 
+fact has a numbered reference. The 
+references are real papers with 
+clickable links. The quality of 
+evidence is shown clearly so the 
+researcher knows if this is a strong 
+finding or a weak one.
+
+To achieve this build these things 
+one at a time in this order:
+
+First piece: Make the system understand 
+questions better before searching.
+When someone asks a question the 
+system should first break it down 
+into its key parts. Who is the patient 
+population. What is being studied. 
+What is it being compared to. What 
+is the outcome being measured. Then 
+use those parts to create better 
+search terms instead of just searching 
+the raw question. This alone will 
+make answers much more relevant.
+Build this and stop. Show me it works.
+
+Second piece: Add conversation memory.
+Right now every question is forgotten 
+after answering. If someone asks about 
+thyroid cancer surgery and then asks 
+what about complications the system 
+has no idea what complications means 
+in context. Fix this by remembering 
+the last five things discussed in 
+the current session. Use that memory 
+when answering each new question.
+Build this and stop. Show me it works.
+
+Third piece: Change how answers are 
+built to prevent wrong information.
+Right now the system dumps all the 
+paper summaries into one big prompt 
+and asks the AI to write an answer. 
+This is how hallucination happens. 
+Change it to two steps. First step 
+is read each paper and pull out only 
+the sentences directly relevant to 
+the question. Second step is use 
+only those pulled sentences to write 
+the final answer. This means every 
+sentence in the answer comes from 
+a real sentence in a real paper. 
+Nothing is invented.
+Build this and stop. Show me it works.
+
+Fourth piece: Change how answers look.
+Make the answer stream word by word 
+like Claude does so it feels alive.
+Structure every answer clearly with 
+a short summary at the top, then 
+the key findings, then what the 
+evidence agrees on, then what is 
+still debated, then suggested follow 
+up questions.
+Show an evidence quality label on 
+every answer saying whether the 
+evidence is strong, moderate, or weak.
+Highlight any numbers like percentages 
+and p values so they stand out.
+Build this and stop. Show me it works.
+
+Fifth piece: Let researchers upload 
+a paper PDF and ask questions about it.
+A researcher gets a paper from their 
+supervisor and wants to understand it. 
+They upload it. They ask questions. 
+The system reads the paper and answers 
+from it directly. This is one of the 
+most useful things Claude does and 
+we need it here.
+Build this and stop. Show me it works.
+
+Sixth piece: Add a one click button 
+to export all references from any 
+answer in Vancouver format and APA 
+format as a text file the researcher 
+can copy into their paper.
+Build this and stop. Show me it works.
+
+AREA TWO — BUILD THE DOCUMENT 
+MANAGEMENT MODULE
+
+Call this module something that feels 
+right for a writing and formatting tool. 
+You choose the name. Give it its own 
+icon on the home screen. Place it 
+between the thesis writer and the 
+plagiarism checker.
+
+This module solves one specific painful 
+problem that every researcher faces. 
+They spend weeks writing a thesis. 
+Their guide asks for changes. Thirty 
+references removed. Tables restructured. 
+Sections reordered. The entire document 
+numbering breaks. They spend days 
+fixing it manually. This module 
+makes that problem disappear.
+
+Build these pieces one at a time 
+in this order:
+
+First piece: Smart reference management.
+Every reference in the document has 
+an invisible tracking number behind 
+the scenes. When the researcher 
+deletes any reference every citation 
+number in the entire document updates 
+automatically. They never manually 
+renumber anything. All references 
+are automatically formatted in 
+Vancouver style. One click to switch 
+to APA or any other style.
+Build this and stop. Show me it works.
+
+Second piece: Smart table and figure 
+numbering.
+Every table and every figure is tracked 
+invisibly. When a table is deleted 
+all later tables renumber automatically. 
+All mentions in the text like see 
+Table 3 update automatically too. 
+Same for figures. The researcher 
+never chases broken references 
+through a document again.
+Build this and stop. Show me it works.
+
+Third piece: Guide feedback handler.
+The researcher types exactly what 
+their guide said in plain English 
+into a text box. For example my 
+guide said remove references 45 to 
+75 and move the conclusion before 
+the limitations and change the bar 
+charts to pie charts. The system 
+reads this, understands each 
+instruction, makes every change, 
+shows the researcher a list of 
+what was changed, and downloads 
+a freshly formatted correct document. 
+Version history is kept so the 
+previous version is always recoverable.
+Build this and stop. Show me it works.
+
+Fourth piece: Section reordering.
+The researcher can drag sections 
+to change their order. All numbers, 
+references, tables, and figures 
+throughout the document update 
+correctly after reordering.
+Build this and stop. Show me it works.
+
+Fifth piece: Connect to the analysis 
+engine.
+When a researcher finishes their 
+statistical analysis there should 
+be a button that says take this to 
+the document module. Clicking it 
+sends the generated results section, 
+methods section, and all graphs 
+directly into the document module 
+so the researcher can complete the 
+rest of their paper there without 
+copying and pasting anything manually.
+Build this and stop. Show me it works.
+
+FOR ALL MODULES ADD THESE TWO THINGS:
+
+One: Add coming soon placeholders 
+on the home screen for Journal Finder 
+and Data Collection. Do not build 
+them yet. Just show the icons with 
+coming soon labels so users know 
+they are planned.
+
+Two: Add a simple top navigation 
+bar that appears on every module 
+screen showing all module names. 
+When a user is in the statistical 
+analysis engine they can see the 
+other modules and click to switch. 
+Right now switching between modules 
+feels like going to a different app. 
+Fix this so MedRAS feels like one 
+connected product.
+
+That is everything. Start with the 
+first piece of Area One. Build it. 
+Stop. Show me it works. Then I will 
+tell you to continue to the next piece.

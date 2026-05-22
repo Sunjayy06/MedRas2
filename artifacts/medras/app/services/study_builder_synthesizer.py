@@ -1,96 +1,405 @@
-"""Study Builder — AI answer synthesiser (GPT-4o-mini → Gemini → raw fallback)."""
+"""Study Builder — distillation-based RAG synthesis pipeline.
+
+Pipeline per question
+─────────────────────
+1. Per-paper sentence distillation  (keyword overlap, no API call)
+2. GRADE-style evidence quality grade
+3. Structured Gemini / OpenAI synthesis  (JSON, strict schema)
+4. Raw-source fallback if both AI providers fail
+
+The AI only ever sees distilled sentences, never full abstracts.
+Every sentence in the answer must trace to a real sentence in a real paper.
+"""
 
 from __future__ import annotations
 
+import json
 import logging
 import os
+import re
+from collections import Counter
 
 log = logging.getLogger(__name__)
 
-_SYSTEM = """\
-You are a medical research assistant for MedRAS.
-Answer the user's question using ONLY the research papers provided below.
+# ── Stop words for sentence scoring ─────────────────────────────────────────
+_SW: frozenset[str] = frozenset({
+    "the", "a", "an", "and", "or", "of", "in", "is", "are", "for", "to",
+    "with", "on", "at", "by", "from", "be", "was", "were", "this", "that",
+    "which", "it", "its", "as", "we", "our", "their", "there", "these",
+    "those", "but", "not", "no", "has", "have", "had", "been", "were",
+    "also", "than", "however", "between", "among", "after", "before",
+    "results", "methods", "conclusions", "background", "objective",
+    "patients", "patient", "study", "studies", "found", "showed",
+})
 
-STRICT RULES:
-1. Cite every factual statement with square-bracket source numbers, e.g. [1] or [1,3].
-2. Never add information not present in the provided documents.
-3. If the documents are insufficient to answer reliably, respond with this sentence only:
-   "The available published evidence is insufficient to answer this question reliably. \
-Please consult a qualified clinical specialist or conduct a targeted database search."
-4. Keep your answer under 400 words.
-5. End with a "References" section: [N] Authors. Title. Journal. Year. URL
-6. Use calm, precise academic English.
-7. Never fabricate p-values, effect sizes, dosages, or clinical conclusions.
+# Statistical signal patterns — boost sentences that contain hard numbers
+_STAT_PAT = re.compile(
+    r"(p\s*[<=>]\s*0\.\d+|"
+    r"\d+\.?\d*\s*%|"
+    r"\bOR\b|\bRR\b|\bHR\b|\bNNT\b|\bARR\b|\bRRR\b|"
+    r"95\s*%\s*CI|confidence interval|"
+    r"odds ratio|relative risk|hazard ratio|"
+    r"mean\s+difference|effect size|"
+    r"significant(ly)?|p[\s-]?value)",
+    re.IGNORECASE,
+)
 
-=== BEGIN UNTRUSTED RESEARCH EVIDENCE ===
+# ── Sentence distillation ────────────────────────────────────────────────────
+
+def _question_keywords(question: str) -> frozenset[str]:
+    clean = re.sub(r"[^\w\s]", " ", question.lower())
+    return frozenset(w for w in clean.split() if w not in _SW and len(w) > 2)
+
+
+def _distill(question: str, abstract: str, top_n: int = 4) -> list[str]:
+    """Extract the *top_n* most relevant sentences from *abstract*.
+
+    Scoring: keyword overlap with question + statistical-signal boost.
+    Sentences shorter than 20 characters are skipped.
+    """
+    if not abstract or not abstract.strip():
+        return []
+
+    q_kw = _question_keywords(question)
+    raw_sents = re.split(r"(?<=[.!?])\s+(?=[A-Z])", abstract.strip())
+    # secondary split on semicolons that separate independent clauses
+    sents: list[str] = []
+    for s in raw_sents:
+        if len(s) > 200:  # long run-on — try semicolon split
+            sents.extend(p.strip() for p in s.split(";") if p.strip())
+        else:
+            sents.append(s.strip())
+
+    scored: list[tuple[float, str]] = []
+    for sent in sents:
+        if len(sent) < 20:
+            continue
+        s_words = frozenset(
+            re.sub(r"[^\w]", "", w).lower()
+            for w in sent.split()
+        )
+        overlap = len(q_kw & s_words)
+        stat_bonus = 2.0 if _STAT_PAT.search(sent) else 0.0
+        scored.append((overlap + stat_bonus, sent))
+
+    scored.sort(key=lambda x: x[0], reverse=True)
+    return [s for _, s in scored[:top_n] if s]
+
+
+# ── GRADE evidence quality ───────────────────────────────────────────────────
+
+def _grade(papers: list[dict]) -> tuple[str, str]:
+    """Return *(grade, explanation)* using GRADE-like logic."""
+    counts: Counter[str] = Counter(
+        p.get("evidence_type", "observational") for p in papers
+    )
+    sr  = counts["systematic_review"]
+    rct = counts["rct"]
+    gl  = counts["guideline"]
+    obs = counts["observational"]
+
+    if sr >= 1:
+        label = "HIGH"
+        n_desc = f"{sr} systematic review{'s' if sr > 1 else ''}"
+        if rct:
+            n_desc += f" and {rct} RCT{'s' if rct > 1 else ''}"
+        expl = f"Evidence graded HIGH — based on {n_desc}."
+    elif rct >= 2:
+        label = "HIGH"
+        expl  = f"Evidence graded HIGH — based on {rct} randomised controlled trials."
+    elif rct == 1:
+        label = "MODERATE"
+        expl  = "Evidence graded MODERATE — 1 RCT found; supplemented by observational data."
+    elif gl >= 1:
+        label = "MODERATE"
+        expl  = f"Evidence graded MODERATE — based on {gl} clinical guideline(s)."
+    elif obs >= 3:
+        label = "LOW"
+        expl  = f"Evidence graded LOW — {obs} observational studies; no RCTs or reviews found."
+    else:
+        label = "VERY LOW"
+        expl  = "Evidence graded VERY LOW — fewer than 3 relevant studies retrieved."
+
+    return label, expl
+
+
+# ── Structured synthesis ─────────────────────────────────────────────────────
+
+_SYNTH_SYSTEM = """\
+You are a senior medical researcher producing an evidence-based briefing.
+You have been given distilled evidence — sentences extracted directly from \
+real research papers. Your job is to synthesise these into a structured answer.
+
+RULES — strictly enforced:
+1. Every factual statement must cite at least one source by its number [N].
+2. Never invent statistics, p-values, effect sizes, drug doses, or clinical \
+conclusions. If the evidence does not support a claim, do not make it.
+3. If evidence is conflicting, explicitly name both sides in contradictions[].
+4. next_questions must be specific to this question and answer — not generic \
+advice like "consult a specialist". They should be the natural next research \
+question a curious clinician would ask.
+5. Keep summary to 2–3 sentences maximum.
+6. Use plain, precise academic English.
+
+=== BEGIN DISTILLED EVIDENCE ===
 {evidence}
-=== END UNTRUSTED RESEARCH EVIDENCE ===
+=== END DISTILLED EVIDENCE ===
+
+Conversation history (for context only — do not cite from it):
+{history}
+
+Return ONLY valid JSON matching this exact schema — no markdown, no extra keys:
+{{
+  "summary": "2-3 sentence direct answer citing sources",
+  "key_findings": [
+    {{"finding": "specific finding", "sources": [1, 2]}}
+  ],
+  "what_agrees": "what all sources consistently show",
+  "what_is_debated": "areas of uncertainty or conflicting findings (write N/A if none)",
+  "contradictions": ["Paper [N] found X while paper [M] found Y"],
+  "limitations": "key limitations of this body of evidence",
+  "next_questions": ["specific follow-up question 1", "specific follow-up question 2", "specific follow-up question 3"]
+}}
 """
 
 
-def _evidence_block(papers: list[dict]) -> str:
-    lines = []
+def _evidence_block(papers: list[dict], distilled: dict[int, list[str]]) -> str:
+    """Build the distilled evidence block for the synthesis prompt."""
+    lines: list[str] = []
     for i, p in enumerate(papers, 1):
         authors  = ", ".join(p.get("authors") or []) or "Authors unknown"
-        abstract = (p.get("abstract") or "No abstract available.")[:700]
-        lines.append(
+        journal  = p.get("journal", "")
+        year     = p.get("year", "")
+        url      = p.get("url", "")
+        ev_type  = p.get("evidence_type", "")
+        excerpts = distilled.get(i, [])
+
+        header = (
             f"[{i}] {authors}. \"{p.get('title', 'Untitled')}\". "
-            f"{p.get('journal', '')} ({p.get('year', '')}).\n"
-            f"    URL: {p.get('url', '')}\n"
-            f"    Abstract: {abstract}"
+            f"{journal} ({year}). URL: {url}. "
+            f"Study type: {ev_type}."
         )
+        if excerpts:
+            excerpt_text = " | ".join(excerpts)
+            lines.append(f"{header}\n    Relevant excerpts: {excerpt_text}")
+        else:
+            # No distilled sentences — include a short abstract snippet
+            fallback = (p.get("abstract") or "")[:300]
+            lines.append(f"{header}\n    Abstract (truncated): {fallback}")
+
     return "\n\n".join(lines)
 
 
-async def synthesize_answer(question: str, papers: list[dict]) -> dict:
+def _build_answer_text(structured: dict, papers: list[dict]) -> str:
+    """Convert structured JSON into a readable markdown string (backward compat)."""
+    parts: list[str] = []
+
+    summary = structured.get("summary", "")
+    if summary:
+        parts.append(summary)
+
+    findings = structured.get("key_findings") or []
+    if findings:
+        parts.append("\n**Key findings:**")
+        for f in findings:
+            srcs = f.get("sources") or []
+            cite = "".join(f"[{s}]" for s in srcs)
+            parts.append(f"- {f.get('finding', '')} {cite}")
+
+    agrees = structured.get("what_agrees", "")
+    if agrees and agrees.upper() != "N/A":
+        parts.append(f"\n**Evidence agrees:** {agrees}")
+
+    debated = structured.get("what_is_debated", "")
+    if debated and debated.upper() != "N/A":
+        parts.append(f"\n**Still debated:** {debated}")
+
+    contradictions = structured.get("contradictions") or []
+    if contradictions:
+        parts.append("\n**Conflicting findings:**")
+        for c in contradictions:
+            parts.append(f"- {c}")
+
+    limitations = structured.get("limitations", "")
+    if limitations:
+        parts.append(f"\n**Limitations of this evidence:** {limitations}")
+
+    # Reference list
+    if papers:
+        parts.append("\n**References:**")
+        for i, p in enumerate(papers, 1):
+            authors = ", ".join(p.get("authors") or [])
+            parts.append(
+                f"[{i}] {authors}. {p.get('title', '')}. "
+                f"{p.get('journal', '')} ({p.get('year', '')}). "
+                f"{p.get('url', '')}"
+            )
+
+    return "\n".join(parts)
+
+
+async def _call_gemini(system: str, user: str) -> dict | None:
+    key = os.environ.get("GEMINI_API_KEY", "")
+    if not key:
+        return None
+    try:
+        from google import genai
+        from google.genai import types as gtypes
+
+        gc   = genai.Client(api_key=key)
+        resp = gc.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=f"{system}\n\nQuestion: {user}",
+            config=gtypes.GenerateContentConfig(
+                max_output_tokens=2000,
+                temperature=0.1,
+            ),
+        )
+        raw = (resp.text or "").strip()
+        raw = re.sub(r"^```(?:json)?\s*", "", raw)
+        raw = re.sub(r"\s*```\s*$",        "", raw)
+        return json.loads(raw)
+    except Exception as exc:
+        log.warning("Gemini synthesis failed: %s", exc)
+        return None
+
+
+async def _call_openai(system: str, user: str) -> dict | None:
+    key = os.environ.get("OPENAI_API_KEY", "")
+    if not key:
+        return None
+    try:
+        from openai import AsyncOpenAI
+
+        oai  = AsyncOpenAI(api_key=key)
+        resp = await oai.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user",   "content": f"Question: {user}"},
+            ],
+            max_tokens=2000,
+            temperature=0.1,
+            response_format={"type": "json_object"},
+        )
+        raw = (resp.choices[0].message.content or "").strip()
+        return json.loads(raw)
+    except Exception as exc:
+        log.warning("OpenAI synthesis failed: %s", exc)
+        return None
+
+
+# ── Public entry point ───────────────────────────────────────────────────────
+
+async def synthesize(
+    question: str,
+    papers: list[dict],
+    history: list[dict],
+) -> dict:
+    """Full distillation → grading → synthesis pipeline.
+
+    Returns a dict with keys:
+    ``answer``, ``key_findings``, ``what_agrees``, ``what_is_debated``,
+    ``contradictions``, ``limitations``, ``evidence_grade``,
+    ``evidence_grade_explanation``, ``suggested_questions``, ``method``.
+    """
     if not papers:
         return {
-            "answer": ("No relevant published papers were found for this question. "
-                       "Please refine your search terms or consult a specialist database directly."),
-            "method": "no_papers", "error": None,
+            "answer": (
+                "No relevant published papers were found for this question. "
+                "Please refine your search terms or consult a specialist database directly."
+            ),
+            "key_findings": [], "what_agrees": "", "what_is_debated": "",
+            "contradictions": [], "limitations": "",
+            "evidence_grade": "VERY LOW",
+            "evidence_grade_explanation": "No papers retrieved.",
+            "suggested_questions": [], "method": "no_papers",
         }
 
-    evidence = _evidence_block(papers)
-    system   = _SYSTEM.format(evidence=evidence)
+    # Step 1 — per-paper distillation (pure Python, fast)
+    distilled: dict[int, list[str]] = {}
+    kept_papers: list[dict] = []
+    kept_index  = 0
+    for p in papers:
+        sents = _distill(question, p.get("abstract") or "", top_n=4)
+        kept_index += 1
+        distilled[kept_index] = sents
+        kept_papers.append(p)
 
-    openai_key = os.environ.get("OPENAI_API_KEY", "")
-    if openai_key:
-        try:
-            from openai import AsyncOpenAI
-            oai  = AsyncOpenAI(api_key=openai_key)
-            resp = await oai.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[{"role": "system", "content": system},
-                          {"role": "user",   "content": question}],
-                max_tokens=800, temperature=0.15,
+    # Step 2 — GRADE evidence quality
+    grade, grade_expl = _grade(kept_papers)
+
+    # Step 3 — build evidence block and history string
+    evidence_block = _evidence_block(kept_papers, distilled)
+    history_text   = (
+        "\n".join(f"Q: {t['question']}\nA: {t['answer_summary']}" for t in history)
+        if history else "No prior conversation."
+    )
+
+    synth_system = _SYNTH_SYSTEM.format(
+        evidence=evidence_block,
+        history=history_text,
+    )
+
+    # Step 4 — structured AI synthesis (Gemini first, OpenAI fallback)
+    structured = await _call_gemini(synth_system, question)
+    method = "gemini-2.5-flash"
+
+    if not structured:
+        structured = await _call_openai(synth_system, question)
+        method = "gpt-4o-mini"
+
+    if not structured:
+        # Both providers failed — return raw sources
+        raw_lines = ["AI synthesis temporarily unavailable. Retrieved sources:\n"]
+        for i, p in enumerate(kept_papers[:8], 1):
+            authors = ", ".join(p.get("authors") or [])
+            raw_lines.append(
+                f"[{i}] {authors}. {p.get('title', '')}. "
+                f"{p.get('journal', '')} ({p.get('year', '')}). {p.get('url', '')}"
             )
-            answer = (resp.choices[0].message.content or "").strip()
-            if answer:
-                return {"answer": answer, "method": "gpt-4o-mini", "error": None}
-        except Exception as exc:
-            log.warning("OpenAI synthesis failed: %s", exc)
+        return {
+            "answer": "\n".join(raw_lines),
+            "key_findings": [], "what_agrees": "", "what_is_debated": "",
+            "contradictions": [], "limitations": "",
+            "evidence_grade": grade,
+            "evidence_grade_explanation": grade_expl,
+            "suggested_questions": [], "method": "raw_sources",
+        }
 
-    gemini_key = os.environ.get("GEMINI_API_KEY", "")
-    if gemini_key:
-        try:
-            from google import genai
-            from google.genai import types as gtypes
-            gc   = genai.Client(api_key=gemini_key)
-            resp = gc.models.generate_content(
-                model="gemini-2.5-flash",
-                contents=f"{system}\n\nQuestion: {question}",
-                config=gtypes.GenerateContentConfig(max_output_tokens=800, temperature=0.15),
-            )
-            answer = (resp.text or "").strip()
-            if answer:
-                return {"answer": answer, "method": "gemini", "error": None}
-        except Exception as exc:
-            log.warning("Gemini synthesis failed: %s", exc)
+    answer_text = _build_answer_text(structured, kept_papers)
 
-    lines = ["AI synthesis is temporarily unavailable. Most relevant sources retrieved:\n"]
-    for i, p in enumerate(papers[:6], 1):
-        authors = ", ".join(p.get("authors") or [])
-        lines.append(f"[{i}] {authors}. {p.get('title', '')}. "
-                     f"{p.get('journal', '')} ({p.get('year', '')}). {p.get('url', '')}")
-    return {"answer": "\n".join(lines), "method": "raw_sources",
-            "error": "AI providers unavailable"}
+    # Normalise fields that AI occasionally returns as strings instead of lists
+    def _to_list(val: object) -> list:
+        if isinstance(val, list):
+            return [v for v in val if v and str(v).strip().upper() not in ("N/A", "NONE")]
+        if isinstance(val, str) and val.strip().upper() not in ("N/A", "NONE", ""):
+            return [val.strip()]
+        return []
+
+    def _to_str(val: object) -> str:
+        if isinstance(val, str):
+            return val if val.strip().upper() not in ("N/A", "NONE") else ""
+        return ""
+
+    # key_findings: each item should be {finding, sources} — coerce plain strings too
+    raw_kf = structured.get("key_findings") or []
+    key_findings: list[dict] = []
+    for item in (raw_kf if isinstance(raw_kf, list) else []):
+        if isinstance(item, dict):
+            key_findings.append(item)
+        elif isinstance(item, str) and item.strip():
+            key_findings.append({"finding": item.strip(), "sources": []})
+
+    return {
+        "answer":                   answer_text,
+        "key_findings":             key_findings,
+        "what_agrees":              _to_str(structured.get("what_agrees")),
+        "what_is_debated":          _to_str(structured.get("what_is_debated")),
+        "contradictions":           _to_list(structured.get("contradictions")),
+        "limitations":              _to_str(structured.get("limitations")),
+        "evidence_grade":           grade,
+        "evidence_grade_explanation": grade_expl,
+        "suggested_questions":      _to_list(structured.get("next_questions")),
+        "method": method,
+    }
