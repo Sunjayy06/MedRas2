@@ -1,0 +1,384 @@
+Here is the plain English prompt. Paste this into Replit:
+
+---
+
+```
+Build a new module called Study Builder 
+in MedRAS. This is separate from the 
+statistical analysis engine and the 
+plagiarism checker. Do not touch any 
+existing code.
+
+Read everything carefully before 
+starting. Use your best judgment on 
+how to build each part. Stop and 
+checkpoint after each of the three 
+parts below.
+
+WHAT THIS MODULE DOES
+
+A healthcare professional or researcher 
+can come to this module with any 
+medical or research question. The 
+system searches real published medical 
+literature and gives them a reliable 
+referenced answer. No guessing. Every 
+statement comes from a real source. 
+If the system does not have enough 
+information it says so clearly and 
+tells the user to consult a specialist.
+
+After getting their answer the user 
+can go further and design a complete 
+study, build a data collection form, 
+and generate a ready to submit ethics 
+committee application document.
+
+PART 1 — MEDICAL KNOWLEDGE ASSISTANT
+
+Build a clean chat screen where the 
+user types any medical or research 
+question in plain English and gets 
+a reliable answer with references.
+
+When the user asks a question do 
+these steps in order:
+
+Step one — understand what they are asking:
+Read the question and decide if it is 
+about research evidence, clinical 
+guidelines, study design, statistics, 
+or drugs and pharmacology.
+
+Step two — search real sources:
+Search all of these sources in parallel. 
+If any source takes more than 5 seconds 
+skip it and continue with the others.
+
+PubMed using the free NCBI API.
+Search URL: https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi
+Fetch URL: https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi
+Get the title, authors, journal, year, 
+abstract, and PubMed ID for each result.
+Store NCBI_API_KEY in Replit Secrets.
+
+Europe PMC using their free API.
+URL: https://www.ebi.ac.uk/europepmc/webservices/rest/search
+No key needed. Covers literature 
+beyond PubMed especially European research.
+
+Semantic Scholar using their free API.
+URL: https://api.semanticscholar.org/graph/v1/paper/search
+Get title, authors, year, abstract, 
+journal, and citation count.
+Store SEMANTIC_SCHOLAR_KEY in Secrets.
+Covers 200 million papers across all fields.
+
+OpenAlex using their free API.
+URL: https://api.openalex.org/works
+No key needed. Add the email address 
+as a polite pool parameter.
+Covers 250 million works with citation data.
+This is a free alternative to Scopus 
+and covers most of what researchers need.
+
+WHO IRIS for guidelines and reports.
+URL: https://iris.who.int/rest/search
+No key needed. Use for clinical and 
+policy questions.
+
+For Cochrane systematic reviews filter 
+the Europe PMC search to return only 
+papers from the Cochrane Database of 
+Systematic Reviews. These are the 
+highest quality evidence and should 
+always be shown first when available.
+
+Also build a local document database 
+using ChromaDB for ICMR guidelines. 
+Download these documents from the 
+ICMR website and embed them into 
+ChromaDB on first startup:
+ICMR national guidelines for diabetes
+ICMR national guidelines for hypertension
+ICMR national guidelines for tuberculosis
+ICMR research methodology guidelines
+These give India-specific authoritative 
+content that no other source provides.
+Search this local database alongside 
+the online APIs for every query.
+
+Step three — combine and rank results:
+Remove any duplicate papers found 
+across multiple sources.
+Put Cochrane systematic reviews first.
+Then sort by how recent and how 
+cited each paper is.
+Keep the best 8 results.
+
+Step four — generate the answer:
+Send the 8 retrieved paper abstracts 
+to OpenAI GPT-4o-mini with clear 
+instructions that it must only use 
+the provided documents to answer.
+It must never guess or add information 
+not in the documents.
+Every factual sentence must cite 
+its source with a number in square 
+brackets like this [1].
+If the documents do not contain 
+enough information to answer properly 
+it must say so clearly and tell the 
+user to consult a specialist directly.
+Keep answers under 400 words.
+End with a numbered reference list 
+showing title, authors, journal, 
+year, and a clickable link.
+
+Step five — show the answer clearly:
+Display the answer with numbered 
+references as clickable links to 
+the original source.
+Show a small badge next to each 
+reference showing what type of 
+evidence it is: systematic review 
+in purple, clinical trial in blue, 
+observational study in grey, 
+guideline in green.
+Show when the most recent source 
+was published so the user knows 
+how current the information is.
+Show small icons indicating which 
+databases were searched.
+
+Below every answer show:
+Two or three related questions the 
+user might want to ask next.
+Action buttons based on what they asked:
+If it was a research question show 
+a button saying design a study on this.
+If it was a clinical question show 
+a button saying find clinical trials.
+Always show a button saying calculate 
+sample size.
+
+Show this disclaimer below every answer:
+This information is for educational 
+and research purposes only and is 
+based on published literature. 
+Clinical decisions must involve a 
+qualified healthcare professional.
+
+If OpenAI is not available fall back 
+to Gemini. If neither is available 
+show the retrieved paper titles and 
+abstracts directly without AI synthesis 
+so the user still gets the sources.
+
+PART 2 — STUDY DESIGN AND PROPOSAL BUILDER
+
+After the knowledge assistant answers 
+a research question the user can click 
+design a study on this and enter this 
+guided flow. They can also enter this 
+flow directly from the Study Builder 
+home screen.
+
+Guide them through six steps one at 
+a time. Show a progress indicator.
+
+Step one — research question:
+Ask the user to describe their study 
+idea in their own words.
+Automatically convert it to PICO 
+format which stands for Population, 
+Intervention or exposure, Comparison, 
+and Outcome.
+Show the PICO in an editable card 
+so they can correct anything.
+Search PubMed for similar studies 
+based on their PICO.
+Show what has already been published 
+and what the research gap seems to be.
+
+Step two — study design:
+Based on their PICO recommend the 
+most suitable study design.
+Show the top two options with a 
+plain English explanation of each 
+and the pros and cons.
+The designs to support are:
+Cross-sectional study
+Case control study
+Cohort study prospective or retrospective
+Randomised controlled trial
+Diagnostic accuracy study
+Qualitative study
+Questionnaire validation study
+Systematic review or meta-analysis
+The user selects one and confirms.
+
+Step three — variables and data collection:
+Ask the user what variables they 
+plan to collect.
+Suggest additional variables based 
+on similar published studies.
+For variables that have validated 
+measurement instruments suggest them.
+Include these built-in validated tools:
+PHQ-9 for depression screening
+GAD-7 for anxiety assessment
+SF-36 for quality of life
+Visual analogue scale for pain
+Mini Mental State Examination
+Likert scale with customisable labels
+Custom scale builder for anything else
+Generate a data collection form as 
+a Word document that the researcher 
+can print or use at the bedside.
+
+Step four — sample size:
+Link directly to the existing MedRAS 
+sample size calculator.
+Pre-fill the calculator fields based 
+on what was chosen in step two.
+
+Step five — statistical analysis plan:
+Generate a pre-specified statistical 
+analysis plan document.
+This is a short document describing 
+which statistical tests will be run 
+before data collection begins.
+This is required for ICMR grant 
+applications and ethics committee 
+submissions.
+Output as a Word document section 
+the researcher can paste directly 
+into their proposal.
+
+Step six — ethics proposal:
+Generate a complete ethics committee 
+application document containing these 
+sections in order:
+Title of the study
+Background and rationale
+Brief literature review using the 
+papers retrieved from PubMed earlier
+Primary and secondary objectives
+Study design and methodology
+Inclusion and exclusion criteria
+Sample size with justification
+Data collection procedure
+Statistical analysis plan
+Ethical considerations
+Informed consent process
+Study timeline as a formatted table
+Budget estimate
+References in Vancouver format
+
+Generate this as a formatted Word 
+document ready for Indian IEC 
+submission.
+
+Also generate two separate documents:
+An informed consent form in simple 
+plain English that a patient can 
+understand.
+A patient information sheet in plain 
+English explaining the study.
+
+PART 3 — VECTOR DATABASE FOR ICMR DOCUMENTS
+
+Install ChromaDB locally in the project.
+
+On the very first startup of this module 
+download the ICMR guideline documents 
+listed in Part 1 and embed them into 
+ChromaDB using OpenAI text-embedding-3-small.
+
+Store them in a ChromaDB collection 
+called icmr-guidelines.
+
+For every user query in the knowledge 
+assistant search this ChromaDB collection 
+alongside the online API sources.
+Return the top 3 most relevant ICMR 
+passages and include them in the 
+context sent to OpenAI for answer 
+generation.
+
+This gives MedRAS an India-specific 
+knowledge advantage that no other 
+platform has.
+
+TESTING AFTER BUILDING
+
+After all three parts are complete 
+run these five tests:
+
+Test one:
+Ask this question in the knowledge assistant:
+What is the current evidence for 
+metformin use in non-alcoholic 
+fatty liver disease?
+Confirm at least 3 papers retrieved 
+from different databases, the answer 
+cites each source with numbers, 
+evidence quality badges are visible, 
+and the PubMed links work.
+
+Test two:
+Ask this question:
+I want to study yoga and blood 
+pressure in South Indian hypertensive 
+patients. What has been published 
+on this already?
+Confirm PubMed is searched, existing 
+studies are shown, a research gap 
+is identified, and the option to 
+design a study is offered.
+
+Test three:
+Go through the full study design flow 
+with this input:
+I want to compare two surgical 
+techniques for thyroid cancer in 
+terms of recurrence rate.
+Confirm PICO is generated correctly, 
+a study design is recommended, a 
+data collection form is generated 
+as a Word document, and the ethics 
+proposal is generated as a Word 
+document.
+
+Test four:
+Ask this question which cannot be 
+fully answered from current sources:
+What is the ideal combined diet plan 
+for a patient with both lupus and 
+hypothyroidism?
+Confirm the system says it does not 
+have sufficient evidence to answer 
+this reliably and directs the user 
+to consult a specialist rather than 
+guessing an answer.
+
+Test five:
+Ask this India-specific question:
+What are the ICMR guidelines for 
+diabetes management?
+Confirm the ICMR local database 
+is searched, Indian guidelines are 
+cited alongside international evidence, 
+and any differences between Indian 
+and international recommendations 
+are noted.
+
+When all five tests pass print:
+Study builder module is complete. 
+Multi-source knowledge assistant 
+working. Study design and ethics 
+proposal builder working. ICMR 
+document database working.
+Then stop and wait for next instruction.
+```
