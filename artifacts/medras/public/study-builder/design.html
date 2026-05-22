@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Study Design Builder — MedRAS</title>
+  <link rel="stylesheet" href="/study-builder/css/sb.css"/>
+  <link rel="stylesheet" href="/study-builder/css/design.css"/>
+</head>
+<body>
+
+<!-- Nav -->
+<nav class="sb-nav">
+  <a href="/" class="sb-logo">
+    <div class="sb-logo-mark">M</div>MedRAS
+  </a>
+  <span class="sb-nav-sep">/</span>
+  <span class="sb-module-name">Study Design Builder</span>
+  <div class="sb-nav-right">
+    <a href="/study-builder/" class="sb-nav-btn">← Knowledge Assistant</a>
+    <a href="/" class="sb-nav-btn">All modules</a>
+  </div>
+</nav>
+
+<!-- Progress -->
+<div class="progress-wrap">
+  <div class="progress-inner">
+    <div class="progress-steps">
+      <div class="ps active" title="Research Question">
+        <div class="ps-dot">1</div>
+        <span class="ps-label">Question</span>
+        <div class="ps-line"></div>
+      </div>
+      <div class="ps" title="Study Design">
+        <div class="ps-dot">2</div>
+        <span class="ps-label">Design</span>
+        <div class="ps-line"></div>
+      </div>
+      <div class="ps" title="Methodology">
+        <div class="ps-dot">3</div>
+        <span class="ps-label">Methods</span>
+        <div class="ps-line"></div>
+      </div>
+      <div class="ps" title="Statistical Plan">
+        <div class="ps-dot">4</div>
+        <span class="ps-label">Statistics</span>
+        <div class="ps-line"></div>
+      </div>
+      <div class="ps" title="Ethics & Compliance">
+        <div class="ps-dot">5</div>
+        <span class="ps-label">Ethics</span>
+        <div class="ps-line"></div>
+      </div>
+      <div class="ps" title="Review & Export">
+        <div class="ps-dot">6</div>
+        <span class="ps-label">Export</span>
+        <div class="ps-line"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Main content -->
+<div class="dw-outer">
+  <div class="dw-inner">
+
+    <!-- ─── Step 1: Research Question ─── -->
+    <div class="step-card active" id="step-1">
+      <div class="step-header">
+        <div class="step-eyebrow">Step 1 of 6</div>
+        <div class="step-title">Define your research question</div>
+        <div class="step-desc">A clear, answerable question is the foundation of every good study. Use the PICO framework to structure it precisely.</div>
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="s1-title">Study title <span style="font-weight:400;color:var(--sb-muted)">(optional)</span></label>
+        <input class="field-input" id="s1-title" placeholder="A brief working title for your study"/>
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="s1-question">Research question <span style="color:#ef4444">*</span></label>
+        <textarea class="field-input" id="s1-question" rows="3"
+          placeholder="e.g. In adult patients with T2DM, does adding SGLT-2 inhibitors to metformin reduce HbA1c more than metformin alone over 6 months?"></textarea>
+        <span class="field-hint">Be specific: Who? What intervention or exposure? Compared to what? What outcome?</span>
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="s1-objective">Objective type <span style="color:#ef4444">*</span></label>
+        <select class="field-input" id="s1-objective">
+          <option value="analytical">Analytical — test a hypothesis or association</option>
+          <option value="experimental">Experimental — test an intervention</option>
+          <option value="descriptive">Descriptive — describe a population or condition</option>
+          <option value="exploratory">Exploratory — explore an unknown area</option>
+          <option value="diagnostic">Diagnostic — evaluate a test or biomarker</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label class="field-label">PICO Framework <span style="color:#ef4444">*</span></label>
+        <span class="field-hint">Fill in at least Population (P) and Outcome (O).</span>
+        <div class="pico-grid" style="margin-top:.5rem">
+          <div class="field">
+            <label for="pico-P"><span class="pico-label">P</span><span class="pico-key" style="color:#3b82f6">Population</span></label>
+            <input class="field-input" id="pico-P" placeholder="Who are your participants?"/>
+          </div>
+          <div class="field">
+            <label for="pico-I"><span class="pico-label">I</span><span class="pico-key" style="color:#8b5cf6">Intervention / Exposure</span></label>
+            <input class="field-input" id="pico-I" placeholder="What is the exposure or intervention?"/>
+          </div>
+          <div class="field">
+            <label for="pico-C"><span class="pico-label">C</span><span class="pico-key" style="color:#06b6d4">Comparison</span></label>
+            <input class="field-input" id="pico-C" placeholder="Compared to what? (leave blank if none)"/>
+          </div>
+          <div class="field">
+            <label for="pico-O"><span class="pico-label">O</span><span class="pico-key" style="color:#10b981">Outcome</span></label>
+            <input class="field-input" id="pico-O" placeholder="What do you want to measure?"/>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── Step 2: Study Design ─── -->
+    <div class="step-card" id="step-2">
+      <div class="step-header">
+        <div class="step-eyebrow">Step 2 of 6</div>
+        <div class="step-title">Select your study design</div>
+        <div class="step-desc">AI has analysed your research question and PICO to recommend the most appropriate designs. You can also browse all available designs below.</div>
+      </div>
+      <div id="design-container">
+        <div class="designs-loading">Loading recommendations…</div>
+      </div>
+    </div>
+
+    <!-- ─── Step 3: Methodology ─── -->
+    <div class="step-card" id="step-3">
+      <div class="step-header">
+        <div class="step-eyebrow">Step 3 of 6</div>
+        <div class="step-title">Build your methodology</div>
+        <div class="step-desc">AI has drafted a methodology based on your design. Review, edit, and customise every element to match your specific study context.</div>
+      </div>
+      <div id="meth-container">
+        <div class="meth-loading">Generating methodology…</div>
+      </div>
+    </div>
+
+    <!-- ─── Step 4: Statistical Plan ─── -->
+    <div class="step-card" id="step-4">
+      <div class="step-header">
+        <div class="step-eyebrow">Step 4 of 6</div>
+        <div class="step-title">Statistical analysis plan</div>
+        <div class="step-desc">Define your sample size, significance threshold, and statistical tests. AI has pre-filled suggestions based on your study design — review and adjust.</div>
+      </div>
+
+      <div class="three-col">
+        <div class="field">
+          <label class="field-label" for="s4-sample-size">Sample size (n)</label>
+          <input class="field-input" id="s4-sample-size" placeholder="e.g. 120" type="number" min="1"/>
+          <span class="field-hint"><a href="/sample-size.html" target="_blank" style="color:var(--sb-teal-lt)">→ Open Sample Size Calculator</a></span>
+        </div>
+        <div class="field">
+          <label class="field-label" for="s4-alpha">Significance level (α)</label>
+          <select class="field-input" id="s4-alpha">
+            <option value="0.05">0.05 (5%)</option>
+            <option value="0.01">0.01 (1%)</option>
+            <option value="0.10">0.10 (10%)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label class="field-label" for="s4-power">Statistical power (1−β)</label>
+          <select class="field-input" id="s4-power">
+            <option value="80%">80%</option>
+            <option value="90%">90%</option>
+            <option value="95%">95%</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="two-col">
+        <div class="field">
+          <label class="field-label" for="s4-software">Statistical software</label>
+          <select class="field-input" id="s4-software">
+            <option value="SPSS">SPSS</option>
+            <option value="R">R / RStudio</option>
+            <option value="Stata">Stata</option>
+            <option value="JASP">JASP</option>
+            <option value="SAS">SAS</option>
+            <option value="Python">Python (statsmodels)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label class="field-label" for="s4-missing">Missing data handling</label>
+          <select class="field-input" id="s4-missing">
+            <option value="complete_case">Complete case analysis</option>
+            <option value="multiple_imputation">Multiple imputation</option>
+            <option value="last_observation">Last observation carried forward</option>
+            <option value="sensitivity">Sensitivity analysis</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="field-label">Statistical tests</label>
+        <span class="field-hint">AI-suggested tests are pre-filled. Add or remove as needed.</span>
+        <div class="stat-tests-wrap">
+          <div id="stat-tests-list"></div>
+          <div style="display:flex;gap:.4rem;margin-top:.4rem">
+            <input class="field-input" id="add-test-input" placeholder="Add a statistical test…" style="flex:1"/>
+            <button id="add-test-btn" class="btn-next" style="padding:.45rem .9rem;font-size:.82rem;flex-shrink:0">Add</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── Step 5: Ethics ─── -->
+    <div class="step-card" id="step-5">
+      <div class="step-header">
+        <div class="step-eyebrow">Step 5 of 6</div>
+        <div class="step-title">Ethics &amp; regulatory compliance</div>
+        <div class="step-desc">Confirm your ethical obligations. All human research must adhere to the Declaration of Helsinki and relevant national guidelines.</div>
+      </div>
+
+      <div class="field">
+        <label class="field-label">Risk classification</label>
+        <div class="risk-selector" style="margin-top:.35rem">
+          <div class="risk-opt" data-risk="minimal">
+            <div class="risk-opt-name">Minimal risk</div>
+            <div class="risk-opt-desc">Risk no greater than routine medical care or daily life (surveys, existing data, standard tests)</div>
+          </div>
+          <div class="risk-opt" data-risk="greater_than_minimal">
+            <div class="risk-opt-name">Greater than minimal</div>
+            <div class="risk-opt-desc">Involves procedures, interventions, or collection of biological samples</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="field-label">Compliance checklist</label>
+        <div class="checklist">
+          <div class="check-item" id="chk-iec">
+            <div class="check-box"></div>
+            <div class="check-text">
+              <div class="check-title">IEC / IRB approval obtained (or will be applied for)</div>
+              <div class="check-sub">Institutional Ethics Committee clearance is mandatory for all human research in India</div>
+            </div>
+          </div>
+          <div class="check-item" id="chk-consent">
+            <div class="check-box"></div>
+            <div class="check-text">
+              <div class="check-title">Informed consent will be taken from participants</div>
+              <div class="check-sub">Written, signed consent; or oral with a witness for illiterate participants</div>
+            </div>
+          </div>
+          <div class="check-item" id="chk-helsinki">
+            <div class="check-box"></div>
+            <div class="check-text">
+              <div class="check-title">Declaration of Helsinki (2013) — adhered to</div>
+              <div class="check-sub">Principles of beneficence, non-maleficence, justice, and autonomy upheld</div>
+            </div>
+          </div>
+          <div class="check-item" id="chk-icmr">
+            <div class="check-box"></div>
+            <div class="check-text">
+              <div class="check-title">ICMR National Ethical Guidelines (2017) — adhered to</div>
+              <div class="check-sub">Indian Council of Medical Research guidelines for biomedical and health research</div>
+            </div>
+          </div>
+          <div class="check-item" id="chk-waiver">
+            <div class="check-box"></div>
+            <div class="check-text">
+              <div class="check-title">Waiver of consent (if applicable)</div>
+              <div class="check-sub">Request waiver for retrospective record review or anonymised data analysis</div>
+            </div>
+          </div>
+          <div id="waiver-justification-wrap" style="margin-top:.25rem">
+            <div class="field">
+              <label class="field-label">Justification for consent waiver</label>
+              <textarea class="field-input" id="waiver-justification" rows="2"
+                placeholder="e.g. Retrospective review of anonymised hospital records — no patient contact, no identifiable data collected."></textarea>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── Step 6: Export ─── -->
+    <div class="step-card" id="step-6">
+      <div class="step-header">
+        <div class="step-eyebrow">Step 6 of 6</div>
+        <div class="step-title">Review &amp; export your study design</div>
+        <div class="step-desc">Your complete study design protocol is ready. Export it to the Proposal Writer or Thesis module, or download as a text file.</div>
+      </div>
+
+      <div class="field">
+        <label class="field-label">Protocol preview</label>
+        <pre class="export-preview" id="export-preview">Generating…</pre>
+        <div style="display:flex;gap:.5rem;margin-top:.5rem">
+          <button class="sb-nav-btn" id="btn-copy" style="font-size:.8rem;padding:.4rem .9rem">Copy text</button>
+          <button class="sb-nav-btn" id="btn-download" style="font-size:.8rem;padding:.4rem .9rem">Download .txt</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="field-label">Send to another module</label>
+        <div class="export-actions">
+          <div class="export-card">
+            <div class="export-card-icon">📄</div>
+            <div class="export-card-title">Proposal Writer (Prologue)</div>
+            <div class="export-card-desc">Pre-fill the 8-step proposal writing module with your study design, PICO, and methodology.</div>
+            <button class="export-card-btn" id="btn-send-prologue">Open in Proposal Writer →</button>
+          </div>
+          <div class="export-card">
+            <div class="export-card-icon">📖</div>
+            <div class="export-card-title">Thesis & Article Writer (Scriptorium)</div>
+            <div class="export-card-desc">Import your study design into the thesis writing module as a research context for AI-assisted drafting.</div>
+            <button class="export-card-btn secondary" id="btn-send-thesis">Open in Scriptorium →</button>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top:.5rem;text-align:center">
+        <button class="sb-nav-btn" id="btn-new" style="font-size:.82rem;padding:.45rem 1.1rem">+ Start a new study design</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Step navigation footer -->
+<div class="step-nav">
+  <div class="step-nav-inner">
+    <span class="step-info" id="step-info">Step 1 of 6</span>
+    <div class="step-btns">
+      <button class="btn-back" id="btn-back" disabled>← Back</button>
+      <button class="btn-next" id="btn-next">Next →</button>
+    </div>
+  </div>
+</div>
+
+<script src="/study-builder/js/design.js"></script>
+</body>
+</html>

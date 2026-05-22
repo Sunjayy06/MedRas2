@@ -13,6 +13,7 @@ from .references import router as references_router
 from .sample_size import router as sample_size_router
 from .stats import router as stats_router
 from .study_builder import router as study_builder_router
+from .study_design import router as study_design_router
 from .thesis import router as thesis_router
 
 router = APIRouter()
@@ -26,3 +27,4 @@ router.include_router(references_router)
 router.include_router(proposal_router)
 router.include_router(thesis_router)
 router.include_router(study_builder_router)
+router.include_router(study_design_router)

@@ -5,6 +5,21 @@
   <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
   <title>Study Builder — MedRAS</title>
   <link rel="stylesheet" href="/study-builder/css/sb.css"/>
+  <style>
+    .sb-hub{max-width:680px;margin:auto;padding:2.5rem 1.5rem;display:flex;flex-direction:column;gap:1.5rem}
+    .hub-title{font-size:1.5rem;font-weight:800;display:flex;align-items:center;gap:.6rem}
+    .hub-sub{font-size:.9rem;color:var(--sb-muted);line-height:1.6;margin-top:.2rem}
+    .hub-cards{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+    .hub-card{background:var(--sb-surface);border:1px solid var(--sb-border);border-radius:var(--sb-radius);padding:1.2rem;text-decoration:none;color:var(--sb-text);display:flex;flex-direction:column;gap:.5rem;transition:border-color .15s,background .15s;position:relative;overflow:hidden}
+    .hub-card:hover{border-color:rgba(8,145,178,.4);background:rgba(255,255,255,.02)}
+    .hub-card-badge{position:absolute;top:.7rem;right:.7rem;font-size:.62rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:2px 7px;border-radius:20px}
+    .badge-new{background:rgba(8,145,178,.2);color:var(--sb-teal-lt)}
+    .hub-card-icon{font-size:1.6rem}
+    .hub-card-title{font-size:.95rem;font-weight:700}
+    .hub-card-desc{font-size:.8rem;color:var(--sb-muted);line-height:1.55}
+    .hub-card-arrow{margin-top:auto;font-size:.78rem;color:var(--sb-teal-lt);font-weight:600}
+    @media(max-width:520px){.hub-cards{grid-template-columns:1fr}}
+  </style>
 </head>
 <body>
 
@@ -17,65 +32,34 @@
   <a href="/" class="sb-nav-back">← All modules</a>
 </nav>
 
-<div class="sb-layout">
-  <aside class="sb-sidebar">
+<div class="sb-chat" style="flex:1;justify-content:center;align-items:center;display:flex">
+  <div class="sb-hub">
     <div>
-      <div class="sb-sh">About</div>
-      <p class="sb-desc" style="margin-top:.5rem">Ask any medical research question and get a cited answer synthesised from 5 live academic databases.</p>
-    </div>
-    <div>
-      <div class="sb-sh">Sources searched</div>
-      <div class="sb-source-list" style="margin-top:.5rem">
-        <div class="sb-source-row"><span class="sb-dot d-pubmed"></span>PubMed</div>
-        <div class="sb-source-row"><span class="sb-dot d-cochrane"></span>Cochrane</div>
-        <div class="sb-source-row"><span class="sb-dot d-epmc"></span>Europe PMC</div>
-        <div class="sb-source-row"><span class="sb-dot d-s2"></span>Semantic Scholar</div>
-        <div class="sb-source-row"><span class="sb-dot d-openalex"></span>OpenAlex</div>
-        <div class="sb-source-row"><span class="sb-dot d-who"></span>WHO IRIS</div>
-      </div>
-    </div>
-    <div class="sb-tip">Every answer cites only what was actually found. If evidence is insufficient, it says so directly.</div>
-    <div>
-      <div class="sb-sh">Evidence hierarchy</div>
-      <div class="ev-legend" style="margin-top:.5rem">
-        <div class="ev-legend-row"><span class="ev-badge ev-systematic_review">Sys. Review</span>Highest priority</div>
-        <div class="ev-legend-row"><span class="ev-badge ev-guideline">Guideline</span>Clinical standards</div>
-        <div class="ev-legend-row"><span class="ev-badge ev-rct">RCT</span>Experimental</div>
-        <div class="ev-legend-row"><span class="ev-badge ev-observational">Observational</span>Descriptive</div>
-      </div>
-    </div>
-  </aside>
-
-  <div class="sb-main">
-    <div class="sb-chat" id="sb-chat">
-      <div class="sb-welcome" id="sb-welcome">
-        <div class="sb-welcome-icon">🔬</div>
-        <h2>Medical Knowledge Assistant</h2>
-        <p>Ask a clinical or research question and get a synthesised answer grounded in published evidence — with citations you can verify.</p>
-        <div class="sb-examples">
-          <button class="sb-eg" data-q="What is the evidence for metformin in non-alcoholic fatty liver disease?">What is the evidence for metformin in non-alcoholic fatty liver disease?</button>
-          <button class="sb-eg" data-q="Compare laparoscopic vs open appendectomy outcomes in adults">Compare laparoscopic vs open appendectomy outcomes in adults</button>
-          <button class="sb-eg" data-q="What are ICMR guidelines on antibiotic prophylaxis in clean surgery?">What are ICMR guidelines on antibiotic prophylaxis in clean surgery?</button>
-          <button class="sb-eg" data-q="Prevalence of hypertension among urban Indian adults: recent studies">Prevalence of hypertension among urban Indian adults: recent studies</button>
-        </div>
-      </div>
+      <div class="hub-title">🔬 Study Builder</div>
+      <div class="hub-sub">Two integrated tools to help you design, research, and develop your study — from initial question to final protocol.</div>
     </div>
 
-    <div class="sb-input-bar">
-      <div class="sb-input-inner">
-        <textarea id="sb-input" class="sb-input" placeholder="Ask a medical research question…" rows="1" autocomplete="off" spellcheck="true"></textarea>
-        <button id="sb-send" class="sb-send" title="Send (Enter)">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="22" y1="2" x2="11" y2="13"></line>
-            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-          </svg>
-        </button>
-      </div>
-      <div class="sb-hint">Enter to send &nbsp;·&nbsp; Shift+Enter for new line</div>
+    <div class="hub-cards">
+      <a href="/study-builder/chat.html" class="hub-card">
+        <span class="hub-card-icon">💬</span>
+        <div class="hub-card-title">Medical Knowledge Assistant</div>
+        <div class="hub-card-desc">Ask any medical research question. Get a cited answer synthesised from 6 live academic databases — PubMed, Cochrane, Europe PMC, Semantic Scholar, OpenAlex, WHO IRIS.</div>
+        <div class="hub-card-arrow">Search the evidence →</div>
+      </a>
+      <a href="/study-builder/design.html" class="hub-card">
+        <span class="hub-card-badge badge-new">6-step</span>
+        <span class="hub-card-icon">🗂</span>
+        <div class="hub-card-title">Study Design &amp; Proposal Builder</div>
+        <div class="hub-card-desc">Go from research question to a complete study protocol. AI recommends your study design, builds your methodology, and exports to Proposal Writer or Thesis module.</div>
+        <div class="hub-card-arrow">Design your study →</div>
+      </a>
+    </div>
+
+    <div style="font-size:.76rem;color:var(--sb-muted);text-align:center;line-height:1.6;padding-top:.5rem;border-top:1px solid var(--sb-border)">
+      Study Builder is part of MedRAS — a research operating system for medical and academic researchers.
     </div>
   </div>
 </div>
 
-<script src="/study-builder/js/sb.js"></script>
 </body>
 </html>
