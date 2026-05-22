@@ -160,14 +160,25 @@
     _dlText('folio-citations.ris', _toRis(folioItems)));
   document.getElementById('folio-exp-van').addEventListener('click', () =>
     _dlText('folio-citations.txt', _toVancouver(folioItems)));
+  document.getElementById('folio-exp-apa').addEventListener('click', () =>
+    _dlText('folio-citations-apa.txt', _toApa(folioItems)));
   document.getElementById('folio-copy-van').addEventListener('click', () => {
     const btn = document.getElementById('folio-copy-van');
     navigator.clipboard.writeText(_toVancouver(folioItems))
       .then(() => {
         btn.textContent = 'Copied \u2713';
-        setTimeout(() => { btn.textContent = 'Copy'; }, 2200);
+        setTimeout(() => { btn.textContent = 'Copy Vancouver'; }, 2200);
       })
       .catch(() => _dlText('folio-citations.txt', _toVancouver(folioItems)));
+  });
+  document.getElementById('folio-copy-apa').addEventListener('click', () => {
+    const btn = document.getElementById('folio-copy-apa');
+    navigator.clipboard.writeText(_toApa(folioItems))
+      .then(() => {
+        btn.textContent = 'Copied \u2713';
+        setTimeout(() => { btn.textContent = 'Copy APA'; }, 2200);
+      })
+      .catch(() => _dlText('folio-citations-apa.txt', _toApa(folioItems)));
   });
 
   /* Initialise from any session-restored folio data */
@@ -801,6 +812,7 @@
       { label:'BibTeX',     ext:'.bib', fn: _toBibtex    },
       { label:'RIS',        ext:'.ris', fn: _toRis       },
       { label:'Vancouver',  ext:'.txt', fn: _toVancouver },
+      { label:'APA 7th',   ext:'.txt', fn: _toApa       },
       { label:'Plain text', ext:'.txt', fn: _toPlainText },
     ].forEach(({ label, ext, fn }) => {
       const btn = mk('button', 'export-chip');
@@ -811,21 +823,23 @@
       row.appendChild(btn);
     });
 
-    /* Copy-Vancouver shortcut */
-    const copyBtn = mk('button', 'export-chip export-copy');
-    copyBtn.textContent = 'Copy Vancouver';
-    copyBtn.addEventListener('click', () => {
-      navigator.clipboard.writeText(_toVancouver(exportable))
-        .then(() => {
-          copyBtn.textContent = 'Copied \u2713';
-          setTimeout(() => { copyBtn.textContent = 'Copy Vancouver'; }, 2000);
-        })
-        .catch(() => {
-          /* clipboard blocked — fall back to download */
-          _dlText('medras-citations.txt', _toVancouver(exportable));
-        });
+    /* Copy shortcuts */
+    [
+      { label: 'Copy Vancouver', fn: _toVancouver },
+      { label: 'Copy APA',      fn: _toApa       },
+    ].forEach(({ label, fn }) => {
+      const copyBtn = mk('button', 'export-chip export-copy');
+      copyBtn.textContent = label;
+      copyBtn.addEventListener('click', () => {
+        navigator.clipboard.writeText(fn(exportable))
+          .then(() => {
+            copyBtn.textContent = 'Copied \u2713';
+            setTimeout(() => { copyBtn.textContent = label; }, 2000);
+          })
+          .catch(() => _dlText('medras-citations.txt', fn(exportable)));
+      });
+      row.appendChild(copyBtn);
     });
-    row.appendChild(copyBtn);
 
     return row;
   }
@@ -908,6 +922,50 @@
       else if (p.url) ref += ` Available from: ${p.url}`;
       return ref.trim();
     }).join('\n');
+  }
+
+  /* APA 7th edition
+     Format: Last, F. M., & Last, F. M. (Year). Title in sentence case.
+             Journal Name. https://doi.org/xxxxx                          */
+  function _fmtApaAuthors(authors) {
+    if (!authors || !authors.length) return '';
+    /* Format each name as "Last, F. M." */
+    const fmt = authors.slice(0, 20).map((a) => {
+      const parts = a.trim().split(/\s+/);
+      if (parts.length < 2) return a;
+      const last     = parts[parts.length - 1];
+      const initials = parts.slice(0, -1)
+        .map((n) => n[0] ? n[0].toUpperCase() + '.' : '')
+        .filter(Boolean)
+        .join(' ');
+      return `${last}, ${initials}`;
+    });
+    /* APA 21+ authors: first 19 … last */
+    if (authors.length > 20) {
+      const lastAuthor = fmt[fmt.length - 1];
+      return fmt.slice(0, 19).join(', ') + ', \u2026 ' + lastAuthor;
+    }
+    if (fmt.length === 1) return fmt[0];
+    const last = fmt.pop();
+    return fmt.join(', ') + ', & ' + last;
+  }
+
+  function _toApa(papers) {
+    return papers.map((p) => {
+      const auth  = _fmtApaAuthors(p.authors || []);
+      const doi   = _extractDoi(p.url);
+      const year  = p.year ? `(${p.year})` : '(n.d.)';
+      /* Sentence-case: capitalise first letter only; preserve rest to
+         avoid mangling abbreviations and proper nouns.               */
+      const rawTitle = (p.title || 'Untitled').trim();
+      const title = rawTitle.charAt(0).toUpperCase() + rawTitle.slice(1);
+      let ref = auth ? `${auth} ${year}. ` : `${year}. `;
+      ref += `${title}.`;
+      if (p.journal) ref += ` ${p.journal}.`;
+      if (doi)       ref += ` https://doi.org/${doi}`;
+      else if (p.url) ref += ` ${p.url}`;
+      return ref.trim();
+    }).join('\n\n');
   }
 
   function _toPlainText(papers) {
