@@ -591,6 +591,22 @@ body.home main {
 .m-card-status[data-state="beta"]        { background: #f0fdf4; color: #15803d; }
 .m-card-status[data-state="coming-soon"] { background: #f3f4f6; color: #6b7280; }
 
+.m-card-soon {
+  opacity: .55;
+  cursor: default;
+  pointer-events: none;
+}
+.m-card-soon:hover {
+  transform: none;
+  box-shadow: none;
+  border-color: var(--home-card-border);
+}
+.m-card-cta-muted {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--home-text-hint);
+}
+
 /* =========================================================================
    About
    ========================================================================= */
