@@ -193,6 +193,17 @@
       <button id="th-dl-plag" class="th-btn th-btn-light">Send to Plagiarism Checker →</button>
     </div>
     <div id="th-dl-status" class="th-status info" style="display:none"></div>
+
+    <div style="margin-top:18px; padding-top:16px; border-top:1px solid var(--th-line);">
+      <p style="font-size:12px; color:var(--th-text-soft); margin:0 0 10px;">
+        <strong>Want to reformat citations, renumber tables, or apply supervisor feedback?</strong>
+        Open your draft in Folio — MedRAS's document polish tool.
+      </p>
+      <button id="th-open-folio" class="th-btn th-btn-light" style="border-color:#7c3aed; color:#7c3aed;">
+        Open draft in Folio for final polish →
+      </button>
+      <div id="th-folio-status" style="font-size:12px; color:var(--th-text-soft); margin-top:6px; display:none;"></div>
+    </div>
   </section>
 
   <div style="margin-top:18px">
@@ -363,6 +374,69 @@
   document.getElementById('th-dl-docx').addEventListener('click', () => downloadBinary('/export/docx', 'docx'));
   document.getElementById('th-dl-pdf').addEventListener('click',  () => downloadBinary('/export/pdf',  'pdf'));
   document.getElementById('th-dl-zip').addEventListener('click',  () => downloadBinary('/export/zip',  'zip'));
+  document.getElementById('th-open-folio').addEventListener('click', function () {
+    var s = ThesisState.get();
+    var folioStatus = document.getElementById('th-folio-status');
+
+    // Build Folio document model from thesis chapters
+    function uid() { return Math.random().toString(36).slice(2, 10); }
+
+    var spine = s.chapter_spine || [];
+    var sections = [];
+
+    // If spine is available, use it for chapter order; else fall back to chapters keys
+    var chapterEntries = spine.length
+      ? spine.map(function (ch) { return { id: ch.id, title: ch.title }; })
+      : Object.keys(s.chapters || {}).map(function (id) { return { id: id, title: id }; });
+
+    chapterEntries.forEach(function (ch) {
+      var chData = (s.chapters || {})[ch.id] || {};
+      var text   = chData.text || '';
+      if (!text.trim()) return;           // skip empty chapters
+      sections.push({
+        id: uid(),
+        level: 1,
+        title: ch.title,
+        paragraphs: [{ id: uid(), text: text }],
+      });
+    });
+
+    if (!sections.length) {
+      folioStatus.style.display = '';
+      folioStatus.textContent = 'No written chapters found. Write at least one chapter in the Editor first.';
+      return;
+    }
+
+    // Build references as plain strings for Folio's reference panel
+    var refs = (s.references || []).map(function (r, i) {
+      return {
+        id: uid(),
+        num: i + 1,
+        text: [r.authors, r.title, r.journal, r.year].filter(Boolean).join('. '),
+        doi: r.doi || '',
+        style: 'vancouver',
+      };
+    });
+
+    var folioDoc = {
+      title: (s.setup && s.setup.title) || 'Thesis Draft',
+      sections: sections,
+      references: refs,
+      tables: [],
+      figures: [],
+    };
+
+    try {
+      sessionStorage.setItem('folio.doc', JSON.stringify(folioDoc));
+      folioStatus.style.display = '';
+      folioStatus.textContent = 'Opening Folio…';
+      window.open('/folio-module/editor.html', '_blank');
+    } catch (e) {
+      folioStatus.style.display = '';
+      folioStatus.textContent = 'Could not stage document: ' + e.message;
+    }
+  });
+
   document.getElementById('th-dl-plag').addEventListener('click', async () => {
     setStatus('info', 'Preparing plain text for the Plagiarism Checker…');
     try {
