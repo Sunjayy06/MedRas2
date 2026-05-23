@@ -416,21 +416,20 @@ function bindScreen1() {
     if (head)  head.classList.remove("is-hidden");
   });
 
-  // Enable/disable the describe-path continue button based on outcome field
+  // Show a soft hint when the outcome field is blank (no longer blocks the button)
   const outcomeInput = $("#s1-outcome-hint");
-  const describeBtn  = $("#s1-describe-continue-btn");
-  if (outcomeInput && describeBtn) {
+  const outcomeHintMsg = $("#s1-outcome-hint-msg");
+  if (outcomeInput && outcomeHintMsg) {
     outcomeInput.addEventListener("input", () => {
-      describeBtn.disabled = outcomeInput.value.trim() === "";
+      outcomeHintMsg.style.display = outcomeInput.value.trim() ? "none" : "block";
     });
   }
 
-  // Describe-path continue
+  // Describe-path continue — outcome hint is now optional
   document.addEventListener("click", (e) => {
     if (!e.target.closest('[data-action="s1-continue-describe"]')) return;
     const desc = ($("#s1-study-desc")?.value || "").trim();
     const hint = ($("#s1-outcome-hint")?.value || "").trim();
-    if (!hint) { alert("Please enter the exact column header for your outcome variable."); return; }
     state.studyDesc   = desc;
     state.outcomeHint = hint;
     // Mirror into state.intake so the AI bridge can consume it downstream
@@ -441,14 +440,13 @@ function bindScreen1() {
     showScreen("2a");
   });
 
-  // Proposal-path continue
+  // Proposal-path continue — outcome hint is now optional
   document.addEventListener("click", (e) => {
     if (!e.target.closest('[data-action="s1-continue-proposal"]')) return;
     const desc       = ($("#s1-prop-desc")?.value || "").trim();
     const hint       = ($("#s1-prop-outcome")?.value || "").trim();
     const studyType  = ($("#s1-prop-study-type")?.value || "").trim();
     const sampleSize = parseInt($("#s1-prop-sample-size")?.value || "", 10) || null;
-    if (!hint) { alert("Please enter the exact column header for your outcome variable."); return; }
     state.studyDesc   = desc;
     state.outcomeHint = hint;
     state.intake = Object.assign({}, state.intake || {}, {

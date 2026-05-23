@@ -175,11 +175,14 @@
                 <textarea id="s1-study-desc" rows="5" placeholder="e.g. I am studying ER expression in 113 thyroid cancer patients. I want to see if ER positivity relates to gender, age, tumour type, lymph node metastasis, and extrathyroidal extension." style="width:100%"></textarea>
               </label>
               <label class="se-field" style="margin-top:0.75rem">
-                <span>Outcome variable <strong>exactly as it appears in your Excel column header</strong> <span style="color:#e55353;font-weight:700">*</span></span>
+                <span>Outcome variable <strong>exactly as it appears in your Excel column header</strong> <small style="font-weight:400;color:#666">(optional — AI will try to detect it)</small></span>
                 <input type="text" id="s1-outcome-hint" placeholder="e.g. P/N, HbA1c, Outcome, Allred Score" style="width:100%" />
-                <span class="se-hint">Copy the exact column name from your spreadsheet, including any punctuation.</span>
+                <span class="se-hint">Copy the exact column name from your spreadsheet, including any punctuation. Leave blank to let the AI detect it from your data.</span>
               </label>
-              <button type="button" class="btn btn-primary" id="s1-describe-continue-btn" data-action="s1-continue-describe" disabled style="margin-top:1rem">Continue to upload data →</button>
+              <p id="s1-outcome-hint-msg" style="display:none;font-size:0.82rem;color:#92400e;padding:0.4rem 0.7rem;background:#fffbeb;border-left:3px solid #f59e0b;border-radius:4px;margin-top:0.4rem">
+                Tip: entering the outcome column name helps the AI pick the right variable automatically.
+              </p>
+              <button type="button" class="btn btn-primary" id="s1-describe-continue-btn" data-action="s1-continue-describe" style="margin-top:1rem">Continue to upload data →</button>
             </div>
           </div>
 
