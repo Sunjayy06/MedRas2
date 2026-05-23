@@ -32,10 +32,18 @@ _TIMEOUT = 20.0
 
 # Study-type keyword heuristics (used as fallback without Gemini)
 _TYPE_WORDS: Dict[str, List[str]] = {
+    # association = categorical↔categorical (chi-square / Fisher's / Cramér's V / OR)
+    # correlation = continuous↔continuous (Pearson r / Spearman ρ)
+    # Researchers often conflate the two; the validator enforces the distinction.
+    "association": [
+        "chi.square", "chi-square", "fisher", "odds ratio", "odd ratio",
+        "cramer", "cramér", "categorical association", "cross.tab", "crosstab",
+    ],
     "correlation": [
-        "correlat", "associat", "relat", "factor", "predictor", "risk factor",
-        "effect of", "influence of", "impact of", "relate to", "related to",
-        "regression", "logistic", "linear model",
+        "correlat", "pearson", "spearman", "linear model",
+        "factor", "predictor", "risk factor",
+        "effect of", "influence of", "impact of",
+        "regression", "logistic",
     ],
     "comparison": [
         "compar", "difference", " vs ", " versus ", "between group",
@@ -269,6 +277,19 @@ def _validate_study_type(
     has_time_col  = any(
         frag in col for col in all_col_names for frag in _TIME_COL_FRAGMENTS
     )
+
+    # ── Rule 0: "correlation" with no continuous variables → "association" ─
+    # "Correlation" (Pearson/Spearman) requires continuous measurements.
+    # When all variables are categorical, the correct term is "association"
+    # (chi-square / Fisher's exact / Cramér's V / odds ratio).
+    if study_type == "correlation" and not has_continuous:
+        note = (
+            "'Correlation' (Pearson/Spearman) requires continuous measurements — "
+            "your dataset has no continuous variables. "
+            "Switched to 'association' (chi-square / Fisher's exact / Cramér's V / "
+            "odds ratio), which is the correct analysis for categorical data."
+        )
+        return "association", f"{note} [{reasoning}]"
 
     # ── Rule 1: Diagnostic needs a continuous score ───────────────────────
     if study_type == "diagnostic" and not has_continuous:

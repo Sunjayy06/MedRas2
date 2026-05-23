@@ -2887,3 +2887,71 @@ td.se-corr-p-sig {
   background: #fef2f2;
   border-color: #fca5a5;
 }
+
+/* ---------- Analysis Plan Preview (ai-confirm redesign) ---------- */
+.se-plan-card {
+  display: flex;
+  gap: 1rem;
+  background: #f8faff;
+  border: 1.5px solid #c7d7f5;
+  border-radius: 12px;
+  padding: 1.1rem 1.25rem;
+  margin-bottom: 1rem;
+  align-items: flex-start;
+}
+.se-plan-card-icon { font-size: 2rem; line-height: 1; flex-shrink: 0; margin-top: 2px; }
+.se-plan-card-body { flex: 1; min-width: 0; }
+.se-plan-type-label { font-weight: 700; font-size: 1.05rem; color: #1e3a5f; margin-bottom: 0.25rem; }
+.se-plan-description { font-size: 0.83rem; color: #374151; margin: 0 0 0.4rem; line-height: 1.5; }
+.se-plan-reasoning { font-size: 0.8rem; color: #6b7280; font-style: italic; margin: 0; line-height: 1.4; }
+.se-plan-section {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 0.85rem 1rem;
+  margin-bottom: 0.75rem;
+}
+.se-plan-section-head { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.6rem; }
+.se-plan-section-icon { font-size: 1rem; }
+.se-plan-section-title { font-weight: 600; font-size: 0.88rem; color: #374151; flex: 1; }
+.se-plan-outcome-col {
+  background: #e0e7ff; color: #3730a3; border-radius: 6px;
+  padding: 0.15rem 0.5rem; font-size: 0.8rem; font-family: monospace;
+}
+.se-plan-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+.se-plan-table thead th {
+  background: #f1f5f9; color: #475569; font-weight: 600;
+  padding: 0.4rem 0.6rem; text-align: left; border-bottom: 1px solid #e2e8f0;
+}
+.se-plan-table tbody td { padding: 0.38rem 0.6rem; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+.se-plan-table tbody tr:last-child td { border-bottom: none; }
+.se-plan-col-name { font-weight: 500; color: #1e3a5f; }
+.se-plan-col-type { color: #64748b; font-size: 0.78rem; white-space: nowrap; }
+.se-plan-col-test { color: #374151; }
+.se-plan-actions { display: flex; flex-direction: column; gap: 0.5rem; margin: 1.25rem 0 0.5rem; }
+.se-plan-btn-proceed { font-size: 1rem; padding: 0.75rem 1.25rem; }
+.se-plan-btn-adjust {
+  background: #fff; border: 1.5px solid #e5e7eb; color: #374151;
+  font-size: 0.88rem; padding: 0.55rem 1rem; border-radius: 8px; cursor: pointer; transition: background 0.15s;
+}
+.se-plan-btn-adjust:hover { background: #f9fafb; }
+.se-plan-chatbox {
+  background: #f9fafb; border: 1.5px solid #e5e7eb;
+  border-radius: 12px; padding: 1rem; margin-top: 0.75rem;
+}
+.se-plan-chatbox-hint { font-size: 0.85rem; color: #374151; margin: 0 0 0.5rem; }
+.se-plan-chatbox-input {
+  width: 100%; border: 1.5px solid #d1d5db; border-radius: 8px;
+  padding: 0.6rem 0.75rem; font-size: 0.9rem; font-family: inherit;
+  resize: vertical; box-sizing: border-box;
+}
+.se-plan-chatbox-row { display: flex; gap: 0.5rem; margin-top: 0.6rem; align-items: center; flex-wrap: wrap; }
+.se-plan-btn-manual-toggle {
+  background: none; border: none; color: #6b7280; font-size: 0.8rem;
+  cursor: pointer; text-decoration: underline; padding: 0; margin-left: auto;
+}
+.se-plan-btn-manual-toggle:hover { color: #374151; }
+.se-plan-manual {
+  background: #fff; border: 1px dashed #d1d5db;
+  border-radius: 10px; padding: 0.85rem 1rem; margin-top: 0.75rem;
+}

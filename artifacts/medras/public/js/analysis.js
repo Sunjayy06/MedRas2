@@ -3724,12 +3724,61 @@ function bindChatboxes() {
 /* ------------------------------------------------------------------ */
 
 const _STUDY_TYPE_LABELS = {
-  correlation: "Correlation study — find which factors are associated with the outcome",
-  comparison:  "Comparison — compare groups (RCT, case-control, cohort)",
-  diagnostic:  "Diagnostic accuracy — sensitivity, specificity, ROC",
-  survival:    "Survival — time-to-event, Kaplan-Meier",
-  descriptive: "Descriptive — prevalence, frequencies, profile",
+  association: "Association study",
+  correlation: "Correlation study",
+  comparison:  "Comparison study",
+  diagnostic:  "Diagnostic accuracy",
+  survival:    "Survival analysis",
+  descriptive: "Descriptive analysis",
 };
+
+const _STUDY_TYPE_DESCRIPTIONS = {
+  association: "All variables are categorical. Tests the strength of association between each predictor and the outcome using chi-square, Fisher's exact test, Cramér's V, and odds ratios. Important: 'association' and 'correlation' are often confused by researchers — correlation (Pearson/Spearman) specifically measures continuous variable relationships; association applies to categorical data.",
+  correlation: "Continuous measurements. Quantifies the linear (Pearson r) or monotonic (Spearman ρ) relationship between continuous predictors and the outcome.",
+  comparison:  "Group differences. Compares the outcome between two or more groups — independent t-test / Mann-Whitney U (two groups) or one-way ANOVA / Kruskal-Wallis (multiple groups).",
+  diagnostic:  "Test performance. Evaluates sensitivity, specificity, PPV, NPV, and area under the ROC curve (AUC) to assess how well a test identifies the condition.",
+  survival:    "Time-to-event. Estimates survival probability (Kaplan-Meier), compares groups (log-rank test), and models hazard ratios (Cox proportional hazards regression).",
+  descriptive: "Population profile. Reports frequencies, proportions, means / medians, standard deviations, and 95% confidence intervals for all variables.",
+};
+
+const _STUDY_TYPE_ICONS = {
+  association: "🔗",
+  correlation: "📈",
+  comparison:  "⚖️",
+  diagnostic:  "🔬",
+  survival:    "⏱️",
+  descriptive: "📋",
+};
+
+// Returns the planned statistical test name for a given predictor
+function _getPlannedTest(studyType, predictorType, nOutcomeValues) {
+  switch (studyType) {
+    case "association":
+      return nOutcomeValues === 2
+        ? "Chi-square / Fisher's exact · Odds Ratio · Cramér's V"
+        : "Chi-square · Cramér's V";
+    case "correlation":
+      if (predictorType === "scale")   return "Pearson r · Spearman ρ";
+      if (predictorType === "ordinal") return "Spearman ρ";
+      return "Point-biserial r · Phi coefficient";
+    case "comparison":
+      if (predictorType === "scale" || predictorType === "ordinal")
+        return nOutcomeValues === 2
+          ? "Independent t-test · Mann-Whitney U"
+          : "One-way ANOVA · Kruskal-Wallis";
+      return nOutcomeValues === 2
+        ? "Chi-square / Fisher's exact · Odds Ratio"
+        : "Chi-square · Cramér's V";
+    case "diagnostic":
+      return "AUC / ROC · Sensitivity · Specificity · PPV · NPV";
+    case "survival":
+      return "Kaplan-Meier · Log-rank test · Cox regression";
+    case "descriptive":
+      return "Frequency · Proportion · Mean / Median · 95% CI";
+    default:
+      return "Chi-square / Fisher's exact";
+  }
+}
 
 // Plain-English type labels shown in the variables list
 const _CONFIRM_TYPE_LABELS = {
@@ -3745,21 +3794,27 @@ function renderAiConfirmScreen() {
   const ai = state.aiStudy || {};
   const studyType = ai.study_type || "correlation";
   const outCol    = ai.outcome_col || "";
-  const reasoning = ai.reasoning  || "No reasoning provided.";
-  // Strip any internal "[old reasoning]" bracket appended by the validator
+  const reasoning = ai.reasoning  || "";
   const cleanReasoning = reasoning.replace(/\s*\[.*?\]\s*$/, "").trim();
 
-  // Update display labels
+  // ── Study-type card ──────────────────────────────────────────────────
+  const iconEl = document.getElementById("ai-plan-icon");
+  if (iconEl) iconEl.textContent = _STUDY_TYPE_ICONS[studyType] || "📊";
+
   const typeDisplay = document.getElementById("ai-study-type-display");
   if (typeDisplay) typeDisplay.textContent = _STUDY_TYPE_LABELS[studyType] || studyType;
 
-  const colDisplay = document.getElementById("ai-outcome-col-display");
-  if (colDisplay) colDisplay.textContent = outCol || "Not detected — please select below";
+  const descEl = document.getElementById("ai-study-type-description");
+  if (descEl) descEl.textContent = _STUDY_TYPE_DESCRIPTIONS[studyType] || "";
 
   const reasoningEl = document.getElementById("ai-reasoning-display");
   if (reasoningEl) reasoningEl.textContent = cleanReasoning;
 
-  // Populate outcome column dropdown
+  // ── Outcome column display ───────────────────────────────────────────
+  const colDisplay = document.getElementById("ai-outcome-col-display");
+  if (colDisplay) colDisplay.textContent = outCol || "Not detected — set manually below";
+
+  // ── Populate hidden dropdowns (for manual override + internal wiring) ─
   const colSelect = document.getElementById("ai-outcome-col-select");
   if (colSelect) {
     colSelect.innerHTML = '<option value="">— select a column —</option>';
@@ -3772,28 +3827,30 @@ function renderAiConfirmScreen() {
       colSelect.appendChild(opt);
     });
   }
-
-  // Pre-select study type
   const typeSelect = document.getElementById("ai-study-type-select");
   if (typeSelect) typeSelect.value = studyType;
 
-  // Show/hide the "Run Pairwise Analysis" button
-  _updateAiConfirmButtons();
+  // ── Proceed button label ─────────────────────────────────────────────
+  const isPairwise = studyType === "correlation" || studyType === "association";
+  const proceedBtn = document.getElementById("btn-ai-proceed");
+  if (proceedBtn) {
+    proceedBtn.textContent = isPairwise && outCol
+      ? "✓ Looks correct — Run Analysis →"
+      : "✓ Looks correct — Continue →";
+  }
 
-  // Populate the three detail panels for correlation studies
-  if (studyType === "correlation" && outCol) {
-    _renderAiConfirmDetails(outCol).catch(() => {});
+  // ── Detail panels (shown for ALL study types when outcome is known) ──
+  if (outCol) {
+    _renderAiConfirmDetails(studyType, outCol).catch(() => {});
   } else {
-    // Hide all three panels if not a correlation study
-    ["ai-detail-counts", "ai-detail-vars", "ai-detail-tests"].forEach((id) => {
+    ["ai-detail-counts", "ai-detail-vars"].forEach((id) => {
       const el = document.getElementById(id);
       if (el) el.classList.add("is-hidden");
     });
   }
 }
 
-async function _renderAiConfirmDetails(outCol) {
-  // Single API call — reused by all three sections
+async function _renderAiConfirmDetails(studyType, outCol) {
   let countsData = null;
   try {
     countsData = await api(
@@ -3805,106 +3862,75 @@ async function _renderAiConfirmDetails(outCol) {
   const outcomeTotal    = countsData ? (countsData.total  || 0) : 0;
   const nOutcomeValues  = Object.keys(outcomeCountMap).length || 2;
 
-  // ── 1. Outcome value counts ──────────────────────────────────────────────
+  // ── Outcome value distribution ───────────────────────────────────────
   const countsWrap = document.getElementById("ai-detail-counts");
   const countsBody = document.getElementById("ai-detail-counts-body");
   if (countsWrap && countsBody) {
     if (Object.keys(outcomeCountMap).length > 0) {
       countsBody.innerHTML = Object.entries(outcomeCountMap)
         .sort((a, b) => b[1] - a[1])
-        .map(([val, n]) =>
-          `<span class="se-ai-count-chip">${escapeHtml(val)} = ${n}</span>`
-        ).join("") +
+        .map(([val, n]) => `<span class="se-ai-count-chip">${escapeHtml(val)} = ${n}</span>`)
+        .join("") +
         `<span class="se-ai-count-chip" style="background:#f1f5f9;color:#475569">Total = ${outcomeTotal}</span>`;
-      countsWrap.classList.remove("is-hidden");
-    } else {
-      countsWrap.classList.add("is-hidden");
     }
+    countsWrap.classList.remove("is-hidden");
   }
 
-  // ── 2. Included independent variables with types ─────────────────────────
+  // ── Predictors + planned tests table ────────────────────────────────
   const predictors = (state.classifications || []).filter(
     (c) => c.column !== outCol && !_CONFIRM_SKIP_TYPES.has(c.detected_type)
   );
 
   const varsWrap = document.getElementById("ai-detail-vars");
-  const varsList = document.getElementById("ai-detail-vars-list");
+  const varsList = document.getElementById("ai-detail-vars-list"); // now a <tbody>
   if (varsWrap && varsList) {
     if (predictors.length > 0) {
       varsList.innerHTML = predictors.map((c) => {
         const typeLabel = _CONFIRM_TYPE_LABELS[c.detected_type] || c.detected_type;
-        return `<li>
-          <span class="se-ai-detail-var-name">${escapeHtml(c.column)}</span>
-          <span class="se-ai-detail-var-type">${typeLabel}</span>
-        </li>`;
+        const testName  = _getPlannedTest(studyType, c.detected_type, nOutcomeValues);
+        return `<tr>
+          <td class="se-plan-col-name">${escapeHtml(c.column)}</td>
+          <td class="se-plan-col-type">${typeLabel}</td>
+          <td class="se-plan-col-test">${escapeHtml(testName)}</td>
+        </tr>`;
       }).join("");
       varsWrap.classList.remove("is-hidden");
     } else {
       varsWrap.classList.add("is-hidden");
     }
   }
-
-  // ── 3. Tests that will run ───────────────────────────────────────────────
-  const testsWrap = document.getElementById("ai-detail-tests");
-  const testsList = document.getElementById("ai-detail-tests-list");
-  if (testsWrap && testsList) {
-    if (predictors.length > 0) {
-      testsList.innerHTML = predictors.map((c) => {
-        const isContinuous = c.detected_type === "scale" ||
-                             c.detected_type === "ordinal" ||
-                             c.detected_type === "discrete";
-        let testName;
-        if (isContinuous) {
-          testName = nOutcomeValues <= 2
-            ? "Mann-Whitney U test"
-            : "Kruskal-Wallis test";
-        } else {
-          testName = "Chi-square / Fisher\u2019s exact test";
-        }
-        return `<li>
-          <span>${escapeHtml(outCol)} compared to <strong>${escapeHtml(c.column)}</strong> — ${testName}</span>
-        </li>`;
-      }).join("");
-      testsWrap.classList.remove("is-hidden");
-    } else {
-      testsWrap.classList.add("is-hidden");
-    }
-  }
 }
 
 function _updateAiConfirmButtons() {
   const typeSelect = document.getElementById("ai-study-type-select");
+  if (!typeSelect) return;
+  const studyType = typeSelect.value;
+  const isPairwise = studyType === "correlation" || studyType === "association";
   const colSelect  = document.getElementById("ai-outcome-col-select");
-  const corrBtn    = document.getElementById("btn-run-correlation");
+  const hasCol     = colSelect && colSelect.value && colSelect.value !== "";
   const colHint    = document.getElementById("ai-outcome-col-required-hint");
-  if (!typeSelect || !corrBtn) return;
-
-  const isCorr  = typeSelect.value === "correlation";
-  const hasCol  = colSelect && colSelect.value && colSelect.value !== "";
-
-  // Show button only for correlation studies
-  corrBtn.classList.toggle("is-hidden", !isCorr);
-
-  if (isCorr) {
-    // Enable/disable based on whether an outcome column is chosen
-    corrBtn.disabled = !hasCol;
-    corrBtn.title = hasCol ? "" : "Select an outcome column above first";
-    if (colHint) colHint.style.display = hasCol ? "none" : "block";
-  } else {
-    corrBtn.disabled = false;
-    if (colHint) colHint.style.display = "none";
+  if (colHint) colHint.style.display = (isPairwise && !hasCol) ? "block" : "none";
+  // Keep hidden corrBtn in sync (used by proceed-button delegation)
+  const corrBtn = document.getElementById("btn-run-correlation");
+  if (corrBtn) corrBtn.disabled = !hasCol;
+  // Update visible proceed button label
+  const proceedBtn = document.getElementById("btn-ai-proceed");
+  if (proceedBtn) {
+    proceedBtn.textContent = isPairwise && hasCol
+      ? "✓ Looks correct — Run Analysis →"
+      : "✓ Looks correct — Continue →";
   }
 }
 
 function _refreshAiDetailPanels() {
   const typeSelect = document.getElementById("ai-study-type-select");
   const colSelect  = document.getElementById("ai-outcome-col-select");
-  const studyType  = typeSelect ? typeSelect.value : "";
+  const studyType  = typeSelect ? typeSelect.value : "correlation";
   const outCol     = colSelect  ? colSelect.value  : "";
-  if (studyType === "correlation" && outCol) {
-    _renderAiConfirmDetails(outCol).catch(() => {});
+  if (outCol) {
+    _renderAiConfirmDetails(studyType, outCol).catch(() => {});
   } else {
-    ["ai-detail-counts", "ai-detail-vars", "ai-detail-tests"].forEach((id) => {
+    ["ai-detail-counts", "ai-detail-vars"].forEach((id) => {
       const el = document.getElementById(id);
       if (el) el.classList.add("is-hidden");
     });
@@ -3915,28 +3941,47 @@ function bindAiConfirm() {
   const screen = document.getElementById("screen-ai-confirm");
   if (!screen) return;
 
-  // Live update buttons + detail panels as study type or outcome col changes
+  // Live update buttons + detail panels when manual dropdowns change
   const typeSelect = document.getElementById("ai-study-type-select");
   if (typeSelect) typeSelect.addEventListener("change", () => {
     _updateAiConfirmButtons();
     _refreshAiDetailPanels();
   });
-
   const colSelectEl = document.getElementById("ai-outcome-col-select");
   if (colSelectEl) colSelectEl.addEventListener("change", () => {
     _refreshAiDetailPanels();
     _updateAiConfirmButtons();
   });
 
-  // Back → preview
+  // ── Back → preview ───────────────────────────────────────────────────
   const backBtn = screen.querySelector('[data-action="back-to-preview-from-ai"]');
   if (backBtn) backBtn.addEventListener("click", () => showScreen("preview"));
 
-  // "Standard flow" → variables screen (skip correlation shortcut)
+  // ── Main proceed button (visible; delegates to hidden internal buttons) ─
+  const proceedBtn = document.getElementById("btn-ai-proceed");
+  if (proceedBtn) {
+    proceedBtn.addEventListener("click", () => {
+      const studyType  = (state.aiStudy && state.aiStudy.study_type) || "correlation";
+      const outCol     = (state.aiStudy && state.aiStudy.outcome_col) || "";
+      const isPairwise = studyType === "correlation" || studyType === "association";
+      // Sync hidden dropdowns with current aiStudy so the internal handlers read correctly
+      const ts = document.getElementById("ai-study-type-select");
+      const cs = document.getElementById("ai-outcome-col-select");
+      if (ts) ts.value = studyType;
+      if (cs && outCol) cs.value = outCol;
+      if (isPairwise && outCol) {
+        document.getElementById("btn-run-correlation")?.click();
+      } else {
+        screen.querySelector('[data-action="ai-confirm-skip-to-variables"]')?.click();
+      }
+    });
+  }
+
+  // ── Skip button (hidden; wired for internal use by proceedBtn) ───────
   const skipBtn = screen.querySelector('[data-action="ai-confirm-skip-to-variables"]');
   if (skipBtn) {
     skipBtn.addEventListener("click", async () => {
-      const status = document.getElementById("ai-confirm-status");
+      const status    = document.getElementById("ai-confirm-status");
       const studyType = (document.getElementById("ai-study-type-select") || {}).value || "correlation";
       const outCol    = (document.getElementById("ai-outcome-col-select") || {}).value || null;
       setStatus(status, "Confirming…", "loading");
@@ -3944,11 +3989,7 @@ function bindAiConfirm() {
         await api("/confirm-study", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            job_id: state.jobId,
-            study_type: studyType,
-            outcome_col: outCol || null,
-          }),
+          body: JSON.stringify({ job_id: state.jobId, study_type: studyType, outcome_col: outCol || null }),
         });
         setStatus(status, "");
         showScreen("3");
@@ -3959,33 +4000,28 @@ function bindAiConfirm() {
     });
   }
 
-  // "Run Pairwise Analysis" → correlation results
+  // ── Run pairwise (hidden; wired for internal use by proceedBtn) ──────
   const corrBtn = document.getElementById("btn-run-correlation");
   if (corrBtn) {
     corrBtn.addEventListener("click", async () => {
-      const status    = document.getElementById("ai-confirm-status");
-      const typeSelect = document.getElementById("ai-study-type-select");
-      const colSelect  = document.getElementById("ai-outcome-col-select");
-      const studyType  = typeSelect ? typeSelect.value : "correlation";
-      const outCol     = colSelect ? colSelect.value : "";
+      const status     = document.getElementById("ai-confirm-status");
+      const ts         = document.getElementById("ai-study-type-select");
+      const cs         = document.getElementById("ai-outcome-col-select");
+      const studyType  = ts ? ts.value : "correlation";
+      const outCol     = cs ? cs.value : "";
       if (!outCol) {
         setStatus(status, "Please select an outcome column first.", "error");
         return;
       }
       setStatus(status, "Confirming study setup…", "loading");
+      if (proceedBtn) { proceedBtn.disabled = true; proceedBtn.textContent = "Running…"; }
       try {
         await api("/confirm-study", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            job_id: state.jobId,
-            study_type: studyType,
-            outcome_col: outCol,
-          }),
+          body: JSON.stringify({ job_id: state.jobId, study_type: studyType, outcome_col: outCol }),
         });
         setStatus(status, "Running pairwise analysis…", "loading");
-        corrBtn.disabled = true;
-        corrBtn.textContent = "Running…";
         const result = await api("/run-correlation", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -3998,9 +4034,86 @@ function bindAiConfirm() {
       } catch (err) {
         setStatus(status, `Analysis failed: ${err.message}`, "error");
       } finally {
-        corrBtn.disabled = false;
-        corrBtn.textContent = "Run Pairwise Analysis →";
+        if (proceedBtn) { proceedBtn.disabled = false; proceedBtn.textContent = "✓ Looks correct — Run Analysis →"; }
       }
+    });
+  }
+
+  // ── Chatbox toggle ────────────────────────────────────────────────────
+  const adjustBtn = screen.querySelector('[data-action="ai-confirm-adjust"]');
+  const adjustBox = document.getElementById("ai-adjust-box");
+  if (adjustBtn && adjustBox) {
+    adjustBtn.addEventListener("click", () => {
+      adjustBox.classList.toggle("is-hidden");
+      if (!adjustBox.classList.contains("is-hidden")) {
+        document.getElementById("ai-adjust-input")?.focus();
+      }
+    });
+  }
+
+  // ── Chatbox cancel ────────────────────────────────────────────────────
+  const adjustCancel = screen.querySelector('[data-action="ai-adjust-cancel"]');
+  if (adjustCancel && adjustBox) {
+    adjustCancel.addEventListener("click", () => adjustBox.classList.add("is-hidden"));
+  }
+
+  // ── Chatbox submit → POST /adjust-analysis ────────────────────────────
+  const adjustSubmit = screen.querySelector('[data-action="ai-adjust-submit"]');
+  if (adjustSubmit) {
+    adjustSubmit.addEventListener("click", async () => {
+      const input   = document.getElementById("ai-adjust-input");
+      const status  = document.getElementById("ai-adjust-status");
+      const message = (input ? input.value : "").trim();
+      if (!message) { if (input) input.focus(); return; }
+      setStatus(status, "Updating analysis plan…", "loading");
+      adjustSubmit.disabled = true;
+      try {
+        const result = await api("/adjust-analysis", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            job_id: state.jobId,
+            user_message: message,
+            current_study_type: (state.aiStudy && state.aiStudy.study_type) || "correlation",
+            current_outcome_col: (state.aiStudy && state.aiStudy.outcome_col) || null,
+          }),
+        });
+        state.aiStudy = result;
+        if (input) input.value = "";
+        if (adjustBox) adjustBox.classList.add("is-hidden");
+        setStatus(status, "");
+        renderAiConfirmScreen();
+        setStatus(document.getElementById("ai-confirm-status"), "");
+      } catch (err) {
+        setStatus(status, `Could not update: ${err.message}`, "error");
+      } finally {
+        adjustSubmit.disabled = false;
+      }
+    });
+  }
+
+  // ── Manual override toggle ────────────────────────────────────────────
+  const manualToggle = screen.querySelector('[data-action="ai-toggle-manual"]');
+  const manualPanel  = document.getElementById("ai-manual-override");
+  if (manualToggle && manualPanel) {
+    manualToggle.addEventListener("click", () => manualPanel.classList.toggle("is-hidden"));
+  }
+
+  // ── Manual apply → update state + re-render ───────────────────────────
+  const manualApply = screen.querySelector('[data-action="ai-manual-apply"]');
+  if (manualApply) {
+    manualApply.addEventListener("click", () => {
+      const ts = document.getElementById("ai-study-type-select");
+      const cs = document.getElementById("ai-outcome-col-select");
+      const studyType = ts ? ts.value : "correlation";
+      const outCol    = cs ? cs.value : "";
+      state.aiStudy = Object.assign({}, state.aiStudy || {}, {
+        study_type: studyType,
+        outcome_col: outCol || null,
+        reasoning: "Manually set by researcher.",
+      });
+      if (manualPanel) manualPanel.classList.add("is-hidden");
+      renderAiConfirmScreen();
     });
   }
 }

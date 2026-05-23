@@ -1274,6 +1274,37 @@ async def ai_bridge(request: Request, payload: AiBridgeRequest) -> Dict[str, Any
     return result
 
 
+class AdjustAnalysisRequest(BaseModel):
+    job_id: str = Field(..., min_length=1, max_length=64)
+    user_message: str = Field(..., min_length=1, max_length=1000)
+    current_study_type: str = Field(default="correlation", max_length=50)
+    current_outcome_col: Optional[str] = Field(default=None, max_length=200)
+
+
+@router.post("/adjust-analysis")
+@limiter.limit("10/minute")
+async def adjust_analysis(request: Request, payload: AdjustAnalysisRequest) -> Dict[str, Any]:
+    """Re-run the AI bridge using the researcher's plain-English correction."""
+    entry = dataset_store.get(payload.job_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Dataset expired or not found.")
+    classifications = (
+        entry.meta.get("classifications")
+        or variable_classifier.classify_dataframe(entry.df)
+    )
+    entry.meta["classifications"] = classifications
+    columns = list(entry.df.columns)
+    result = ai_bridge_service.identify_study(
+        description=payload.user_message,
+        outcome_hint=payload.current_outcome_col or "",
+        columns=columns,
+        classifications=classifications,
+        study_type_hint=None,  # researcher is explicitly overriding; ignore old hint
+    )
+    entry.meta["ai_study"] = result
+    return result
+
+
 class ConfirmStudyRequest(BaseModel):
     job_id: str = Field(..., min_length=1, max_length=64)
     study_type: str = Field(..., max_length=50)

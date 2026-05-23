@@ -10,7 +10,7 @@
     />
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%232f6fed'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-family='Inter,sans-serif' font-size='18' font-weight='700' fill='white'%3EM%3C/text%3E%3C/svg%3E" />
     <link rel="stylesheet" href="/css/style.css" />
-    <link rel="stylesheet" href="/css/analysis.css?v=2026052001" />
+    <link rel="stylesheet" href="/css/analysis.css?v=2026052302" />
     <link rel="stylesheet" href="/css/medras-nav.css" />
   </head>
   <body data-medras-module="sigma">
@@ -910,52 +910,81 @@
            =========================================================== -->
       <section class="se-screen se-screen-narrow is-hidden" id="screen-ai-confirm" data-testid="screen-ai-confirm">
         <header class="se-screen-head">
-          <h2>Step 2.5 · Study setup</h2>
-          <p>I've analysed your dataset. Confirm the study type and outcome column below.</p>
+          <h2>Analysis Plan</h2>
+          <p>Here's what I've identified from your data. Review and proceed — or tell me what to change.</p>
         </header>
 
-        <div class="se-ai-card" id="ai-confirm-card" data-testid="ai-confirm-card">
-          <div class="se-ai-row">
-            <span class="se-ai-label">Study type detected</span>
-            <span class="se-ai-value" id="ai-study-type-display">—</span>
-          </div>
-          <div class="se-ai-row">
-            <span class="se-ai-label">Outcome column</span>
-            <span class="se-ai-value" id="ai-outcome-col-display">—</span>
-          </div>
-          <div class="se-ai-row">
-            <span class="se-ai-label">Reasoning</span>
-            <span class="se-ai-value se-ai-reasoning" id="ai-reasoning-display">—</span>
+        <!-- ── Study-type summary card ── -->
+        <div class="se-plan-card" id="ai-confirm-card" data-testid="ai-confirm-card">
+          <div class="se-plan-card-icon" id="ai-plan-icon">📊</div>
+          <div class="se-plan-card-body">
+            <div class="se-plan-type-label" id="ai-study-type-display">—</div>
+            <p class="se-plan-description" id="ai-study-type-description">—</p>
+            <p class="se-plan-reasoning" id="ai-reasoning-display">—</p>
           </div>
         </div>
 
-        <!-- ── Three detail panels (populated by renderAiConfirmScreen) ── -->
-        <div id="ai-detail-counts" class="se-ai-detail is-hidden">
-          <div class="se-ai-detail-label">Outcome distribution</div>
+        <!-- ── Outcome variable ── -->
+        <div id="ai-detail-counts" class="se-plan-section is-hidden">
+          <div class="se-plan-section-head">
+            <span class="se-plan-section-icon">🎯</span>
+            <span class="se-plan-section-title">Outcome variable</span>
+            <code class="se-plan-outcome-col" id="ai-outcome-col-display">—</code>
+          </div>
           <div id="ai-detail-counts-body" class="se-ai-count-row"></div>
         </div>
 
-        <div id="ai-detail-vars" class="se-ai-detail is-hidden">
-          <div class="se-ai-detail-label">Independent variables included</div>
-          <ul id="ai-detail-vars-list" class="se-ai-detail-list"></ul>
+        <!-- ── Predictors + planned tests ── -->
+        <div id="ai-detail-vars" class="se-plan-section is-hidden">
+          <div class="se-plan-section-head">
+            <span class="se-plan-section-icon">📋</span>
+            <span class="se-plan-section-title">Predictors &amp; planned statistical tests</span>
+          </div>
+          <table class="se-plan-table">
+            <thead><tr><th>Variable</th><th>Type</th><th>Planned test</th></tr></thead>
+            <tbody id="ai-detail-vars-list"></tbody>
+          </table>
         </div>
 
-        <div id="ai-detail-tests" class="se-ai-detail is-hidden">
-          <div class="se-ai-detail-label">Tests that will run</div>
-          <ul id="ai-detail-tests-list" class="se-ai-detail-list"></ul>
+        <!-- hidden compat divs kept for JS backward compat -->
+        <div id="ai-detail-tests" class="is-hidden"><ul id="ai-detail-tests-list"></ul></div>
+
+        <!-- ── Primary actions ── -->
+        <div class="se-plan-actions">
+          <button type="button" class="btn btn-primary se-plan-btn-proceed" id="btn-ai-proceed" data-action="ai-confirm-proceed">
+            ✓ Looks correct — Proceed to Analysis
+          </button>
+          <button type="button" class="btn se-plan-btn-adjust" data-action="ai-confirm-adjust">
+            ✎ Something doesn't look right
+          </button>
         </div>
 
-        <div class="se-ai-edit-panel">
-          <p class="se-hint">Not right? Adjust below and re-confirm.</p>
+        <!-- ── Adjustment chatbox (hidden by default) ── -->
+        <div class="se-plan-chatbox is-hidden" id="ai-adjust-box">
+          <p class="se-plan-chatbox-hint">Describe what's wrong — I'll update the analysis plan:</p>
+          <textarea id="ai-adjust-input" class="se-plan-chatbox-input" rows="3"
+            placeholder="e.g. The outcome should be 'Complication', not 'Treatment'. This is a retrospective cohort study comparing two groups."></textarea>
+          <div class="se-plan-chatbox-row">
+            <button type="button" class="btn btn-primary" data-action="ai-adjust-submit">Update Plan</button>
+            <button type="button" class="btn btn-tertiary" data-action="ai-adjust-cancel">Cancel</button>
+            <button type="button" class="se-plan-btn-manual-toggle" data-action="ai-toggle-manual">Set manually instead</button>
+          </div>
+          <div id="ai-adjust-status" class="se-status" role="status" aria-live="polite"></div>
+        </div>
+
+        <!-- ── Manual override (hidden) ── -->
+        <div class="se-plan-manual is-hidden" id="ai-manual-override">
+          <p class="se-hint" style="margin-bottom:0.5rem;font-weight:600;">Manual settings:</p>
           <div class="se-field-row">
             <label class="se-field">
               <span>Study type</span>
               <select id="ai-study-type-select">
-                <option value="correlation">Correlation — find which factors are associated with the outcome</option>
-                <option value="comparison">Comparison — compare groups (RCT, case-control, cohort)</option>
-                <option value="diagnostic">Diagnostic accuracy — sensitivity, specificity, ROC</option>
-                <option value="survival">Survival — time-to-event, Kaplan-Meier</option>
-                <option value="descriptive">Descriptive — prevalence, frequencies, profile</option>
+                <option value="association">Association — chi-square / Fisher's / Cramér's V (categorical variables)</option>
+                <option value="correlation">Correlation — Pearson r / Spearman ρ (continuous measurements)</option>
+                <option value="comparison">Comparison — t-test / ANOVA / Mann-Whitney (group differences)</option>
+                <option value="diagnostic">Diagnostic accuracy — sensitivity, specificity, AUC / ROC</option>
+                <option value="survival">Survival — Kaplan-Meier / Cox regression (time-to-event)</option>
+                <option value="descriptive">Descriptive — frequencies, proportions, profile</option>
               </select>
             </label>
             <label class="se-field">
@@ -965,21 +994,22 @@
               </select>
             </label>
           </div>
+          <button type="button" class="btn btn-secondary" data-action="ai-manual-apply">Apply &amp; Update Preview</button>
         </div>
 
         <div id="ai-confirm-status" class="se-status" role="status" aria-live="polite" data-testid="status-ai-confirm"></div>
-
-        <p class="se-hint" style="margin-top:0.75rem;padding:0.6rem 0.85rem;background:#f0f4ff;border-left:3px solid #4a6eb5;border-radius:4px;font-size:0.82rem;" data-testid="note-primary-outcome">
-          <strong>One primary outcome per session.</strong> This analysis uses a single primary outcome variable. To analyse a second outcome variable, start a new analysis session and select the second outcome column.
+        <p id="ai-outcome-col-required-hint" style="display:none;margin-top:0.5rem;font-size:0.82rem;color:#b45309;padding:0.45rem 0.75rem;background:#fffbeb;border-left:3px solid #f59e0b;border-radius:4px;">
+          &#9888; Select an <strong>outcome column</strong> in the manual settings above to enable analysis.
         </p>
 
-        <p id="ai-outcome-col-required-hint" style="display:none;margin-top:0.5rem;font-size:0.82rem;color:#b45309;padding:0.45rem 0.75rem;background:#fffbeb;border-left:3px solid #f59e0b;border-radius:4px;">
-          &#9888; Select an <strong>outcome column</strong> from the dropdown above to enable this button.
+        <p class="se-hint" style="margin-top:0.75rem;padding:0.6rem 0.85rem;background:#f0f4ff;border-left:3px solid #4a6eb5;border-radius:4px;font-size:0.82rem;" data-testid="note-primary-outcome">
+          <strong>One primary outcome per session.</strong> To analyse a second outcome variable, start a new analysis session.
         </p>
 
         <div class="se-actions">
           <button type="button" class="btn btn-secondary" data-action="back-to-preview-from-ai">&larr; Back</button>
-          <button type="button" class="btn btn-secondary" data-action="ai-confirm-skip-to-variables">Continue to Variables &rarr;</button>
+          <!-- kept hidden for internal JS delegation -->
+          <button type="button" class="btn btn-secondary is-hidden" data-action="ai-confirm-skip-to-variables">Continue to Variables &rarr;</button>
           <button type="button" class="btn btn-primary is-hidden" id="btn-run-correlation" data-action="ai-confirm-run-correlation">Run Pairwise Analysis &rarr;</button>
         </div>
       </section>
@@ -1087,7 +1117,7 @@
       </div>
     </footer>
 
-    <script src="/js/analysis.js?v=2026052301" defer></script>
+    <script src="/js/analysis.js?v=2026052303" defer></script>
     <script src="/js/medras-nav.js" defer></script>
 
     <!-- MedRAS Study Builder prefill (Phase 6) -->
