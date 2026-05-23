@@ -2824,3 +2824,4 @@ td.se-corr-p-sig {
   opacity: 0.45;
   cursor: not-allowed;
 }
+@keyframes spin { to { transform: rotate(360deg); } }

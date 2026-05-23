@@ -296,6 +296,7 @@ function renderResumeBanner(saved) {
 
 const SCREENS = [
   "1", "intake", "2a", "2c", "2c-custom", "preview",
+  "ai-confirm", "corr-results",
   "3", "4",
   "normality", "plan", "results", "export",
 ];
@@ -304,10 +305,10 @@ const SCREENS = [
 //               5 Normality, 6 Plan and Run, 7 Results, 8 Export.
 const SCREEN_TO_STEP = {
   "1": 1, "intake": 1,
-  "2a": 2, "2c": 2, "2c-custom": 2, "preview": 2,
+  "2a": 2, "2c": 2, "2c-custom": 2, "preview": 2, "ai-confirm": 2,
   "3": 3,
   "4": 4,
-  "normality": 5, "plan": 6, "results": 7, "export": 8,
+  "normality": 5, "plan": 6, "results": 7, "corr-results": 7, "export": 8,
 };
 
 function showScreen(id) {
@@ -343,6 +344,26 @@ function showScreen(id) {
   }
   const target = document.getElementById(`screen-${id}`);
   if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
+
+  // Update the Pass badge: Steps 1-4 = data preparation; Steps 5-8 = analysis
+  const passBadge = document.querySelector('[data-testid="badge-pass"]');
+  if (passBadge) {
+    const helpBtn = passBadge.querySelector(".se-pass-help");
+    const tip     = passBadge.querySelector(".se-pass-tip");
+    const step    = SCREEN_TO_STEP[id] || 1;
+    const isAnalysis = step >= 5;
+    const labelText = isAnalysis
+      ? "Pass 2 of 2 — statistical analysis"
+      : "Pass 1 of 2 — data preparation";
+    // Replace the text node (first child) without touching the button/tip
+    const textNode = Array.from(passBadge.childNodes).find((n) => n.nodeType === 3);
+    if (textNode) textNode.textContent = labelText;
+    else if (helpBtn) passBadge.insertBefore(document.createTextNode(labelText), helpBtn);
+    if (tip) tip.textContent = isAnalysis
+      ? "You are now in Pass 2. MedRAS is running statistical tests and building your results."
+      : "MedRAS runs two passes. Pass 1 prepares and cleans your data. Pass 2 runs the statistical analysis.";
+  }
+
   // Persist the latest step + state to localStorage so a refresh can resume.
   saveSession();
 }
@@ -1832,6 +1853,12 @@ function renderPreview() {
   if (regen) regen.classList.toggle("is-hidden", !isCustom);
 }
 
+function _showAiBridgeOverlay(show) {
+  const overlay = document.getElementById("ai-bridge-overlay");
+  if (!overlay) return;
+  overlay.style.display = show ? "flex" : "none";
+}
+
 function bindPreview() {
   $('[data-action="confirm-preview"]').addEventListener("click", async () => {
     const status = $("#preview-status");
@@ -1849,6 +1876,9 @@ function bindPreview() {
       ingestDataset(data);
       setStatus(status, "");
 
+      // Show a full-page loading overlay so users know analysis is in progress
+      _showAiBridgeOverlay(true);
+
       // Call the AI bridge to identify study type + outcome column.
       // This never blocks navigation — errors fall back gracefully.
       const description =
@@ -1856,7 +1886,6 @@ function bindPreview() {
       const outcomeHint =
         (state.intake && (state.intake.outcomes || "")) || "";
       try {
-        setStatus(status, "Analysing study type…", "loading");
         const bridgeResult = await api("/ai-bridge", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -1879,10 +1908,11 @@ function bindPreview() {
         };
       }
 
-      setStatus(status, "");
+      _showAiBridgeOverlay(false);
       renderAiConfirmScreen();
       showScreen("ai-confirm");
     } catch (err) {
+      _showAiBridgeOverlay(false);
       setStatus(status, `Could not confirm: ${err.message}`, "error");
     }
   });
