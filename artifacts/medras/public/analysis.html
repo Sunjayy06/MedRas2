@@ -1092,6 +1092,19 @@
           </div>
         </div>
 
+        <!-- Glossary of Statistical Terms (collapsible) -->
+        <details class="se-glossary-panel" id="corr-glossary-panel">
+          <summary class="se-glossary-toggle">
+            <span class="se-glossary-icon">📖</span>
+            <span>Glossary of Statistical Terms</span>
+            <span class="se-glossary-hint">Only terms used in this analysis</span>
+          </summary>
+          <div class="se-glossary-body" id="corr-glossary-body">
+            <!-- filled by renderCorrResults() -->
+          </div>
+          <p class="se-glossary-ref">Reference: Cohen, J. (1988). <em>Statistical power analysis for the behavioural sciences</em> (2nd ed.). Lawrence Erlbaum Associates.</p>
+        </details>
+
         <div class="se-actions" style="margin-top:2rem">
           <button type="button" class="btn btn-secondary" data-action="back-to-ai-confirm">&larr; Back to Setup</button>
           <button type="button" class="btn btn-primary" id="btn-export-corr-chapter" data-action="export-corr-chapter">
@@ -1162,7 +1175,7 @@
       </div>
     </footer>
 
-    <script src="/js/analysis.js?v=2026052304" defer></script>
+    <script src="/js/analysis.js?v=2026052305" defer></script>
     <script src="/js/medras-nav.js" defer></script>
 
     <!-- MedRAS Study Builder prefill (Phase 6) -->

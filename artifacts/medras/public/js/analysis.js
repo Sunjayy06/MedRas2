@@ -4247,6 +4247,99 @@ function renderCorrResults(outcomeCol) {
     });
     if (summarySection) summarySection.classList.remove("is-hidden");
   }
+
+  // Glossary panel
+  _renderGlossary(res);
+}
+
+/* ── Glossary of Statistical Terms ─────────────────────────────────────── */
+
+function _renderGlossary(corrResults) {
+  const container = document.getElementById("corr-glossary-body");
+  if (!container) return;
+
+  const pairs = (corrResults && corrResults.pairs) || [];
+  const successful = pairs.filter((p) => !p.test_result?.error);
+  const allTestNames = successful.map((p) =>
+    ((p.test_result || {}).test_name || "").toLowerCase()
+  );
+
+  const hasMW      = allTestNames.some((t) => t.includes("mann"));
+  const hasKW      = allTestNames.some((t) => t.includes("kruskal"));
+  const hasChi     = allTestNames.some((t) => t.includes("chi"));
+  const hasFisher  = allTestNames.some((t) => t.includes("fisher"));
+
+  // Build ordered list of (term, definition)
+  const entries = [];
+
+  entries.push(["Null hypothesis (H₀)",
+    "The default statistical proposition that there is no association or difference between the variables under investigation. A p-value below the pre-specified significance threshold provides evidence against the null hypothesis."]);
+
+  entries.push(["p-value",
+    "The probability of obtaining a test statistic as extreme as, or more extreme than, the value observed, assuming the null hypothesis is true. A smaller p-value indicates stronger evidence against the null hypothesis. In this study, p < 0.05 was adopted as the threshold for statistical significance."]);
+
+  entries.push(["Statistical significance",
+    "A result is deemed statistically significant when the computed p-value falls below the pre-defined α level (here, α = 0.05), indicating the observed finding is unlikely to have arisen by chance alone. Statistical significance does not, by itself, imply clinical or practical importance."]);
+
+  entries.push(["Effect size",
+    "A quantitative measure of the magnitude of an association or difference, independent of sample size. Effect sizes allow comparison of findings across studies and provide information beyond that conveyed by the p-value alone."]);
+
+  if (hasMW || hasKW) {
+    entries.push(["Median",
+      "The middle value of a ranked dataset. Half of all observations fall above, half below. Preferred over the mean when data are skewed or ordinal."]);
+    entries.push(["Interquartile range (IQR)",
+      "The range between the 25th percentile (Q1) and the 75th percentile (Q3), capturing the spread of the central 50% of observations. Resistant to the influence of outliers."]);
+  }
+
+  if (hasMW) {
+    entries.push(["Mann-Whitney U test",
+      "A non-parametric test comparing the distributions of a continuous variable between two independent groups. Does not assume normality. Non-parametric counterpart of the independent-samples t-test."]);
+    entries.push(["Rank-biserial correlation (rᵦ)",
+      "Effect size for the Mann-Whitney U test, ranging from −1 to +1. Represents the proportion of concordant minus discordant pairs between groups. Thresholds: small ≥ 0.10, medium ≥ 0.30, large ≥ 0.50 (Cohen, 1988)."]);
+  }
+
+  if (hasKW) {
+    entries.push(["Kruskal-Wallis H test",
+      "A non-parametric test comparing distributions of a continuous variable across three or more independent groups. Extension of the Mann-Whitney U test. A significant result means at least one group differs — post-hoc tests are needed to identify which."]);
+  }
+
+  if (hasChi || hasFisher) {
+    entries.push(["Contingency table",
+      "A cross-tabulation showing the joint frequency distribution of two categorical variables. Each cell contains the count of observations satisfying both the row and column category."]);
+  }
+
+  if (hasChi) {
+    entries.push(["Chi-square test of independence (χ²)",
+      "Tests whether two categorical variables are associated by comparing observed cell frequencies with those expected under independence. A significant result indicates the variables are not independent."]);
+  }
+
+  if (hasFisher) {
+    entries.push(["Fisher's exact test",
+      "Alternative to the chi-square test used when any expected cell count falls below 5. Calculates exact probabilities rather than relying on a chi-square approximation, making it more accurate for small samples."]);
+  }
+
+  if (hasChi || hasFisher) {
+    entries.push(["Cramér's V",
+      "Effect size for chi-square / Fisher's exact tests, ranging from 0 to 1. Thresholds: negligible < 0.10, weak 0.10–0.29, moderate 0.30–0.49, strong ≥ 0.50 (Cohen, 1988)."]);
+  }
+
+  // Render
+  container.innerHTML = "";
+  const dl = document.createElement("dl");
+  dl.className = "se-glossary-list";
+  entries.forEach(([term, defn]) => {
+    const dt = document.createElement("dt");
+    dt.textContent = term;
+    const dd = document.createElement("dd");
+    dd.textContent = defn;
+    dl.appendChild(dt);
+    dl.appendChild(dd);
+  });
+  container.appendChild(dl);
+
+  // Show the panel (was hidden until results loaded)
+  const panel = document.getElementById("corr-glossary-panel");
+  if (panel) panel.style.display = "";
 }
 
 /* ── Analysis Settings bar helpers ─────────────────────────────────────── */

@@ -2984,3 +2984,69 @@ td.se-corr-p-sig {
 .se-settings-panel { margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid #e5e7eb; }
 .se-settings-hint { font-size: 0.85rem; color: #374151; margin: 0 0 0.5rem; }
 .se-settings-row { display: flex; gap: 0.5rem; margin-top: 0.5rem; align-items: center; flex-wrap: wrap; }
+
+/* ── Glossary of Statistical Terms panel ────────────────────────────────── */
+.se-glossary-panel {
+  margin-top: 2rem;
+  border: 1.5px solid #dde3f0;
+  border-radius: 10px;
+  background: #f8f9fc;
+  overflow: hidden;
+}
+.se-glossary-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.85rem 1.1rem;
+  cursor: pointer;
+  list-style: none;
+  font-weight: 600;
+  font-size: 0.92rem;
+  color: #1a2e5a;
+  user-select: none;
+}
+.se-glossary-toggle::-webkit-details-marker { display: none; }
+.se-glossary-toggle::after {
+  content: "▾";
+  margin-left: auto;
+  font-size: 0.85rem;
+  color: #6b7280;
+  transition: transform 0.18s;
+}
+.se-glossary-panel[open] .se-glossary-toggle::after { transform: rotate(180deg); }
+.se-glossary-icon { font-size: 1rem; }
+.se-glossary-hint {
+  margin-left: auto;
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: #6b7280;
+  margin-right: 0.25rem;
+}
+.se-glossary-body {
+  padding: 0 1.25rem 0.5rem;
+  border-top: 1px solid #dde3f0;
+}
+.se-glossary-list {
+  margin: 0;
+  padding: 0;
+}
+.se-glossary-list dt {
+  font-weight: 700;
+  font-size: 0.88rem;
+  color: #1a2e5a;
+  margin-top: 1rem;
+}
+.se-glossary-list dd {
+  margin: 0.2rem 0 0;
+  font-size: 0.84rem;
+  color: #374151;
+  line-height: 1.55;
+}
+.se-glossary-ref {
+  padding: 0.6rem 1.25rem;
+  margin: 0;
+  font-size: 0.75rem;
+  color: #6b7280;
+  border-top: 1px solid #dde3f0;
+  font-style: normal;
+}
