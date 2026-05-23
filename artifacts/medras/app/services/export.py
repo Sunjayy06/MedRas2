@@ -1949,10 +1949,108 @@ def generate_correlation_chapter_word(
             sum_rows.append([
                 clean_display_name(item.get("predictor", "")),
                 item.get("test", ""),
-                item.get("stat", "—"),
-                _fmt_p_star(item.get("p", "—")),
+                item.get("stat", "\u2014"),
+                _fmt_p_star(item.get("p", "\u2014")),
             ])
         _add_demo_table(sum_headers, sum_rows)
+        table_num += 1
+
+    # ── Statistical Methods appendix (new page) ───────────────────────────
+    doc.add_page_break()
+
+    meth_heading = doc.add_paragraph()
+    _set_para(meth_heading, align=WD_ALIGN_PARAGRAPH.CENTER,
+              space_before=0, space_after=14, line_spacing=1.0)
+    _tnr(meth_heading.add_run("Statistical Methods"), size=14, bold=True)
+
+    # ── Para 1: Overall analytic approach ─────────────────────────────────
+    n_total_study = len(entry.df) if hasattr(entry, "df") else None
+    n_str = f" (N\u00a0=\u00a0{n_total_study})" if n_total_study else ""
+    n_vars = len(successful)
+    alpha_val = corr_results.get("alpha", 0.05)
+
+    para1 = doc.add_paragraph(
+        f"Statistical analyses were conducted on the study dataset{n_str}. "
+        f"The association of {n_vars} predictor variable"
+        f"{'s' if n_vars != 1 else ''} with the outcome variable "
+        f"({outcome_display}) was examined independently for each predictor. "
+        f"All tests were two-sided. Statistical significance was set at "
+        f"\u03b1\u00a0=\u00a0{alpha_val}. Analyses were performed using "
+        f"Python\u00a0(SciPy statistical library)."
+    )
+    _set_para(para1, space_after=10)
+    for run in para1.runs:
+        _tnr(run)
+
+    # ── Para 2: Test-selection rationale ──────────────────────────────────
+    para2 = doc.add_paragraph(
+        "Test selection was guided by the measurement level of each predictor variable. "
+        "For continuous predictor variables assessed against a categorical outcome, "
+        "the Mann-Whitney U test (two groups) or Kruskal-Wallis H test (three or more "
+        "groups) was applied, as non-parametric alternatives are robust when normality "
+        "cannot be assumed. "
+        "For categorical predictor variables, the chi-square test of independence was "
+        "used; Fisher\u2019s exact test was substituted when any expected cell count "
+        "fell below\u00a05."
+    )
+    _set_para(para2, space_after=10)
+    for run in para2.runs:
+        _tnr(run)
+
+    # ── Para 3: Effect size measures ──────────────────────────────────────
+    para3 = doc.add_paragraph(
+        "Effect size was reported alongside each inferential test to convey the "
+        "magnitude of observed associations independent of sample size. "
+        "The rank-biserial correlation coefficient (r\u209b) was computed for "
+        "Mann-Whitney U comparisons and interpreted as negligible (<\u00a00.10), "
+        "small (0.10\u20130.29), medium (0.30\u20130.49), or large (\u22650.50). "
+        "Cram\u00e9r\u2019s V was reported for chi-square analyses and classified "
+        "as negligible (<\u00a00.10), weak (0.10\u20130.29), moderate (0.30\u20130.49), "
+        "or strong (\u22650.50), following the convention of Cohen (1988)."
+    )
+    _set_para(para3, space_after=10)
+    for run in para3.runs:
+        _tnr(run)
+
+    # ── Table: per-variable test summary ──────────────────────────────────
+    if successful:
+        meth_cap = f"Table {table_num}: Statistical Tests Applied per Variable"
+        _add_caption_above(meth_cap)
+
+        meth_headers = ["Variable", "Type", "Test Applied", "Effect Size Measure"]
+        meth_rows: List[List[str]] = []
+        for pr in successful:
+            pd_name  = clean_display_name(pr.get("predictor", ""))
+            pt       = pr.get("predictor_type", "nominal")
+            tr       = pr.get("test_result") or {}
+            tn       = tr.get("test_name", "\u2014")
+            if "mann" in tn.lower():
+                es_label = "Rank-biserial r"
+            elif "kruskal" in tn.lower():
+                es_label = "Eta-squared (\u03b7\u00b2)"
+            elif "chi" in tn.lower() or "fisher" in tn.lower():
+                es_label = "Cram\u00e9r\u2019s V"
+            else:
+                es_label = "\u2014"
+            type_label = "Continuous" if pt == "scale" else "Categorical"
+            meth_rows.append([pd_name, type_label, tn, es_label])
+
+        _add_demo_table(meth_headers, meth_rows)
+
+    # ── Para 4: Multiple comparisons note ────────────────────────────────
+    if n_vars > 1:
+        para4 = doc.add_paragraph(
+            f"Given that {n_vars} predictor variable"
+            f"{'s were' if n_vars != 1 else ' was'} tested against the same outcome, "
+            f"the possibility of inflated type\u00a0I error due to multiple comparisons "
+            f"should be considered when interpreting the results. "
+            f"Findings with p\u00a0<\u00a00.05 should be regarded as exploratory; "
+            f"confirmatory analyses with appropriate correction (e.g., Bonferroni or "
+            f"Holm\u2013Bonferroni) are recommended before drawing causal inferences."
+        )
+        _set_para(para4, space_after=10)
+        for run in para4.runs:
+            _tnr(run)
 
     out = io.BytesIO()
     doc.save(out)
