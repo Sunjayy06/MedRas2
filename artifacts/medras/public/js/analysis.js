@@ -4126,6 +4126,9 @@ function renderCorrResults(outcomeCol) {
   const res = state.corrResults;
   if (!res) return;
 
+  // Update the settings bar badges + dynamic heading
+  _populateSettingsBar();
+
   const outcomeLabel = document.getElementById("corr-outcome-label");
   if (outcomeLabel) outcomeLabel.textContent = outcomeCol || res.outcome_col || "the outcome";
 
@@ -4246,9 +4249,172 @@ function renderCorrResults(outcomeCol) {
   }
 }
 
+/* ── Analysis Settings bar helpers ─────────────────────────────────────── */
+
+function _populateSettingsBar() {
+  const ai = state.aiStudy || {};
+  const studyType = ai.study_type || "correlation";
+  const outCol    = ai.outcome_col || "";
+
+  const badge = document.getElementById("results-study-type-badge");
+  if (badge) badge.textContent = _STUDY_TYPE_LABELS[studyType] || studyType;
+
+  const outBadge = document.getElementById("results-outcome-badge");
+  if (outBadge) outBadge.textContent = outCol || "—";
+
+  const heading = document.getElementById("corr-results-heading");
+  if (heading) {
+    const titles = {
+      association: "Association Analysis Results",
+      correlation: "Correlation Analysis Results",
+      comparison:  "Comparison Analysis Results",
+      diagnostic:  "Diagnostic Analysis Results",
+      survival:    "Survival Analysis Results",
+      descriptive: "Descriptive Analysis Results",
+    };
+    heading.textContent = titles[studyType] || "Analysis Results";
+  }
+
+  const settingsOutcomeSelect = document.getElementById("settings-outcome-select");
+  if (settingsOutcomeSelect) {
+    settingsOutcomeSelect.innerHTML = '<option value="">— select —</option>';
+    const cols = state.columns.map((c) => (typeof c === "string" ? c : c.column));
+    cols.forEach((col) => {
+      const opt = document.createElement("option");
+      opt.value = col;
+      opt.textContent = col;
+      if (col === outCol) opt.selected = true;
+      settingsOutcomeSelect.appendChild(opt);
+    });
+  }
+
+  const settingsTypeSelect = document.getElementById("settings-type-select");
+  if (settingsTypeSelect) settingsTypeSelect.value = studyType;
+}
+
+async function _rerunFromSettings(studyType, outCol) {
+  const status = document.getElementById("settings-status");
+  setStatus(status, "Re-confirming study setup…", "loading");
+  try {
+    await api("/confirm-study", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ job_id: state.jobId, study_type: studyType, outcome_col: outCol }),
+    });
+    setStatus(status, "Re-running analysis…", "loading");
+    const result = await api("/run-correlation", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ job_id: state.jobId, outcome_col: outCol }),
+    });
+    state.corrResults = result.results;
+    document.getElementById("settings-panel")?.classList.add("is-hidden");
+    document.getElementById("settings-manual")?.classList.add("is-hidden");
+    setStatus(status, "");
+    renderCorrResults(outCol);
+  } catch (err) {
+    setStatus(status, `Re-run failed: ${err.message}`, "error");
+  }
+}
+
+function bindSettingsPanel() {
+  const screen = document.getElementById("screen-corr-results");
+  if (!screen) return;
+
+  const panel = document.getElementById("settings-panel");
+
+  // ── Toggle panel ─────────────────────────────────────────────────────
+  const toggleBtn = screen.querySelector('[data-action="toggle-settings-panel"]');
+  if (toggleBtn && panel) {
+    toggleBtn.addEventListener("click", () => {
+      panel.classList.toggle("is-hidden");
+      if (!panel.classList.contains("is-hidden")) {
+        document.getElementById("settings-adjust-input")?.focus();
+      }
+    });
+  }
+
+  // ── Cancel ────────────────────────────────────────────────────────────
+  const cancelBtn = screen.querySelector('[data-action="settings-cancel"]');
+  if (cancelBtn && panel) {
+    cancelBtn.addEventListener("click", () => panel.classList.add("is-hidden"));
+  }
+
+  // ── AI re-run (open-ended text → /adjust-analysis → /run-correlation) ─
+  const rerunBtn = screen.querySelector('[data-action="settings-rerun"]');
+  if (rerunBtn) {
+    rerunBtn.addEventListener("click", async () => {
+      const input   = document.getElementById("settings-adjust-input");
+      const status  = document.getElementById("settings-status");
+      const message = (input ? input.value : "").trim();
+      if (!message) { if (input) input.focus(); return; }
+      setStatus(status, "Asking AI to interpret your correction…", "loading");
+      rerunBtn.disabled = true;
+      try {
+        const result = await api("/adjust-analysis", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            job_id: state.jobId,
+            user_message: message,
+            current_study_type: (state.aiStudy && state.aiStudy.study_type) || "correlation",
+            current_outcome_col: (state.aiStudy && state.aiStudy.outcome_col) || null,
+          }),
+        });
+        state.aiStudy = result;
+        if (input) input.value = "";
+        const outCol = result.outcome_col || "";
+        if (!outCol) {
+          setStatus(status, "Outcome column not detected — please use 'Override manually' to set it.", "error");
+          return;
+        }
+        _populateSettingsBar();
+        await _rerunFromSettings(result.study_type, outCol);
+      } catch (err) {
+        setStatus(status, `Could not update: ${err.message}`, "error");
+      } finally {
+        rerunBtn.disabled = false;
+      }
+    });
+  }
+
+  // ── Manual toggle ─────────────────────────────────────────────────────
+  const manualToggle = screen.querySelector('[data-action="settings-toggle-manual"]');
+  const manualPanel  = document.getElementById("settings-manual");
+  if (manualToggle && manualPanel) {
+    manualToggle.addEventListener("click", () => manualPanel.classList.toggle("is-hidden"));
+  }
+
+  // ── Manual apply → re-run immediately ────────────────────────────────
+  const manualApply = screen.querySelector('[data-action="settings-manual-apply"]');
+  if (manualApply) {
+    manualApply.addEventListener("click", async () => {
+      const ts = document.getElementById("settings-type-select");
+      const cs = document.getElementById("settings-outcome-select");
+      const studyType = ts ? ts.value : "correlation";
+      const outCol    = cs ? cs.value : "";
+      if (!outCol) {
+        setStatus(document.getElementById("settings-status"), "Please select an outcome column.", "error");
+        return;
+      }
+      state.aiStudy = Object.assign({}, state.aiStudy || {}, {
+        study_type: studyType,
+        outcome_col: outCol,
+        reasoning: "Manually adjusted from results screen.",
+      });
+      _populateSettingsBar();
+      await _rerunFromSettings(studyType, outCol);
+    });
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────── */
+
 function bindCorrResults() {
   const screen = document.getElementById("screen-corr-results");
   if (!screen) return;
+
+  bindSettingsPanel();
 
   const backBtn = screen.querySelector('[data-action="back-to-ai-confirm"]');
   if (backBtn) backBtn.addEventListener("click", () => showScreen("ai-confirm"));

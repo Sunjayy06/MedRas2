@@ -2955,3 +2955,32 @@ td.se-corr-p-sig {
   background: #fff; border: 1px dashed #d1d5db;
   border-radius: 10px; padding: 0.85rem 1rem; margin-top: 0.75rem;
 }
+
+/* ---------- Analysis Settings bar (on results screen) ---------- */
+.se-settings-bar {
+  background: #f8faff;
+  border: 1px solid #c7d7f5;
+  border-radius: 10px;
+  padding: 0.65rem 1rem;
+  margin-bottom: 1.25rem;
+}
+.se-settings-summary { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.se-settings-chip {
+  background: #dbeafe; color: #1e40af; border-radius: 6px;
+  padding: 0.15rem 0.55rem; font-size: 0.78rem; font-weight: 600;
+}
+.se-settings-sep { color: #94a3b8; }
+.se-settings-outcome { font-size: 0.82rem; color: #475569; flex: 1; }
+.se-settings-outcome code {
+  background: #e0e7ff; color: #3730a3; border-radius: 4px;
+  padding: 0.1rem 0.4rem; font-size: 0.78rem;
+}
+.se-settings-toggle-btn {
+  background: #fff; border: 1.5px solid #c7d7f5; color: #374151;
+  border-radius: 8px; padding: 0.35rem 0.8rem; font-size: 0.82rem;
+  cursor: pointer; transition: background 0.15s; margin-left: auto;
+}
+.se-settings-toggle-btn:hover { background: #eff6ff; }
+.se-settings-panel { margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid #e5e7eb; }
+.se-settings-hint { font-size: 0.85rem; color: #374151; margin: 0 0 0.5rem; }
+.se-settings-row { display: flex; gap: 0.5rem; margin-top: 0.5rem; align-items: center; flex-wrap: wrap; }

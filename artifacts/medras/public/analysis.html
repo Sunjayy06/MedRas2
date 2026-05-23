@@ -1018,8 +1018,53 @@
            SCREEN CORR-RESULTS · Correlation analysis results
            =========================================================== -->
       <section class="se-screen is-hidden" id="screen-corr-results" data-testid="screen-corr-results">
+
+        <!-- ── Analysis Settings bar ── -->
+        <div class="se-settings-bar" id="corr-settings-bar">
+          <div class="se-settings-summary">
+            <span class="se-settings-chip" id="results-study-type-badge">—</span>
+            <span class="se-settings-sep">·</span>
+            <span class="se-settings-outcome">Outcome: <code id="results-outcome-badge">—</code></span>
+            <button type="button" class="se-settings-toggle-btn" data-action="toggle-settings-panel">⚙ Adjust Settings</button>
+          </div>
+          <div class="se-settings-panel is-hidden" id="settings-panel">
+            <p class="se-settings-hint">Describe what to change — I'll re-run the analysis with the updated setup:</p>
+            <textarea id="settings-adjust-input" class="se-plan-chatbox-input" rows="2"
+              placeholder="e.g. The outcome should be 'Mortality'. This is a prospective cohort study comparing two groups, not a correlation study."></textarea>
+            <div class="se-settings-row">
+              <button type="button" class="btn btn-primary" data-action="settings-rerun">Re-run Analysis</button>
+              <button type="button" class="btn btn-tertiary" data-action="settings-cancel">Cancel</button>
+              <button type="button" class="se-plan-btn-manual-toggle" data-action="settings-toggle-manual">Override manually instead</button>
+            </div>
+            <div id="settings-status" class="se-status" role="status" aria-live="polite"></div>
+            <!-- Manual override (hidden) -->
+            <div class="se-plan-manual is-hidden" id="settings-manual">
+              <div class="se-field-row">
+                <label class="se-field">
+                  <span>Study type</span>
+                  <select id="settings-type-select">
+                    <option value="association">Association — chi-square / Cramér's V (categorical)</option>
+                    <option value="correlation">Correlation — Pearson r / Spearman ρ (continuous)</option>
+                    <option value="comparison">Comparison — t-test / ANOVA / Mann-Whitney (groups)</option>
+                    <option value="diagnostic">Diagnostic — AUC / sensitivity / specificity</option>
+                    <option value="survival">Survival — Kaplan-Meier / Cox regression</option>
+                    <option value="descriptive">Descriptive — frequencies / profile</option>
+                  </select>
+                </label>
+                <label class="se-field">
+                  <span>Outcome column</span>
+                  <select id="settings-outcome-select">
+                    <option value="">— select —</option>
+                  </select>
+                </label>
+              </div>
+              <button type="button" class="btn btn-secondary" data-action="settings-manual-apply">Apply &amp; Re-run</button>
+            </div>
+          </div>
+        </div>
+
         <header class="se-screen-head">
-          <h2>Correlation Analysis Results</h2>
+          <h2 id="corr-results-heading">Analysis Results</h2>
           <p>Pairwise association of each predictor with <strong id="corr-outcome-label">the outcome</strong>. <span id="corr-n-vars"></span></p>
         </header>
 
@@ -1117,7 +1162,7 @@
       </div>
     </footer>
 
-    <script src="/js/analysis.js?v=2026052303" defer></script>
+    <script src="/js/analysis.js?v=2026052304" defer></script>
     <script src="/js/medras-nav.js" defer></script>
 
     <!-- MedRAS Study Builder prefill (Phase 6) -->
