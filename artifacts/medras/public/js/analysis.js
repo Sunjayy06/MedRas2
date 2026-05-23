@@ -227,7 +227,12 @@ async function resumeFromSavedSession(saved) {
         const bridgeResult = await api("/ai-bridge", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ job_id: state.jobId, description, outcome_hint: outcomeHint }),
+          body: JSON.stringify({
+            job_id: state.jobId,
+            description,
+            outcome_hint: outcomeHint,
+            study_type_hint: (state.intake && state.intake.study_type) || null,
+          }),
         });
         state.aiStudy = bridgeResult;
       } catch (_) {
@@ -1925,6 +1930,7 @@ function bindPreview() {
             job_id: state.jobId,
             description,
             outcome_hint: outcomeHint,
+            study_type_hint: (state.intake && state.intake.study_type) || null,
           }),
         });
         state.aiStudy = bridgeResult;

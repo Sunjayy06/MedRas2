@@ -35,10 +35,15 @@ _TYPE_WORDS: Dict[str, List[str]] = {
     "correlation": [
         "correlat", "associat", "relat", "factor", "predictor", "risk factor",
         "effect of", "influence of", "impact of", "relate to", "related to",
+        "regression", "logistic", "linear model",
     ],
     "comparison": [
         "compar", "difference", " vs ", " versus ", "between group",
         "treatment", "intervention", "control group", "arm", "trial",
+        # Study designs that are inherently group-comparison
+        "retrospective", "prospective", "cohort", "case.control", "case control",
+        "case-control", "randomis", "randomiz", "rct", "controlled trial",
+        "observational", "longitudinal",
     ],
     "diagnostic": [
         "sensitiv", "specific", "diagnostic", "accuracy", "roc", "auc",
@@ -50,7 +55,8 @@ _TYPE_WORDS: Dict[str, List[str]] = {
     ],
     "descriptive": [
         "prevalence", "incidence", "frequenc", "distribution", "describe",
-        "profile", "characteris",
+        "profile", "characteris", "cross.section", "cross-section",
+        "cross sectional", "epidemiolog",
     ],
 }
 
@@ -223,8 +229,13 @@ def identify_study(
     outcome_hint: str,
     columns: List[str],
     classifications: Optional[List[Dict[str, Any]]] = None,
+    study_type_hint: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Identify study type and outcome column from free-text description.
+
+    If *study_type_hint* is provided (e.g. extracted from an uploaded proposal)
+    and is a recognised type, it is used directly — the LLM is only called to
+    identify the outcome column, not to re-classify the design.
 
     Returns:
       {
@@ -233,15 +244,31 @@ def identify_study(
         "confidence":   float,
         "reasoning":    str,
         "all_predictors": [str, ...],   # non-id/non-excluded columns minus outcome
-        "source":       "gemini" | "heuristic",
+        "source":       "gemini" | "heuristic" | "proposal",
       }
     """
+    # Normalise and validate the hint coming from the proposal parser.
+    hint_type: Optional[str] = None
+    if study_type_hint:
+        candidate = str(study_type_hint).strip().lower()
+        if candidate in _TYPE_WORDS:
+            hint_type = candidate
+
     # OpenAI GPT-4o-mini is primary; Gemini is fallback; heuristic is last resort.
     result = None
     if description.strip() or outcome_hint.strip():
         result = _call_openai(description, outcome_hint, columns)
         if not (result and isinstance(result, dict) and "study_type" in result):
             result = _call_gemini(description, outcome_hint, columns)
+
+    # If the proposal already told us the study type, trust it over the LLM.
+    # We still use the LLM result for outcome_col / confidence / reasoning.
+    if hint_type and result and isinstance(result, dict):
+        result["study_type"] = hint_type
+        result["reasoning"] = (
+            f"Study type '{hint_type}' taken from your uploaded proposal. "
+            + str(result.get("reasoning", ""))
+        )
 
     if result and isinstance(result, dict) and "study_type" in result:
         study_type = str(result.get("study_type") or "correlation").strip().lower()
@@ -257,14 +284,21 @@ def identify_study(
         reasoning = str(result.get("reasoning") or "")
         source = "gemini"
     else:
-        # Full heuristic fallback
-        study_type = _detect_study_type_heuristic(description)
+        # Full heuristic fallback — also honour any proposal hint here
+        study_type = hint_type or _detect_study_type_heuristic(description)
         outcome_col = _fuzzy_match_column(outcome_hint, columns)
-        confidence = 0.6 if outcome_col else 0.4
-        reasoning = (
-            f"Detected study type '{study_type}' from keywords in your description."
-        )
-        source = "heuristic"
+        confidence = 0.7 if hint_type else (0.6 if outcome_col else 0.4)
+        if hint_type:
+            reasoning = (
+                f"Study type '{study_type}' taken from your uploaded proposal "
+                f"(AI service unavailable)."
+            )
+            source = "proposal"
+        else:
+            reasoning = (
+                f"Detected study type '{study_type}' from keywords in your description."
+            )
+            source = "heuristic"
 
     # Build predictor list — exclude id/date/exclude types plus the outcome
     excluded_types = {"id", "date", "exclude"}

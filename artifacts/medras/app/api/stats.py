@@ -1246,6 +1246,7 @@ class AiBridgeRequest(BaseModel):
     job_id: str = Field(..., min_length=1, max_length=64)
     description: str = Field(default="", max_length=2000)
     outcome_hint: str = Field(default="", max_length=200)
+    study_type_hint: Optional[str] = Field(default=None, max_length=50)
 
 
 @router.post("/ai-bridge")
@@ -1265,6 +1266,7 @@ async def ai_bridge(request: Request, payload: AiBridgeRequest) -> Dict[str, Any
         outcome_hint=payload.outcome_hint,
         columns=columns,
         classifications=classifications,
+        study_type_hint=payload.study_type_hint or None,
     )
     entry.meta["ai_study"] = result
     if payload.description.strip():
