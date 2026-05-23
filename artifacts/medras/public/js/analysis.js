@@ -3810,10 +3810,26 @@ async function _renderAiConfirmDetails(outCol) {
 
 function _updateAiConfirmButtons() {
   const typeSelect = document.getElementById("ai-study-type-select");
+  const colSelect  = document.getElementById("ai-outcome-col-select");
   const corrBtn    = document.getElementById("btn-run-correlation");
+  const colHint    = document.getElementById("ai-outcome-col-required-hint");
   if (!typeSelect || !corrBtn) return;
-  const isCorr = typeSelect.value === "correlation";
+
+  const isCorr  = typeSelect.value === "correlation";
+  const hasCol  = colSelect && colSelect.value && colSelect.value !== "";
+
+  // Show button only for correlation studies
   corrBtn.classList.toggle("is-hidden", !isCorr);
+
+  if (isCorr) {
+    // Enable/disable based on whether an outcome column is chosen
+    corrBtn.disabled = !hasCol;
+    corrBtn.title = hasCol ? "" : "Select an outcome column above first";
+    if (colHint) colHint.style.display = hasCol ? "none" : "block";
+  } else {
+    corrBtn.disabled = false;
+    if (colHint) colHint.style.display = "none";
+  }
 }
 
 function _refreshAiDetailPanels() {
@@ -3843,7 +3859,10 @@ function bindAiConfirm() {
   });
 
   const colSelectEl = document.getElementById("ai-outcome-col-select");
-  if (colSelectEl) colSelectEl.addEventListener("change", _refreshAiDetailPanels);
+  if (colSelectEl) colSelectEl.addEventListener("change", () => {
+    _refreshAiDetailPanels();
+    _updateAiConfirmButtons();
+  });
 
   // Back → preview
   const backBtn = screen.querySelector('[data-action="back-to-preview-from-ai"]');
