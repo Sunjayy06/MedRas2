@@ -23,6 +23,23 @@ class FeedbackPayload(BaseModel):
     email:   Optional[str] = None
 
 
+@router.get("", summary="List all feedback entries (admin)")
+async def list_feedback():
+    if not _FB_FILE.exists():
+        return {"entries": []}
+    entries = []
+    with open(_FB_FILE, "r", encoding="utf-8") as fh:
+        for line in fh:
+            line = line.strip()
+            if line:
+                try:
+                    entries.append(json.loads(line))
+                except json.JSONDecodeError:
+                    pass
+    entries.sort(key=lambda e: e.get("ts", ""), reverse=True)
+    return {"entries": entries}
+
+
 @router.post("", summary="Submit user feedback")
 async def submit_feedback(payload: FeedbackPayload):
     if not payload.message or not payload.message.strip():
