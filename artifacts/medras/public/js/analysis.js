@@ -466,12 +466,6 @@ function _bindS1ProposalUpload() {
   const fields    = $("#s1-proposal-fields");
   if (!dropzone || !fileInput) return;
 
-  dropzone.addEventListener("click", (e) => {
-    // Prevent double-trigger when clicking the label itself
-    if (e.target === fileInput) return;
-    fileInput.click();
-  });
-
   fileInput.addEventListener("change", async () => {
     const file = fileInput.files[0];
     if (!file) return;
