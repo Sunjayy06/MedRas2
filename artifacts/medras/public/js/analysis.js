@@ -4443,13 +4443,21 @@ function initApp() {
     bindPassBadgeTooltip();
     bindStepNavBack();
     showScreen("1");
-    // Offer to resume any in-progress session saved in the last 24h.
-    // We do this AFTER showScreen("1") so the resume banner sits above
-    // the (visible) entry chooser rather than racing against a hidden
-    // screen flip. If the saved dataset can't be re-fetched the resume
-    // handler quietly falls back to a fresh start.
-    const saved = loadSavedSession();
-    if (saved) renderResumeBanner(saved);
+    // If ?fresh=1 is in the URL, wipe any saved session immediately and
+    // redirect to the clean URL so a refresh doesn't re-trigger the wipe.
+    if (new URLSearchParams(window.location.search).get("fresh") === "1") {
+      clearSavedSession();
+      window.history.replaceState({}, "", window.location.pathname);
+      // Stay on screen 1 — no resume modal needed.
+    } else {
+      // Offer to resume any in-progress session saved in the last 24h.
+      // We do this AFTER showScreen("1") so the resume modal sits above
+      // the (visible) entry chooser rather than racing against a hidden
+      // screen flip. If the saved dataset can't be re-fetched the resume
+      // handler quietly falls back to a fresh start.
+      const saved = loadSavedSession();
+      if (saved) renderResumeBanner(saved);
+    }
 
     // If the user came here from the Practice Data Wizard with
     // ?practice=<job_id>, hydrate the dataset and skip past the entry chooser.
