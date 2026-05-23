@@ -514,40 +514,72 @@ def reduce_plagiarism(
 # p-values, citations, etc.) are surfaced as a hard constraint to every
 # stage and verified post-hoc on the combined output.
 
-STAGE_A_PARAPHRASE_PROMPT = """You are an expert academic editor performing PARAPHRASE-FOR-ORIGINALITY. Rewrite the passage below so it expresses the same ideas using different words and sentence structures, reducing surface similarity to common academic phrasing.
+STAGE_A_PARAPHRASE_PROMPT = """You are Novus — a specialist academic paraphrase engine designed for medical and scientific manuscripts. Your task is PARAPHRASE-FOR-ORIGINALITY: restructure the passage so it expresses identical ideas through substantially different vocabulary, sentence architecture, and paragraph rhythm, targeting <10% surface similarity to common academic phrasing while fully preserving academic rigour.
 
-HARD RULES:
-- Every protected string listed below MUST appear in your output EXACTLY as written, character-for-character. Do not change capitalisation, units, punctuation, or rounding.
-- Preserve every numeric value, p-value, confidence interval, drug name, gene symbol, citation, and DOI exactly.
-- Preserve the meaning and the order of ideas. Do not add new claims or remove information.
-- Preserve paragraph breaks.
-- If the passage starts with a heading word (Abstract, Methods, Results, etc.), keep that heading on its own line at the top.
+WHAT MAKES NOVUS DIFFERENT FROM A GENERIC PARAPHRASER:
+- You are NOT a synonym-swapper. You reconstruct sentence structure, not just individual words.
+- You preserve every technical and scientific term exactly — they are anchors, not targets.
+- You maintain the logical flow and argumentative weight of each paragraph.
+- The rewritten text must read as if written by the same expert author, not a different one.
 
-Output ONLY the rewritten text — no preface, no JSON, no code fences, no commentary.
+PARAPHRASE TECHNIQUES TO APPLY:
+- Change sentence order within paragraphs where logically permissible.
+- Convert passive constructions to active and vice versa (where each improves clarity).
+- Merge two short sentences into one compound-complex sentence, or split one long sentence into two.
+- Replace generic academic openers ("This study aimed to", "The results showed that") with specific, information-forward openers.
+- Vary clause position: move temporal, causal, or conditional clauses from end to beginning or vice versa.
+- Use discipline-appropriate synonyms for non-technical words (e.g. "evaluate" → "assess", "indicate" → "suggest", "demonstrate" → "reveal").
+
+ABSOLUTE HARD RULES — NEVER VIOLATE:
+- Every protected string listed below MUST appear in your output EXACTLY as written, character-for-character. No capitalisation changes, no unit changes, no rounding.
+- Preserve every numeric value, p-value, confidence interval, odds ratio, hazard ratio, drug name, gene symbol, diagnostic criterion, citation marker, and DOI exactly.
+- Do NOT add new claims, data, or interpretations. Do NOT remove existing information.
+- Preserve paragraph breaks. Keep any section heading on its own line at the top, unchanged.
+- The meaning, conclusions, and academic standard of the original MUST be fully retained.
+
+Output ONLY the rewritten text — no preamble, no JSON, no code fences, no commentary.
 """
 
-STAGE_B_HUMANIZE_PROMPT = """You are an experienced human researcher editing the passage below to remove all signs of AI-generated writing. Make it read like a thoughtful human author wrote it.
+STAGE_B_HUMANIZE_PROMPT = """You are Novus — a specialist AI-signature removal engine. Your task is to make the passage below read as if written by an experienced human medical researcher, eliminating EVERY pattern that AI-detection systems (GPTZero, Turnitin AI, Copyleaks AI, Originality.ai) recognise as machine-generated. Target: 0% AI detection score.
 
-HARD RULES:
-- Vary sentence length sharply. Mix short sentences (5-10 words) with longer ones.
-- Strip AI-typical filler and transitions: "Moreover", "Furthermore", "Additionally", "In conclusion", "It is important to note", "It is worth noting", "delve into", "robust", "comprehensive", "navigate", "tapestry", "underscore", "showcase".
-- Remove formulaic hedging ("It can be argued that", "It should be noted that", "Generally speaking").
-- Use active voice when natural. Allow occasional contractions or sentences starting with "And" or "But" if it sounds more human.
-- Every protected string listed below MUST appear in your output EXACTLY as written. Preserve all numbers, statistics, citations, drug names, units, and DOIs.
-- Preserve the meaning. Do not add new claims or remove information.
-- Preserve paragraph structure and any heading on its own line at the top.
+WHAT AI-DETECTION SYSTEMS LOOK FOR (eliminate ALL of these):
+1. Uniform sentence length — AI consistently produces sentences of similar word count. Vary sharply: some 6-word sentences, some 30-word sentences, with unpredictable rhythm.
+2. Perfectly balanced paragraph structure — AI balances paragraphs symmetrically. Disrupt this: let some paragraphs be brief (2-3 sentences), others longer.
+3. Formulaic transition words — eliminate: "Moreover", "Furthermore", "Additionally", "In conclusion", "It is important to note", "It is worth noting", "Notably", "Importantly", "It should be noted that", "It can be argued that", "Significantly", "Essentially", "Overall", "In summary", "To summarize", "Delve into", "Robust", "Comprehensive", "Nuanced", "Multifaceted", "Navigate", "Tapestry", "Underscore", "Showcase", "Leverage", "Facilitate", "Utilize" (use "use" instead).
+4. Hedging boilerplate — remove: "Generally speaking", "It is widely accepted that", "It has been shown that", "Studies have demonstrated that" (use specific citations instead).
+5. Symmetrical list structures — AI loves "X, Y, and Z" triplets and tidy bulleted reasoning. Break symmetry: use two items sometimes, four other times.
+6. Overly formal, even register — allow occasional informal academic phrasing, contractions in dialogue-style sections, sentences starting with "And" or "But", even one-sentence paragraphs for emphasis.
+7. Predictable conclusion sentences — AI always ends paragraphs with a summary sentence. Break this pattern: sometimes end mid-thought, sometimes with a question or implication.
 
-Output ONLY the revised text — no preface, no JSON, no code fences, no commentary.
+HARD RULES — NEVER VIOLATE:
+- Every protected string listed below MUST appear in your output EXACTLY as written. Preserve all numbers, statistics, p-values, confidence intervals, citations, drug names, units, gene symbols, and DOIs.
+- Preserve the meaning and academic integrity. Do NOT add new claims or remove information.
+- Maintain the academic standard of a peer-reviewed medical manuscript.
+- Preserve paragraph structure. Keep any section heading on its own line at the top, unchanged.
+
+Output ONLY the revised text — no preamble, no JSON, no code fences, no commentary.
 """
 
-STAGE_C_POLISH_PROMPT = """You are a senior journal editor performing the FINAL QUALITY PASS on the passage below. Check for grammar errors, awkward phrasing, broken transitions, and inconsistencies. Make MINIMAL edits — only fix actual problems. If a sentence already reads cleanly, leave it untouched.
+STAGE_C_POLISH_PROMPT = """You are Novus — a senior medical journal editor performing the FINAL QUALITY PASS. Your goal is to ensure the passage reads as submission-ready academic prose: grammatically correct, scientifically precise, and at the standard of a high-impact peer-reviewed journal.
 
-HARD RULES:
-- Every protected string listed below MUST appear in your output EXACTLY as written. Do not touch numbers, p-values, confidence intervals, drug names, citations, units, or DOIs.
-- Preserve the meaning and overall length. Do not add new claims, remove information, or substantially shorten.
+WHAT TO FIX:
+- Grammar errors, subject-verb disagreement, dangling modifiers, incorrect tense.
+- Broken or awkward transitions between sentences.
+- Any sentence that reads unnaturally or loses scientific meaning.
+- Repetition of the same word or phrase within two sentences of each other.
+- Any accidental AI phrase that slipped through (check the list from Stage B).
+
+WHAT NOT TO TOUCH:
+- Sentences that already read cleanly — make NO change.
+- The level of paraphrasing already achieved — do NOT revert to more original-sounding phrasing.
+- The academic register — this must read like a medical researcher, not a generalist.
+
+ABSOLUTE HARD RULES — NEVER VIOLATE:
+- Every protected string listed below MUST appear in your output EXACTLY as written. Do not alter numbers, p-values, confidence intervals, drug names, citations, units, or DOIs in any way.
+- Preserve the overall meaning and length. Do not add new claims, remove information, or substantially shorten.
 - Preserve paragraph structure and any heading on its own line at the top.
 
-Output ONLY the polished text — no preface, no JSON, no code fences, no commentary.
+Output ONLY the polished text — no preamble, no JSON, no code fences, no commentary.
 """
 
 # Match labels that the analyzer uses for the references block. Anything
@@ -592,6 +624,7 @@ def _run_stage(
     protected_terms: Optional[List[str]],
     stage_label: str,
     sdk_timeout: Optional[float] = None,
+    temperature: float = 0.4,
 ) -> Dict[str, Any]:
     """Run one stage with primary-provider preference and other-provider fallback.
 
@@ -610,10 +643,14 @@ def _run_stage(
     primary_err: Optional[str] = None
 
     def _openai_call() -> str:
-        return _with_retry(lambda: _call_openai_text(full_prompt, user_text, model="gpt-4o", timeout=sdk_timeout))
+        return _with_retry(lambda: _call_openai_text(
+            full_prompt, user_text, model="gpt-4o", timeout=sdk_timeout, temperature=temperature,
+        ))
 
     def _gemini_call() -> str:
-        return _with_retry(lambda: _call_gemini_text(full_prompt, user_text, timeout=sdk_timeout))
+        return _with_retry(lambda: _call_gemini_text(
+            full_prompt, user_text, timeout=sdk_timeout, temperature=temperature,
+        ))
 
     def _try_fallback(
         other_call,
@@ -689,6 +726,7 @@ def _run_stage_with_timeout(
     protected_terms: Optional[List[str]],
     stage_label: str,
     timeout_seconds: float,
+    temperature: float = 0.4,
 ) -> Dict[str, Any]:
     """Wrap ``_run_stage`` with a hard wall-clock timeout.
 
@@ -719,6 +757,7 @@ def _run_stage_with_timeout(
             protected_terms=protected_terms,
             stage_label=stage_label,
             sdk_timeout=sdk_timeout,
+            temperature=temperature,
         )
         try:
             return fut.result(timeout=timeout_seconds)
@@ -733,6 +772,51 @@ def _run_stage_with_timeout(
     finally:
         # wait=False: do NOT block on any orphaned worker thread.
         ex.shutdown(wait=False)
+
+
+# ---------------------------------------------------------------------------
+# Large-section chunking
+# ---------------------------------------------------------------------------
+# Sections longer than this word count are split into paragraph-aligned
+# chunks before the 3-stage pipeline runs. Each chunk is processed
+# independently; outputs are reassembled in order. This keeps individual
+# LLM calls well within context limits and improves paraphrase quality —
+# the model produces better diversity on a focused 600-word block than when
+# it must simultaneously track 3000 words.
+
+_CHUNK_WORD_THRESHOLD = 900   # words; sections larger than this are chunked
+_CHUNK_TARGET_WORDS   = 600   # target words per chunk
+
+
+def _split_into_chunks(text: str, target_words: int = _CHUNK_TARGET_WORDS) -> List[str]:
+    """Split ``text`` into ≈target_words-word chunks at paragraph boundaries.
+
+    Paragraph integrity is preserved — a paragraph is never broken
+    mid-sentence. If a single paragraph exceeds 2× target_words it is
+    accepted as an oversized chunk rather than being split in the middle.
+    """
+    paragraphs = [p.strip() for p in re.split(r"\n\s*\n", text.strip()) if p.strip()]
+    if not paragraphs:
+        return [text]
+
+    chunks: List[str] = []
+    current: List[str] = []
+    current_words = 0
+
+    for para in paragraphs:
+        para_words = len(re.findall(r"\b\w+\b", para))
+        if current_words + para_words > target_words and current:
+            chunks.append("\n\n".join(current))
+            current = [para]
+            current_words = para_words
+        else:
+            current.append(para)
+            current_words += para_words
+
+    if current:
+        chunks.append("\n\n".join(current))
+
+    return chunks if chunks else [text]
 
 
 def process_one_section(
@@ -834,6 +918,12 @@ def process_one_section(
     started = time.monotonic()
     light_mode = (intensity == "light")  # skip the Stage C polish pass
 
+    # Split large sections into paragraph-aligned chunks so each LLM call
+    # stays focused and produces higher-quality paraphrase diversity.
+    _word_count = len(re.findall(r"\b\w+\b", body))
+    chunks = _split_into_chunks(body) if _word_count > _CHUNK_WORD_THRESHOLD else [body]
+    n_chunks = len(chunks)
+
     def _cb(num: int, lbl: str) -> None:
         if progress_cb is None:
             return
@@ -843,39 +933,88 @@ def process_one_section(
             log.debug("process_one_section progress_cb raised: %s", cb_exc)
 
     try:
-        _cb(1, "Pass 1 of 3 — GPT-4o paraphrase")
-        a = _run_stage_with_timeout(
-            primary="openai",
-            system_prompt=STAGE_A_PARAPHRASE_PROMPT,
-            user_text=body,
-            protected_terms=section_terms,
-            stage_label=f"A:{label}",
-            timeout_seconds=stage_timeout,
-        )
-        _cb(2, "Pass 2 of 3 — Gemini AI pattern removal")
-        b = _run_stage_with_timeout(
-            primary="gemini",
-            system_prompt=STAGE_B_HUMANIZE_PROMPT,
-            user_text=a["text"],
-            protected_terms=section_terms,
-            stage_label=f"B:{label}",
-            timeout_seconds=stage_timeout,
-        )
-        if light_mode:
-            # Light intensity (similarity 10-15%) — skip the polish pass
-            # and use stage B's output as the final text. Stage C is
-            # left empty so the UI can show "Light rewrite — 2 stages".
-            c = {"text": b["text"], "model": "(skipped — light mode)", "fallback_used": False}
-        else:
-            _cb(3, "Pass 3 of 3 — GPT-4o quality polish")
-            c = _run_stage_with_timeout(
+        chunk_a_texts: List[str] = []
+        chunk_b_texts: List[str] = []
+        chunk_c_texts: List[str] = []
+        chunk_a_models: List[str] = []
+        chunk_b_models: List[str] = []
+        chunk_c_models: List[str] = []
+        any_fallback_chunks = False
+
+        for ci, chunk in enumerate(chunks):
+            chunk_label = f"{label}[{ci+1}/{n_chunks}]" if n_chunks > 1 else label
+            chunk_terms = [t for t in section_terms if t and t in chunk]
+            chunk_sfx = f" (chunk {ci+1}/{n_chunks})" if n_chunks > 1 else ""
+
+            # Stage A — GPT-4o paraphrase (temperature 0.75 for diversity)
+            _cb(1, f"Pass 1 of 3 — GPT-4o paraphrase{chunk_sfx}")
+            a = _run_stage_with_timeout(
                 primary="openai",
-                system_prompt=STAGE_C_POLISH_PROMPT,
-                user_text=b["text"],
-                protected_terms=section_terms,
-                stage_label=f"C:{label}",
+                system_prompt=STAGE_A_PARAPHRASE_PROMPT,
+                user_text=chunk,
+                protected_terms=chunk_terms,
+                stage_label=f"A:{chunk_label}",
                 timeout_seconds=stage_timeout,
+                temperature=0.75,
             )
+            chunk_a_texts.append(a["text"])
+            chunk_a_models.append(a["model"])
+            if a["fallback_used"]:
+                any_fallback_chunks = True
+
+            # Stage B — Gemini humanise / de-AI (temperature 0.65)
+            _cb(2, f"Pass 2 of 3 — Gemini AI removal{chunk_sfx}")
+            b = _run_stage_with_timeout(
+                primary="gemini",
+                system_prompt=STAGE_B_HUMANIZE_PROMPT,
+                user_text=a["text"],
+                protected_terms=chunk_terms,
+                stage_label=f"B:{chunk_label}",
+                timeout_seconds=stage_timeout,
+                temperature=0.65,
+            )
+            chunk_b_texts.append(b["text"])
+            chunk_b_models.append(b["model"])
+            if b["fallback_used"]:
+                any_fallback_chunks = True
+
+            if light_mode:
+                # Light intensity — skip the polish pass (similarity 10-15%)
+                chunk_c_texts.append(b["text"])
+                chunk_c_models.append("(skipped — light mode)")
+            else:
+                # Stage C — GPT-4o final polish (temperature 0.3 for precision)
+                _cb(3, f"Pass 3 of 3 — GPT-4o polish{chunk_sfx}")
+                c = _run_stage_with_timeout(
+                    primary="openai",
+                    system_prompt=STAGE_C_POLISH_PROMPT,
+                    user_text=b["text"],
+                    protected_terms=chunk_terms,
+                    stage_label=f"C:{chunk_label}",
+                    timeout_seconds=stage_timeout,
+                    temperature=0.30,
+                )
+                chunk_c_texts.append(c["text"])
+                chunk_c_models.append(c["model"])
+                if c["fallback_used"]:
+                    any_fallback_chunks = True
+
+        # Reassemble chunks → single section output
+        sep = "\n\n"
+        a_combined = sep.join(chunk_a_texts)
+        b_combined = sep.join(chunk_b_texts)
+        c_combined = sep.join(chunk_c_texts)
+
+        def _model_label(models: List[str]) -> str:
+            unique = list(dict.fromkeys(models))  # deduplicate preserving order
+            return unique[0] if len(unique) == 1 else f"{unique[0]} (multi-chunk)"
+
+        a = {"text": a_combined, "model": _model_label(chunk_a_models),
+             "fallback_used": any("fallback" in m for m in chunk_a_models)}
+        b = {"text": b_combined, "model": _model_label(chunk_b_models),
+             "fallback_used": any("fallback" in m for m in chunk_b_models)}
+        c = {"text": c_combined, "model": _model_label(chunk_c_models),
+             "fallback_used": any_fallback_chunks and not light_mode}
     except StageTimeoutError as exc:
         return {
             **base_entry,

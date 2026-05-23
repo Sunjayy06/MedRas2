@@ -36,7 +36,13 @@ log = get_logger(__name__)
 MAX_CONCURRENT_JOBS = 3
 MAX_TOTAL_BYTES = 500 * 1024 * 1024  # 500 MB across ALL jobs in memory
 JOB_TTL_SECONDS = 15 * 24 * 60 * 60  # remove finished jobs after 15 days
-SECTION_TIMEOUT_SECONDS = 60.0       # per-stage hard wall-clock cap
+SECTION_TIMEOUT_SECONDS = 120.0      # per-stage hard wall-clock cap (was 60)
+# How many sections within ONE job can run in parallel. With 2 sections
+# concurrent, an 80-page thesis (10 sections × 3 stages × ~30s each)
+# drops from ~15 min to ~8 min. Keep ≤2 per job to avoid hitting API
+# rate limits when multiple jobs run simultaneously (MAX_CONCURRENT_JOBS=3
+# means up to 6 section-level threads total, each making LLM calls).
+SECTION_CONCURRENCY = 2
 # Circuit breaker: if this many sections in a row time out we abort the
 # rest of the job. Continuing would just waste compute (and possibly
 # tokens) while the user waits — far better to fail fast and let them
@@ -353,7 +359,14 @@ class JobManager:
 
     # ---- worker ----
     def _run_job(self, job_id: str) -> None:
-        """Daemon worker — run pending sections one at a time."""
+        """Daemon worker — run pending sections with SECTION_CONCURRENCY parallelism.
+
+        Up to SECTION_CONCURRENCY sections execute simultaneously using a
+        ThreadPoolExecutor, halving wall-clock time for large documents while
+        keeping total thread / API-call counts within safe limits.
+        """
+        import concurrent.futures as _cf
+
         with self._lock:
             j = self._jobs.get(job_id)
             if not j:
@@ -361,144 +374,157 @@ class JobManager:
             j.status = "processing"
             j.updated_at = time.time()
 
+        # Shared abort flag so section workers know to stop (complements
+        # cancel_event, which is user-driven; _abort is set internally on
+        # quota exhaustion / circuit breaker).
+        _abort_event = threading.Event()
         consecutive_timeouts = 0
+
         try:
-            # Snapshot pending indices up front so concurrent reads of
-            # j.sections don't surprise us mid-loop.
             with self._lock:
                 pending_indices = [
                     s["index"] for s in j.sections if s["status"] == "pending"
                 ]
 
-            for idx in pending_indices:
-                if j.cancel_event.is_set():
-                    break
-
+            # ---- per-section worker (runs inside the thread pool) ----
+            def _process_section(idx: int):
+                """Process one section; returns (idx, result | None)."""
+                # Mark processing; read needed fields under lock.
                 with self._lock:
+                    if j.cancel_event.is_set() or _abort_event.is_set():
+                        return idx, None
                     s = j.sections[idx]
                     if s["status"] != "pending":
-                        continue
-                    label = s["label"]
-                    body = s.get("original") or ""
-                    j.current_index = idx
-                    j.current_pass_num = 0
-                    j.current_pass_label = "Preparing…"
+                        return idx, None
+                    label    = s["label"]
+                    body     = s.get("original") or ""
+                    intensity = s.get("intensity") or "normal"
                     s["status"] = "processing"
+                    j.current_pass_label = f"Rewriting {label}…"
                     j.updated_at = time.time()
 
-                def _on_pass(num: int, label_text: str, _j=j) -> None:
-                    with self._lock:
-                        _j.current_pass_num = num
-                        _j.current_pass_label = label_text
-                        _j.updated_at = time.time()
+                result = pa.process_one_section(
+                    index=idx,
+                    label=label,
+                    text=body,
+                    protected_terms=j.protected_terms,
+                    stage_timeout=SECTION_TIMEOUT_SECONDS,
+                    intensity=intensity,
+                    # progress_cb omitted: concurrent updates to
+                    # current_pass_label would race; per-section card
+                    # status already feeds the UI polling loop.
+                )
+                return idx, result
 
-                started = time.time()
-                try:
-                    result = pa.process_one_section(
-                        index=idx,
-                        label=label,
-                        text=body,
-                        protected_terms=j.protected_terms,
-                        stage_timeout=SECTION_TIMEOUT_SECONDS,
-                        progress_cb=_on_pass,
-                        intensity=s.get("intensity") or "normal",
-                    )
-                except pa.ProviderQuotaExhausted as exc:
-                    # Both providers exhausted — abort the whole job;
-                    # subsequent sections will hit the same wall.
-                    log.warning(
-                        "plagiarism_jobs: job %s aborted, providers exhausted: %s",
-                        job_id, pa.sanitize_error_message(exc),
-                    )
-                    with self._lock:
-                        s["status"] = "failed"
-                        s["error"] = (
-                            "Both AI providers are out of quota right now. "
-                            "Please try again later."
-                        )
-                        # Mark the rest as failed-because-aborted so the
-                        # UI can show a single coherent banner.
-                        for other in j.sections:
-                            if other["status"] in ("pending", "processing"):
-                                other["status"] = "failed"
-                                other["error"] = (
-                                    "Skipped because both AI providers ran "
-                                    "out of quota mid-job."
-                                )
-                        j.status = "failed"
-                        j.error = "providers_exhausted"
-                        j.completed_at = time.time()
-                        j.updated_at = j.completed_at
-                        j.current_index = None
-                        j.current_pass_label = ""
-                    return
-                except Exception as exc:  # noqa: BLE001
-                    log.exception(
-                        "plagiarism_jobs: unexpected crash in job %s section %s",
-                        job_id, idx,
-                    )
-                    with self._lock:
-                        s["status"] = "failed"
-                        s["error"] = pa.sanitize_error_message(exc)
-                    continue
-
-                # Success path: merge result, update bookkeeping, free
-                # the original text if appropriate.
-                elapsed = time.time() - started
+            # ---- merge helper (always called under self._lock) ----
+            def _merge(idx: int, result: dict, elapsed: float) -> str:
+                """Update section state from a completed result; return status."""
+                s = j.sections[idx]
+                sim_pct = s.get("similarity_percent")
+                s.update(result)
+                if sim_pct is not None and s.get("similarity_percent") is None:
+                    s["similarity_percent"] = sim_pct
                 status = result.get("status")
-                with self._lock:
-                    # Preserve similarity_percent — the rewriter never
-                    # sets it but the UI needs it for the "Was X% similar"
-                    # badge on every card.
-                    sim_pct = s.get("similarity_percent")
-                    s.update(result)
-                    if sim_pct is not None and s.get("similarity_percent") is None:
-                        s["similarity_percent"] = sim_pct
-                    if status == "complete" and not result.get("skipped"):
-                        j.completion_times.append(elapsed)
-                    # Drop original text from memory for any section
-                    # that won't be retried (complete or skipped). We
-                    # retain it for failed/timed_out so retry works
-                    # without a re-upload. Stage A/B intermediates are
-                    # also cleared on completion — only the final text
-                    # is needed for the download. Keep stage_c_text
-                    # because it equals final_text and the UI may show
-                    # the staged view.
-                    if status in ("complete", "skipped"):
-                        s["original"] = ""
-                        s["stage_a_text"] = ""
-                        s["stage_b_text"] = ""
-                    # Recompute bytes_tracked from what's actually
-                    # retained across ALL sections rather than
-                    # incrementally adjusting (which drifted because
-                    # the admit-time estimate didn't match the real
-                    # set of strings we end up holding).
-                    j.bytes_tracked = sum(_section_bytes(sec) for sec in j.sections)
-                    j.updated_at = time.time()
+                if status == "complete" and not result.get("skipped"):
+                    j.completion_times.append(elapsed)
+                if status in ("complete", "skipped"):
+                    s["original"] = ""
+                    s["stage_a_text"] = ""
+                    s["stage_b_text"] = ""
+                j.bytes_tracked = sum(_section_bytes(sec) for sec in j.sections)
+                j.updated_at = time.time()
+                return status or "failed"
 
-                # Circuit breaker — if we've timed out N times in a
-                # row, abort the rest of the job. Subsequent sections
-                # would almost certainly fail the same way and just
-                # waste tokens.
-                if status == "timed_out":
-                    consecutive_timeouts += 1
-                else:
-                    consecutive_timeouts = 0
-                if consecutive_timeouts >= CONSECUTIVE_TIMEOUT_LIMIT:
-                    log.warning(
-                        "plagiarism_jobs: job %s aborting after %d consecutive timeouts",
-                        job_id, consecutive_timeouts,
-                    )
+            # ---- submit all pending sections to a bounded pool ----
+            with _cf.ThreadPoolExecutor(
+                max_workers=SECTION_CONCURRENCY,
+                thread_name_prefix=f"pm-sec-{job_id}",
+            ) as pool:
+                future_to_idx = {}
+                future_to_started = {}
+                for idx in pending_indices:
+                    if j.cancel_event.is_set() or _abort_event.is_set():
+                        break
+                    fut = pool.submit(_process_section, idx)
+                    future_to_idx[fut] = idx
+                    future_to_started[fut] = time.time()
+
+                for fut in _cf.as_completed(future_to_idx):
+                    idx = future_to_idx[fut]
+                    elapsed = time.time() - future_to_started[fut]
+
+                    # --- handle section worker exception ---
+                    try:
+                        _, result = fut.result()
+                    except pa.ProviderQuotaExhausted as exc:
+                        log.warning(
+                            "plagiarism_jobs: job %s aborted — quota exhausted: %s",
+                            job_id, pa.sanitize_error_message(exc),
+                        )
+                        _abort_event.set()
+                        with self._lock:
+                            j.sections[idx]["status"] = "failed"
+                            j.sections[idx]["error"] = (
+                                "Both AI providers are out of quota. Please try again later."
+                            )
+                            for other in j.sections:
+                                if other["status"] in ("pending", "processing"):
+                                    other["status"] = "failed"
+                                    other["error"] = (
+                                        "Skipped — both providers ran out of quota mid-job."
+                                    )
+                            j.status = "failed"
+                            j.error = "providers_exhausted"
+                            j.completed_at = time.time()
+                            j.updated_at = j.completed_at
+                            j.current_index = None
+                            j.current_pass_label = ""
+                        # Cancel pending futures (those not yet started).
+                        for f in future_to_idx:
+                            f.cancel()
+                        return
+                    except Exception as exc:  # noqa: BLE001
+                        log.exception(
+                            "plagiarism_jobs: unexpected crash in job %s section %s",
+                            job_id, idx,
+                        )
+                        with self._lock:
+                            j.sections[idx]["status"] = "failed"
+                            j.sections[idx]["error"] = pa.sanitize_error_message(exc)
+                        continue
+
+                    # --- cancelled by user or abort ---
+                    if result is None:
+                        continue
+
+                    # --- merge result ---
                     with self._lock:
-                        for other in j.sections:
-                            if other["status"] in ("pending", "processing"):
-                                other["status"] = "failed"
-                                other["error"] = (
-                                    "Skipped: the provider was timing out repeatedly. "
-                                    "Use Retry once the provider stabilises."
-                                )
-                        j.error = "consecutive_timeouts"
-                    break
+                        status = _merge(idx, result, elapsed)
+
+                    # --- circuit breaker ---
+                    if status == "timed_out":
+                        consecutive_timeouts += 1
+                    else:
+                        consecutive_timeouts = 0
+
+                    if consecutive_timeouts >= CONSECUTIVE_TIMEOUT_LIMIT:
+                        log.warning(
+                            "plagiarism_jobs: job %s aborting after %d consecutive timeouts",
+                            job_id, consecutive_timeouts,
+                        )
+                        _abort_event.set()
+                        with self._lock:
+                            for other in j.sections:
+                                if other["status"] in ("pending", "processing"):
+                                    other["status"] = "failed"
+                                    other["error"] = (
+                                        "Skipped — provider was timing out repeatedly. "
+                                        "Use Retry once the provider stabilises."
+                                    )
+                            j.error = "consecutive_timeouts"
+                        for f in future_to_idx:
+                            f.cancel()
+                        break
 
             with self._lock:
                 if j.cancel_event.is_set():
