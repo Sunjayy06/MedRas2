@@ -69,10 +69,25 @@
     _renderOutline();
     _renderPage();
     _renderRefs();
+    _updateWordCount();
     /* Update session hint for nav continuity */
     sessionStorage.setItem('medras.nav.returnHint', JSON.stringify({
       module: 'folio', label: 'your document', url: '/folio-module/editor.html',
     }));
+  }
+
+  function _updateWordCount() {
+    var el = document.getElementById('fl-wordcount');
+    if (!el) return;
+    var words = 0;
+    (doc.sections || []).forEach(function (sec) {
+      (sec.paragraphs || []).forEach(function (p) {
+        var m = (p.text || '').match(/\b\w+\b/g);
+        if (m) words += m.length;
+      });
+    });
+    var pages = Math.max(1, Math.round(words / 280));
+    el.textContent = words.toLocaleString() + ' words · ~' + pages + (pages === 1 ? ' page' : ' pages');
   }
 
   // ── Outline ───────────────────────────────────────────────────────────────
