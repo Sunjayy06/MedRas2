@@ -3746,7 +3746,8 @@ function renderAiConfirmScreen() {
   const studyType = ai.study_type || "correlation";
   const outCol    = ai.outcome_col || "";
   const reasoning = ai.reasoning  || "No reasoning provided.";
-  const source    = ai.source === "gemini" ? "AI (Gemini)" : "Heuristic (keyword-based)";
+  // Strip any internal "[old reasoning]" bracket appended by the validator
+  const cleanReasoning = reasoning.replace(/\s*\[.*?\]\s*$/, "").trim();
 
   // Update display labels
   const typeDisplay = document.getElementById("ai-study-type-display");
@@ -3756,10 +3757,7 @@ function renderAiConfirmScreen() {
   if (colDisplay) colDisplay.textContent = outCol || "Not detected — please select below";
 
   const reasoningEl = document.getElementById("ai-reasoning-display");
-  if (reasoningEl) reasoningEl.textContent = reasoning;
-
-  const sourceEl = document.getElementById("ai-source-display");
-  if (sourceEl) sourceEl.textContent = source;
+  if (reasoningEl) reasoningEl.textContent = cleanReasoning;
 
   // Populate outcome column dropdown
   const colSelect = document.getElementById("ai-outcome-col-select");
