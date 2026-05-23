@@ -220,6 +220,104 @@ Rules:
 
 
 # ---------------------------------------------------------------------------
+# Statistician validation
+# ---------------------------------------------------------------------------
+
+# Keywords whose presence in the description means the researcher
+# explicitly wants diagnostic accuracy (sensitivity/specificity/AUC).
+# Only when these are present AND there is no continuous variable do we
+# let the "diagnostic" label stand (the confirm screen will warn).
+_DIAGNOSTIC_EXPLICIT = frozenset([
+    "sensitiv", "specific", "roc", "auc", "ppv", "npv",
+    "gold standard", "cut.off", "cutoff", "youden",
+])
+
+# Column-name fragments that suggest a time-to-event variable even when
+# the detected_type is not "date" (e.g. "days_to_death", "followup_months").
+_TIME_COL_FRAGMENTS = ("days", "months", "years", "time", "followup", "follow_up",
+                       "duration", "survival", "event_time")
+
+
+def _validate_study_type(
+    study_type: str,
+    outcome_col: Optional[str],
+    classifications: List[Dict[str, Any]],
+    description: str,
+    reasoning: str,
+) -> tuple:
+    """Apply data-driven sanity checks and return (study_type, reasoning).
+
+    Rules applied in order:
+    1. "diagnostic" without any continuous variable → downgrade.
+    2. "survival" without any date/time variable → downgrade.
+    3. "comparison" with no usable categorical grouping variable → "correlation".
+    All other combinations are left unchanged.
+    """
+    dl = description.lower()
+
+    # Build sets of detected types from the actual dataset
+    type_counts: Dict[str, int] = {}
+    for c in classifications:
+        t = c.get("detected_type", "nominal")
+        type_counts[t] = type_counts.get(t, 0) + 1
+
+    has_continuous = type_counts.get("scale", 0) > 0
+    has_date       = type_counts.get("date", 0) > 0
+
+    # Also treat a column whose name contains time-fragment as a date proxy
+    all_col_names = [c.get("column", "").lower() for c in classifications]
+    has_time_col  = any(
+        frag in col for col in all_col_names for frag in _TIME_COL_FRAGMENTS
+    )
+
+    # ── Rule 1: Diagnostic needs a continuous score ───────────────────────
+    if study_type == "diagnostic" and not has_continuous:
+        explicitly_diagnostic = any(kw in dl for kw in _DIAGNOSTIC_EXPLICIT)
+        if not explicitly_diagnostic:
+            # Downgrade: binary/nominal outcome → comparison; else correlation
+            outcome_type = ""
+            if outcome_col:
+                for c in classifications:
+                    if c.get("column") == outcome_col:
+                        outcome_type = c.get("detected_type", "")
+                        break
+            if outcome_type in ("nominal", "binary", "ordinal") or not outcome_type:
+                new_type = "comparison"
+                note = (
+                    "Diagnostic accuracy tests require a continuous test score "
+                    "for AUC/ROC — your dataset has no continuous variables. "
+                    "Switched to 'comparison' (chi-square / logistic regression) "
+                    "which is appropriate for categorical data."
+                )
+            else:
+                new_type = "correlation"
+                note = (
+                    "Diagnostic accuracy tests require a continuous test score "
+                    "for AUC/ROC — your dataset has no continuous variables. "
+                    "Switched to 'correlation' (association analysis)."
+                )
+            return new_type, f"{note} [{reasoning}]"
+
+    # ── Rule 2: Survival needs a date or time-to-event variable ──────────
+    if study_type == "survival" and not has_date and not has_time_col:
+        # Only override if description also doesn't scream survival
+        survival_explicit = any(
+            kw in dl for kw in ("kaplan", "time to event", "time-to-event",
+                                "censored", "hazard ratio", "cox")
+        )
+        if not survival_explicit:
+            note = (
+                "Survival/time-to-event analysis needs a date or time column "
+                "— none was found in your dataset. "
+                "Switched to 'comparison' (group difference analysis)."
+            )
+            return "comparison", f"{note} [{reasoning}]"
+
+    # No override needed
+    return study_type, reasoning
+
+
+# ---------------------------------------------------------------------------
 # Public entry point
 # ---------------------------------------------------------------------------
 
@@ -299,6 +397,20 @@ def identify_study(
                 f"Detected study type '{study_type}' from keywords in your description."
             )
             source = "heuristic"
+
+    # -----------------------------------------------------------------------
+    # Statistician validation — override study type when the actual data
+    # makes the suggestion statistically impossible or nonsensical.
+    # This runs regardless of whether the type came from LLM / proposal /
+    # heuristic so we never present an unrunnable analysis path.
+    # -----------------------------------------------------------------------
+    study_type, reasoning = _validate_study_type(
+        study_type=study_type,
+        outcome_col=outcome_col,
+        classifications=classifications or [],
+        description=description,
+        reasoning=reasoning,
+    )
 
     # Build predictor list — exclude id/date/exclude types plus the outcome
     excluded_types = {"id", "date", "exclude"}
