@@ -442,6 +442,34 @@
     }
   });
 
+  // ── Novus handoff ─────────────────────────────────────────────────────────
+  var btnNovus = document.getElementById('btn-novus');
+  if (btnNovus) {
+    btnNovus.addEventListener('click', function () {
+      // Collect all paragraph text from every section in order
+      var parts = [];
+      (doc.sections || []).forEach(function (sec) {
+        if (sec.title) parts.push(sec.title.toUpperCase());
+        (sec.paragraphs || []).forEach(function (p) {
+          var t = (p.text || '').trim();
+          if (t) parts.push(t);
+        });
+      });
+      var fullText = parts.join('\n\n').trim();
+      if (!fullText) {
+        toast('No content to send — write something first.');
+        return;
+      }
+      try {
+        sessionStorage.setItem('medras.plagiarism.prefill', fullText);
+        toast('Opening Novus…');
+        window.open('/plagiarism-module/checker.html', '_blank');
+      } catch (e) {
+        toast('Could not stage text: ' + e.message);
+      }
+    });
+  }
+
   // ── DOCX export ───────────────────────────────────────────────────────────
   btnExport.addEventListener('click', function () {
     btnExport.textContent = 'Exporting…';
