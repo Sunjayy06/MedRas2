@@ -49,9 +49,8 @@
         <p style="font-size:0.85rem;color:#6b7280;margin:0">MedRAS is identifying your study type and outcome variable. This takes about 5–10 seconds.</p>
       </div>
 
-      <!-- Resume-session banner (populated by analysis.js if a saved
-           session is found in localStorage). Sits above all screens. -->
-      <div id="resume-banner" class="is-hidden" data-testid="resume-banner-host"></div>
+      <!-- Resume-session modal (populated by analysis.js if a saved session exists) -->
+      <div id="resume-modal" style="display:none;position:fixed;inset:0;z-index:1000;background:rgba(15,23,42,0.55);align-items:center;justify-content:center;padding:1rem;" data-testid="resume-modal-host"></div>
 
       <!-- Practice-data banner (shown when the loaded dataset was generated
            by the practice wizard or template flow). -->

@@ -140,7 +140,7 @@ const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 // screen 1 / intake would defeat the resume banner (there's nothing to
 // resume to) and would also wipe the saved session every time the page
 // reloads cold.
-const RESUMABLE_SCREENS = new Set(["preview", "3", "4", "normality", "plan", "results", "export"]);
+const RESUMABLE_SCREENS = new Set(["preview", "ai-confirm", "3", "4", "normality", "plan", "results", "export"]);
 
 function saveSession() {
   if (!state.jobId) return;
@@ -217,8 +217,27 @@ async function resumeFromSavedSession(saved) {
       await loadQualityReport();
     } else if (resolved === "3") {
       showScreen("3");
-      // Step 3 binds its own classification render via showScreen subscribers
-      // already; nothing extra needed here.
+    } else if (resolved === "ai-confirm") {
+      // Re-run the AI bridge so the confirmation screen has fresh results,
+      // then show it. Falls back gracefully if the bridge is unavailable.
+      _showAiBridgeOverlay(true);
+      try {
+        const description = (state.intake && (state.intake.objectives || "")) || "";
+        const outcomeHint  = (state.intake && (state.intake.outcomes || "")) || "";
+        const bridgeResult = await api("/ai-bridge", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ job_id: state.jobId, description, outcome_hint: outcomeHint }),
+        });
+        state.aiStudy = bridgeResult;
+      } catch (_) {
+        state.aiStudy = { study_type: "correlation", outcome_col: null, confidence: 0,
+          reasoning: "Could not contact AI service. Please select manually.", source: "heuristic",
+          all_predictors: state.columns.map((c) => c.column || c) };
+      }
+      _showAiBridgeOverlay(false);
+      renderAiConfirmScreen();
+      showScreen("ai-confirm");
     } else if (resolved === "preview") {
       showScreen("preview");
       // Without renderPreview() the zone label, conditional buttons, and
@@ -246,47 +265,60 @@ async function resumeFromSavedSession(saved) {
 }
 
 function renderResumeBanner(saved) {
-  const host = document.getElementById("resume-banner");
-  if (!host) return;
+  const modal = document.getElementById("resume-modal");
+  if (!modal) return;
+
   const when = _formatRelativeTime(saved.timestamp);
   const stepLabel = (() => {
     switch (saved.screen) {
-      case "4": return "Step 4 · Review data";
-      case "3": return "Step 3 · Variables";
-      case "preview": return "Step 2 · Preview";
-      case "normality": return "Step 5 · Normality";
-      case "plan": return "Step 6 · Plan and Run";
-      case "results": return "Step 7 · Results";
-      case "export": return "Step 8 · Export";
-      // Legacy labels for sessions saved before the 7 → 8 refactor:
-      case "soon": return "Step 5 · Normality";
-      case "assign": return "Step 3 · Variables";
-      default: return `Step ${saved.step || 1}`;
+      case "4":          return "Step 4 · Review data";
+      case "3":          return "Step 3 · Variables";
+      case "preview":    return "Step 2 · Data preview";
+      case "ai-confirm": return "Step 2.5 · Study setup";
+      case "normality":  return "Step 5 · Normality";
+      case "plan":       return "Step 6 · Plan and Run";
+      case "results":    return "Step 7 · Results";
+      case "export":     return "Step 8 · Export";
+      case "soon":       return "Step 5 · Normality";
+      case "assign":     return "Step 3 · Variables";
+      default:           return `Step ${saved.step || 1}`;
     }
   })();
-  const fname = saved.filename ? `<strong>${escapeHtml(saved.filename)}</strong>` : "your dataset";
-  host.innerHTML = `
-    <div class="se-resume" data-testid="resume-banner" role="status">
-      <div class="se-resume-text">
-        <strong>You have an unfinished analysis</strong> on ${fname}
-        from ${escapeHtml(when)} — paused at ${escapeHtml(stepLabel)}.
-      </div>
-      <div class="se-resume-actions">
-        <button type="button" class="btn btn-primary" data-action="resume-continue" data-testid="button-resume-continue">Continue where you left off →</button>
-        <button type="button" class="btn btn-tertiary" data-action="resume-fresh" data-testid="button-resume-fresh">Start fresh</button>
+
+  const fname   = saved.filename ? escapeHtml(saved.filename) : "your dataset";
+  const rows    = saved.n_rows   ? `${saved.n_rows} rows` : "";
+  const cols    = saved.n_cols   ? `${saved.n_cols} columns` : "";
+  const dims    = [rows, cols].filter(Boolean).join(" · ");
+
+  modal.innerHTML = `
+    <div class="se-resume-modal" data-testid="resume-modal" role="dialog" aria-modal="true" aria-labelledby="resume-modal-title">
+      <div class="se-resume-modal-card">
+        <div class="se-resume-modal-icon" aria-hidden="true">📊</div>
+        <h2 id="resume-modal-title" class="se-resume-modal-title">Unfinished analysis found</h2>
+        <p class="se-resume-modal-file"><strong>${fname}</strong>${dims ? `<br><span style="font-size:0.82rem;color:#6b7280">${dims}</span>` : ""}</p>
+        <p class="se-resume-modal-meta">Paused <strong>${escapeHtml(when)}</strong> at <strong>${escapeHtml(stepLabel)}</strong></p>
+        <div class="se-resume-modal-actions">
+          <button type="button" class="btn btn-primary se-resume-modal-btn-continue" data-action="resume-continue" data-testid="button-resume-continue">
+            ▶ Resume analysis
+          </button>
+          <button type="button" class="btn se-resume-modal-btn-delete" data-action="resume-fresh" data-testid="button-resume-fresh">
+            🗑 Delete &amp; start fresh
+          </button>
+        </div>
       </div>
     </div>
   `;
-  host.classList.remove("is-hidden");
-  host.querySelector('[data-action="resume-continue"]').addEventListener("click", async () => {
-    host.classList.add("is-hidden");
-    host.innerHTML = "";
+  modal.style.display = "flex";
+
+  modal.querySelector('[data-action="resume-continue"]').addEventListener("click", async () => {
+    modal.style.display = "none";
+    modal.innerHTML = "";
     await resumeFromSavedSession(saved);
   });
-  host.querySelector('[data-action="resume-fresh"]').addEventListener("click", () => {
+  modal.querySelector('[data-action="resume-fresh"]').addEventListener("click", () => {
     clearSavedSession();
-    host.classList.add("is-hidden");
-    host.innerHTML = "";
+    modal.style.display = "none";
+    modal.innerHTML = "";
   });
 }
 
