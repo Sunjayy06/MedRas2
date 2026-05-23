@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Folio — Document Management · MedRAS</title>
+  <title>Folio — Document Polish · MedRAS</title>
   <link rel="stylesheet" href="/css/medras-nav.css">
   <link rel="stylesheet" href="css/folio.css">
   <style>
@@ -35,6 +35,77 @@
     }
     .fl-sigma-banner-btn:hover { background: #6d28d9; }
     .hidden { display: none !important; }
+
+    /* Single-card import zone */
+    .fl-import-zone {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0;
+      border: 2px dashed #c4b5fd;
+      border-radius: var(--fl-radius);
+      padding: 40px 32px 32px;
+      text-align: center;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+      background: var(--fl-surface);
+      margin-bottom: 24px;
+    }
+    .fl-import-zone:hover,
+    .fl-import-zone.drag-over {
+      background: #f5f3ff;
+      border-color: #7c3aed;
+    }
+    .fl-import-zone-icon { font-size: 2.8rem; margin-bottom: 14px; }
+    .fl-import-zone-title {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: var(--fl-text);
+      margin-bottom: 6px;
+    }
+    .fl-import-zone-desc {
+      font-size: 0.85rem;
+      color: var(--fl-muted);
+      max-width: 400px;
+      line-height: 1.55;
+      margin-bottom: 20px;
+    }
+    .fl-import-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 11px 28px;
+      background: #7c3aed;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.92rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .fl-import-btn:hover { background: #6d28d9; }
+    .fl-import-hint {
+      font-size: 0.75rem;
+      color: var(--fl-muted);
+      margin-top: 10px;
+    }
+
+    /* Distinction callout */
+    .fl-distinction {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      background: #fffbeb;
+      border: 1px solid #fde68a;
+      border-radius: var(--fl-radius);
+      padding: 14px 18px;
+      margin-bottom: 24px;
+      font-size: 0.82rem;
+      color: #92400e;
+      line-height: 1.5;
+    }
+    .fl-distinction-icon { font-size: 1rem; flex-shrink: 0; margin-top: 1px; }
   </style>
 </head>
 <body data-medras-module="folio">
@@ -42,13 +113,23 @@
 <div id="medras-nav"></div>
 
 <div class="fl-entry-wrap">
-  <p class="fl-entry-eyebrow">Module 07 · Document Management</p>
+  <p class="fl-entry-eyebrow">Module 07 · Document Polish</p>
   <h1 class="fl-entry-title">Folio</h1>
   <p class="fl-entry-sub">
-    Smart document management for your thesis or manuscript. Import a Word document or start fresh —
-    Folio tracks every reference, table and figure automatically and renumbers everything the moment
-    you make a change.
+    Bring your existing thesis or manuscript — Folio fixes the messy parts automatically:
+    renumbers every reference, table and figure the moment you make a change, reformats citations in one click,
+    and applies supervisor feedback without manual hunting.
   </p>
+
+  <!-- Distinction callout -->
+  <div class="fl-distinction">
+    <span class="fl-distinction-icon">💡</span>
+    <span>
+      <strong>Writing from scratch?</strong> Use <a href="/thesis-module/" style="color:#92400e;">Scriptorium</a> —
+      it provides AI-assisted chapter-by-chapter authoring with compliance checks and RAG-backed citations.
+      Come back to Folio when you have a draft that needs polishing.
+    </span>
+  </div>
 
   <!-- Sigma import banner (shown only when data is available) -->
   <div class="fl-sigma-banner hidden" id="sigma-banner">
@@ -60,42 +141,33 @@
     <button class="fl-sigma-banner-btn" id="sigma-import-btn">Import from Sigma →</button>
   </div>
 
-  <div class="fl-entry-cards">
-    <!-- New document -->
-    <div class="fl-entry-card" id="card-new" tabindex="0" role="button" aria-label="Start a new document">
-      <span class="fl-entry-icon">📄</span>
-      <div class="fl-entry-card-title">Start a new document</div>
-      <p class="fl-entry-card-desc">
-        Begin with a blank thesis structure. Folio provides the standard chapter outline — Introduction, Review of Literature, Methods, Results, Discussion, Conclusion, References.
-      </p>
-      <span class="fl-entry-card-badge">Blank document</span>
-    </div>
-
-    <!-- Import DOCX -->
-    <div class="fl-entry-card" id="card-import" tabindex="0" role="button" aria-label="Import a Word document">
-      <span class="fl-entry-icon">📂</span>
-      <div class="fl-entry-card-title">Import a Word document</div>
-      <p class="fl-entry-card-desc">
-        Upload your existing <code>.docx</code> file. Folio extracts all sections, headings, body text, and the numbered reference list, then activates smart tracking immediately.
-      </p>
-      <span class="fl-entry-card-badge">DOCX import</span>
-      <p class="fl-upload-hint">Supports .docx · up to 20 MB</p>
-    </div>
+  <!-- Import zone (single entry point) -->
+  <div class="fl-import-zone" id="import-zone" tabindex="0" role="button" aria-label="Upload your Word document">
+    <span class="fl-import-zone-icon">📂</span>
+    <div class="fl-import-zone-title">Upload your Word document</div>
+    <p class="fl-import-zone-desc">
+      Folio extracts all sections, headings, body text, and your numbered reference list,
+      then activates smart tracking immediately. Drag &amp; drop or click to browse.
+    </p>
+    <button class="fl-import-btn" id="import-btn" tabindex="-1">
+      <span>Choose .docx file</span>
+    </button>
+    <p class="fl-import-hint">Supports .docx · up to 20 MB</p>
   </div>
 
   <!-- Hidden file input -->
   <input type="file" id="file-input" accept=".docx" style="display:none">
 
   <!-- Feature list -->
-  <div style="margin-top: 8px; padding: 20px 24px; background: var(--fl-surface); border-radius: var(--fl-radius); border: 1px solid var(--fl-border);">
-    <p style="font-size: 12px; font-weight: 600; color: var(--fl-muted); text-transform: uppercase; letter-spacing:.06em; margin-bottom: 12px;">What Folio does</p>
+  <div style="padding: 20px 24px; background: var(--fl-surface); border-radius: var(--fl-radius); border: 1px solid var(--fl-border);">
+    <p style="font-size: 12px; font-weight: 600; color: var(--fl-muted); text-transform: uppercase; letter-spacing:.06em; margin-bottom: 12px;">What Folio does to your document</p>
     <ul style="list-style: none; display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
       <li style="font-size: 13px; color: var(--fl-text); display: flex; gap: 8px;"><span style="color:#7c3aed;">✦</span> Auto-renumber references on delete</li>
       <li style="font-size: 13px; color: var(--fl-text); display: flex; gap: 8px;"><span style="color:#7c3aed;">✦</span> Switch citation style in one click</li>
       <li style="font-size: 13px; color: var(--fl-text); display: flex; gap: 8px;"><span style="color:#7c3aed;">✦</span> Auto-renumber tables and figures</li>
       <li style="font-size: 13px; color: var(--fl-text); display: flex; gap: 8px;"><span style="color:#7c3aed;">✦</span> Drag sections to reorder</li>
       <li style="font-size: 13px; color: var(--fl-text); display: flex; gap: 8px;"><span style="color:#7c3aed;">✦</span> Paste guide feedback — AI applies it</li>
-      <li style="font-size: 13px; color: var(--fl-text); display: flex; gap: 8px;"><span style="color:#7c3aed;">✦</span> One-click DOCX export</li>
+      <li style="font-size: 13px; color: var(--fl-text); display: flex; gap: 8px;"><span style="color:#7c3aed;">✦</span> Export clean DOCX when done</li>
     </ul>
   </div>
 </div>
@@ -116,13 +188,14 @@
 (function () {
   'use strict';
 
-  var fileInput    = document.getElementById('file-input');
-  var overlay      = document.getElementById('upload-overlay');
-  var statusEl     = document.getElementById('upload-status');
-  var filenameEl   = document.getElementById('upload-filename');
-  var sigmaBanner  = document.getElementById('sigma-banner');
-  var sigmaBtn     = document.getElementById('sigma-import-btn');
-  var toastEl      = document.getElementById('toast');
+  var fileInput   = document.getElementById('file-input');
+  var importZone  = document.getElementById('import-zone');
+  var overlay     = document.getElementById('upload-overlay');
+  var statusEl    = document.getElementById('upload-status');
+  var filenameEl  = document.getElementById('upload-filename');
+  var sigmaBanner = document.getElementById('sigma-banner');
+  var sigmaBtn    = document.getElementById('sigma-import-btn');
+  var toastEl     = document.getElementById('toast');
 
   // ── Toast ──────────────────────────────────────────────────────────────────
   function toast(msg, duration) {
@@ -143,7 +216,7 @@
         sessionStorage.removeItem('folio.import.from_sigma');
         window.location.href = 'editor.html';
       } catch (e) {
-        toast('Could not parse Sigma data. Starting blank.');
+        toast('Could not parse Sigma data.');
         sessionStorage.removeItem('folio.import.from_sigma');
         sigmaBanner.classList.add('hidden');
       }
@@ -154,56 +227,47 @@
     return {
       title: data.title || 'Analysis Results',
       sections: [
-        {
-          id: _uid(), level: 1, title: 'Methods',
-          paragraphs: [{ id: _uid(), text: data.methods || '' }],
-        },
-        {
-          id: _uid(), level: 1, title: 'Results',
-          paragraphs: [{ id: _uid(), text: data.results || '' }],
-        },
+        { id: _uid(), level: 1, title: 'Methods',  paragraphs: [{ id: _uid(), text: data.methods || '' }] },
+        { id: _uid(), level: 1, title: 'Results',  paragraphs: [{ id: _uid(), text: data.results || '' }] },
       ],
       references: [], tables: [], figures: [],
     };
   }
-
-  // ── New document ───────────────────────────────────────────────────────────
-  var cardNew    = document.getElementById('card-new');
-  var cardImport = document.getElementById('card-import');
 
   function _uid() {
     return Math.random().toString(36).slice(2, 10);
   }
 
-  function startNew() {
-    var doc = {
-      title: 'New Document',
-      sections: [
-        { id: _uid(), level: 1, title: 'Introduction',           paragraphs: [{ id: _uid(), text: '' }] },
-        { id: _uid(), level: 1, title: 'Review of Literature',   paragraphs: [{ id: _uid(), text: '' }] },
-        { id: _uid(), level: 1, title: 'Methodology',            paragraphs: [{ id: _uid(), text: '' }] },
-        { id: _uid(), level: 1, title: 'Results',                paragraphs: [{ id: _uid(), text: '' }] },
-        { id: _uid(), level: 1, title: 'Discussion',             paragraphs: [{ id: _uid(), text: '' }] },
-        { id: _uid(), level: 1, title: 'Conclusion',             paragraphs: [{ id: _uid(), text: '' }] },
-        { id: _uid(), level: 1, title: 'Summary',                paragraphs: [{ id: _uid(), text: '' }] },
-        { id: _uid(), level: 1, title: 'References',             paragraphs: [] },
-      ],
-      references: [], tables: [], figures: [],
-    };
-    sessionStorage.setItem('folio.doc', JSON.stringify(doc));
-    window.location.href = 'editor.html';
-  }
+  // ── Open file picker ───────────────────────────────────────────────────────
+  function openPicker() { fileInput.click(); }
 
-  cardNew.addEventListener('click',   startNew);
-  cardNew.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') startNew(); });
+  importZone.addEventListener('click', openPicker);
+  importZone.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' || e.key === ' ') openPicker();
+  });
 
-  cardImport.addEventListener('click',   function () { fileInput.click(); });
-  cardImport.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') fileInput.click(); });
+  // ── Drag & drop ───────────────────────────────────────────────────────────
+  importZone.addEventListener('dragover', function (e) {
+    e.preventDefault();
+    importZone.classList.add('drag-over');
+  });
+  importZone.addEventListener('dragleave', function () {
+    importZone.classList.remove('drag-over');
+  });
+  importZone.addEventListener('drop', function (e) {
+    e.preventDefault();
+    importZone.classList.remove('drag-over');
+    var file = e.dataTransfer.files[0];
+    if (file) handleFile(file);
+  });
 
   // ── DOCX import ────────────────────────────────────────────────────────────
   fileInput.addEventListener('change', function () {
     var file = fileInput.files[0];
-    if (!file) return;
+    if (file) handleFile(file);
+  });
+
+  function handleFile(file) {
     if (!file.name.toLowerCase().endsWith('.docx')) {
       toast('Please select a .docx file.');
       return;
@@ -240,7 +304,7 @@
         toast('Import failed: ' + (err.message || 'unknown error'));
         fileInput.value = '';
       });
-  });
+  }
 })();
 </script>
 </body>
