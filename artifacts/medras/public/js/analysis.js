@@ -444,14 +444,18 @@ function bindScreen1() {
   // Proposal-path continue
   document.addEventListener("click", (e) => {
     if (!e.target.closest('[data-action="s1-continue-proposal"]')) return;
-    const desc = ($("#s1-prop-desc")?.value || "").trim();
-    const hint = ($("#s1-prop-outcome")?.value || "").trim();
+    const desc       = ($("#s1-prop-desc")?.value || "").trim();
+    const hint       = ($("#s1-prop-outcome")?.value || "").trim();
+    const studyType  = ($("#s1-prop-study-type")?.value || "").trim();
+    const sampleSize = parseInt($("#s1-prop-sample-size")?.value || "", 10) || null;
     if (!hint) { alert("Please enter the exact column header for your outcome variable."); return; }
     state.studyDesc   = desc;
     state.outcomeHint = hint;
     state.intake = Object.assign({}, state.intake || {}, {
-      objectives: desc,
-      outcomes:   hint,
+      objectives:  desc,
+      outcomes:    hint,
+      study_type:  studyType  || state.intake?.study_type  || null,
+      sample_size: sampleSize || state.intake?.sample_size || null,
     });
     showScreen("2a");
   });
@@ -469,7 +473,7 @@ function _bindS1ProposalUpload() {
   fileInput.addEventListener("change", async () => {
     const file = fileInput.files[0];
     if (!file) return;
-    if (status) status.textContent = `Uploading ${file.name}…`;
+    if (status) status.textContent = `Parsing ${file.name}…`;
     try {
       const fd = new FormData();
       fd.append("file", file);
@@ -481,14 +485,37 @@ function _bindS1ProposalUpload() {
         throw new Error(errMsg);
       }
       const data = await r.json();
-      const descField    = $("#s1-prop-desc");
-      const outcomeField = $("#s1-prop-outcome");
-      if (descField) descField.value = (
-        data.objective || data.objectives || data.objective_text || ""
-      );
+
+      const descField       = $("#s1-prop-desc");
+      const outcomeField    = $("#s1-prop-outcome");
+      const studyTypeField  = $("#s1-prop-study-type");
+      const sampleSizeField = $("#s1-prop-sample-size");
+      const aiBadge         = $("#s1-prop-ai-badge");
+
+      if (descField)    descField.value = data.objective || data.objectives || "";
       if (outcomeField) outcomeField.value = data.outcomes || "";
+      if (studyTypeField && data.study_type) studyTypeField.value = data.study_type;
+      if (sampleSizeField && data.sample_size) sampleSizeField.value = data.sample_size;
+
+      // Show AI badge if extraction was AI-powered.
+      if (aiBadge) {
+        if (data.source === "ai") {
+          aiBadge.style.display = "flex";
+          aiBadge.classList.remove("is-hidden");
+        } else {
+          aiBadge.style.display = "none";
+        }
+      }
+
+      // Cache extracted values in state for downstream use.
+      state.intake = Object.assign({}, state.intake || {}, {
+        study_type:  data.study_type  || null,
+        sample_size: data.sample_size || null,
+      });
+
       if (fields) fields.classList.remove("is-hidden");
-      if (status) status.textContent = `✓ ${file.name} loaded`;
+      const sourceLabel = data.source === "ai" ? "AI extracted" : "parsed";
+      if (status) status.textContent = `✓ ${file.name} — ${sourceLabel}`;
     } catch (e) {
       if (fields) fields.classList.remove("is-hidden");
       if (status) status.textContent = `Could not parse file: ${e.message}. Please fill the fields manually.`;

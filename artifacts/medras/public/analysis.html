@@ -127,10 +127,29 @@
                 <span class="se-dropzone-sub" id="s1-proposal-status">PDF, Word, or plain text · Max 8&nbsp;MB</span>
               </label>
               <div id="s1-proposal-fields" class="is-hidden" style="margin-top:1rem">
+                <div id="s1-prop-ai-badge" class="is-hidden" style="display:none;align-items:center;gap:0.4rem;margin-bottom:0.75rem;font-size:0.82rem;color:#2a7a5a;font-weight:600">
+                  <span aria-hidden="true">✦</span> Extracted by AI — review and edit if needed
+                </div>
                 <label class="se-field">
                   <span>Study description <small style="font-weight:400">(extracted — edit if needed)</small></span>
                   <textarea id="s1-prop-desc" rows="3" style="width:100%"></textarea>
                 </label>
+                <div style="display:flex;gap:0.75rem;margin-top:0.75rem;flex-wrap:wrap">
+                  <label class="se-field" style="flex:1;min-width:180px">
+                    <span>Study type</span>
+                    <select id="s1-prop-study-type" style="width:100%">
+                      <option value="correlation">Correlation / Association</option>
+                      <option value="comparison">Comparison / RCT / Case-Control</option>
+                      <option value="diagnostic">Diagnostic Accuracy</option>
+                      <option value="survival">Survival / Time-to-Event</option>
+                      <option value="descriptive">Descriptive / Prevalence</option>
+                    </select>
+                  </label>
+                  <label class="se-field" style="flex:1;min-width:140px">
+                    <span>Sample size</span>
+                    <input type="number" id="s1-prop-sample-size" min="1" max="999999" placeholder="e.g. 120" style="width:100%" />
+                  </label>
+                </div>
                 <label class="se-field" style="margin-top:0.75rem">
                   <span>Outcome variable <strong>exactly as it appears in your Excel column header</strong></span>
                   <input type="text" id="s1-prop-outcome" placeholder="e.g. P/N, HbA1c, Outcome" style="width:100%" />

@@ -285,55 +285,170 @@ async def upload_proposal(request: Request, file: UploadFile = File(...)) -> Dic
 
 
 import re as _re
+import os as _os
+import json as _json
+import httpx as _httpx
+
+_GEMINI_PARSE_URL = (
+    "https://generativelanguage.googleapis.com/v1beta/"
+    "models/gemini-2.0-flash:generateContent"
+)
+_OPENAI_PARSE_URL = "https://api.openai.com/v1/chat/completions"
+_PARSE_TIMEOUT = 25.0
+
+_PARSE_PROMPT = """\
+You are a medical research assistant. The text below is extracted from a \
+study proposal or synopsis document. Extract the following fields and return \
+ONLY valid JSON with exactly these keys — no markdown, no extra text:
+
+{{
+  "objective": "<Full study aim or primary objective. 2-4 sentences. \
+If multiple objectives, include all. Empty string if not found.>",
+  "outcomes": "<The PRIMARY outcome variable name exactly as it would \
+appear as a column header in an Excel/SPSS spreadsheet. \
+Examples: HbA1c, P/N, Allred Score, OS, SBP. \
+Short, precise. Empty string if not found.>",
+  "study_type": "<One of: comparison | correlation | diagnostic | \
+survival | descriptive. Choose the best fit. Default to correlation.>",
+  "sample_size": <Integer sample size if stated, or null>
+}}
+
+=== DOCUMENT TEXT (first 4000 chars) ===
+{text}
+=== END ===
+"""
 
 
-def _heuristic_extract(text: str) -> tuple[str, str]:
-    """Return (objective_text, outcome_hint) extracted from raw proposal text."""
-    # ── Objective ──────────────────────────────────────────────────────────
+def _heuristic_extract(text: str) -> dict:
+    """Return best-effort extraction using regex — used as fallback."""
     obj = ""
-    obj_pattern = _re.compile(
-        r"(?:primary\s+)?(?:aim|objective|purpose|goal|hypothesis)\s*[:\-–—]\s*(.+?)(?:\n\n|\n(?=[A-Z])|\Z)",
+    obj_pat = _re.compile(
+        r"(?:primary\s+)?(?:aim|objective|purpose|goal|hypothesis)\s*[:\-–—]\s*"
+        r"(.+?)(?:\n\n|\n(?=[A-Z])|\Z)",
         _re.IGNORECASE | _re.DOTALL,
     )
-    m = obj_pattern.search(text)
+    m = obj_pat.search(text)
     if m:
         obj = m.group(1).strip()[:600]
     if not obj:
-        # Grab first substantive paragraph that mentions "to study/evaluate/compare/assess"
-        para_pattern = _re.compile(
-            r"(?:to\s+(?:study|evaluate|compare|assess|determine|investigate|examine|analyse|analyze)\b.{20,400})",
+        para_pat = _re.compile(
+            r"(?:to\s+(?:study|evaluate|compare|assess|determine|investigate|"
+            r"examine|analyse|analyze)\b.{20,400})",
             _re.IGNORECASE | _re.DOTALL,
         )
-        pm = para_pattern.search(text)
+        pm = para_pat.search(text)
         if pm:
             obj = pm.group(0).strip()[:600]
 
-    # ── Outcome variable hint ───────────────────────────────────────────────
     out = ""
-    out_pattern = _re.compile(
+    out_pat = _re.compile(
         r"(?:primary\s+)?(?:outcome|endpoint|variable|measure)\s*[:\-–—]\s*([^\n]{3,120})",
         _re.IGNORECASE,
     )
-    om = out_pattern.search(text)
+    om = out_pat.search(text)
     if om:
-        # Take first token that looks like a column-header candidate
-        raw_val = om.group(1).strip()
-        token = _re.split(r"[,;()\n]", raw_val)[0].strip()
+        token = _re.split(r"[,;()\n]", om.group(1).strip())[0].strip()
         out = token[:80]
 
-    return obj, out
+    n = None
+    n_pat = _re.compile(
+        r"(?:sample\s+size|n\s*=|enrol(?:l?ed)?|participants?|subjects?)\s*[:\=\-–]?\s*(\d{2,5})",
+        _re.IGNORECASE,
+    )
+    nm = n_pat.search(text)
+    if nm:
+        try:
+            n = int(nm.group(1))
+        except ValueError:
+            pass
+
+    study_type = "correlation"
+    dl = text.lower()
+    for st, words in [
+        ("diagnostic", ["sensitiv", "specific", "roc", "auc", "diagnostic accuracy"]),
+        ("survival", ["survival", "mortality", "time to event", "kaplan", "disease-free"]),
+        ("comparison", ["compar", " vs ", "versus", "between group", "randomis", "randomiz", "trial"]),
+        ("descriptive", ["prevalence", "incidence", "frequenc", "characteris", "profile"]),
+    ]:
+        if any(w in dl for w in words):
+            study_type = st
+            break
+
+    return {"objective": obj, "outcomes": out, "study_type": study_type, "sample_size": n}
+
+
+async def _ai_extract(text: str) -> dict | None:
+    """Try Gemini then OpenAI to extract structured fields from proposal text.
+
+    Returns parsed dict or None on failure — caller falls back to heuristics.
+    """
+    snippet = text[:4000]
+    prompt = _PARSE_PROMPT.format(text=snippet)
+
+    # ── Try Gemini first ────────────────────────────────────────────────────
+    gemini_key = _os.environ.get("GEMINI_API_KEY", "")
+    if gemini_key:
+        payload = {
+            "contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {"temperature": 0.1, "maxOutputTokens": 512},
+        }
+        try:
+            async with _httpx.AsyncClient(timeout=_PARSE_TIMEOUT) as client:
+                resp = await client.post(
+                    f"{_GEMINI_PARSE_URL}?key={gemini_key}", json=payload
+                )
+            if resp.status_code == 200:
+                raw = (
+                    resp.json()
+                    .get("candidates", [{}])[0]
+                    .get("content", {})
+                    .get("parts", [{}])[0]
+                    .get("text", "")
+                )
+                raw = _re.sub(r"^```(?:json)?\s*", "", raw.strip(), flags=_re.IGNORECASE)
+                raw = _re.sub(r"\s*```$", "", raw.strip())
+                result = _json.loads(raw)
+                if isinstance(result, dict) and "objective" in result:
+                    return result
+        except Exception:
+            pass
+
+    # ── Fall back to OpenAI ─────────────────────────────────────────────────
+    openai_key = _os.environ.get("OPENAI_API_KEY", "")
+    if openai_key:
+        payload = {
+            "model": "gpt-4o-mini",
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": 512,
+            "temperature": 0.1,
+            "response_format": {"type": "json_object"},
+        }
+        try:
+            async with _httpx.AsyncClient(timeout=_PARSE_TIMEOUT) as client:
+                resp = await client.post(
+                    _OPENAI_PARSE_URL,
+                    json=payload,
+                    headers={"Authorization": f"Bearer {openai_key}"},
+                )
+            if resp.status_code == 200:
+                raw = resp.json()["choices"][0]["message"]["content"].strip()
+                result = _json.loads(raw)
+                if isinstance(result, dict) and "objective" in result:
+                    return result
+        except Exception:
+            pass
+
+    return None
 
 
 @router.post("/parse-proposal")
 @limiter.limit("10/minute")
 async def parse_proposal(request: Request, file: UploadFile = File(...)) -> Dict[str, Any]:
-    """Parse a study-proposal document and extract objective + outcome hint.
+    """Parse a study-proposal document and extract structured study details.
 
-    Accepts PDF / DOCX / PPTX / TXT / MD / RTF.  Returns:
-      ``{objective: str, outcomes: str}``
-    where *outcomes* is a best-effort guess at the primary outcome column name.
-    Both fields may be empty strings if the document does not contain
-    recognisable sections — the frontend shows them for the researcher to edit.
+    Accepts PDF / DOCX / PPTX / TXT / MD / RTF.
+    Uses Gemini → OpenAI → regex heuristic fallback chain.
+    Returns ``{objective, outcomes, study_type, sample_size, source}``.
     """
     filename = file.filename or "proposal"
     lower = filename.lower()
@@ -362,8 +477,30 @@ async def parse_proposal(request: Request, file: UploadFile = File(...)) -> Dict
             detail=f"Could not read the file: {exc}",
         ) from exc
 
-    objective, outcomes = _heuristic_extract(text)
-    return {"objective": objective, "outcomes": outcomes}
+    # Try AI extraction first, fall back to heuristics.
+    ai_result = await _ai_extract(text)
+    if ai_result and isinstance(ai_result, dict) and ai_result.get("objective"):
+        sample_size = ai_result.get("sample_size")
+        if sample_size is not None:
+            try:
+                sample_size = int(sample_size)
+            except (ValueError, TypeError):
+                sample_size = None
+        valid_types = {"comparison", "correlation", "diagnostic", "survival", "descriptive"}
+        study_type = str(ai_result.get("study_type") or "correlation").strip().lower()
+        if study_type not in valid_types:
+            study_type = "correlation"
+        return {
+            "objective": str(ai_result.get("objective") or "").strip(),
+            "outcomes": str(ai_result.get("outcomes") or "").strip(),
+            "study_type": study_type,
+            "sample_size": sample_size,
+            "source": "ai",
+        }
+
+    # Heuristic fallback.
+    h = _heuristic_extract(text)
+    return {**h, "source": "heuristic"}
 
 
 @router.post("/upload")
