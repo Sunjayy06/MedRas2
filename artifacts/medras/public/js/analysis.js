@@ -479,8 +479,14 @@ function _bindS1ProposalUpload() {
     try {
       const fd = new FormData();
       fd.append("file", file);
-      const r = await fetch("/api/stats/intake", { method: "POST", body: fd });
-      const data = r.ok ? await r.json() : {};
+      const r = await fetch(`${API_BASE}/parse-proposal`, { method: "POST", body: fd });
+      if (!r.ok) {
+        const errText = await r.text();
+        let errMsg = errText;
+        try { errMsg = JSON.parse(errText).detail || errText; } catch (_) { /* keep raw */ }
+        throw new Error(errMsg);
+      }
+      const data = await r.json();
       const descField    = $("#s1-prop-desc");
       const outcomeField = $("#s1-prop-outcome");
       if (descField) descField.value = (
@@ -491,7 +497,7 @@ function _bindS1ProposalUpload() {
       if (status) status.textContent = `✓ ${file.name} loaded`;
     } catch (e) {
       if (fields) fields.classList.remove("is-hidden");
-      if (status) status.textContent = `Could not parse automatically (${e.message}). Please fill fields manually.`;
+      if (status) status.textContent = `Could not parse file: ${e.message}. Please fill the fields manually.`;
     }
   });
 }

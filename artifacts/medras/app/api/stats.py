@@ -34,6 +34,7 @@ from app.services import (
     excel_loader,
     export as export_service,
     normality as normality_service,
+    outline_extractor,
     plan as plan_service,
     proposal_store,
     results as results_service,
@@ -281,6 +282,88 @@ async def upload_proposal(request: Request, file: UploadFile = File(...)) -> Dic
         "size_bytes": len(raw),
         "content_type": file.content_type or "",
     }
+
+
+import re as _re
+
+
+def _heuristic_extract(text: str) -> tuple[str, str]:
+    """Return (objective_text, outcome_hint) extracted from raw proposal text."""
+    # ── Objective ──────────────────────────────────────────────────────────
+    obj = ""
+    obj_pattern = _re.compile(
+        r"(?:primary\s+)?(?:aim|objective|purpose|goal|hypothesis)\s*[:\-–—]\s*(.+?)(?:\n\n|\n(?=[A-Z])|\Z)",
+        _re.IGNORECASE | _re.DOTALL,
+    )
+    m = obj_pattern.search(text)
+    if m:
+        obj = m.group(1).strip()[:600]
+    if not obj:
+        # Grab first substantive paragraph that mentions "to study/evaluate/compare/assess"
+        para_pattern = _re.compile(
+            r"(?:to\s+(?:study|evaluate|compare|assess|determine|investigate|examine|analyse|analyze)\b.{20,400})",
+            _re.IGNORECASE | _re.DOTALL,
+        )
+        pm = para_pattern.search(text)
+        if pm:
+            obj = pm.group(0).strip()[:600]
+
+    # ── Outcome variable hint ───────────────────────────────────────────────
+    out = ""
+    out_pattern = _re.compile(
+        r"(?:primary\s+)?(?:outcome|endpoint|variable|measure)\s*[:\-–—]\s*([^\n]{3,120})",
+        _re.IGNORECASE,
+    )
+    om = out_pattern.search(text)
+    if om:
+        # Take first token that looks like a column-header candidate
+        raw_val = om.group(1).strip()
+        token = _re.split(r"[,;()\n]", raw_val)[0].strip()
+        out = token[:80]
+
+    return obj, out
+
+
+@router.post("/parse-proposal")
+@limiter.limit("10/minute")
+async def parse_proposal(request: Request, file: UploadFile = File(...)) -> Dict[str, Any]:
+    """Parse a study-proposal document and extract objective + outcome hint.
+
+    Accepts PDF / DOCX / PPTX / TXT / MD / RTF.  Returns:
+      ``{objective: str, outcomes: str}``
+    where *outcomes* is a best-effort guess at the primary outcome column name.
+    Both fields may be empty strings if the document does not contain
+    recognisable sections — the frontend shows them for the researcher to edit.
+    """
+    filename = file.filename or "proposal"
+    lower = filename.lower()
+    ext = ("." + lower.rsplit(".", 1)[-1]) if "." in lower else ""
+    if ext not in _PROPOSAL_EXTS:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Unsupported file type. Please upload a PDF, Word (.doc/.docx),"
+                " PowerPoint (.ppt/.pptx), or plain text (.txt/.md/.rtf) file."
+            ),
+        )
+    raw = await file.read()
+    if len(raw) == 0:
+        raise HTTPException(status_code=400, detail="The uploaded file is empty.")
+    if len(raw) > _PROPOSAL_MAX_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File too large. Limit is {_PROPOSAL_MAX_BYTES // (1024 * 1024)} MB.",
+        )
+    try:
+        text = outline_extractor.extract_text(filename, raw)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Could not read the file: {exc}",
+        ) from exc
+
+    objective, outcomes = _heuristic_extract(text)
+    return {"objective": objective, "outcomes": outcomes}
 
 
 @router.post("/upload")
