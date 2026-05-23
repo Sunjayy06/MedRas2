@@ -204,6 +204,17 @@
       </button>
       <div id="th-folio-status" style="font-size:12px; color:var(--th-text-soft); margin-top:6px; display:none;"></div>
     </div>
+
+    <div style="margin-top:14px; padding-top:14px; border-top:1px solid var(--th-line);">
+      <p style="font-size:12px; color:var(--th-text-soft); margin:0 0 10px;">
+        <strong>Ready to check for plagiarism and AI content?</strong>
+        Send your full thesis text to Novus — MedRAS's originality and AI-reduction engine.
+      </p>
+      <button id="th-open-novus" class="th-btn th-btn-light" style="border-color:#0e7490; color:#0e7490;">
+        Check with Novus →
+      </button>
+      <div id="th-novus-status" style="font-size:12px; color:var(--th-text-soft); margin-top:6px; display:none;"></div>
+    </div>
   </section>
 
   <div style="margin-top:18px">
@@ -452,6 +463,26 @@
       window.open('/plagiarism-module/checker.html', '_blank');
     } catch (e) {
       setStatus('err', 'Failed: ' + e.message);
+    }
+  });
+
+  document.getElementById('th-open-novus').addEventListener('click', async function () {
+    var novusStatus = document.getElementById('th-novus-status');
+    novusStatus.style.display = '';
+    novusStatus.textContent = 'Preparing thesis text for Novus…';
+    try {
+      var r = await fetch('/api/thesis/export/plaintext', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(buildPayload()),
+      });
+      var data = await r.json();
+      if (!r.ok) throw new Error(data.detail || ('HTTP ' + r.status));
+      try { sessionStorage.setItem('medras.plagiarism.prefill', data.text || ''); } catch (_) {}
+      novusStatus.textContent = 'Done. Opening Novus in a new tab…';
+      window.open('/plagiarism-module/checker.html', '_blank');
+    } catch (e) {
+      novusStatus.textContent = 'Failed: ' + e.message;
     }
   });
 
