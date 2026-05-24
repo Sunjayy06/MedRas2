@@ -199,6 +199,68 @@ def parse_intent(message: str, columns: List[str]) -> Dict[str, Any]:
     if re.search(r"strip.*prefix|remove.*prefix|drop.*prefix", msg_low) and column:
         return {"action": "strip_prefix", "column": column, "params": {}}
 
+    # "{col} has text/letters/words" or "make {col} numeric/a number"
+    # → strip_prefix so text-in-numeric columns get cleaned naturally
+    if column and re.search(
+        r"\b(has|contains|with|include)\s+(text|letters|words|characters|non.?numeric|prefix)\b"
+        r"|\b(make|convert|turn)\b.{0,30}\b(numeric|a number|numbers?|continuous)\b",
+        msg_low,
+    ):
+        return {"action": "strip_prefix", "column": column, "params": {}}
+
+    # "fix {col}" / "correct {col}" / "what's wrong with {col}" /
+    # "help with {col}" / "i can't proceed" / bare column name alone
+    # → surface a targeted suggestion for that column (or globally)
+    if re.search(
+        r"\b(fix|correct|repair|help with|what.?s wrong|what is wrong"
+        r"|i can.?t proceed|cannot proceed|can.?t continue|cannot continue"
+        r"|something.{0,10}wrong|not working|blocked|stuck)\b",
+        msg_low,
+    ):
+        return {"action": "suggest", "column": column, "params": {}}
+
+    # Bare column name (or column name + "?") as the entire message
+    if column and msg_low.strip().rstrip("?") == column.lower():
+        return {"action": "suggest", "column": column, "params": {}}
+
+    # "{col} should be scale/nominal/ordinal" — type correction in natural form
+    m = re.search(
+        r"(.+?)\s+(?:should|must|needs? to)\s+be\s+(scale|ordinal|nominal|date|id|exclude)",
+        msg, re.IGNORECASE,
+    )
+    if m:
+        target_col = next(
+            (c for c in columns if c.lower() == m.group(1).strip().lower()), column
+        )
+        new_type = m.group(2).lower()
+        if target_col and new_type in _VALID_TYPES:
+            return {
+                "action": "change_type",
+                "column": target_col,
+                "params": {"new_type": new_type},
+            }
+
+    # "change {col} to/as nominal" with reversed word order
+    # (covers "change Grade to nominal" which the earlier regex may miss
+    # when the column name contains extra words)
+    m = re.search(
+        r"(?:change|set|make|mark)\s+(.+?)\s+(?:to|as|into)\s+(scale|ordinal|nominal|date|id|exclude)",
+        msg, re.IGNORECASE,
+    )
+    if m:
+        raw = m.group(1).strip().strip("'\"")
+        target_col = next(
+            (c for c in columns if raw.lower() in c.lower() or c.lower() in raw.lower()),
+            column,
+        )
+        new_type = m.group(2).lower()
+        if target_col and new_type in _VALID_TYPES:
+            return {
+                "action": "change_type",
+                "column": target_col,
+                "params": {"new_type": new_type},
+            }
+
     # Open-ended "what should I do?" / "should I add X" / "any
     # recommendation?" — checked LAST so phrasings like "how do I rename
     # X to Y" still resolve to the concrete action above instead of

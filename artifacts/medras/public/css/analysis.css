@@ -1856,6 +1856,31 @@ html[data-medras-init="ok"] .se-actions-fallback { display: none; }
 .se-issue-sub.is-blocking::before { color: #c43838; }
 .se-issue-sub.is-blocking { color: #93181a; }
 
+.se-issue-fix-btn {
+  flex-shrink: 0;
+  margin-left: auto;
+  padding: 1px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 18px;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  opacity: 0.75;
+  transition: opacity 0.15s, background 0.15s;
+}
+.se-issue-fix-btn:hover {
+  opacity: 1;
+  background: rgba(0,0,0,0.06);
+}
+.se-issue-sub.is-blocking .se-issue-fix-btn {
+  border-color: #c43838;
+  color: #93181a;
+}
+
 /* Zone C · recoding rows */
 .se-recode-zone {
   background: #ffffff;

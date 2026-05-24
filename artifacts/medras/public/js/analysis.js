@@ -2366,6 +2366,17 @@ function issuesForColumn(col) {
   return state.issues.filter((i) => i.column === col);
 }
 
+function _issueFixCommand(column, issueType) {
+  switch (issueType) {
+    case "text_in_numeric":  return `Strip the prefix from ${column}`;
+    case "numeric_as_id":    return `Exclude ${column} from analysis`;
+    case "low_unique_nominal": return `Exclude ${column} from analysis`;
+    case "high_missing":     return `Exclude ${column} from analysis`;
+    case "duplicate_values": return `What should I do with ${column}?`;
+    default: return null;
+  }
+}
+
 function renderClassifyTable() {
   const tbody = $("#classify-table tbody");
   tbody.innerHTML = state.classifications.map((c, idx) => {
@@ -2387,7 +2398,11 @@ function renderClassifyTable() {
     const colIssues = issuesForColumn(c.column);
     const issueHtml = colIssues.map((i) => {
       const cls = i.severity === "blocking" ? " is-blocking" : "";
-      return `<div class="se-issue-sub${cls}" data-testid="issue-${escapeHtml(c.column)}-${i.type}">${escapeHtml(i.message)}</div>`;
+      const fixCmd = _issueFixCommand(c.column, i.type);
+      const fixBtn = fixCmd
+        ? `<button type="button" class="se-issue-fix-btn" data-fix-cmd="${escapeHtml(fixCmd)}" title="Send fix command to assistant">Fix →</button>`
+        : "";
+      return `<div class="se-issue-sub${cls}" data-testid="issue-${escapeHtml(c.column)}-${i.type}">${escapeHtml(i.message)}${fixBtn}</div>`;
     }).join("");
 
     // Per spec Rule 2: surface the auto-strip notice directly on the
@@ -2437,6 +2452,16 @@ function renderClassifyTable() {
   // notice. POSTs to /api/stats/cleanup-undo, then re-classifies so the
   // restored column shows up with its original text values + a fresh
   // type badge (usually Nominal once the strings are back).
+  $$("[data-fix-cmd]", tbody).forEach((btn) => {
+    btn.addEventListener("click", () => {
+      sendAssistantMessage(btn.dataset.fixCmd);
+      btn.closest(".se-assistant-panel, #screen-3") && setTimeout(() => {
+        const thread = $("#assistant-thread");
+        if (thread) thread.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      }, 100);
+    });
+  });
+
   $$("[data-cleanup-undo]", tbody).forEach((btn) => {
     btn.addEventListener("click", async () => {
       const col = btn.dataset.cleanupUndo;
@@ -2692,27 +2717,39 @@ function renderAssistantThread() {
 function renderAssistantChips() {
   const out = $("#assistant-chips");
   if (!out) return;
-  // Pick the first text-in-numeric column as the primary suggestion target,
-  // otherwise the first non-id/exclude column.
-  const blocking = state.classifications.find((c) =>
-    issuesForColumn(c.column).some((i) => i.type === "text_in_numeric"),
-  );
-  const target = blocking || state.classifications.find(
+
+  const chips = [];
+
+  // 1. Issue-specific "Fix" chip for every flagged column (most useful — at top)
+  const flaggedCols = [...new Set((state.issues || []).map((i) => i.column))].slice(0, 4);
+  flaggedCols.forEach((col) => {
+    const colIssues = issuesForColumn(col);
+    colIssues.forEach((issue) => {
+      const cmd = _issueFixCommand(col, issue.type);
+      if (cmd) chips.push({ label: \`Fix "${col}"\`, text: cmd });
+    });
+  });
+
+  // 2. Always include a global suggestion chip
+  chips.push({ label: "What should I do?", text: "What's your suggestion?" });
+
+  // 3. Type-change and exclude shortcuts for the first usable column
+  const firstUsable = state.classifications.find(
     (c) => c.detected_type !== "id" && c.detected_type !== "exclude",
   );
-  const colName = target ? target.column : null;
-  const chips = CHIP_SUGGESTIONS.flatMap((s) => {
-    if (s.isStatic) {
-      return [{ label: s.label, text: s.text }];
-    }
-    if (!colName) return [];
-    return [{
-      label: s.label.replace("this column", `“${colName}”`),
-      text: s.template.replace("{col}", colName),
-    }];
-  });
+  if (firstUsable) {
+    chips.push({
+      label: \`Change type of "${firstUsable.column}"\`,
+      text: \`What type should ${firstUsable.column} be?\`,
+    });
+    chips.push({
+      label: \`Exclude "${firstUsable.column}"\`,
+      text: \`Exclude ${firstUsable.column} from analysis\`,
+    });
+  }
+
   out.innerHTML = chips.map(
-    (c, i) => `<button type="button" class="se-chip" data-chip="${i}" data-testid="chip-${i}">${escapeHtml(c.label)}</button>`
+    (c, i) => \`<button type="button" class="se-chip" data-chip="${i}" data-testid="chip-${i}">${escapeHtml(c.label)}</button>\`
   ).join("");
   $$(".se-chip", out).forEach((btn, i) => {
     btn.addEventListener("click", () => sendAssistantMessage(chips[i].text));
