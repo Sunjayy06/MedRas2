@@ -514,6 +514,79 @@ def reduce_plagiarism(
 # p-values, citations, etc.) are surfaced as a hard constraint to every
 # stage and verified post-hoc on the combined output.
 
+# ---------------------------------------------------------------------------
+# AI residual scoring
+# ---------------------------------------------------------------------------
+# After the 3-stage pipeline, we score the final text for residual AI
+# patterns using two heuristics:
+#   (1) Phrase density — how many of the known AI-filler phrases from
+#       Stage B's blacklist still appear per 1000 words.
+#   (2) Sentence-length uniformity — the coefficient of variation (CV) of
+#       sentence word-counts. AI text has suspiciously uniform lengths
+#       (CV ≈ 0.2–0.35); human academic prose is more erratic (CV > 0.45).
+# Both sub-scores are combined into a 0–100 composite (0 = clean / human,
+# 100 = AI-like) and bucketed into a labelled colour key.
+
+_AI_RESIDUAL_PHRASES: tuple = (
+    "moreover", "furthermore", "additionally", "in conclusion",
+    "it is important to note", "it is worth noting", "notably",
+    "it should be noted that", "it can be argued that",
+    "generally speaking", "it has been shown that",
+    "studies have demonstrated", "delve into",
+    "in summary", "to summarize", "essentially",
+    "nuanced", "multifaceted", "robust", "comprehensive",
+    "tapestry", "underscore", "showcase", "leverage",
+    "facilitate", "utilize", "overall",
+)
+
+
+def _score_ai_residual(text: str) -> Dict[str, Any]:
+    """Heuristic AI-pattern residual score for the rewritten text.
+
+    Returns dict:
+      ``ai_risk_score``  int 0-100  (0 = very human-like, 100 = AI-like)
+      ``ai_risk_label``  str        e.g. "Very Low", "Low", …
+      ``ai_risk_key``    str        one of green / yellow / orange / red / gray
+    """
+    stripped = text.strip()
+    if not stripped:
+        return {"ai_risk_score": 0, "ai_risk_label": "N/A", "ai_risk_key": "gray"}
+
+    lower = stripped.lower()
+    word_count = max(1, len(re.findall(r"\b\w+\b", lower)))
+
+    # ---- sub-score 1: phrase density (per 1000 words, capped at 100) ----
+    phrase_hits = sum(lower.count(p) for p in _AI_RESIDUAL_PHRASES)
+    phrase_score = min(100, round(phrase_hits / word_count * 1000))
+
+    # ---- sub-score 2: sentence-length uniformity ----
+    sentences = [s.strip() for s in re.split(r"[.!?]+", stripped)
+                 if len(s.strip().split()) > 2]
+    if len(sentences) >= 5:
+        lengths = [len(s.split()) for s in sentences]
+        mean_len = sum(lengths) / len(lengths)
+        std_dev = (sum((l - mean_len) ** 2 for l in lengths) / len(lengths)) ** 0.5
+        cv = std_dev / max(1.0, mean_len)
+        # CV ≥ 0.55 → richly varied (0 risk); CV ≤ 0.20 → robot-flat (100 risk)
+        uniformity_score = max(0, min(100, round((0.55 - cv) / 0.35 * 100)))
+    else:
+        uniformity_score = 20  # too few sentences to judge
+
+    composite = round(0.55 * phrase_score + 0.45 * uniformity_score)
+
+    if composite <= 12:
+        label, key = "Very Low", "green"
+    elif composite <= 30:
+        label, key = "Low", "green"
+    elif composite <= 55:
+        label, key = "Moderate", "yellow"
+    elif composite <= 75:
+        label, key = "High", "orange"
+    else:
+        label, key = "Very High", "red"
+
+    return {"ai_risk_score": composite, "ai_risk_label": label, "ai_risk_key": key}
+
 STAGE_A_PARAPHRASE_PROMPT = """You are Novus — a specialist academic paraphrase engine designed for medical and scientific manuscripts. Your task is PARAPHRASE-FOR-ORIGINALITY: restructure the passage so it expresses identical ideas through substantially different vocabulary, sentence architecture, and paragraph rhythm, targeting <10% surface similarity to common academic phrasing while fully preserving academic rigour.
 
 WHAT MAKES NOVUS DIFFERENT FROM A GENERIC PARAPHRASER:
@@ -1048,6 +1121,8 @@ def process_one_section(
         }
 
     edits = _approx_word_edits(body, c["text"])
+    edit_pct = round(edits / max(1, _word_count) * 100)
+    ai_residual = _score_ai_residual(c["text"])
     section_missing = [t for t in section_terms if t and t not in c["text"]]
     fallback_used = bool(a.get("fallback_used") or b.get("fallback_used") or c.get("fallback_used"))
     quality = _classify_section_quality(
@@ -1069,8 +1144,11 @@ def process_one_section(
         "final_text": c["text"],
         "stage_models": {"a": a["model"], "b": b["model"], "c": c["model"]},
         "edits": edits,
-        "fallback_used": fallback_used,
+        "edit_pct": edit_pct,
+        "ai_residual": ai_residual,
+        "protected_terms_in_section": len(section_terms),
         "missing_terms": section_missing,
+        "fallback_used": fallback_used,
         "intensity": intensity,
         "quality": quality,
         "elapsed_seconds": round(time.monotonic() - started, 1),

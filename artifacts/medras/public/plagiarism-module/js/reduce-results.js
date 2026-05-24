@@ -598,6 +598,52 @@
       simBadge = `<span class="pm-sim-badge pm-sim-badge--${band}" data-testid="badge-similarity-${sec.index}" title="Original similarity from your plagiarism report">Was ${pct}% similar</span>`;
     }
 
+    // Novus Quality Report — three-metric panel shown on every completed
+    // (non-skipped, non-failed) section. Requires edit_pct and ai_residual
+    // fields from the backend (added 2026-05-24).
+    let novusReportHtml = "";
+    if (!failed && !skipped && sec.status === "complete") {
+      const editPct    = typeof sec.edit_pct === "number" ? Math.min(100, Math.max(0, sec.edit_pct)) : null;
+      const aiResidual = sec.ai_residual || {};
+      const aiScore    = typeof aiResidual.ai_risk_score === "number" ? aiResidual.ai_risk_score : null;
+      const aiLabel    = aiResidual.ai_risk_label || "—";
+      const aiKey      = aiResidual.ai_risk_key   || "gray";
+
+      const totalTerms    = sec.protected_terms_in_section || 0;
+      const missingCount  = (sec.missing_terms || []).length;
+      const preservedCount = totalTerms - missingCount;
+      const termsHtml = totalTerms > 0
+        ? `<span class="pm-nqr-terms${missingCount > 0 ? " pm-nqr-terms--warn" : ""}">${preservedCount}/${totalTerms}${missingCount > 0 ? " ⚠ check output" : " ✓ all locked"}</span>`
+        : `<span class="pm-nqr-terms pm-nqr-terms--none">No flagged terms</span>`;
+
+      const barPct = editPct != null ? editPct : 0;
+      const barKey = barPct >= 40 ? "green" : barPct >= 20 ? "yellow" : "orange";
+      const editLabel = editPct != null ? `${editPct}%` : "—";
+
+      novusReportHtml = `
+      <div class="pm-novus-report" data-testid="novus-report-${sec.index}">
+        <div class="pm-novus-report-header">Novus Quality Report</div>
+        <div class="pm-novus-report-metrics">
+          <div class="pm-nqr-metric">
+            <span class="pm-nqr-metric-label">Structural changes</span>
+            <div class="pm-nqr-bar-track" title="${escapeHtml(editLabel)} of words structurally rewritten">
+              <div class="pm-nqr-bar pm-nqr-bar--${barKey}" style="width:${barPct}%"></div>
+            </div>
+            <span class="pm-nqr-metric-value">${editLabel} rewritten</span>
+          </div>
+          <div class="pm-nqr-metric">
+            <span class="pm-nqr-metric-label">AI signature</span>
+            <span class="pm-nqr-badge pm-nqr-badge--${escapeHtml(aiKey)}" title="Heuristic residual AI-pattern score: phrase density + sentence rhythm">${escapeHtml(aiLabel)}</span>
+            ${aiScore != null ? `<span class="pm-nqr-metric-value">${aiScore}/100 risk</span>` : ""}
+          </div>
+          <div class="pm-nqr-metric">
+            <span class="pm-nqr-metric-label">Technical terms</span>
+            ${termsHtml}
+          </div>
+        </div>
+      </div>`;
+    }
+
     // RAG-grounded citation suggestions — only available for sections
     // that were actually rewritten (skipping References/empty/failed).
     const citationsHtml = (skipped || failed || !finalText.trim()) ? "" : `
@@ -622,6 +668,7 @@
         </span>
       </header>
       ${qHint ? `<p class="pm-section-card-hint">${escapeHtml(qHint)}</p>` : ""}
+      ${novusReportHtml}
       ${compareHtml}
       ${stagesHtml}
       ${citationsHtml}
