@@ -31,6 +31,36 @@ _OPENAI_URL = "https://api.openai.com/v1/chat/completions"
 _TIMEOUT = 20.0
 
 # Study-type keyword heuristics (used as fallback without Gemini)
+# ---------------------------------------------------------------------------
+# Standard clinical / IHC markers that are almost always PREDICTORS/grouping
+# variables, NOT the primary study outcome — unless the user explicitly names
+# one of these as their outcome variable.
+# ---------------------------------------------------------------------------
+# Markers whose NORMALIZED TOKEN SET must exactly match a column's token set
+# (with allowed qualifier tokens) before we treat that column as a standard
+# clinical/grouping variable rather than a novel primary study marker.
+#
+# DELIBERATELY excluded (because they are often the PRIMARY study variable):
+#   p53, tp53, bcl2, bcl-2, bax, mlh1, pms2, msh2, msh6, s100, vimentin
+_STANDARD_CLINICAL_MARKERS: frozenset = frozenset([
+    # Steroid / nuclear receptors — almost always grouping variables
+    "er", "estrogen receptor", "estrogen", "oestrogen", "oestrogen receptor",
+    "pr", "progesterone receptor", "progesterone",
+    "ar", "androgen receptor", "androgen",
+    # Growth factor receptors — usually predictors in IHC studies
+    "her2", "her 2", "erbb2", "c erbb2", "her2 neu",
+    "egfr", "epidermal growth factor receptor",
+    "vegf", "vegfr",
+    # Proliferation marker — usually a predictor / grouping variable
+    "ki67", "ki 67", "mib1", "mib 1", "mib",
+    # Structural / panel markers
+    "cytokeratin", "ck5", "ck6", "ck7", "ck20",
+    "e cadherin", "ecadherin", "n cadherin",
+    "hbme1", "tpo", "lca",
+    # Molecular subtype (derived grouping variable, not a primary endpoint)
+    "molecular subtype", "subtype",
+])
+
 _TYPE_WORDS: Dict[str, List[str]] = {
     # association = categorical↔categorical (chi-square / Fisher's / Cramér's V / OR)
     # correlation = continuous↔continuous (Pearson r / Spearman ρ)
@@ -81,6 +111,92 @@ def _detect_study_type_heuristic(description: str) -> str:
             if word in dl:
                 return stype
     return "correlation"
+
+
+def _is_standard_marker(col: str) -> bool:
+    """Return True if a column name maps to a routine clinical / IHC marker.
+
+    Uses whole-token matching to avoid false positives like "p27 expression"
+    matching the "pr" (progesterone receptor) abbreviation via substring.
+
+    Logic:
+      1. Normalized full-string match  →  "Ki-67" == "ki67"
+      2. All marker tokens present in column tokens, with at most the
+         column having a few known qualifier words (status, expression, etc.)
+         as the only extras.
+    """
+    # Qualifiers that may legitimately follow a marker name in a column header
+    _QUALIFIERS = frozenset([
+        "status", "positive", "negative", "pos", "neg",
+        "expression", "level", "score", "index", "result",
+        "pct", "percent", "fraction", "staining", "stain",
+        "ihc", "iihc", "group", "category", "pattern",
+        "1", "2", "3", "0",
+    ])
+
+    def _tokens(s: str):
+        return set(re.sub(r"[^a-z0-9]+", " ", s.lower()).split())
+
+    def _norm(s: str):
+        return re.sub(r"[^a-z0-9]", "", s.lower())
+
+    col_tokens = _tokens(col)
+    col_norm   = _norm(col)
+
+    for marker in _STANDARD_CLINICAL_MARKERS:
+        m_tokens = _tokens(marker)
+        m_norm   = _norm(marker)
+
+        if not m_tokens:
+            continue
+
+        # 1. Normalized full string (handles ki-67 ↔ ki67, her2/neu ↔ her2neu)
+        if m_norm and m_norm == col_norm:
+            return True
+
+        # 2. All marker tokens appear in column tokens, and column has no
+        #    unexpected extra tokens beyond the marker + known qualifiers.
+        if m_tokens <= col_tokens:
+            extra = col_tokens - m_tokens - _QUALIFIERS
+            if not extra:
+                return True
+
+    return False
+
+
+def _find_novel_marker(
+    hint: str,
+    description: str,
+    columns: List[str],
+) -> Optional[str]:
+    """Find the best non-standard column that matches the hint or description.
+
+    Used to override an LLM choice that landed on a standard clinical marker
+    (e.g. PR, ER, HER2) when the study is about a novel/study-specific marker.
+    Returns the best candidate, or None if nothing better is found.
+    """
+    non_standard = [c for c in columns if not _is_standard_marker(c)]
+    if not non_standard:
+        return None
+
+    # 1. Direct fuzzy match on the non-standard subset
+    match = _fuzzy_match_column(hint, non_standard)
+    if match:
+        return match
+
+    # 2. Token-scan the description against non-standard column names
+    desc_tokens = set(re.split(r"[\s,;./\-()]+", description.lower()))
+    desc_tokens = {t for t in desc_tokens if len(t) >= 3}
+    best_col, best_score = None, 0
+    for col in non_standard:
+        col_tokens = set(re.split(r"[\s_/\\.,-]+", col.lower()))
+        score = len(desc_tokens & col_tokens)
+        if score > best_score:
+            best_score, best_col = score, col
+    if best_col:
+        return best_col
+
+    return None
 
 
 def _fuzzy_match_column(hint: str, columns: List[str]) -> Optional[str]:
@@ -141,6 +257,13 @@ def _call_openai(
         '"reasoning": "<one plain English sentence explaining your choices>"}\n\n'
         "Rules:\n"
         "- outcome_col must be the EXACT column name string from the list, or null\n"
+        "- The outcome column is the PRIMARY NOVEL marker or variable the study is\n"
+        "  designed to examine (e.g. p27 expression, bcl-2 score, ALDH1 status).\n"
+        "- Standard routine clinical/IHC markers — ER, PR, HER2, AR, EGFR, Ki-67,\n"
+        "  p53, molecular subtype — are PREDICTORS (independent variables), NOT the\n"
+        "  outcome, unless the user explicitly named one as their outcome variable.\n"
+        "- If the outcome hint is blank or generic, choose the most study-specific\n"
+        "  (novel) column — the one that is NOT a routine clinical marker.\n"
         "- Respond ONLY with valid JSON, nothing else."
     )
 
@@ -198,6 +321,12 @@ Rules:
 - study_type "comparison" = researcher wants to compare groups (RCT, case-control, cohort)
 - outcome_col must be the EXACT column name string from the list, or null
 - If the outcome hint matches a column name closely, pick that column
+- CRITICAL: The outcome_col is the PRIMARY NOVEL marker or variable the study is designed
+  to examine (e.g. p27 expression, bcl-2 score, ALDH1 status, PCNA index).
+- Standard routine clinical/IHC markers (ER, PR, HER2, AR, EGFR, Ki-67, p53, molecular
+  subtype, CD markers, cytokeratin) are PREDICTORS — do NOT pick them as outcome_col
+  unless the outcome hint explicitly names one of them.
+- If the outcome hint is blank or vague, identify the novel/study-specific column.
 - Respond ONLY with valid JSON, nothing else.
 """
 
@@ -395,12 +524,35 @@ def identify_study(
             study_type = "correlation"
         outcome_col = result.get("outcome_col")
         if outcome_col and outcome_col not in columns:
-            # Gemini hallucinated a column name — fall back to fuzzy
+            # LLM hallucinated a column name — fall back to fuzzy
             outcome_col = _fuzzy_match_column(outcome_col, columns)
         if not outcome_col:
             outcome_col = _fuzzy_match_column(outcome_hint, columns)
+
         confidence = float(result.get("confidence") or 0.8)
         reasoning = str(result.get("reasoning") or "")
+
+        # ── Override guard: if the LLM picked a standard clinical marker and
+        # the user's hint did NOT explicitly name that marker, look for a
+        # novel/study-specific column instead.  This prevents common mistakes
+        # like selecting "PR" instead of "p27 expression" in IHC studies.
+        hint_lower = outcome_hint.lower().strip()
+        if (
+            outcome_col
+            and _is_standard_marker(outcome_col)
+            and hint_lower not in outcome_col.lower()
+            and outcome_col.lower() not in hint_lower
+        ):
+            novel = _find_novel_marker(outcome_hint, description, columns)
+            if novel and novel != outcome_col:
+                old_col = outcome_col
+                outcome_col = novel
+                reasoning = (
+                    f"Auto-corrected: '{old_col}' is a standard clinical marker "
+                    f"(predictor). Switched to '{novel}' as the study-specific "
+                    f"outcome variable. [{reasoning}]"
+                )
+
         source = "gemini"
     else:
         # Full heuristic fallback — also honour any proposal hint here

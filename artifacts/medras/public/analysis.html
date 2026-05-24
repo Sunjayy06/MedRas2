@@ -158,8 +158,8 @@
                 </div>
                 <label class="se-field" style="margin-top:0.75rem">
                   <span>Outcome variable <strong>exactly as it appears in your Excel column header</strong></span>
-                  <input type="text" id="s1-prop-outcome" placeholder="e.g. P/N, HbA1c, Outcome" style="width:100%" />
-                  <span class="se-hint">Copy the exact column name from your spreadsheet.</span>
+                  <input type="text" id="s1-prop-outcome" placeholder="e.g. p27 expression, bcl-2 score, ALDH1 status — the primary marker your study examines" style="width:100%" />
+                  <span class="se-hint">This is the <strong>novel/study-specific</strong> variable your study is designed to examine — not the routine clinical markers (ER, PR, HER2, Ki-67) used to group patients. Copy the exact column name from your spreadsheet.</span>
                 </label>
                 <button type="button" class="btn btn-primary" id="s1-proposal-continue-btn" data-action="s1-continue-proposal" style="margin-top:1rem">Continue to upload data →</button>
               </div>
@@ -182,11 +182,11 @@
               </label>
               <label class="se-field" style="margin-top:0.75rem">
                 <span>Outcome variable <strong>exactly as it appears in your Excel column header</strong> <small style="font-weight:400;color:#666">(optional — AI will try to detect it)</small></span>
-                <input type="text" id="s1-outcome-hint" placeholder="e.g. P/N, HbA1c, Outcome, Allred Score" style="width:100%" />
-                <span class="se-hint">Copy the exact column name from your spreadsheet, including any punctuation. Leave blank to let the AI detect it from your data.</span>
+                <input type="text" id="s1-outcome-hint" placeholder="e.g. p27 expression, bcl-2 score, ALDH1 status — the primary marker your study examines" style="width:100%" />
+                <span class="se-hint">This is the <strong>novel/study-specific</strong> marker your study is designed to examine — not routine clinical markers (ER, PR, HER2, Ki-67). Copy the exact column name from your spreadsheet.</span>
               </label>
               <p id="s1-outcome-hint-msg" style="display:none;font-size:0.82rem;color:#92400e;padding:0.4rem 0.7rem;background:#fffbeb;border-left:3px solid #f59e0b;border-radius:4px;margin-top:0.4rem">
-                Tip: entering the outcome column name helps the AI pick the right variable automatically.
+                Tip: enter the primary study marker column name (e.g. "p27 expression") to ensure the AI picks the right variable — not a routine IHC marker like ER or PR.
               </p>
               <button type="button" class="btn btn-primary" id="s1-describe-continue-btn" data-action="s1-continue-describe" style="margin-top:1rem">Continue to upload data →</button>
             </div>

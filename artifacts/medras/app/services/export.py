@@ -1853,6 +1853,28 @@ def generate_correlation_chapter_word(
     successful = [pr for pr in pair_results
                   if "error" not in (pr.get("test_result") or {})]
 
+    # -- Chapter introductory paragraph ---------------------------------------
+    n_total = len(entry.df) if hasattr(entry, "df") else None
+    n_str = str(n_total) if n_total else "all"
+    sig_count = sum(
+        1 for pr in successful
+        if (pr.get("test_result") or {}).get("p") is not None
+        and float((pr.get("test_result") or {}).get("p", 1)) < 0.05
+    )
+    n_vars = len(successful)
+    intro_p = doc.add_paragraph()
+    _set_para(intro_p, space_before=0, space_after=14)
+    intro_text = (
+        f"This chapter presents the observations and results of the study conducted on "
+        f"{n_str} subjects. The clinicopathological and immunohistochemical profile of the "
+        f"study population is described, followed by a systematic assessment of the "
+        f"statistical association of each variable with {outcome_display}. "
+        f"A total of {n_vars} variable{'s were' if n_vars != 1 else ' was'} analysed; "
+        f"of these, {sig_count} showed a statistically significant association with "
+        f"{outcome_display} (p\u00a0<\u00a00.05)."
+    )
+    _tnr(intro_p.add_run(intro_text))
+
     fig_num = 1
     table_num = 1
 
