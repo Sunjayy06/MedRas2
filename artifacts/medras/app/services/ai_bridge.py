@@ -16,14 +16,16 @@ is exhausted.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 from typing import Any, Dict, List, Optional
 
 import httpx
 
-
 from app.services.llm_client import openai_chat_url, openai_auth_header, openai_is_configured, gemini_is_configured, get_gemini_client
+
+log = logging.getLogger(__name__)
 _TIMEOUT = 20.0
 
 # Study-type keyword heuristics (used as fallback without Gemini)
@@ -74,10 +76,8 @@ _TYPE_WORDS: Dict[str, List[str]] = {
     "comparison": [
         "compar", "difference", " vs ", " versus ", "between group",
         "treatment", "intervention", "control group", "arm", "trial",
-        # Study designs that are inherently group-comparison
-        "retrospective", "prospective", "cohort", "case.control", "case control",
-        "case-control", "randomis", "randomiz", "rct", "controlled trial",
-        "observational", "longitudinal",
+        "randomis", "randomiz", "rct", "controlled trial",
+        "case.control", "case control", "case-control",
     ],
     "diagnostic": [
         "sensitiv", "specific", "diagnostic", "accuracy", "roc", "auc",
@@ -169,27 +169,34 @@ def _find_novel_marker(
 
     Used to override an LLM choice that landed on a standard clinical marker
     (e.g. PR, ER, HER2) when the study is about a novel/study-specific marker.
-    Returns the best candidate, or None if nothing better is found.
+    Returns the best candidate only when there is a STRONG match; returns None
+    if nothing clearly better is found, so the LLM choice is preserved.
     """
     non_standard = [c for c in columns if not _is_standard_marker(c)]
     if not non_standard:
         return None
 
-    # 1. Direct fuzzy match on the non-standard subset
-    match = _fuzzy_match_column(hint, non_standard)
-    if match:
-        return match
+    # 1. Direct fuzzy match on the hint against the non-standard subset.
+    #    Only accept if the hint is non-trivial (≥ 4 chars) to avoid matching
+    #    short words like "the", "and", "for".
+    if hint and len(hint.strip()) >= 4:
+        match = _fuzzy_match_column(hint, non_standard)
+        if match:
+            return match
 
-    # 2. Token-scan the description against non-standard column names
+    # 2. Token-scan the description against non-standard column names.
+    #    Require a meaningful score (≥ 2 tokens overlap) so we don't redirect
+    #    the outcome based on incidental word matches.
     desc_tokens = set(re.split(r"[\s,;./\-()]+", description.lower()))
-    desc_tokens = {t for t in desc_tokens if len(t) >= 3}
+    desc_tokens = {t for t in desc_tokens if len(t) >= 4}  # skip short words
     best_col, best_score = None, 0
     for col in non_standard:
         col_tokens = set(re.split(r"[\s_/\\.,-]+", col.lower()))
+        col_tokens = {t for t in col_tokens if len(t) >= 4}
         score = len(desc_tokens & col_tokens)
         if score > best_score:
             best_score, best_col = score, col
-    if best_col:
+    if best_score >= 2:  # require at least 2 meaningful overlapping tokens
         return best_col
 
     return None
@@ -461,6 +468,138 @@ def _validate_study_type(
 # ---------------------------------------------------------------------------
 
 
+def _heuristic_outcome_from_description(
+    description: str,
+    columns: List[str],
+) -> Optional[str]:
+    """Scan the description for tokens that appear in non-standard column names.
+
+    Used as a last-resort heuristic when both the outcome hint is empty and
+    the LLM is unavailable. Prefers non-standard (novel) columns and returns
+    the column with the highest token-overlap score, or None if nothing
+    meaningful matches.
+    """
+    if not description or not columns:
+        return None
+
+    _SKIP_NAMES = frozenset(["sno", "id", "age", "sex", "gender", "no", "number",
+                              "name", "date", "year", "serial", "reg", "mrn"])
+
+    def _desc_token_set(text: str):
+        """Split on whitespace and punctuation; also add normalised (no-sep) variants.
+
+        E.g. "bcl-2" → {"bcl", "2", "bcl2"} so it matches a column "bcl2_score".
+        """
+        raw = set(re.split(r"[\s,;./\-()]+", text.lower()))
+        toks = {t for t in raw if len(t) >= 2}
+        # Add fused variants for pairs: "bcl" + "2" → "bcl2"
+        raw_list = [t for t in re.split(r"[\s,;./\-()]+", text.lower()) if t]
+        for i in range(len(raw_list) - 1):
+            fused = raw_list[i] + raw_list[i + 1]
+            if len(fused) >= 2:
+                toks.add(fused)
+        return toks
+
+    def _col_base_tokens(col: str):
+        toks = set(re.split(r"[\s_/\\.,-]+", col.lower()))
+        # Also add normalised (no-separator) form of the whole column
+        toks.add(re.sub(r"[^a-z0-9]", "", col.lower()))
+        return {t for t in toks if len(t) >= 2 and t not in _SKIP_NAMES}
+
+    desc_tokens = _desc_token_set(description)
+    desc_lower  = description.lower()
+    desc_norm   = re.sub(r"[^a-z0-9]", "", desc_lower)
+
+    # Classifier suffixes — last part of a compound column that makes it a
+    # categorical predictor, not the primary study outcome.
+    # E.g. "Tumour_type", "Stage_CKD", "Lymph_node_status" → predictor.
+    _CLASSIFIER_SUFFIXES = frozenset([
+        "type", "grade", "status", "group", "category", "subtype", "class",
+        "stage", "diagnosis", "histology", "laterality", "site", "location",
+    ])
+
+    # Generic words that are almost never the study outcome on their own.
+    _GENERIC_DESCRIPTORS = frozenset([
+        "type", "grade", "stage", "status", "group", "category",
+        "subtype", "class", "size", "weight", "height", "bmi",
+        "result", "outcome", "diagnosis", "histology", "laterality",
+        "site", "location", "duration", "score", "index", "level",
+        "count", "rate", "ratio", "value", "months", "days", "weeks",
+        "tumour", "tumor", "cancer", "carcinoma",
+    ])
+
+    # Suffixes that follow a biomarker name (the subject is what matters).
+    _BIOMARKER_SUFFIXES = frozenset([
+        "expression", "positivity", "immunoreactivity", "staining",
+        "score", "index", "level", "status",
+    ])
+
+    def _last_part(col: str) -> str:
+        parts = re.split(r"[\s_]+", col.lower())
+        return parts[-1] if parts else ""
+
+    def _subject_tokens(non_skip: set) -> set:
+        """Return the 'novel' tokens of a column after stripping generic suffixes.
+        Also removes fused compound forms so 'tumourtype' or 'stageckd' don't
+        masquerade as subject tokens."""
+        toks = non_skip - _GENERIC_DESCRIPTORS - _BIOMARKER_SUFFIXES
+        return {
+            t for t in toks
+            if not any(
+                t == (a + b)
+                for a in _GENERIC_DESCRIPTORS
+                for b in _GENERIC_DESCRIPTORS | _CLASSIFIER_SUFFIXES
+            )
+        }
+
+    # Score ALL columns — both standard and non-standard.
+    # Non-standard columns get a head-start bonus so they win over standard
+    # markers unless the standard marker is clearly a better textual match.
+    best_col, best_score = None, 0.0
+    for col in columns:
+        ctoks = _col_base_tokens(col)
+        non_skip = ctoks - _SKIP_NAMES
+        if not non_skip:
+            continue
+
+        is_std = _is_standard_marker(col)
+
+        # ---- Base score ----
+        score = float(len(desc_tokens & ctoks))
+
+        # Non-standard columns get a head-start: we prefer novel markers.
+        if not is_std:
+            score += 0.5
+
+        # ---- Classifier-suffix penalty ----
+        # Penalise if the LAST part is a classifier (e.g. "Tumour_type").
+        if _last_part(col) in _CLASSIFIER_SUFFIXES:
+            score -= 3.0
+
+        # ---- Classifier-prefix penalty ----
+        # Penalise compound columns whose FIRST part is a classifier and whose
+        # remaining part is just a context noun (e.g. "Stage_CKD", "Grade_II").
+        # These are staging/grading variables, never the primary study outcome.
+        _first_part = re.split(r"[\s_]+", col.lower())[0] if col else ""
+        if _first_part in _CLASSIFIER_SUFFIXES and len(re.split(r"[\s_]+", col)) > 1:
+            score -= 2.0
+
+        # ---- Subject-token bonus ----
+        subject_toks = _subject_tokens(non_skip)
+        if subject_toks:
+            if any(len(t) >= 3 and t in desc_norm for t in subject_toks):
+                score += 2.0
+        else:
+            # Pure generic name — small penalty
+            score -= 0.5
+
+        if score > best_score:
+            best_score, best_col = score, col
+
+    # Require a meaningful score before returning
+    return best_col if best_score >= 1 else None
+
+
 def identify_study(
     description: str,
     outcome_hint: str,
@@ -495,8 +634,16 @@ def identify_study(
     result = None
     if description.strip() or outcome_hint.strip():
         result = _call_openai(description, outcome_hint, columns)
+        log.info(
+            "AI bridge OpenAI raw result: %s",
+            json.dumps(result) if result else "None",
+        )
         if not (result and isinstance(result, dict) and "study_type" in result):
             result = _call_gemini(description, outcome_hint, columns)
+            log.info(
+                "AI bridge Gemini raw result: %s",
+                json.dumps(result) if result else "None",
+            )
 
     # If the proposal already told us the study type, trust it over the LLM.
     # We still use the LLM result for outcome_col / confidence / reasoning.
@@ -526,12 +673,17 @@ def identify_study(
         # novel/study-specific column instead.  This prevents common mistakes
         # like selecting "PR" instead of "p27 expression" in IHC studies.
         hint_lower = outcome_hint.lower().strip()
-        if (
-            outcome_col
-            and _is_standard_marker(outcome_col)
-            and hint_lower not in outcome_col.lower()
-            and outcome_col.lower() not in hint_lower
-        ):
+        is_std = outcome_col and _is_standard_marker(outcome_col)
+        hint_names_it = (
+            hint_lower
+            and outcome_col
+            and (hint_lower in outcome_col.lower() or outcome_col.lower() in hint_lower)
+        )
+        if is_std and not hint_names_it:
+            log.info(
+                "Override guard: LLM chose standard marker '%s'; searching for novel column",
+                outcome_col,
+            )
             novel = _find_novel_marker(outcome_hint, description, columns)
             if novel and novel != outcome_col:
                 old_col = outcome_col
@@ -541,12 +693,28 @@ def identify_study(
                     f"(predictor). Switched to '{novel}' as the study-specific "
                     f"outcome variable. [{reasoning}]"
                 )
+                log.info("Override guard: swapped '%s' → '%s'", old_col, novel)
+            else:
+                log.info(
+                    "Override guard: no strong novel alternative found; keeping '%s'",
+                    outcome_col,
+                )
 
         source = "gemini"
+        log.info(
+            "AI bridge final (LLM path): study_type=%s outcome_col=%s source=%s",
+            study_type, outcome_col, source,
+        )
     else:
         # Full heuristic fallback — also honour any proposal hint here
         study_type = hint_type or _detect_study_type_heuristic(description)
         outcome_col = _fuzzy_match_column(outcome_hint, columns)
+
+        # If no outcome column found yet, try scanning the description
+        # against non-standard columns (works even with an empty hint).
+        if not outcome_col:
+            outcome_col = _heuristic_outcome_from_description(description, columns)
+
         confidence = 0.7 if hint_type else (0.6 if outcome_col else 0.4)
         if hint_type:
             reasoning = (
@@ -559,6 +727,10 @@ def identify_study(
                 f"Detected study type '{study_type}' from keywords in your description."
             )
             source = "heuristic"
+        log.info(
+            "AI bridge final (heuristic path): study_type=%s outcome_col=%s",
+            study_type, outcome_col,
+        )
 
     # -----------------------------------------------------------------------
     # Statistician validation — override study type when the actual data
