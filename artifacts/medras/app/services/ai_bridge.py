@@ -380,15 +380,26 @@ def _validate_study_type(
 ) -> tuple:
     """Apply data-driven sanity checks and return (study_type, reasoning).
 
-    Rules applied in order:
-    1. "diagnostic" without any continuous variable → downgrade.
-    2. "survival" without any date/time variable → downgrade.
-    3. "comparison" with no usable categorical grouping variable → "correlation".
-    All other combinations are left unchanged.
+    The fundamental principle: the actual variable types in the dataset are
+    the ground truth for test selection.  The study description / LLM guess
+    is only a hint — it can be overridden by the data at any point.
+
+    Decision matrix (data-first):
+    ┌─────────────────────┬──────────────────────┬─────────────────────┐
+    │ Outcome type        │ Predictor/group type │ Correct study_type  │
+    ├─────────────────────┼──────────────────────┼─────────────────────┤
+    │ categorical         │ any                  │ association         │
+    │ continuous          │ categorical           │ comparison          │
+    │ continuous          │ continuous            │ correlation         │
+    │ any                 │ time-to-event col     │ survival            │
+    │ continuous score    │ binary reference      │ diagnostic          │
+    └─────────────────────┴──────────────────────┴─────────────────────┘
+
+    Rules are applied in priority order; the first matching rule wins.
     """
     dl = description.lower()
 
-    # Build sets of detected types from the actual dataset
+    # ── Build dataset-level type inventory ───────────────────────────────
     type_counts: Dict[str, int] = {}
     for c in classifications:
         t = c.get("detected_type", "nominal")
@@ -397,16 +408,129 @@ def _validate_study_type(
     has_continuous = type_counts.get("scale", 0) > 0
     has_date       = type_counts.get("date", 0) > 0
 
-    # Also treat a column whose name contains time-fragment as a date proxy
     all_col_names = [c.get("column", "").lower() for c in classifications]
     has_time_col  = any(
         frag in col for col in all_col_names for frag in _TIME_COL_FRAGMENTS
     )
 
-    # ── Rule 0: "correlation" with no continuous variables → "association" ─
-    # "Correlation" (Pearson/Spearman) requires continuous measurements.
-    # When all variables are categorical, the correct term is "association"
-    # (chi-square / Fisher's exact / Cramér's V / odds ratio).
+    # ── Resolve outcome variable type ─────────────────────────────────────
+    outcome_type: str = ""
+    if outcome_col:
+        for c in classifications:
+            if c.get("column") == outcome_col:
+                outcome_type = c.get("detected_type", "")
+                break
+
+    # Classify non-outcome, non-excluded predictors
+    _SKIP_TYPES = {"id", "date", "exclude"}
+    predictor_types = [
+        c.get("detected_type", "nominal")
+        for c in classifications
+        if c.get("column") != outcome_col
+        and c.get("detected_type") not in _SKIP_TYPES
+    ]
+    has_categorical_predictor = any(
+        t in ("nominal", "ordinal", "binary") for t in predictor_types
+    )
+    has_continuous_predictor  = any(t == "scale" for t in predictor_types)
+
+    # ── Description-derived explicit flags (override suppressors) ─────────
+    survival_explicit = any(
+        kw in dl for kw in ("kaplan", "time to event", "time-to-event",
+                            "censored", "hazard ratio", "cox")
+    )
+    diagnostic_explicit = any(kw in dl for kw in _DIAGNOSTIC_EXPLICIT)
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # RULE 1 — Survival needs a time-to-event column
+    # ═══════════════════════════════════════════════════════════════════════
+    if study_type == "survival" and not has_date and not has_time_col:
+        if not survival_explicit:
+            note = (
+                "Survival/time-to-event analysis needs a date or time column "
+                "— none was found in your dataset. "
+                "Switched to 'comparison' (group difference analysis)."
+            )
+            return "comparison", f"{note} [{reasoning}]"
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # RULE 2 — Diagnostic needs a continuous score
+    # ═══════════════════════════════════════════════════════════════════════
+    if study_type == "diagnostic" and not has_continuous and not diagnostic_explicit:
+        if outcome_type in ("nominal", "binary", "ordinal") or not outcome_type:
+            note = (
+                "Diagnostic accuracy tests require a continuous test score "
+                "for AUC/ROC — your dataset has no continuous variables. "
+                "Switched to 'association' (chi-square / Fisher's exact / "
+                "Cramér's V / odds ratio)."
+            )
+            return "association", f"{note} [{reasoning}]"
+        note = (
+            "Diagnostic accuracy tests require a continuous test score "
+            "for AUC/ROC — your dataset has no continuous variables. "
+            "Switched to 'correlation' (association analysis)."
+        )
+        return "correlation", f"{note} [{reasoning}]"
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # RULE 3 — DATA-FIRST: Outcome variable type drives test family
+    #
+    # This is the core rule.  The outcome's measurement scale determines
+    # which test family is valid — the study description is overridden
+    # whenever it conflicts with the actual data.
+    # ═══════════════════════════════════════════════════════════════════════
+    if outcome_type and study_type not in ("survival", "diagnostic"):
+
+        # 3a. Categorical outcome → must use association tests
+        # (Chi-square / Fisher's exact / Cramér's V / odds ratio / logistic)
+        # "Correlation" (Pearson/Spearman) and "comparison" (t-test/ANOVA)
+        # require a CONTINUOUS outcome — they cannot be applied to categorical data.
+        if outcome_type in ("nominal", "ordinal", "binary"):
+            if study_type in ("correlation", "comparison"):
+                note = (
+                    f"Outcome '{outcome_col}' is categorical — "
+                    f"'{study_type}' (Pearson/Spearman or t-test/ANOVA) cannot "
+                    "be applied to categorical data. "
+                    "Switched to 'association' (chi-square / Fisher's exact / "
+                    "Cramér's V / odds ratio), which is the correct test for "
+                    "a categorical outcome."
+                )
+                return "association", f"{note} [{reasoning}]"
+
+        # 3b. Continuous outcome → cannot use chi-square (association)
+        elif outcome_type == "scale":
+            if study_type == "association":
+                if has_categorical_predictor:
+                    note = (
+                        f"Outcome '{outcome_col}' is continuous — "
+                        "chi-square / association tests require categorical outcomes. "
+                        "Switched to 'comparison' (t-test / ANOVA) since categorical "
+                        "predictors are present in your dataset."
+                    )
+                    return "comparison", f"{note} [{reasoning}]"
+                elif has_continuous_predictor or has_continuous:
+                    note = (
+                        f"Outcome '{outcome_col}' is continuous — "
+                        "chi-square / association tests require categorical outcomes. "
+                        "Switched to 'correlation' (Pearson / Spearman)."
+                    )
+                    return "correlation", f"{note} [{reasoning}]"
+
+            # 3c. Continuous outcome + no continuous predictors anywhere
+            # → "correlation" (Pearson/Spearman) is impossible; use "comparison"
+            if study_type == "correlation" and not has_continuous_predictor:
+                note = (
+                    f"Outcome '{outcome_col}' is continuous but all predictors are "
+                    "categorical — Pearson/Spearman correlation requires continuous "
+                    "predictors. "
+                    "Switched to 'comparison' (t-test / ANOVA / Mann-Whitney)."
+                )
+                return "comparison", f"{note} [{reasoning}]"
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # RULE 4 — Legacy rule: "correlation" with NO continuous variables at all
+    # (catches the case where outcome_col was not identified)
+    # ═══════════════════════════════════════════════════════════════════════
     if study_type == "correlation" and not has_continuous:
         note = (
             "'Correlation' (Pearson/Spearman) requires continuous measurements — "
@@ -415,49 +539,6 @@ def _validate_study_type(
             "odds ratio), which is the correct analysis for categorical data."
         )
         return "association", f"{note} [{reasoning}]"
-
-    # ── Rule 1: Diagnostic needs a continuous score ───────────────────────
-    if study_type == "diagnostic" and not has_continuous:
-        explicitly_diagnostic = any(kw in dl for kw in _DIAGNOSTIC_EXPLICIT)
-        if not explicitly_diagnostic:
-            # Downgrade: binary/nominal outcome → comparison; else correlation
-            outcome_type = ""
-            if outcome_col:
-                for c in classifications:
-                    if c.get("column") == outcome_col:
-                        outcome_type = c.get("detected_type", "")
-                        break
-            if outcome_type in ("nominal", "binary", "ordinal") or not outcome_type:
-                new_type = "comparison"
-                note = (
-                    "Diagnostic accuracy tests require a continuous test score "
-                    "for AUC/ROC — your dataset has no continuous variables. "
-                    "Switched to 'comparison' (chi-square / logistic regression) "
-                    "which is appropriate for categorical data."
-                )
-            else:
-                new_type = "correlation"
-                note = (
-                    "Diagnostic accuracy tests require a continuous test score "
-                    "for AUC/ROC — your dataset has no continuous variables. "
-                    "Switched to 'correlation' (association analysis)."
-                )
-            return new_type, f"{note} [{reasoning}]"
-
-    # ── Rule 2: Survival needs a date or time-to-event variable ──────────
-    if study_type == "survival" and not has_date and not has_time_col:
-        # Only override if description also doesn't scream survival
-        survival_explicit = any(
-            kw in dl for kw in ("kaplan", "time to event", "time-to-event",
-                                "censored", "hazard ratio", "cox")
-        )
-        if not survival_explicit:
-            note = (
-                "Survival/time-to-event analysis needs a date or time column "
-                "— none was found in your dataset. "
-                "Switched to 'comparison' (group difference analysis)."
-            )
-            return "comparison", f"{note} [{reasoning}]"
 
     # No override needed
     return study_type, reasoning
