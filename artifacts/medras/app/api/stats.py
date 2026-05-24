@@ -289,11 +289,7 @@ import os as _os
 import json as _json
 import httpx as _httpx
 
-_GEMINI_PARSE_URL = (
-    "https://generativelanguage.googleapis.com/v1beta/"
-    "models/gemini-2.0-flash:generateContent"
-)
-_OPENAI_PARSE_URL = "https://api.openai.com/v1/chat/completions"
+from app.services.llm_client import openai_chat_url as _openai_chat_url, openai_auth_header as _openai_auth_header, openai_is_configured as _openai_is_configured, gemini_is_configured as _gemini_is_configured, get_gemini_client as _get_gemini_client
 _PARSE_TIMEOUT = 25.0
 
 _PARSE_PROMPT = """\
@@ -386,36 +382,30 @@ async def _ai_extract(text: str) -> dict | None:
     prompt = _PARSE_PROMPT.format(text=snippet)
 
     # ── Try Gemini first ────────────────────────────────────────────────────
-    gemini_key = _os.environ.get("GEMINI_API_KEY", "")
-    if gemini_key:
-        payload = {
-            "contents": [{"parts": [{"text": prompt}]}],
-            "generationConfig": {"temperature": 0.1, "maxOutputTokens": 512},
-        }
+    if _gemini_is_configured():
         try:
-            async with _httpx.AsyncClient(timeout=_PARSE_TIMEOUT) as client:
-                resp = await client.post(
-                    f"{_GEMINI_PARSE_URL}?key={gemini_key}", json=payload
-                )
-            if resp.status_code == 200:
-                raw = (
-                    resp.json()
-                    .get("candidates", [{}])[0]
-                    .get("content", {})
-                    .get("parts", [{}])[0]
-                    .get("text", "")
-                )
-                raw = _re.sub(r"^```(?:json)?\s*", "", raw.strip(), flags=_re.IGNORECASE)
-                raw = _re.sub(r"\s*```$", "", raw.strip())
-                result = _json.loads(raw)
-                if isinstance(result, dict) and "objective" in result:
-                    return result
+            from google.genai import types as _gtypes
+            gc = _get_gemini_client()
+            resp = gc.models.generate_content(
+                model="gemini-2.0-flash",
+                contents=prompt,
+                config=_gtypes.GenerateContentConfig(
+                    temperature=0.1,
+                    max_output_tokens=512,
+                    response_mime_type="application/json",
+                ),
+            )
+            raw = (resp.text or "").strip()
+            raw = _re.sub(r"^```(?:json)?\s*", "", raw, flags=_re.IGNORECASE)
+            raw = _re.sub(r"\s*```$", "", raw.strip())
+            result = _json.loads(raw)
+            if isinstance(result, dict) and "objective" in result:
+                return result
         except Exception:
             pass
 
     # ── Fall back to OpenAI ─────────────────────────────────────────────────
-    openai_key = _os.environ.get("OPENAI_API_KEY", "")
-    if openai_key:
+    if _openai_is_configured():
         payload = {
             "model": "gpt-4o-mini",
             "messages": [{"role": "user", "content": prompt}],
@@ -426,9 +416,9 @@ async def _ai_extract(text: str) -> dict | None:
         try:
             async with _httpx.AsyncClient(timeout=_PARSE_TIMEOUT) as client:
                 resp = await client.post(
-                    _OPENAI_PARSE_URL,
+                    _openai_chat_url(),
                     json=payload,
-                    headers={"Authorization": f"Bearer {openai_key}"},
+                    headers={"Authorization": _openai_auth_header()},
                 )
             if resp.status_code == 200:
                 raw = resp.json()["choices"][0]["message"]["content"].strip()

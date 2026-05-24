@@ -736,13 +736,11 @@ Output JSON only. No markdown. No commentary.
 
 
 def _llm_analyze(objective: str) -> Optional[ObjectiveAnalysis]:
-    if not settings.has_openai:
+    from app.services.llm_client import get_openai_client, openai_is_configured
+    if not openai_is_configured():
         return None
     try:
-        # Imported lazily so the app starts even if `openai` is missing.
-        from openai import OpenAI
-
-        client = OpenAI(api_key=settings.openai_api_key)
+        client = get_openai_client()
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             response_format={"type": "json_object"},

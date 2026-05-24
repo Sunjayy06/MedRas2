@@ -583,10 +583,7 @@ def chatbox4_reply(message: str, context: Dict[str, Any]) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
-_GEMINI_URL = (
-    "https://generativelanguage.googleapis.com/v1beta/"
-    "models/gemini-1.5-flash:generateContent"
-)
+from app.services.llm_client import openai_chat_url, openai_auth_header, openai_is_configured, gemini_is_configured, get_gemini_client
 
 
 _SYSTEM_PROMPTS: Dict[str, str] = {
@@ -657,8 +654,7 @@ def _build_gemini_context(kind: str, context: Dict[str, Any]) -> str:
 
 def _try_gemini(kind: str, message: str, context: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """Call Gemini; return a reply dict on success, None on any failure."""
-    api_key = os.environ.get("GEMINI_API_KEY")
-    if not api_key:
+    if not gemini_is_configured():
         return None
 
     system = _SYSTEM_PROMPTS.get(kind)
@@ -673,34 +669,22 @@ def _try_gemini(kind: str, message: str, context: Dict[str, Any]) -> Optional[Di
         + message
     )
 
-    body = json.dumps({
-        "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"maxOutputTokens": 400, "temperature": 0.3},
-    }).encode("utf-8")
-
-    req = urllib.request.Request(
-        f"{_GEMINI_URL}?key={api_key}",
-        data=body,
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-
     try:
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-        text = (
-            data.get("candidates", [{}])[0]
-            .get("content", {})
-            .get("parts", [{}])[0]
-            .get("text", "")
-        ).strip()
+        from google.genai import types as gtypes
+        client = get_gemini_client()
+        resp = client.models.generate_content(
+            model="gemini-1.5-flash",
+            contents=prompt,
+            config=gtypes.GenerateContentConfig(
+                max_output_tokens=400,
+                temperature=0.3,
+            ),
+        )
+        text = (resp.text or "").strip()
         if not text:
             return None
-    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, ValueError, KeyError, IndexError) as exc:
-        logger.info("Gemini call failed (%s); falling back to rule-based.", exc)
-        return None
     except Exception as exc:  # noqa: BLE001 - never let LLM kill the request
-        logger.warning("Unexpected Gemini error: %s", exc)
+        logger.info("Gemini call failed (%s); falling back to rule-based.", exc)
         return None
 
     if kind == "plan":
@@ -739,13 +723,9 @@ def _rule_based_reply(kind: str, message: str, context: Dict[str, Any]) -> Dict[
     return _msg("Unknown chatbox.")
 
 
-_OPENAI_URL = "https://api.openai.com/v1/chat/completions"
-
-
 def _try_openai(kind: str, message: str, context: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """Call OpenAI GPT-4o-mini; return a reply dict on success, None on any failure."""
-    api_key = os.environ.get("OPENAI_API_KEY")
-    if not api_key:
+    if not openai_is_configured():
         return None
 
     system = _SYSTEM_PROMPTS.get(kind)
@@ -769,11 +749,11 @@ def _try_openai(kind: str, message: str, context: Dict[str, Any]) -> Optional[Di
     }).encode("utf-8")
 
     req = urllib.request.Request(
-        _OPENAI_URL,
+        openai_chat_url(),
         data=body,
         headers={
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {api_key}",
+            "Authorization": openai_auth_header(),
         },
         method="POST",
     )

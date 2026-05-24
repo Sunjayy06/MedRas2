@@ -178,15 +178,11 @@ def _translate_consent(english_text: str, target_language: str) -> Optional[str]
     if cached is not None:
         return cached
 
-    api_key = os.environ.get("GEMINI_API_KEY")
-    if not api_key:
-        return None
-
     try:
-        from google import genai
+        from app.services.llm_client import get_gemini_client
         from google.genai import types
 
-        client = genai.Client(api_key=api_key)
+        client = get_gemini_client()
         prompt = (
             f"Translate the following INFORMED CONSENT FORM into {target_language}.\n\n"
             "Strict requirements — the output is a regulatory document:\n"

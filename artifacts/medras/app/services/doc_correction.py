@@ -23,7 +23,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
-_OPENAI_URL = "https://api.openai.com/v1/chat/completions"
+from app.services.llm_client import openai_chat_url, openai_auth_header, openai_is_configured
 _TIMEOUT = 25.0
 
 _SYSTEM_PROMPT = (
@@ -58,9 +58,8 @@ def _call_openai_correction(
     inventory: Dict[str, Any],
 ) -> Optional[List[Dict[str, Any]]]:
     """Parse correction instructions into a list of action dicts via OpenAI."""
-    api_key = os.environ.get("OPENAI_API_KEY", "")
-    if not api_key:
-        logger.warning("OPENAI_API_KEY not set; correction parsing unavailable.")
+    if not openai_is_configured():
+        logger.warning("OpenAI not configured; correction parsing unavailable.")
         return None
 
     var_list = ", ".join(inventory.get("variables") or [])
@@ -88,11 +87,11 @@ def _call_openai_correction(
     }).encode("utf-8")
 
     req = urllib.request.Request(
-        _OPENAI_URL,
+        openai_chat_url(),
         data=body,
         headers={
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {api_key}",
+            "Authorization": openai_auth_header(),
         },
         method="POST",
     )

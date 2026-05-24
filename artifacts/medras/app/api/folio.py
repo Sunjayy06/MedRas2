@@ -220,17 +220,20 @@ Allowed operation types and their params:
 
 Extract every distinct instruction from the feedback. Return an empty operations list if nothing actionable is found."""
 
-    api_key = os.environ.get("GEMINI_API_KEY", "")
-    if not api_key:
+    from app.services.llm_client import get_gemini_client, gemini_is_configured
+    if not gemini_is_configured():
         raise HTTPException(503, "AI service not configured.")
 
     try:
-        import google.generativeai as genai
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel("gemini-2.5-flash")
-        resp  = model.generate_content(
-            prompt,
-            generation_config={"response_mime_type": "application/json", "max_output_tokens": 1024},
+        from google.genai import types as gtypes
+        client = get_gemini_client()
+        resp  = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt,
+            config=gtypes.GenerateContentConfig(
+                response_mime_type="application/json",
+                max_output_tokens=1024,
+            ),
         )
         result = json.loads(resp.text)
         return {"ok": True, **result}

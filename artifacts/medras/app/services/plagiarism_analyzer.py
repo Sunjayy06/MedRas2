@@ -39,34 +39,16 @@ log = get_logger(__name__)
 # Lazy-initialised SDK clients
 # ---------------------------------------------------------------------------
 
-_openai_client = None  # type: ignore[var-annotated]
-_gemini_client = None  # type: ignore[var-annotated]
-
-
 def _get_openai():
-    """Return a memoised OpenAI client. Raises if OPENAI_API_KEY missing."""
-    global _openai_client
-    if _openai_client is None:
-        from openai import OpenAI  # local import keeps module load fast
-
-        api_key = os.environ.get("OPENAI_API_KEY")
-        if not api_key:
-            raise RuntimeError("OPENAI_API_KEY is not configured")
-        _openai_client = OpenAI(api_key=api_key)
-    return _openai_client
+    """Return a fresh OpenAI client via the integration proxy or direct key."""
+    from app.services.llm_client import get_openai_client
+    return get_openai_client()
 
 
 def _get_gemini():
-    """Return a memoised google-genai client. Raises if GEMINI_API_KEY missing."""
-    global _gemini_client
-    if _gemini_client is None:
-        from google import genai  # local import; package is heavy
-
-        api_key = os.environ.get("GEMINI_API_KEY")
-        if not api_key:
-            raise RuntimeError("GEMINI_API_KEY is not configured")
-        _gemini_client = genai.Client(api_key=api_key)
-    return _gemini_client
+    """Return a fresh google-genai client via the integration proxy or direct key."""
+    from app.services.llm_client import get_gemini_client
+    return get_gemini_client()
 
 
 # ---------------------------------------------------------------------------

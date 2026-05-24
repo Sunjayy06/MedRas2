@@ -129,14 +129,11 @@ def _heuristic_claims(passage: str, max_claims: int) -> List[Dict[str, str]]:
 def _extract_claims_gemini(passage: str, max_claims: int) -> List[Dict[str, str]]:
     """Call Gemini once to extract claims+queries. Returns [] on any
     failure — caller will fall back to the heuristic."""
-    api_key = os.environ.get("GEMINI_API_KEY")
-    if not api_key:
-        return []
     try:
-        from google import genai
+        from app.services.llm_client import get_gemini_client
         from google.genai import types
 
-        client = genai.Client(api_key=api_key)
+        client = get_gemini_client()
         prompt = _EXTRACTION_PROMPT.replace("{max_claims}", str(max_claims))\
                                    .replace("{passage}", passage)
         resp = client.models.generate_content(

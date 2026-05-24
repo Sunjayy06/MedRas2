@@ -269,14 +269,11 @@ def _build_answer_text(structured: dict, papers: list[dict]) -> str:
 
 
 async def _call_gemini(system: str, user: str) -> dict | None:
-    key = os.environ.get("GEMINI_API_KEY", "")
-    if not key:
-        return None
     try:
-        from google import genai
+        from app.services.llm_client import get_gemini_client
         from google.genai import types as gtypes
 
-        gc   = genai.Client(api_key=key)
+        gc   = get_gemini_client()
         resp = gc.models.generate_content(
             model="gemini-2.5-flash",
             contents=f"{system}\n\nQuestion: {user}",
@@ -295,13 +292,10 @@ async def _call_gemini(system: str, user: str) -> dict | None:
 
 
 async def _call_openai(system: str, user: str) -> dict | None:
-    key = os.environ.get("OPENAI_API_KEY", "")
-    if not key:
-        return None
     try:
-        from openai import AsyncOpenAI
+        from app.services.llm_client import get_async_openai_client
 
-        oai  = AsyncOpenAI(api_key=key)
+        oai  = get_async_openai_client()
         resp = await oai.chat.completions.create(
             model="gpt-4o-mini",
             messages=[

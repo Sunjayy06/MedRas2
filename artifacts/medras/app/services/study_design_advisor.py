@@ -253,12 +253,11 @@ async def recommend_designs(
 
     raw: dict[str, Any] | None = None
 
-    gemini_key = os.environ.get("GEMINI_API_KEY", "")
-    if gemini_key:
+    from app.services.llm_client import get_gemini_client, gemini_is_configured, get_async_openai_client, openai_is_configured
+    if gemini_is_configured():
         try:
-            from google import genai
             from google.genai import types as gtypes
-            gc   = genai.Client(api_key=gemini_key)
+            gc   = get_gemini_client()
             resp = gc.models.generate_content(
                 model="gemini-2.5-flash",
                 contents=prompt,
@@ -272,11 +271,9 @@ async def recommend_designs(
             log.warning("Gemini recommend failed: %s", exc)
 
     if raw is None:
-        openai_key = os.environ.get("OPENAI_API_KEY", "")
-        if openai_key:
+        if openai_is_configured():
             try:
-                from openai import AsyncOpenAI
-                oai  = AsyncOpenAI(api_key=openai_key)
+                oai  = get_async_openai_client()
                 resp = await oai.chat.completions.create(
                     model="gpt-4o-mini",
                     messages=[{"role": "user", "content": prompt}],
@@ -342,12 +339,11 @@ async def generate_methodology(
 
     raw: dict | None = None
 
-    gemini_key = os.environ.get("GEMINI_API_KEY", "")
-    if gemini_key:
+    from app.services.llm_client import get_gemini_client, gemini_is_configured, get_async_openai_client, openai_is_configured
+    if gemini_is_configured():
         try:
-            from google import genai
             from google.genai import types as gtypes
-            gc   = genai.Client(api_key=gemini_key)
+            gc   = get_gemini_client()
             resp = gc.models.generate_content(
                 model="gemini-2.5-flash",
                 contents=prompt,
@@ -361,11 +357,9 @@ async def generate_methodology(
             log.warning("Gemini methodology failed: %s", exc)
 
     if raw is None:
-        openai_key = os.environ.get("OPENAI_API_KEY", "")
-        if openai_key:
+        if openai_is_configured():
             try:
-                from openai import AsyncOpenAI
-                oai  = AsyncOpenAI(api_key=openai_key)
+                oai  = get_async_openai_client()
                 resp = await oai.chat.completions.create(
                     model="gpt-4o-mini",
                     messages=[{"role": "user", "content": prompt}],

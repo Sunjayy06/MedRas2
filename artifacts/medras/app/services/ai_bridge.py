@@ -23,11 +23,7 @@ from typing import Any, Dict, List, Optional
 import httpx
 
 
-_GEMINI_URL = (
-    "https://generativelanguage.googleapis.com/v1beta/"
-    "models/gemini-2.0-flash:generateContent"
-)
-_OPENAI_URL = "https://api.openai.com/v1/chat/completions"
+from app.services.llm_client import openai_chat_url, openai_auth_header, openai_is_configured, gemini_is_configured, get_gemini_client
 _TIMEOUT = 20.0
 
 # Study-type keyword heuristics (used as fallback without Gemini)
@@ -240,8 +236,7 @@ def _call_openai(
     columns: List[str],
 ) -> Optional[Dict[str, Any]]:
     """Call OpenAI GPT-4o-mini to identify study type and outcome column."""
-    api_key = os.environ.get("OPENAI_API_KEY", "")
-    if not api_key:
+    if not openai_is_configured():
         return None
 
     col_list = "\n".join(f"- {c}" for c in columns[:60])
@@ -276,9 +271,9 @@ def _call_openai(
     }
     try:
         resp = httpx.post(
-            _OPENAI_URL,
+            openai_chat_url(),
             json=payload,
-            headers={"Authorization": f"Bearer {api_key}"},
+            headers={"Authorization": openai_auth_header()},
             timeout=_TIMEOUT,
         )
         resp.raise_for_status()
@@ -294,8 +289,7 @@ def _call_gemini(
     outcome_hint: str,
     columns: List[str],
 ) -> Optional[Dict[str, Any]]:
-    api_key = os.environ.get("GEMINI_API_KEY", "")
-    if not api_key:
+    if not gemini_is_configured():
         return None
 
     col_list = "\n".join(f"- {c}" for c in columns[:60])
@@ -330,26 +324,21 @@ Rules:
 - Respond ONLY with valid JSON, nothing else.
 """
 
-    payload = {
-        "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"temperature": 0.1, "maxOutputTokens": 256},
-    }
     try:
-        resp = httpx.post(
-            f"{_GEMINI_URL}?key={api_key}",
-            json=payload,
-            timeout=_TIMEOUT,
+        from google.genai import types as gtypes
+        client = get_gemini_client()
+        resp = client.models.generate_content(
+            model="gemini-2.0-flash",
+            contents=prompt,
+            config=gtypes.GenerateContentConfig(
+                temperature=0.1,
+                max_output_tokens=256,
+                response_mime_type="application/json",
+            ),
         )
-        resp.raise_for_status()
-        data = resp.json()
-        text = (
-            data.get("candidates", [{}])[0]
-            .get("content", {})
-            .get("parts", [{}])[0]
-            .get("text", "")
-        )
+        text = (resp.text or "").strip()
         # Strip markdown code fences if present
-        text = re.sub(r"^```(?:json)?\s*", "", text.strip(), flags=re.IGNORECASE)
+        text = re.sub(r"^```(?:json)?\s*", "", text, flags=re.IGNORECASE)
         text = re.sub(r"\s*```$", "", text.strip())
         return json.loads(text)
     except Exception:

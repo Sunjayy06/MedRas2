@@ -27,7 +27,9 @@ def _split_csv(value: str | None, default: List[str]) -> List[str]:
 class Settings:
     """Application settings loaded from environment variables."""
 
-    openai_api_key: str | None = field(default_factory=lambda: os.environ.get("OPENAI_API_KEY"))
+    openai_api_key: str | None = field(default_factory=lambda: (
+        os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
+    ))
     copyleaks_email: str | None = field(default_factory=lambda: os.environ.get("COPYLEAKS_EMAIL"))
     copyleaks_api_key: str | None = field(default_factory=lambda: os.environ.get("COPYLEAKS_API_KEY"))
     cors_allow_origins: List[str] = field(

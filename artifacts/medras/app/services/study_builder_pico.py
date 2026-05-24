@@ -79,8 +79,8 @@ async def decompose(question: str, history: list[dict]) -> dict:
     ``comparison``, ``outcome``, ``search_queries`` (list of 1–3 strings).
     Never raises — falls back to keyword extraction on any failure.
     """
-    gemini_key = os.environ.get("GEMINI_API_KEY", "")
-    if not gemini_key:
+    from app.services.llm_client import get_gemini_client, gemini_is_configured
+    if not gemini_is_configured():
         return _keyword_fallback(question, history)
 
     history_text = (
@@ -96,10 +96,9 @@ async def decompose(question: str, history: list[dict]) -> dict:
     )
 
     try:
-        from google import genai
         from google.genai import types as gtypes
 
-        gc   = genai.Client(api_key=gemini_key)
+        gc   = get_gemini_client()
         resp = gc.models.generate_content(
             model="gemini-2.5-flash",
             contents=f"{_SYSTEM}\n\n{user_msg}",
