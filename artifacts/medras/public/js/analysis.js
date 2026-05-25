@@ -2726,7 +2726,7 @@ function renderAssistantChips() {
     const colIssues = issuesForColumn(col);
     colIssues.forEach((issue) => {
       const cmd = _issueFixCommand(col, issue.type);
-      if (cmd) chips.push({ label: \`Fix "${col}"\`, text: cmd });
+      if (cmd) chips.push({ label: `Fix "${col}"`, text: cmd });
     });
   });
 
@@ -2739,17 +2739,17 @@ function renderAssistantChips() {
   );
   if (firstUsable) {
     chips.push({
-      label: \`Change type of "${firstUsable.column}"\`,
-      text: \`What type should ${firstUsable.column} be?\`,
+      label: `Change type of "${firstUsable.column}"`,
+      text: `What type should ${firstUsable.column} be?`,
     });
     chips.push({
-      label: \`Exclude "${firstUsable.column}"\`,
-      text: \`Exclude ${firstUsable.column} from analysis\`,
+      label: `Exclude "${firstUsable.column}"`,
+      text: `Exclude ${firstUsable.column} from analysis`,
     });
   }
 
   out.innerHTML = chips.map(
-    (c, i) => \`<button type="button" class="se-chip" data-chip="${i}" data-testid="chip-${i}">${escapeHtml(c.label)}</button>\`
+    (c, i) => `<button type="button" class="se-chip" data-chip="${i}" data-testid="chip-${i}">${escapeHtml(c.label)}</button>`
   ).join("");
   $$(".se-chip", out).forEach((btn, i) => {
     btn.addEventListener("click", () => sendAssistantMessage(chips[i].text));
