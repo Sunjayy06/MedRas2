@@ -26,6 +26,7 @@ from app.core.limiter import limiter
 from app.core.logging import get_logger
 from app.services import (
     ai_bridge as ai_bridge_service,
+    ai_chatbox,
     chatboxes,
     data_quality,
     dataset_store,
@@ -989,7 +990,7 @@ async def chatbox_reply(
     if kind not in ("normality", "plan", "results"):
         raise HTTPException(status_code=404, detail="Unknown chatbox kind.")
     ctx = _chatbox_context(payload.job_id, kind)
-    return chatboxes.reply(kind, payload.message, ctx)
+    return await ai_chatbox.chat(kind, payload.message, ctx)
 
 
 # ---------------------------------------------------------------------------
@@ -1486,6 +1487,78 @@ async def apply_missing_decisions(
     # Persist the human-readable action log so the Methods section can include it
     entry.meta["missing_decision_actions"] = actions_taken
     return {"status": "applied", "actions": actions_taken, "n_rows": len(df)}
+
+
+# ---------------------------------------------------------------------------
+# Partial re-run — add / remove tests from an existing results set
+# ---------------------------------------------------------------------------
+
+
+class RerunPartialRequest(BaseModel):
+    job_id: str = Field(..., min_length=1, max_length=64)
+    add_test_ids: List[str] = Field(default_factory=list, max_length=20)
+    remove_test_ids: List[str] = Field(default_factory=list, max_length=20)
+
+
+@router.post("/rerun-partial")
+@limiter.limit("10/minute")
+async def rerun_partial(request: Request, payload: RerunPartialRequest) -> Dict[str, Any]:
+    """Add or remove tests from the existing analysis and re-run only the delta.
+
+    The updated results are merged back into the stored results so downstream
+    export and correction endpoints see the full picture.
+    """
+    entry = dataset_store.get(payload.job_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Dataset expired or not found.")
+
+    classifications = (
+        entry.meta.get("classifications")
+        or variable_classifier.classify_dataframe(entry.df)
+    )
+    assignment = entry.meta.get("assignment") or {}
+    plan_dict = entry.meta.get("plan")
+    if not plan_dict:
+        raise HTTPException(
+            status_code=400,
+            detail="No plan found — complete the plan step before requesting a re-run.",
+        )
+
+    remove_set = set(payload.remove_test_ids)
+    existing_tests: List[Dict[str, Any]] = list(plan_dict.get("tests") or [])
+    existing_ids = {t["id"] for t in existing_tests}
+
+    # Append requested new tests that are not already in the plan.
+    for tid in payload.add_test_ids:
+        if tid not in existing_ids:
+            existing_tests.append({
+                "id": tid,
+                "title": tid.replace("_", " ").title(),
+                "why": "Added on researcher request via Results assistant.",
+                "columns": [],
+                "parametric": None,
+            })
+            existing_ids.add(tid)
+
+    # Confirmed IDs = all present tests minus the ones to remove.
+    confirmed_ids = [t["id"] for t in existing_tests if t["id"] not in remove_set]
+
+    plan_dict = dict(plan_dict)
+    plan_dict["tests"] = existing_tests
+    entry.meta["plan"] = plan_dict
+
+    session_view = _build_session_view(entry, classifications, assignment)
+    res = results_service.run_plan(
+        entry.df,
+        classifications,
+        assignment,
+        plan_dict,
+        confirmed_test_ids=confirmed_ids,
+        confirmed_graph_ids=None,
+        session=session_view,
+    )
+    entry.meta["results"] = res
+    return {"job_id": payload.job_id, "results": res}
 
 
 @router.post("/analyze")

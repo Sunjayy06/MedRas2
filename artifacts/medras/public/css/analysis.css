@@ -3075,3 +3075,165 @@ td.se-corr-p-sig {
   border-top: 1px solid #dde3f0;
   font-style: normal;
 }
+
+/* ============================================================
+   SIGMA AI OVERHAUL — new styles (plan redesign + chatbox AI)
+   ============================================================ */
+
+/* ── Plan section headings ──────────────────────────────────── */
+.se-plan-section-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #1a2e5a;
+  margin: 0 0 0.75rem;
+}
+.se-plan-section-icon-sm {
+  font-size: 1.05rem;
+  line-height: 1;
+}
+.se-plan-badge-always {
+  display: inline-block;
+  background: #e8f4ec;
+  color: #166534;
+  font-size: 0.68rem;
+  font-weight: 600;
+  border-radius: 100px;
+  padding: 0.1rem 0.55rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-left: 0.35rem;
+}
+.se-plan-section-descriptive {
+  background: #f8fbff;
+  border: 1px solid #d4e3f7;
+  border-radius: 10px;
+  padding: 1rem 1.1rem 0.8rem;
+  margin-bottom: 1.25rem;
+}
+
+/* ── Descriptive plan cards (always-on, non-interactive) ────── */
+.se-plan-card-fixed {
+  background: #fff;
+  border: 1px solid #d4e3f7;
+  border-radius: 8px;
+  padding: 0.65rem 0.9rem;
+  margin-bottom: 0.5rem;
+  opacity: 0.92;
+}
+.se-plan-card-fixed:last-child { margin-bottom: 0; }
+.se-plan-card-fixed-row {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-bottom: 0.2rem;
+}
+.se-plan-card-icon-sm {
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+/* ── Analytical test card enhancements ──────────────────────── */
+.se-plan-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.3rem;
+}
+
+/* Variable pair pills inside a card */
+.se-plan-pair {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin: 0.25rem 0 0.35rem 0;
+  flex-wrap: wrap;
+}
+.se-plan-col {
+  background: #eef2ff;
+  color: #3730a3;
+  border: 1px solid #c7d2fe;
+  border-radius: 4px;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 0.75rem;
+  padding: 0.1rem 0.45rem;
+  font-style: normal;
+  white-space: nowrap;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.se-plan-pair-sep {
+  color: #6b7280;
+  font-size: 0.8rem;
+  font-weight: 700;
+  padding: 0 0.05rem;
+}
+
+/* Parametric badges */
+.se-plan-badge {
+  display: inline-block;
+  font-size: 0.67rem;
+  font-weight: 700;
+  border-radius: 100px;
+  padding: 0.12rem 0.55rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.se-plan-badge-param {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+}
+.se-plan-badge-nonparam {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
+}
+
+/* ── Chat thread enhancements ────────────────────────────────── */
+.se-chat-msg.is-ai {
+  background: #f0f7ff;
+  border-color: #c9ddf5;
+  color: #1e3a5f;
+}
+.se-chat-msg.is-action {
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+  color: #065f46;
+  font-weight: 600;
+}
+
+/* ── Typing indicator (three bouncing dots) ──────────────────── */
+.se-chat-msg.is-typing {
+  background: #f3f4f6;
+  border-color: #e5e7eb;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0.55rem 0.85rem;
+  min-height: unset;
+  width: fit-content;
+}
+.se-typing-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #9ca3af;
+  animation: se-typing-bounce 1.2s infinite ease-in-out;
+}
+.se-typing-dot:nth-child(1) { animation-delay: 0s; }
+.se-typing-dot:nth-child(2) { animation-delay: 0.2s; }
+.se-typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes se-typing-bounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.55; }
+  30%           { transform: translateY(-5px); opacity: 1; }
+}

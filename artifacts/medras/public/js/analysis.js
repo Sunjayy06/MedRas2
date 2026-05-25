@@ -3338,17 +3338,38 @@ async function loadPlan() {
 
 function renderPlan() {
   const summary = document.getElementById("plan-summary");
+  const descriptive = document.getElementById("plan-descriptive");
   const tests = document.getElementById("plan-tests");
   const graphs = document.getElementById("plan-graphs");
-  const outputs = document.getElementById("plan-outputs");
-  if (!summary || !tests || !graphs || !outputs) return;
+  if (!summary || !tests || !graphs) return;
   const p = state.plan || { tests: [], graphs: [], outputs: [], summary: "" };
   summary.textContent = p.summary || "";
+
+  // ── Descriptive section — always-on outputs from the plan ─────────
+  const allOutputs = p.outputs || [];
+  const descriptiveItems = [
+    { id: "table_one", icon: "📋", title: "Table 1 — Baseline characteristics",
+      why: "Demographics + key variables with descriptive statistics (mean ± SD, median (IQR), frequencies, proportions)." },
+    { id: "methods_paragraph", icon: "📝", title: "Methods paragraph",
+      why: "Auto-written APA-formatted statistical methods paragraph describing all tests applied." },
+    { id: "results_paragraph", icon: "📊", title: "Results paragraph",
+      why: "Auto-written results narrative with effect sizes, confidence intervals, and exact p-values for each test." },
+  ];
+  if (descriptive) {
+    descriptive.innerHTML = descriptiveItems.map((item) =>
+      `<article class="se-plan-card se-plan-card-fixed" data-testid="card-descriptive-${item.id}">
+        <div class="se-plan-card-fixed-row">
+          <span class="se-plan-card-icon-sm" aria-hidden="true">${item.icon}</span>
+          <span class="se-plan-card-title">${item.title}</span>
+        </div>
+        <p class="se-plan-card-why">${item.why}</p>
+      </article>`
+    ).join("");
+  }
+
+  // ── Analytical tests ──────────────────────────────────────────────
   tests.innerHTML = (p.tests || []).map((t) => planCard(t, "tests")).join("");
   graphs.innerHTML = (p.graphs || []).map((g) => planCard(g, "graphs")).join("");
-  outputs.innerHTML = (p.outputs || []).map((o) =>
-    `<li><strong>${o.title}</strong> — ${o.what}</li>`
-  ).join("");
 
   document.querySelectorAll('[data-plan-toggle]').forEach((cb) => {
     cb.addEventListener("change", () => {
@@ -3371,12 +3392,38 @@ function renderPlan() {
 function planCard(card, kind) {
   const id = card.id;
   const checked = (kind === "tests" ? state.confirmedTests : state.confirmedGraphs).has(id);
+
+  // Variable pair pills (e.g. "Outcome ↔ Group")
+  const cols = card.columns || [];
+  let pairHtml = "";
+  if (cols.length >= 2) {
+    pairHtml = `<div class="se-plan-pair">
+      <code class="se-plan-col">${escapeHtml(cols[0])}</code>
+      <span class="se-plan-pair-sep" aria-hidden="true">↔</span>
+      <code class="se-plan-col">${escapeHtml(cols[1])}</code>
+    </div>`;
+  } else if (cols.length === 1) {
+    pairHtml = `<div class="se-plan-pair"><code class="se-plan-col">${escapeHtml(cols[0])}</code></div>`;
+  }
+
+  // Parametric / non-parametric badge
+  let paramBadge = "";
+  if (card.parametric === true) {
+    paramBadge = `<span class="se-plan-badge se-plan-badge-param" title="Assumes normally distributed data">Parametric</span>`;
+  } else if (card.parametric === false) {
+    paramBadge = `<span class="se-plan-badge se-plan-badge-nonparam" title="No normality assumption required">Non-parametric</span>`;
+  }
+
   return `<article class="se-plan-card ${checked ? '' : 'is-removed'}" data-id="${id}" data-testid="card-${kind}-${id}">
-    <label class="se-plan-card-toggle">
-      <input type="checkbox" data-plan-toggle data-kind="${kind}" value="${id}" ${checked ? 'checked' : ''} data-testid="toggle-${id}">
-      <span class="se-plan-card-title">${card.title}</span>
-    </label>
-    <p class="se-plan-card-why">${card.why || ''}</p>
+    <div class="se-plan-card-header">
+      <label class="se-plan-card-toggle">
+        <input type="checkbox" data-plan-toggle data-kind="${kind}" value="${id}" ${checked ? 'checked' : ''} data-testid="toggle-${id}">
+        <span class="se-plan-card-title">${escapeHtml(card.title)}</span>
+      </label>
+      ${paramBadge}
+    </div>
+    ${pairHtml}
+    <p class="se-plan-card-why">${escapeHtml(card.why || '')}</p>
   </article>`;
 }
 
@@ -3584,22 +3631,22 @@ function bindResults() {
 
 const CHATBOX_CHIPS = {
   normality: [
-    "What does non-normal mean?",
-    "What does a QQ plot show?",
-    "Explain skewness in plain terms",
-    "Why does normality matter?",
+    "Why does normality matter for test selection?",
+    "Explain what skewness means",
+    "Which variable was borderline?",
+    "Can I override a normality decision?",
   ],
   plan: [
-    "Also run survival analysis",
-    "I don't need regression",
-    "What is the difference between t-test and Mann-Whitney?",
-    "Explain ANOVA",
+    "Add survival analysis (Kaplan-Meier)",
+    "Remove regression — I only want comparison",
+    "Why parametric vs non-parametric?",
+    "What does Tukey HSD do after ANOVA?",
   ],
   results: [
-    "What does p = 0.023 mean?",
-    "What does the OR mean clinically?",
-    "Help me write a sentence for the paper",
-    "Explain a limitation of this analysis",
+    "What does this p-value mean clinically?",
+    "Help me write a results sentence",
+    "Explain the confidence interval",
+    "Add logistic regression to the analysis",
   ],
 };
 
@@ -3617,9 +3664,15 @@ function renderChatThread(kind) {
   if (!out) return;
   const thread = state.chatThreads[kind] || [];
   out.innerHTML = thread.map((m, i) => {
+    if (m.role === "typing") {
+      return `<div class="se-chat-msg is-typing" data-testid="cb-${kind}-typing">
+        <span class="se-typing-dot"></span><span class="se-typing-dot"></span><span class="se-typing-dot"></span>
+      </div>`;
+    }
     const cls = ({ system: "is-system", user: "is-user", action: "is-action",
-                   ai: "is-system", clarify: "is-clarify" })[m.role] || "is-system";
-    return `<div class="se-chat-msg ${cls}" data-testid="cb-${kind}-msg-${i}-${m.role}">${escapeHtml(m.text)}</div>`;
+                   ai: "is-ai", clarify: "is-clarify" })[m.role] || "is-system";
+    const prefix = m.role === "action" ? "✓ " : "";
+    return `<div class="se-chat-msg ${cls}" data-testid="cb-${kind}-msg-${i}-${m.role}">${prefix}${escapeHtml(m.text)}</div>`;
   }).join("");
   out.scrollTop = out.scrollHeight;
 }
@@ -3656,9 +3709,11 @@ async function sendChatMessage(kind, message) {
   const text = (message || "").trim();
   if (!text || !state.jobId) return;
   state.chatThreads[kind].push({ role: "user", text });
+  // Show typing indicator immediately while waiting for AI response.
+  state.chatThreads[kind].push({ role: "typing", text: "" });
   renderChatThread(kind);
   const input = document.getElementById(`cb-${kind}-input`);
-  if (input) input.value = "";
+  if (input) { input.value = ""; input.disabled = true; }
 
   try {
     const res = await api(`/chat/${kind}`, {
@@ -3666,8 +3721,12 @@ async function sendChatMessage(kind, message) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ job_id: state.jobId, message: text }),
     });
+    // Remove typing placeholder.
+    state.chatThreads[kind] = state.chatThreads[kind].filter((m) => m.role !== "typing");
     if (kind === "plan") {
       handlePlanChatResponse(res);
+    } else if (kind === "results") {
+      handleResultsChatResponse(res);
     } else {
       state.chatThreads[kind].push({
         role: res.role || "ai",
@@ -3675,7 +3734,10 @@ async function sendChatMessage(kind, message) {
       });
     }
   } catch (err) {
+    state.chatThreads[kind] = state.chatThreads[kind].filter((m) => m.role !== "typing");
     state.chatThreads[kind].push({ role: "clarify", text: `Could not answer: ${err.message}` });
+  } finally {
+    if (input) input.disabled = false;
   }
   renderChatThread(kind);
 }
@@ -3716,6 +3778,63 @@ function handlePlanChatResponse(res) {
           + "use the tick buttons on the test cards above.",
     });
   }
+}
+
+// Results chatbox handler — shows prose, and triggers rerun when AI returns an action.
+async function handleResultsChatResponse(res) {
+  const raw = (res && res.text) ? res.text : "";
+  const action = res.action || parseAIAction(raw);
+
+  if (action && action.action === "rerun") {
+    const addIds = action.add_test_ids || [];
+    const removeIds = action.remove_test_ids || [];
+
+    // Show a prose explanation of what we're about to do.
+    const proseText = raw.replace(/\{[\s\S]*\}/g, "").trim();
+    if (proseText) {
+      state.chatThreads.results.push({ role: "ai", text: proseText });
+    }
+    state.chatThreads.results.push({
+      role: "action",
+      text: [
+        addIds.length ? `Adding: ${addIds.join(", ")}` : "",
+        removeIds.length ? `Removing: ${removeIds.join(", ")}` : "",
+        "Running analysis…",
+      ].filter(Boolean).join(" · "),
+    });
+    renderChatThread("results");
+
+    try {
+      const rerunRes = await api("/rerun-partial", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          job_id: state.jobId,
+          add_test_ids: addIds,
+          remove_test_ids: removeIds,
+        }),
+      });
+      state.results = rerunRes.results;
+      renderResults();
+      state.chatThreads.results.push({
+        role: "action",
+        text: "Analysis updated. The results panel above has been refreshed.",
+      });
+    } catch (err) {
+      state.chatThreads.results.push({
+        role: "clarify",
+        text: `Could not re-run: ${err.message}`,
+      });
+    }
+    return;
+  }
+
+  // Plain explanation — no action.
+  const prose = raw.replace(/\{[\s\S]*\}/g, "").trim();
+  state.chatThreads.results.push({
+    role: res.role || "ai",
+    text: prose || raw,
+  });
 }
 
 function addTestToPlanLocal(testId, reason) {
