@@ -105,5 +105,6 @@ def get_gemini_client():
         )
     base_url = _gemini_base_url()
     if base_url:
-        return genai.Client(api_key=key, http_options={"base_url": base_url})
+        # Replit AI Integration proxy requires v1 (not the SDK default v1beta).
+        return genai.Client(api_key=key, http_options={"api_version": "v1", "base_url": base_url})
     return genai.Client(api_key=key)

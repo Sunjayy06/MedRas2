@@ -13,6 +13,7 @@ Every sentence in the answer must trace to a real sentence in a real paper.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -268,7 +269,8 @@ def _build_answer_text(structured: dict, papers: list[dict]) -> str:
     return "\n".join(parts)
 
 
-async def _call_gemini(system: str, user: str) -> dict | None:
+def _call_gemini_sync(system: str, user: str) -> dict | None:
+    """Synchronous Gemini call — must be run via asyncio.to_thread."""
     try:
         from app.services.llm_client import get_gemini_client
         from google.genai import types as gtypes
@@ -291,13 +293,17 @@ async def _call_gemini(system: str, user: str) -> dict | None:
         return None
 
 
-async def _call_openai(system: str, user: str) -> dict | None:
-    try:
-        from app.services.llm_client import get_async_openai_client
+def _call_openai_sync(system: str, user: str) -> dict | None:
+    """Synchronous OpenAI call — must be run via asyncio.to_thread.
 
-        oai  = get_async_openai_client()
-        resp = await oai.chat.completions.create(
-            model="gpt-4o-mini",
+    Uses GPT-4o for high-quality academic synthesis.
+    """
+    try:
+        from app.services.llm_client import get_openai_client
+
+        oai  = get_openai_client()
+        resp = oai.chat.completions.create(
+            model="gpt-4o",
             messages=[
                 {"role": "system", "content": system},
                 {"role": "user",   "content": f"Question: {user}"},
@@ -365,13 +371,17 @@ async def synthesize(
         history=history_text,
     )
 
-    # Step 4 — structured AI synthesis (Gemini first, OpenAI fallback)
-    structured = await _call_gemini(synth_system, question)
+    # Step 4 — structured AI synthesis
+    # Gemini 2.5 Flash PRIMARY: excels at academic evidence synthesis with
+    # long-context reading of distilled excerpts.
+    # GPT-4o FALLBACK: strong structured JSON fidelity when Gemini is unavailable.
+    structured = await asyncio.to_thread(_call_gemini_sync, synth_system, question)
     method = "gemini-2.5-flash"
 
     if not structured:
-        structured = await _call_openai(synth_system, question)
-        method = "gpt-4o-mini"
+        log.info("Gemini synthesis unavailable — trying GPT-4o fallback")
+        structured = await asyncio.to_thread(_call_openai_sync, synth_system, question)
+        method = "gpt-4o"
 
     if not structured:
         # Both providers failed — return raw sources

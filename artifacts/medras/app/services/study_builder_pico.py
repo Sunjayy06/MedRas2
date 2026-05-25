@@ -7,6 +7,7 @@ Falls back to keyword extraction when Gemini is unavailable.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -95,23 +96,14 @@ async def decompose(question: str, history: list[dict]) -> dict:
         f"Current research question: {question}"
     )
 
-    try:
-        from google.genai import types as gtypes
-
-        gc   = get_gemini_client()
-        resp = gc.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=f"{_SYSTEM}\n\n{user_msg}",
-            config=gtypes.GenerateContentConfig(
-                max_output_tokens=512,
-                temperature=0.05,
-            ),
-        )
-        raw  = (resp.text or "").strip()
-        raw  = re.sub(r"^```(?:json)?\s*", "", raw)
-        raw  = re.sub(r"\s*```\s*$",        "", raw)
-        data = json.loads(raw)
-
+    def _parse_pico(raw: str) -> dict | None:
+        raw = raw.strip()
+        raw = re.sub(r"^```(?:json)?\s*", "", raw)
+        raw = re.sub(r"\s*```\s*$",        "", raw)
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError:
+            return None
         queries = [
             str(q).strip()
             for q in (data.get("search_queries") or [])
@@ -119,14 +111,64 @@ async def decompose(question: str, history: list[dict]) -> dict:
         ]
         if not queries:
             queries = [question]
-
         return {
-            "population":    str(data.get("population",   "N/A")),
-            "intervention":  str(data.get("intervention", "N/A")),
-            "comparison":    str(data.get("comparison",   "N/A")),
-            "outcome":       str(data.get("outcome",      "N/A")),
+            "population":     str(data.get("population",   "N/A")),
+            "intervention":   str(data.get("intervention", "N/A")),
+            "comparison":     str(data.get("comparison",   "N/A")),
+            "outcome":        str(data.get("outcome",      "N/A")),
             "search_queries": queries[:3],
         }
-    except Exception as exc:
-        log.warning("PICO decomposer error (%s) — keyword fallback", exc)
-        return _keyword_fallback(question, history)
+
+    def _gemini_pico_sync() -> dict | None:
+        """Sync Gemini PICO call — run via asyncio.to_thread."""
+        try:
+            from google.genai import types as gtypes
+            gc = get_gemini_client()
+            resp = gc.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=f"{_SYSTEM}\n\n{user_msg}",
+                config=gtypes.GenerateContentConfig(
+                    max_output_tokens=512,
+                    temperature=0.05,
+                ),
+            )
+            return _parse_pico(resp.text or "")
+        except Exception as exc:
+            log.warning("PICO Gemini error (%s)", exc)
+            return None
+
+    def _openai_pico_sync() -> dict | None:
+        """Sync OpenAI PICO call — run via asyncio.to_thread.
+
+        Uses GPT-4o-mini: fast, cheap, reliably honours JSON for structured extraction.
+        """
+        try:
+            from app.services.llm_client import get_openai_client, openai_is_configured
+            if not openai_is_configured():
+                return None
+            oai = get_openai_client()
+            resp = oai.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": _SYSTEM},
+                    {"role": "user",   "content": user_msg},
+                ],
+                response_format={"type": "json_object"},
+                max_tokens=512,
+                temperature=0.05,
+            )
+            return _parse_pico(resp.choices[0].message.content or "")
+        except Exception as exc:
+            log.warning("PICO OpenAI error (%s)", exc)
+            return None
+
+    # Gemini primary (academic search strategy expertise); OpenAI fallback
+    result = await asyncio.to_thread(_gemini_pico_sync)
+    if result is None:
+        log.info("PICO: Gemini unavailable — trying OpenAI fallback")
+        result = await asyncio.to_thread(_openai_pico_sync)
+    if result is not None:
+        return result
+
+    log.warning("PICO: both providers failed — keyword fallback")
+    return _keyword_fallback(question, history)

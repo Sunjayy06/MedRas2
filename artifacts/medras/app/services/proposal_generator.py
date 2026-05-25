@@ -180,6 +180,46 @@ def _strip_fences(s: str) -> str:
     return s.strip()
 
 
+def _call_openai_json(system_prompt: str, user_text: str,
+                      max_tokens: int = GEMINI_MAX_TOKENS) -> Dict[str, Any]:
+    """Call OpenAI GPT-4o with JSON mode.
+
+    Fallback for when Gemini is unavailable. GPT-4o handles large structured
+    JSON responses reliably and can draft all seven sections in one call.
+    """
+    from app.services.llm_client import get_openai_client, openai_is_configured
+    if not openai_is_configured():
+        raise GeneratorError("OpenAI is not configured.")
+    try:
+        client = get_openai_client()
+        resp = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user",   "content": user_text},
+            ],
+            response_format={"type": "json_object"},
+            max_tokens=max_tokens,
+            temperature=0.3,
+        )
+        raw = _strip_fences(resp.choices[0].message.content or "")
+    except GeneratorError:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        msg = _pa.sanitize_error_message(str(exc))
+        if "quota" in msg.lower() or "rate" in msg.lower():
+            raise GeneratorError("AI service is temporarily over its quota. Please try again later.")
+        raise GeneratorError(f"AI generation failed: {msg}")
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        log.warning("proposal_generator: OpenAI returned non-JSON: %s", raw[:200])
+        raise GeneratorError("AI returned a malformed response. Please retry.")
+    if not isinstance(data, dict):
+        raise GeneratorError("AI returned an unexpected response shape.")
+    return data
+
+
 def _call_gemini_json(system_prompt: str, user_text: str,
                       max_tokens: int = GEMINI_MAX_TOKENS,
                       timeout: float = GEMINI_TIMEOUT_S) -> Dict[str, Any]:
@@ -288,8 +328,14 @@ async def generate_rag_sections(
         f"=== END UNTRUSTED EVIDENCE ===\n"
     )
 
-    # 4) Gemini call (in a worker thread — google-genai client is sync)
-    raw = await asyncio.to_thread(_call_gemini_json, _SYSTEM_PROMPT, user_text)
+    # 4) AI call — Gemini 2.5 Flash PRIMARY: excels at long-context RAG-grounded
+    # academic writing and can draft all seven sections in one structured JSON call.
+    # GPT-4o FALLBACK: strong JSON fidelity, handles all seven sections reliably.
+    try:
+        raw = await asyncio.to_thread(_call_gemini_json, _SYSTEM_PROMPT, user_text)
+    except GeneratorError as _e1:
+        log.info("generate_rag_sections: Gemini unavailable (%s) — trying GPT-4o fallback", _e1)
+        raw = await asyncio.to_thread(_call_openai_json, _SYSTEM_PROMPT, user_text)
 
     sections = {key: str(raw.get(key) or "").strip() for key in ALL_SECTIONS}
     if not any(sections.values()):

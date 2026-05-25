@@ -243,7 +243,7 @@ async def suggest_citations(
 
     n = max(1, min(int(max_claims or DEFAULT_MAX_CLAIMS), MAX_CLAIMS_HARD_CAP))
 
-    claims = _extract_claims_gemini(passage, n)
+    claims = await asyncio.to_thread(_extract_claims_gemini, passage, n)
     used_fallback = False
     if not claims:
         claims = _heuristic_claims(passage, n)

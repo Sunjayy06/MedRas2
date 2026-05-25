@@ -43,6 +43,8 @@ DEFAULT_LIMIT_PER_DB = 4
 DEFAULT_TOTAL_LIMIT = 18
 GEMINI_TIMEOUT_S = 90.0
 GEMINI_MAX_TOKENS = 6000
+OPENAI_MAX_TOKENS_IMPROVE = 3000   # improve mode: GPT-4o produces precise diffs
+OPENAI_MAX_TOKENS_DRAFT   = 6000   # draft fallback
 EXTRA_CONTEXT_MAX_CHARS = 12_000  # hard server-side cap on researcher-supplied context
 
 _CITE_RE = re.compile(r"\[CITE_(\d+)\]")
@@ -147,8 +149,47 @@ def _system_prompt_for(chapter_id: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Gemini call
+# LLM calls
 # ---------------------------------------------------------------------------
+
+def _call_openai_json(system: str, user: str,
+                      max_tokens: int = OPENAI_MAX_TOKENS_IMPROVE) -> Dict[str, Any]:
+    """Call OpenAI GPT-4o with JSON mode.
+
+    GPT-4o is the primary provider for ``improve_section``: it excels at
+    precise sentence-level inline diffs (exact verbatim substring matching,
+    structured suggestions) thanks to its strong instruction-following.
+    Falls back to a ``GeneratorError`` on failure so the caller can try
+    Gemini as a secondary provider.
+    """
+    from app.services.llm_client import get_openai_client, openai_is_configured
+    if not openai_is_configured():
+        raise GeneratorError("OpenAI is not configured.")
+    try:
+        client = get_openai_client()
+        resp = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user",   "content": user},
+            ],
+            response_format={"type": "json_object"},
+            max_tokens=max_tokens,
+            temperature=0.2,
+        )
+        raw = _strip_fences(resp.choices[0].message.content or "")
+        data = json.loads(raw)
+    except GeneratorError:
+        raise
+    except Exception as exc:
+        msg = _pa.sanitize_error_message(str(exc))
+        if "quota" in msg.lower() or "rate" in msg.lower():
+            raise GeneratorError("AI service is over its quota. Please try again later.")
+        raise GeneratorError(f"AI generation failed: {msg}")
+    if not isinstance(data, dict):
+        raise GeneratorError("AI returned an unexpected response shape.")
+    return data
+
 
 def _call_gemini_json(system: str, user: str,
                       max_tokens: int = GEMINI_MAX_TOKENS,
@@ -294,9 +335,16 @@ async def draft_section(
         f"=== END UNTRUSTED EVIDENCE ===\n"
     )
 
-    # 3) Gemini
-    raw = await asyncio.to_thread(_call_gemini_json,
-                                  _system_prompt_for(chapter_id), user_text)
+    # 3) AI call — Gemini 2.5 Flash PRIMARY (long-context RAG academic drafting),
+    # GPT-4o FALLBACK when Gemini is unavailable.
+    try:
+        raw = await asyncio.to_thread(_call_gemini_json,
+                                      _system_prompt_for(chapter_id), user_text)
+    except GeneratorError as _e1:
+        log.info("draft_section: Gemini unavailable (%s) — trying GPT-4o fallback", _e1)
+        raw = await asyncio.to_thread(_call_openai_json,
+                                      _system_prompt_for(chapter_id), user_text,
+                                      OPENAI_MAX_TOKENS_DRAFT)
     drafted = str(raw.get("text") or "").strip()
     if not drafted:
         raise GeneratorError("AI returned an empty draft. Please retry.")
@@ -434,7 +482,15 @@ async def improve_section(
         f"=== END UNTRUSTED EVIDENCE ===\n"
     )
 
-    raw = await asyncio.to_thread(_call_gemini_json, _IMPROVE_SYSTEM, user_text)
+    # GPT-4o PRIMARY for improve: its strong instruction-following produces
+    # exact verbatim substring matches and precise sentence-level diffs.
+    # Gemini 2.5 Flash FALLBACK: handles long-context evidence well if OpenAI is down.
+    try:
+        raw = await asyncio.to_thread(_call_openai_json, _IMPROVE_SYSTEM, user_text,
+                                      OPENAI_MAX_TOKENS_IMPROVE)
+    except GeneratorError as _e1:
+        log.info("improve_section: GPT-4o unavailable (%s) — trying Gemini fallback", _e1)
+        raw = await asyncio.to_thread(_call_gemini_json, _IMPROVE_SYSTEM, user_text)
     suggestions_in = raw.get("suggestions") or []
     if not isinstance(suggestions_in, list):
         return {"suggestions": [], "sources": records,
