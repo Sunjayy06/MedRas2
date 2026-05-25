@@ -230,10 +230,12 @@
       form.append('session_id', sessionId);
       form.append('file', file);
 
+      window.MedrasJobs?.start('helix-upload', 'Processing paper…');
       const res = await fetch('/api/study-builder/upload-paper', {
         method: 'POST',
         body:   form,
       });
+      window.MedrasJobs?.finish('helix-upload');
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -254,6 +256,7 @@
       updateAttachedUI();
 
     } catch (e) {
+      window.MedrasJobs?.finish('helix-upload');
       progressEl.remove();
       appendPaperError(e.message);
     } finally {
@@ -330,12 +333,14 @@
       const body = { question };
       if (sessionId) body.session_id = sessionId;
 
+      window.MedrasJobs?.start('helix-ask', 'Helix searching & synthesising…');
       const res = await fetch('/api/study-builder/ask', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify(body),
       });
       clearInterval(stageTmr);
+      window.MedrasJobs?.finish('helix-ask');
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -358,6 +363,7 @@
 
     } catch (e) {
       clearInterval(stageTmr);
+      window.MedrasJobs?.finish('helix-ask');
       aiEl.innerHTML = `<div class="msg-error">&#9888; ${esc(e.message || 'Request failed — please try again.')}</div>`;
     } finally {
       busy = false;

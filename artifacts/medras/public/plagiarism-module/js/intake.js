@@ -138,6 +138,7 @@
     analyseBothLabel.textContent = "Reading your document…";
 
     try {
+      window.MedrasJobs?.start('novus-analyze', 'Analysing document…');
       // Step 1: original document → /analyze-file (extracts sections)
       const docFd = new FormData();
       docFd.append("file", orig);
@@ -179,6 +180,8 @@
       stepAErr.classList.remove("is-hidden");
       analyseBoth.disabled = false;
       analyseBothLabel.textContent = "Analyse Both Files";
+    } finally {
+      window.MedrasJobs?.finish('novus-analyze');
     }
   });
 

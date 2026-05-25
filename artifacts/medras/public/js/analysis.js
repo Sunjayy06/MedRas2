@@ -112,17 +112,39 @@ function fmtNum(v) {
   return String(v);
 }
 
+const _API_JOB_LABELS = {
+  '/upload':          'Processing dataset…',
+  '/quality-check':   'Quality check…',
+  '/apply-quality':   'Applying quality fixes…',
+  '/generate-plan':   'Generating analysis plan…',
+  '/run-analysis':    'Running analysis…',
+  '/setup-study':     'AI study setup…',
+  '/adjust-setup':    'Updating study setup…',
+  '/normality':       'Checking normality…',
+  '/run-correlation': 'Running correlation…',
+  '/ai-chat':         'AI assistant thinking…',
+  '/handle-missing':  'Handling missing data…',
+  '/rerun-partial':   'Re-running selected tests…',
+};
+
 async function api(path, options = {}) {
-  const res = await fetch(`${API_BASE}${path}`, options);
-  if (!res.ok) {
-    let detail = `${res.status} ${res.statusText}`;
-    try {
-      const body = await res.json();
-      if (body && body.detail) detail = body.detail;
-    } catch (_e) { /* ignore */ }
-    throw new Error(detail);
+  const jobEntry = Object.entries(_API_JOB_LABELS).find(([k]) => path.includes(k));
+  const jobId    = jobEntry ? `sigma${path.replace(/[^a-z0-9]/gi, '')}` : null;
+  if (jobId) window.MedrasJobs?.start(jobId, jobEntry[1]);
+  try {
+    const res = await fetch(`${API_BASE}${path}`, options);
+    if (!res.ok) {
+      let detail = `${res.status} ${res.statusText}`;
+      try {
+        const body = await res.json();
+        if (body && body.detail) detail = body.detail;
+      } catch (_e) { /* ignore */ }
+      throw new Error(detail);
+    }
+    return res.json();
+  } finally {
+    if (jobId) window.MedrasJobs?.finish(jobId);
   }
-  return res.json();
 }
 
 /* ------------------------------------------------------------------ */

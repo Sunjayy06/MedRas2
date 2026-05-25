@@ -203,6 +203,9 @@
 
     /* ── Global feedback widget ─────────────────────────────────────── */
     _buildFeedbackWidget();
+
+    /* ── Running-jobs badge ─────────────────────────────────────────── */
+    _buildJobsBadge();
   }
 
   function _buildFeedbackWidget() {
@@ -344,6 +347,96 @@
         });
     });
   }
+
+  /* ── Running-jobs badge system ──────────────────────────────────── */
+  var JOBS_KEY = 'medras.running_jobs';
+  var _jobsBadgeEl = null;
+
+  function _parseJobs() {
+    try {
+      var raw = localStorage.getItem(JOBS_KEY);
+      if (!raw) return [];
+      var arr = JSON.parse(raw);
+      /* Auto-expire jobs older than 10 minutes (stale from crashed tab) */
+      var now = Date.now();
+      return arr.filter(function(j) { return now - (j.started || 0) < 600000; });
+    } catch (_) { return []; }
+  }
+
+  function _saveJobs(arr) {
+    try { localStorage.setItem(JOBS_KEY, JSON.stringify(arr)); } catch (_) {}
+  }
+
+  function _renderJobsBadge() {
+    if (!_jobsBadgeEl) return;
+    var jobs = _parseJobs();
+    if (jobs.length === 0) {
+      _jobsBadgeEl.style.display = 'none';
+    } else {
+      _jobsBadgeEl.style.display = 'flex';
+      var label = jobs.length === 1 ? jobs[0].label : (jobs.length + ' tasks running');
+      _jobsBadgeEl.querySelector('.mn-jobs-lbl').textContent = label;
+    }
+  }
+
+  function _buildJobsBadge() {
+    var style = document.createElement('style');
+    style.textContent = [
+      '@keyframes mn-jog{0%,100%{opacity:1}50%{opacity:.35}}',
+      '.mn-jobs-badge{position:fixed;bottom:22px;left:22px;z-index:9997;',
+        'display:none;align-items:center;gap:7px;',
+        'background:#0f2040;color:#c7d9f5;border-radius:999px;',
+        'padding:8px 15px 8px 11px;font-size:12px;font-weight:600;',
+        'box-shadow:0 4px 18px rgba(0,0,0,.4);pointer-events:none;',
+        'transition:opacity .25s;}',
+      '.mn-jobs-dot{width:8px;height:8px;border-radius:50%;',
+        'background:#60a5fa;flex-shrink:0;',
+        'animation:mn-jog 1.1s ease-in-out infinite;}',
+    ].join('');
+    document.head.appendChild(style);
+
+    var badge = document.createElement('div');
+    badge.className = 'mn-jobs-badge';
+    badge.setAttribute('role', 'status');
+    badge.setAttribute('aria-live', 'polite');
+    badge.innerHTML = '<div class="mn-jobs-dot"></div><span class="mn-jobs-lbl"></span>';
+    document.body.appendChild(badge);
+    _jobsBadgeEl = badge;
+    _renderJobsBadge();
+
+    /* Poll every 2.5 s in case another tab updates the job list */
+    setInterval(_renderJobsBadge, 2500);
+
+    /* React immediately to cross-tab localStorage changes */
+    window.addEventListener('storage', function (e) {
+      if (e.key === JOBS_KEY) _renderJobsBadge();
+    });
+  }
+
+  /**
+   * MedrasJobs — public API available on every page that loads medras-nav.js
+   *
+   *   window.MedrasJobs.start('sigma-analysis', 'Running analysis…')
+   *   window.MedrasJobs.finish('sigma-analysis')
+   *   window.MedrasJobs.finishAll()
+   */
+  window.MedrasJobs = {
+    start: function (id, label) {
+      var jobs = _parseJobs().filter(function (j) { return j.id !== id; });
+      jobs.push({ id: id, label: label || 'Processing…', started: Date.now() });
+      _saveJobs(jobs);
+      _renderJobsBadge();
+    },
+    finish: function (id) {
+      var jobs = _parseJobs().filter(function (j) { return j.id !== id; });
+      _saveJobs(jobs);
+      _renderJobsBadge();
+    },
+    finishAll: function () {
+      _saveJobs([]);
+      _renderJobsBadge();
+    },
+  };
 
   /* ── Run after DOM is ready ─────────────────────────────────────── */
   if (document.readyState === 'loading') {
