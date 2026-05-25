@@ -156,6 +156,13 @@ function saveSession() {
       (state.classifications || []).map((c) => [c.column, c.detected_type])
     ),
     quality_actions: state.qualityActions || [],
+    // Persist AI study plan + description so screen-setup can rehydrate without
+    // a network call on resume (fast path in resumeFromSavedSession).
+    aiStudy: state.aiStudy || null,
+    studyDescription: (() => {
+      const el = document.getElementById("setup-study-description");
+      return el ? el.value.trim() : "";
+    })(),
     timestamp: new Date().toISOString(),
   };
   try {
@@ -217,6 +224,38 @@ async function resumeFromSavedSession(saved) {
       await loadQualityReport();
     } else if (resolved === "3") {
       showScreen("3");
+    } else if (resolved === "setup") {
+      // Restore the setup screen — rehydrate AI study plan from saved state,
+      // or re-call /setup-study with the stored description if state is stale.
+      const savedStudy = saved.aiStudy || state.aiStudy;
+      const savedDesc  = saved.studyDescription || "";
+      if (savedStudy && savedStudy.study_type) {
+        // Fast path: AI plan survived in localStorage — just render it.
+        state.aiStudy = savedStudy;
+        renderSetupScreen(savedStudy);
+        showScreen("setup");
+      } else {
+        // Slow path: re-run /setup-study with the previously typed description.
+        showScreen("setup");
+        const statusEl = document.getElementById("setup-describe-status");
+        if (statusEl) setStatus(statusEl, "Restoring study plan…", "info");
+        try {
+          const plan = await api("/setup-study", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              job_id: state.jobId,
+              description: savedDesc,
+              outcome_hint: "",
+            }),
+          });
+          state.aiStudy = plan;
+          renderSetupScreen(plan);
+          if (statusEl) setStatus(statusEl, "");
+        } catch (_) {
+          if (statusEl) setStatus(statusEl, "Could not restore study plan — please re-describe.", "error");
+        }
+      }
     } else if (resolved === "ai-confirm") {
       // Re-run the AI bridge so the confirmation screen has fresh results,
       // then show it. Falls back gracefully if the bridge is unavailable.

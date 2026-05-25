@@ -847,7 +847,12 @@ async def variable_assistant_endpoint(
     # Unsupported actions (recode, include) fall through to rule-based.
     _ai_action = (ai_intent or {}).get("action")
     _ai_col    = (ai_intent or {}).get("column")
-    if ai_intent and _ai_col:
+    # Validate: AI must name a column that actually exists in this dataset.
+    # A hallucinated column name would cause a misleading "applied" confirmation
+    # or a runtime error in apply_action, so we fall through to rule-based when
+    # the column is not found.
+    _ai_col_valid = _ai_col and _ai_col in entry.df.columns
+    if ai_intent and _ai_col_valid:
         if _ai_action == "rename" and ai_intent.get("new_name"):
             intent = {
                 "action": "rename",
@@ -865,6 +870,13 @@ async def variable_assistant_endpoint(
         else:
             # recode / include / unrecognised → rule-based fallback
             intent = variable_assistant.parse_intent(payload.message, columns)
+    elif ai_intent and _ai_col and not _ai_col_valid:
+        # AI named a column that doesn't exist — log and fall through gracefully
+        logger.warning(
+            "AI variable intent referenced non-existent column %r (dataset has %r) — rule-based fallback",
+            _ai_col, columns[:10],
+        )
+        intent = variable_assistant.parse_intent(payload.message, columns)
     else:
         # 2. Rule-based fallback (guaranteed to always produce an intent).
         intent = variable_assistant.parse_intent(payload.message, columns)

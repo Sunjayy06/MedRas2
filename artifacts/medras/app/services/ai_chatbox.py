@@ -1,13 +1,21 @@
 """AI-powered chatboxes for Sigma — Variables / Normality / Plan / Results.
 
-Gemini 2.5 Flash is the PRIMARY model (via asyncio.to_thread so the sync
-SDK call doesn't block the event loop).  OpenAI gpt-4o-mini is the secondary
-fallback, and the rule-based chatboxes.py engine is the last-resort fallback.
+Provider assignment (use what each section is best at):
+  Results  → OpenAI GPT-4o PRIMARY   (narrative writing, table interpretation, effect-size commentary)
+  Plan     → OpenAI GPT-4o PRIMARY   (structured test selection, reasoning)
+  Variables→ Gemini 2.5 Flash PRIMARY (fast classification, JSON extraction)
+  Normality→ Gemini 2.5 Flash PRIMARY (fast statistical explanation)
+  Setup    → Gemini 2.5 Flash PRIMARY (planning/routing)
+  parse_variable_intent → Gemini 2.5 Flash PRIMARY (fast JSON)
+
+Each section falls back to the other provider, then to the rule-based engine.
 
 Public API
 ──────────
-  await chat(kind, message, context)  → {"role", "text", "action"}
-  await opening_message(kind, context) → str
+  await chat(kind, message, context)       → {"role", "text", "action"}
+  await opening_message(kind, context)     → str
+  await parse_variable_intent(msg, ctx)    → dict | None
+  await plan_study_setup(desc, cols, ...)  → dict
 
 Action shapes
 ─────────────
@@ -38,9 +46,18 @@ from .llm_client import (
 logger = logging.getLogger(__name__)
 
 _GEMINI_MODEL = "gemini-2.5-flash"
-_OPENAI_MODEL = "gpt-4o-mini"
-_MAX_TOKENS_GEMINI = 600
-_MAX_TOKENS_OPENAI = 600
+_OPENAI_MODEL_STANDARD = "gpt-4o-mini"   # Variables / Normality fallback
+_OPENAI_MODEL_STRONG   = "gpt-4o"        # Results / Plan primary
+
+# Per-kind token budgets — results needs more room for full interpretation
+_MAX_TOKENS = {
+    "results":   1200,
+    "plan":       800,
+    "normality":  500,
+    "variables":  500,
+    "setup":      700,
+}
+_DEFAULT_TOKENS = 600
 
 _VALID_PLAN_TEST_IDS = {
     "ttest_independent", "mann_whitney", "anova_oneway", "kruskal_wallis",
@@ -52,6 +69,11 @@ _VALID_PLAN_TEST_IDS = {
     "pb_kappa", "pb_icc_ba",
     "ancova", "tukey_hsd",
 }
+
+# Kinds where OpenAI GPT-4o is the primary provider
+_OPENAI_PRIMARY_KINDS = frozenset({"results", "plan"})
+# Kinds where Gemini is the primary provider
+_GEMINI_PRIMARY_KINDS = frozenset({"variables", "normality", "setup"})
 
 
 # ---------------------------------------------------------------------------
@@ -103,7 +125,8 @@ def _plan_system(context: Dict[str, Any]) -> str:
         f"Your role:\n"
         f"1. EXPLAIN what tests do in plain language (2–5 sentences).\n"
         f"2. ADD or REMOVE tests on request — ONLY IDs from the valid list above.\n"
-        f"3. COMPARE tests when asked.\n\n"
+        f"3. COMPARE tests when asked — explain parametric vs non-parametric trade-offs.\n"
+        f"4. Recommend tests that fit the study design and variable types.\n\n"
         f"For ADD/REMOVE append this JSON on its own line at the end:\n"
         f'  {{"action": "add_test" or "remove_test", "test_id": "<exact_id>", "reason": "<sentence>"}}\n'
         f"For explanations: plain prose only, no JSON."
@@ -112,33 +135,45 @@ def _plan_system(context: Dict[str, Any]) -> str:
 
 def _results_system(context: Dict[str, Any]) -> str:
     results = (context or {}).get("results") or {}
+    tests = results.get("tests") or []
+
     test_lines = "\n".join(
-        "  • {}: {}".format(
-            t.get("title", "?"),
-            "; ".join(
-                f"{r.get('label','?')}={r.get('value','?')}"
-                for r in (t.get("rows") or [])[:4]
-            )
+        "  • {title}: {rows}".format(
+            title=t.get("title", "?"),
+            rows="; ".join(
+                "{label}={value}".format(
+                    label=r.get("label", "?"), value=r.get("value", "?")
+                )
+                for r in (t.get("rows") or [])[:6]
+            ),
         )
-        for t in (results.get("tests") or [])[:10]
+        for t in tests[:12]
     ) or "  (results not yet available)"
-    methods = (results.get("methods_md") or "")[:400]
+
+    methods = (results.get("methods_md") or "")[:600]
+    narrative = (results.get("narrative_md") or "")[:400]
 
     return (
-        f"You are the Results Assistant in MedRAS Sigma.\n"
-        f"Results summary:\n{test_lines}\n"
-        f"Methods used:\n{methods if methods else '  (not available)'}\n\n"
+        f"You are the Results Interpreter in MedRAS Sigma — an expert medical statistician "
+        f"and clinical writer.\n\n"
+        f"Statistical results:\n{test_lines}\n\n"
+        f"Methods section:\n{methods if methods else '  (not available)'}\n\n"
+        f"Narrative:\n{narrative if narrative else '  (not available)'}\n\n"
         f"Your role:\n"
-        f"1. Explain results in plain clinical language.\n"
-        f"2. Help interpret p-values, effect sizes, ORs, HRs, CIs.\n"
-        f"3. Explain test limitations.\n"
-        f"4. If the researcher wants to ADD/REMOVE a test, append:\n"
+        f"1. Interpret results in precise, publication-ready clinical language.\n"
+        f"2. Explain p-values, effect sizes, ORs, HRs, CIs in context — reference actual numbers.\n"
+        f"3. Flag clinical vs statistical significance distinctions.\n"
+        f"4. Suggest how to phrase results for journal submission (Methods / Results sections).\n"
+        f"5. If the researcher wants a test added or removed, append:\n"
         f'   {{"action": "rerun", "add_test_ids": [...], "remove_test_ids": [...]}}\n'
-        f"   Valid add IDs: ttest_independent, mann_whitney, anova_oneway, kruskal_wallis, "
+        f"   Valid test IDs: ttest_independent, mann_whitney, anova_oneway, kruskal_wallis, "
         f"chi_square, linear_regression, logistic_regression, pb_km, pb_cox, "
-        f"pb_paired_t, pb_wilcoxon, pb_rm_anova, pb_kappa, ancova\n"
-        f"Never change or challenge calculated values — only explain.\n"
-        f"Plain prose for explanations (2–5 sentences), no JSON."
+        f"pb_paired_t, pb_wilcoxon, pb_rm_anova, pb_kappa, ancova\n\n"
+        f"Rules:\n"
+        f"- Never change or fabricate calculated values — interpret what is given.\n"
+        f"- If a result looks unusual, say so and suggest a sanity check.\n"
+        f"- Keep interpretations to 3–6 sentences unless the researcher asks for more.\n"
+        f"- Plain prose for explanations. JSON only when triggering a rerun."
     )
 
 
@@ -171,8 +206,8 @@ def _variables_system(context: Dict[str, Any]) -> str:
 def _build_system_prompt(kind: str, context: Dict[str, Any]) -> str:
     builders = {
         "normality": _normality_system,
-        "plan": _plan_system,
-        "results": _results_system,
+        "plan":      _plan_system,
+        "results":   _results_system,
         "variables": _variables_system,
     }
     fn = builders.get(kind)
@@ -215,10 +250,10 @@ def _strip_action_json(text: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Gemini 2.5 Flash (PRIMARY) — called in a thread pool via asyncio.to_thread
+# Gemini 2.5 Flash — called in a thread pool (sync SDK)
 # ---------------------------------------------------------------------------
 
-def _gemini_call_sync(system_prompt: str, message: str) -> Optional[str]:
+def _gemini_call_sync(system_prompt: str, message: str, max_tokens: int = 600) -> Optional[str]:
     """Synchronous Gemini call — must run in a thread, not the event loop."""
     if not gemini_is_configured():
         return None
@@ -230,7 +265,7 @@ def _gemini_call_sync(system_prompt: str, message: str) -> Optional[str]:
             model=_GEMINI_MODEL,
             contents=full_prompt,
             config=genai_types.GenerateContentConfig(
-                max_output_tokens=_MAX_TOKENS_GEMINI,
+                max_output_tokens=max_tokens,
                 temperature=0.4,
             ),
         )
@@ -242,20 +277,25 @@ def _gemini_call_sync(system_prompt: str, message: str) -> Optional[str]:
 
 
 # ---------------------------------------------------------------------------
-# OpenAI gpt-4o-mini (SECONDARY) — pure urllib, no asyncio needed
+# OpenAI — pure urllib, no asyncio needed
 # ---------------------------------------------------------------------------
 
-def _openai_call_sync(system_prompt: str, message: str) -> Optional[str]:
+def _openai_call_sync(
+    system_prompt: str,
+    message: str,
+    max_tokens: int = 600,
+    model: str = _OPENAI_MODEL_STANDARD,
+) -> Optional[str]:
     """Synchronous OpenAI call — runs inline (short network hop)."""
     if not openai_is_configured():
         return None
     body = json.dumps({
-        "model": _OPENAI_MODEL,
+        "model": model,
         "messages": [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": message},
+            {"role": "user",   "content": message},
         ],
-        "max_tokens": _MAX_TOKENS_OPENAI,
+        "max_tokens": max_tokens,
         "temperature": 0.4,
     }).encode("utf-8")
     req = urllib.request.Request(
@@ -268,13 +308,45 @@ def _openai_call_sync(system_prompt: str, message: str) -> Optional[str]:
         method="POST",
     )
     try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
+        with urllib.request.urlopen(req, timeout=20) as resp:
             data = json.loads(resp.read().decode("utf-8"))
         text = data["choices"][0]["message"]["content"].strip()
         return text if text else None
     except Exception as exc:
         logger.info("OpenAI chatbox call failed (%s) — using rule-based.", exc)
         return None
+
+
+# ---------------------------------------------------------------------------
+# Provider dispatch — routes each kind to its optimal primary model
+# ---------------------------------------------------------------------------
+
+async def _call_llm(
+    kind: str,
+    system_prompt: str,
+    message: str,
+) -> Optional[str]:
+    """Call the best LLM for this kind; fall back to the other; return None if both fail."""
+    tokens = _MAX_TOKENS.get(kind, _DEFAULT_TOKENS)
+
+    if kind in _OPENAI_PRIMARY_KINDS:
+        # OpenAI GPT-4o primary → Gemini fallback
+        raw = await asyncio.to_thread(
+            _openai_call_sync, system_prompt, message, tokens, _OPENAI_MODEL_STRONG
+        )
+        if raw is None:
+            logger.info("GPT-4o unavailable for kind=%r — trying Gemini fallback", kind)
+            raw = await asyncio.to_thread(_gemini_call_sync, system_prompt, message, tokens)
+    else:
+        # Gemini primary → OpenAI gpt-4o-mini fallback
+        raw = await asyncio.to_thread(_gemini_call_sync, system_prompt, message, tokens)
+        if raw is None:
+            logger.info("Gemini unavailable for kind=%r — trying OpenAI fallback", kind)
+            raw = await asyncio.to_thread(
+                _openai_call_sync, system_prompt, message, tokens, _OPENAI_MODEL_STANDARD
+            )
+
+    return raw
 
 
 # ---------------------------------------------------------------------------
@@ -289,14 +361,9 @@ async def chat(
     """Return ``{"role": "ai", "text": str, "action": dict|None}``."""
     system_prompt = _build_system_prompt(kind, context)
 
-    # 1. Gemini 2.5 Flash — PRIMARY (run sync call in thread pool)
-    raw = await asyncio.to_thread(_gemini_call_sync, system_prompt, message)
+    raw = await _call_llm(kind, system_prompt, message)
 
-    # 2. OpenAI gpt-4o-mini — SECONDARY
-    if raw is None:
-        raw = await asyncio.to_thread(_openai_call_sync, system_prompt, message)
-
-    # 3. Rule-based engine — LAST RESORT (always available, no API key needed)
+    # Rule-based engine — last resort (no API key, always available)
     if raw is None:
         logger.warning("Both LLM providers unavailable for kind=%r — rule-based fallback", kind)
         result = chatboxes.reply(kind, message, context)
@@ -307,16 +374,15 @@ async def chat(
         }
 
     action = _extract_action(raw, kind)
-    prose = _strip_action_json(raw)
+    prose  = _strip_action_json(raw)
 
-    # For plan chatbox: embed action JSON in text so the FIX-R9 frontend
-    # regex can parse it even if the `action` key is not consumed by the caller.
+    # For plan chatbox: embed action JSON so the frontend regex can parse it
     display_text = prose
     if action and kind == "plan":
         json_embed = json.dumps({
-            "action": action["action"],
+            "action":  action["action"],
             "test_id": action["test_id"],
-            "reason": action.get("reason", ""),
+            "reason":  action.get("reason", ""),
         })
         display_text = (prose + "\n\n" + json_embed).strip() if prose else json_embed
 
@@ -330,6 +396,7 @@ async def opening_message(kind: str, context: Dict[str, Any]) -> str:
 
 # ---------------------------------------------------------------------------
 # Variable intent parser — natural language → structured action dict
+# (Gemini primary — fast JSON extraction; OpenAI fallback)
 # ---------------------------------------------------------------------------
 
 _VALID_VA_ACTIONS = frozenset({"rename", "recode", "exclude", "include", "set_type"})
@@ -341,8 +408,8 @@ async def parse_variable_intent(
 ) -> Optional[Dict[str, Any]]:
     """Parse a plain-English variable command into a structured intent dict.
 
-    Returns a dict ``{"action": str, "column": str, ...}`` on success, or
-    ``None`` when the message is a question / not parseable as a mutation.
+    Returns ``{"action", "column", ...}`` on success, or ``None`` when the
+    message is a question / not parseable as a mutation.
     """
     classifications = (context or {}).get("classifications") or []
     cols = [c.get("column", "") for c in classifications[:30] if c.get("column")]
@@ -352,7 +419,7 @@ async def parse_variable_intent(
         f"Available columns: {', '.join(cols) if cols else '(unknown)'}\n\n"
         f"If the input is an actionable mutation command, return ONLY this JSON:\n"
         f'{{"action":"rename"|"recode"|"exclude"|"include"|"set_type",'
-        f'"column":"<exact column name>",'
+        f'"column":"<exact column name from the list above>",'
         f'"new_name":"<str or null>",'
         f'"new_type":"scale"|"ordinal"|"nominal"|"id"|null,'
         f'"recode_map":{{}} }}\n'
@@ -360,9 +427,13 @@ async def parse_variable_intent(
         f"Return ONLY the JSON object or null — no prose, no markdown."
     )
 
-    raw = await asyncio.to_thread(_gemini_call_sync, system, message)
+    # Gemini primary (fast JSON extraction)
+    tokens = _MAX_TOKENS.get("variables", _DEFAULT_TOKENS)
+    raw = await asyncio.to_thread(_gemini_call_sync, system, message, tokens)
     if raw is None:
-        raw = await asyncio.to_thread(_openai_call_sync, system, message)
+        raw = await asyncio.to_thread(
+            _openai_call_sync, system, message, tokens, _OPENAI_MODEL_STANDARD
+        )
     if not raw:
         return None
 
@@ -370,18 +441,17 @@ async def parse_variable_intent(
     if raw.lower() in ("null", "none", ""):
         return None
 
-    # Strip markdown fences if the model added them
     raw = re.sub(r"^```(?:json)?\s*", "", raw, flags=re.MULTILINE)
-    raw = re.sub(r"```\s*$", "", raw, flags=re.MULTILINE).strip()
+    raw = re.sub(r"```\s*$",          "", raw, flags=re.MULTILINE).strip()
 
     try:
         obj = json.loads(raw)
         if isinstance(obj, dict) and obj.get("action") in _VALID_VA_ACTIONS and obj.get("column"):
             return {
-                "action": obj["action"],
-                "column": obj["column"],
-                "new_name": obj.get("new_name"),
-                "new_type": obj.get("new_type"),
+                "action":     obj["action"],
+                "column":     obj["column"],
+                "new_name":   obj.get("new_name"),
+                "new_type":   obj.get("new_type"),
                 "recode_map": obj.get("recode_map") or {},
             }
     except (json.JSONDecodeError, ValueError):
@@ -391,6 +461,7 @@ async def parse_variable_intent(
 
 # ---------------------------------------------------------------------------
 # Study plan generator — description → rich plan JSON for screen-setup
+# (Gemini primary — planning/routing; OpenAI fallback)
 # ---------------------------------------------------------------------------
 
 async def plan_study_setup(
@@ -403,7 +474,7 @@ async def plan_study_setup(
 
     Returns:
         {
-            study_type, outcome_col, objective, sample_size,
+            study_type, outcome_col, objective, sample_size, predictors,
             test_pairs: [{"col_a", "col_b", "test_name", "reason"}],
             reasoning, confidence, source
         }
@@ -420,6 +491,7 @@ async def plan_study_setup(
         f"{{\n"
         f'  "study_type": "comparison"|"correlation"|"association"|"survival"|"diagnostic"|"descriptive",\n'
         f'  "outcome_col": "<exact column name or null>",\n'
+        f'  "predictors": ["<col>", ...],\n'
         f'  "objective": "<one clear plain-English sentence>",\n'
         f'  "sample_size": <integer or null>,\n'
         f'  "test_pairs": [\n'
@@ -431,46 +503,53 @@ async def plan_study_setup(
 
     prompt = (description or "").strip() or "Suggest an appropriate study plan based on the columns."
 
-    raw = await asyncio.to_thread(_gemini_call_sync, system, prompt)
+    tokens = _MAX_TOKENS.get("setup", _DEFAULT_TOKENS)
+    # Gemini primary for planning/routing
+    raw = await asyncio.to_thread(_gemini_call_sync, system, prompt, tokens)
     if raw is None:
-        raw = await asyncio.to_thread(_openai_call_sync, system, prompt)
+        raw = await asyncio.to_thread(
+            _openai_call_sync, system, prompt, tokens, _OPENAI_MODEL_STANDARD
+        )
 
     if not raw:
         return {
             "study_type": "descriptive",
             "outcome_col": None,
-            "objective": "Describe the dataset variables.",
+            "predictors": [],
+            "objective":  "Describe the dataset variables.",
             "sample_size": n_rows or None,
             "test_pairs": [],
-            "reasoning": "AI service unavailable. Configure the analysis manually.",
+            "reasoning":  "AI service unavailable. Configure the analysis manually.",
             "confidence": 0,
-            "source": "fallback",
+            "source":     "fallback",
         }
 
     clean = raw.strip()
     clean = re.sub(r"^```(?:json)?\s*", "", clean, flags=re.MULTILINE)
-    clean = re.sub(r"```\s*$", "", clean, flags=re.MULTILINE).strip()
+    clean = re.sub(r"```\s*$",          "", clean, flags=re.MULTILINE).strip()
 
     try:
         plan = json.loads(clean)
         return {
-            "study_type": plan.get("study_type", "descriptive"),
+            "study_type":  plan.get("study_type", "descriptive"),
             "outcome_col": plan.get("outcome_col"),
-            "objective": plan.get("objective", ""),
+            "predictors":  plan.get("predictors") or [],
+            "objective":   plan.get("objective", ""),
             "sample_size": plan.get("sample_size"),
-            "test_pairs": plan.get("test_pairs") or [],
-            "reasoning": plan.get("reasoning", ""),
-            "confidence": 0.85,
-            "source": "ai",
+            "test_pairs":  plan.get("test_pairs") or [],
+            "reasoning":   plan.get("reasoning", ""),
+            "confidence":  0.85,
+            "source":      "ai",
         }
     except (json.JSONDecodeError, ValueError):
         return {
-            "study_type": "descriptive",
+            "study_type":  "descriptive",
             "outcome_col": None,
-            "objective": "Could not parse AI response.",
+            "predictors":  [],
+            "objective":   "Could not parse AI response.",
             "sample_size": None,
-            "test_pairs": [],
-            "reasoning": clean[:400] if clean else "",
-            "confidence": 0,
-            "source": "parse_error",
+            "test_pairs":  [],
+            "reasoning":   clean[:400] if clean else "",
+            "confidence":  0,
+            "source":      "parse_error",
         }
