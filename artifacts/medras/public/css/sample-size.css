@@ -339,10 +339,13 @@
   margin-top: 4px;
 }
 .hero-stat-significant {
-  background: linear-gradient(180deg, rgba(47, 111, 237, 0.08) 0%, rgba(47, 111, 237, 0.02) 100%);
-  border-color: rgba(47, 111, 237, 0.35);
+  background: linear-gradient(180deg, rgba(59, 130, 246, 0.09) 0%, rgba(59, 130, 246, 0.02) 100%);
+  border-color: rgba(59, 130, 246, 0.35);
 }
-.hero-stat-significant .hero-stat-value { color: var(--color-accent); }
+.hero-stat-significant .hero-stat-value {
+  color: #3b82f6;
+  font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
+}
 /* Friendly empty-state when no expected n was provided. */
 .hero-stat-expected.hero-stat-empty .hero-stat-value {
   font-size: 22px;
@@ -916,19 +919,23 @@
 /* ----- Card C: wizard ----- */
 .wizard-dots {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   margin: 12px 0 0;
   padding: 0;
   list-style: none;
 }
 .wizard-dot {
-  width: 28px;
-  height: 6px;
-  border-radius: 3px;
+  flex: 1;
+  height: 5px;
+  border-radius: 99px;
   background: #d8e0ec;
+  transition: background 200ms ease-out;
 }
-.wizard-dot.is-active { background: #2563eb; }
-.wizard-dot.is-complete { background: #1f7a3a; }
+.wizard-dot.is-active {
+  background: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.22);
+}
+.wizard-dot.is-complete { background: #16a34a; }
 .wizard-step { padding: 16px 0; }
 .wizard-choices {
   display: grid;
