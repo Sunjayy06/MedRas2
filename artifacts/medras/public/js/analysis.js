@@ -2749,8 +2749,15 @@ function renderAssistantThread() {
   const out = $("#assistant-thread");
   if (!out) return;
   out.innerHTML = state.assistantThread.map((m, i) => {
-    const cls = ({ system: "is-system", user: "is-user", action: "is-action", clarify: "is-clarify" })[m.role] || "is-system";
-    return `<div class="se-chat-msg ${cls}" data-testid="chat-msg-${i}-${m.role}">${escapeHtml(m.text)}</div>`;
+    if (m.role === "typing") {
+      return `<div class="se-chat-msg is-typing" data-testid="chat-msg-${i}-typing">
+        <span class="se-typing-dot"></span><span class="se-typing-dot"></span><span class="se-typing-dot"></span>
+      </div>`;
+    }
+    const cls = ({ system: "is-system", user: "is-user", action: "is-action",
+                   ai: "is-ai", clarify: "is-clarify" })[m.role] || "is-system";
+    const prefix = m.role === "action" ? "✓ " : "";
+    return `<div class="se-chat-msg ${cls}" data-testid="chat-msg-${i}-${m.role}">${prefix}${escapeHtml(m.text)}</div>`;
   }).join("");
   out.scrollTop = out.scrollHeight;
 }
@@ -3793,10 +3800,10 @@ async function sendChatMessage(kind, message) {
   if (input) { input.value = ""; input.disabled = true; }
 
   try {
-    const res = await api(`/chat/${kind}`, {
+    const res = await api(`/ai-chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ job_id: state.jobId, message: text }),
+      body: JSON.stringify({ job_id: state.jobId, kind, message: text }),
     });
     // Remove typing placeholder.
     state.chatThreads[kind] = state.chatThreads[kind].filter((m) => m.role !== "typing");
@@ -4112,6 +4119,26 @@ function renderAiConfirmScreen() {
       const el = document.getElementById(id);
       if (el) el.classList.add("is-hidden");
     });
+  }
+
+  // ── Test pairs from AI study plan (shown when available) ─────────────
+  const pairsSect  = document.getElementById("ai-confirm-test-pairs-section");
+  const pairsTbody = document.getElementById("ai-confirm-pairs-tbody");
+  const pairs = (state.aiStudy && state.aiStudy.test_pairs) || [];
+  if (pairsSect && pairsTbody) {
+    if (pairs.length > 0) {
+      pairsTbody.innerHTML = pairs.map((p) => `
+        <tr>
+          <td><code class="se-col-code">${escapeHtml(p.col_a || "")}</code></td>
+          <td class="se-pairs-vs">↔</td>
+          <td><code class="se-col-code">${escapeHtml(p.col_b || "")}</code></td>
+          <td class="se-pairs-test">${escapeHtml(p.test_name || "")}</td>
+          <td class="se-pairs-reason">${escapeHtml(p.reason || "")}</td>
+        </tr>`).join("");
+      pairsSect.classList.remove("is-hidden");
+    } else {
+      pairsSect.classList.add("is-hidden");
+    }
   }
 }
 

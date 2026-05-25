@@ -16,6 +16,7 @@ swapped for a shared cache when we move to a multi-worker deployment.
 
 from __future__ import annotations
 
+import asyncio
 import io
 from typing import Any, Dict, List, Literal, Optional
 
@@ -384,11 +385,11 @@ async def _ai_extract(text: str) -> dict | None:
 
     # ── Try Gemini first ────────────────────────────────────────────────────
     if _gemini_is_configured():
-        try:
+        def _gemini_call() -> dict | None:
             from google.genai import types as _gtypes
             gc = _get_gemini_client()
             resp = gc.models.generate_content(
-                model="gemini-2.0-flash",
+                model="gemini-2.5-flash",
                 contents=prompt,
                 config=_gtypes.GenerateContentConfig(
                     temperature=0.1,
@@ -400,7 +401,11 @@ async def _ai_extract(text: str) -> dict | None:
             raw = _re.sub(r"^```(?:json)?\s*", "", raw, flags=_re.IGNORECASE)
             raw = _re.sub(r"\s*```$", "", raw.strip())
             result = _json.loads(raw)
-            if isinstance(result, dict) and "objective" in result:
+            return result if isinstance(result, dict) and "objective" in result else None
+
+        try:
+            result = await asyncio.to_thread(_gemini_call)
+            if result:
                 return result
         except Exception:
             pass

@@ -227,7 +227,7 @@ async def upload_paper(
         )
 
     try:
-        text = extract_text_from_upload(filename, content)
+        text = await asyncio.to_thread(extract_text_from_upload, filename, content)
     except UploadExtractionError as exc:
         raise HTTPException(422, str(exc)) from exc
 

@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 from typing import Any, Dict
@@ -64,7 +65,7 @@ def _validate_export_payload(payload: Any) -> Dict[str, Any]:
 async def export_docx(payload: Dict[str, Any]) -> Response:
     payload = _validate_export_payload(payload)
     try:
-        data = build_docx(payload)
+        data = await asyncio.to_thread(build_docx, payload)
     except Exception as exc:                                  # noqa: BLE001
         log.exception("docx export failed")
         raise HTTPException(status_code=500, detail=f"Word export failed: {exc}")
@@ -81,7 +82,7 @@ async def export_docx(payload: Dict[str, Any]) -> Response:
 async def export_pdf(payload: Dict[str, Any]) -> Response:
     payload = _validate_export_payload(payload)
     try:
-        data = build_pdf(payload)
+        data = await asyncio.to_thread(build_pdf, payload)
     except Exception as exc:                                  # noqa: BLE001
         log.exception("pdf export failed")
         raise HTTPException(status_code=500, detail=f"PDF export failed: {exc}")
@@ -98,7 +99,7 @@ async def export_pdf(payload: Dict[str, Any]) -> Response:
 async def export_zip(payload: Dict[str, Any]) -> Response:
     payload = _validate_export_payload(payload)
     try:
-        data = build_zip(payload)
+        data = await asyncio.to_thread(build_zip, payload)
     except Exception as exc:                                  # noqa: BLE001
         log.exception("zip export failed")
         raise HTTPException(status_code=500, detail=f"Bundle export failed: {exc}")

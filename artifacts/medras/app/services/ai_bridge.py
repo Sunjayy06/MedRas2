@@ -335,7 +335,7 @@ Rules:
         from google.genai import types as gtypes
         client = get_gemini_client()
         resp = client.models.generate_content(
-            model="gemini-2.0-flash",
+            model="gemini-2.5-flash",
             contents=prompt,
             config=gtypes.GenerateContentConfig(
                 temperature=0.1,

@@ -13,6 +13,7 @@ Endpoints
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any, Dict, List
 
@@ -98,7 +99,9 @@ async def parse_guidelines(request: Request, file: UploadFile = File(...)) -> Di
     if len(data) > MAX_UPLOAD_BYTES:
         raise HTTPException(status_code=413, detail="File too large (>30 MB).")
     try:
-        return thesis_guidelines_parser.parse_guidelines(file.filename or "", data)
+        return await asyncio.to_thread(
+            thesis_guidelines_parser.parse_guidelines, file.filename or "", data
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
@@ -226,7 +229,7 @@ async def export_docx(request: Request, payload: Dict[str, Any]) -> Response:
     if not isinstance(payload, dict):
         raise HTTPException(status_code=400, detail="Payload must be a JSON object.")
     try:
-        data = thesis_export.build_docx(payload)
+        data = await asyncio.to_thread(thesis_export.build_docx, payload)
     except Exception as exc:                                      # noqa: BLE001
         log.exception("thesis docx export failed")
         raise HTTPException(status_code=500, detail=f"Word export failed: {exc}")
@@ -244,7 +247,7 @@ async def export_pdf(request: Request, payload: Dict[str, Any]) -> Response:
     if not isinstance(payload, dict):
         raise HTTPException(status_code=400, detail="Payload must be a JSON object.")
     try:
-        data = thesis_export.build_pdf(payload)
+        data = await asyncio.to_thread(thesis_export.build_pdf, payload)
     except Exception as exc:                                      # noqa: BLE001
         log.exception("thesis pdf export failed")
         raise HTTPException(status_code=500, detail=f"PDF export failed: {exc}")
@@ -262,7 +265,7 @@ async def export_zip(request: Request, payload: Dict[str, Any]) -> Response:
     if not isinstance(payload, dict):
         raise HTTPException(status_code=400, detail="Payload must be a JSON object.")
     try:
-        data = thesis_export.build_zip(payload)
+        data = await asyncio.to_thread(thesis_export.build_zip, payload)
     except Exception as exc:                                      # noqa: BLE001
         log.exception("thesis zip export failed")
         raise HTTPException(status_code=500, detail=f"Bundle export failed: {exc}")

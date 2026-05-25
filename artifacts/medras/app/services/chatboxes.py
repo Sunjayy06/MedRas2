@@ -673,7 +673,7 @@ def _try_gemini(kind: str, message: str, context: Dict[str, Any]) -> Optional[Di
         from google.genai import types as gtypes
         client = get_gemini_client()
         resp = client.models.generate_content(
-            model="gemini-1.5-flash",
+            model="gemini-2.5-flash",
             contents=prompt,
             config=gtypes.GenerateContentConfig(
                 max_output_tokens=400,

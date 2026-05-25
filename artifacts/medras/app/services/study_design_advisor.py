@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -255,9 +256,9 @@ async def recommend_designs(
 
     from app.services.llm_client import get_gemini_client, gemini_is_configured, get_async_openai_client, openai_is_configured
     if gemini_is_configured():
-        try:
+        def _gemini_recommend() -> dict | None:
             from google.genai import types as gtypes
-            gc   = get_gemini_client()
+            gc = get_gemini_client()
             resp = gc.models.generate_content(
                 model="gemini-2.5-flash",
                 contents=prompt,
@@ -266,7 +267,10 @@ async def recommend_designs(
                     response_mime_type="application/json",
                 ),
             )
-            raw = json.loads(resp.text or "{}")
+            return json.loads(resp.text or "{}")
+
+        try:
+            raw = await asyncio.to_thread(_gemini_recommend)
         except Exception as exc:
             log.warning("Gemini recommend failed: %s", exc)
 
@@ -341,9 +345,9 @@ async def generate_methodology(
 
     from app.services.llm_client import get_gemini_client, gemini_is_configured, get_async_openai_client, openai_is_configured
     if gemini_is_configured():
-        try:
+        def _gemini_methodology() -> dict | None:
             from google.genai import types as gtypes
-            gc   = get_gemini_client()
+            gc = get_gemini_client()
             resp = gc.models.generate_content(
                 model="gemini-2.5-flash",
                 contents=prompt,
@@ -352,7 +356,10 @@ async def generate_methodology(
                     response_mime_type="application/json",
                 ),
             )
-            raw = json.loads(resp.text or "{}")
+            return json.loads(resp.text or "{}")
+
+        try:
+            raw = await asyncio.to_thread(_gemini_methodology)
         except Exception as exc:
             log.warning("Gemini methodology failed: %s", exc)
 

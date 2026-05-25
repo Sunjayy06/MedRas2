@@ -7,6 +7,7 @@ POST /api/folio/export-docx         — Reconstruct DOCX from Folio document mod
 """
 from __future__ import annotations
 
+import asyncio
 import io
 import json
 import os
@@ -224,10 +225,10 @@ Extract every distinct instruction from the feedback. Return an empty operations
     if not gemini_is_configured():
         raise HTTPException(503, "AI service not configured.")
 
-    try:
+    def _call_gemini() -> dict:
         from google.genai import types as gtypes
         client = get_gemini_client()
-        resp  = client.models.generate_content(
+        resp = client.models.generate_content(
             model="gemini-2.5-flash",
             contents=prompt,
             config=gtypes.GenerateContentConfig(
@@ -235,7 +236,10 @@ Extract every distinct instruction from the feedback. Return an empty operations
                 max_output_tokens=1024,
             ),
         )
-        result = json.loads(resp.text)
+        return json.loads(resp.text or "{}")
+
+    try:
+        result = await asyncio.to_thread(_call_gemini)
         return {"ok": True, **result}
     except json.JSONDecodeError as exc:
         raise HTTPException(502, "AI returned malformed JSON.") from exc

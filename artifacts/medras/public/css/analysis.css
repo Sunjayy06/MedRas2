@@ -3468,3 +3468,80 @@ td.se-corr-p-sig {
   color: #4b5563;
   margin: 0 0 0.5rem;
 }
+
+/* ============================================================
+   LOADING SKELETONS — shimmer placeholders while AI loads
+   ============================================================ */
+
+@keyframes se-skeleton-shimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+
+.se-skeleton {
+  display: block;
+  background: linear-gradient(90deg, #e8ecf0 25%, #f3f5f7 50%, #e8ecf0 75%);
+  background-size: 800px 100%;
+  animation: se-skeleton-shimmer 1.4s infinite linear;
+  border-radius: 5px;
+}
+
+/* Text-line skeleton: use for paragraph lines */
+.se-skeleton-line {
+  display: block;
+  height: 0.85rem;
+  margin-bottom: 0.5rem;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #e8ecf0 25%, #f3f5f7 50%, #e8ecf0 75%);
+  background-size: 800px 100%;
+  animation: se-skeleton-shimmer 1.4s infinite linear;
+}
+.se-skeleton-line.is-short  { width: 55%; }
+.se-skeleton-line.is-medium { width: 75%; }
+.se-skeleton-line.is-long   { width: 92%; }
+.se-skeleton-line.is-full   { width: 100%; }
+
+/* Card skeleton: mimics a .se-plan-card placeholder */
+.se-skeleton-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 1rem 1.1rem;
+  margin-bottom: 0.75rem;
+  background: #fff;
+}
+.se-skeleton-card .se-skeleton-line:first-child {
+  height: 1rem;
+  width: 45%;
+  margin-bottom: 0.65rem;
+}
+
+/* Heading skeleton */
+.se-skeleton-heading {
+  display: block;
+  height: 1.1rem;
+  width: 60%;
+  margin-bottom: 0.9rem;
+  border-radius: 5px;
+  background: linear-gradient(90deg, #dde2e8 25%, #edf0f3 50%, #dde2e8 75%);
+  background-size: 800px 100%;
+  animation: se-skeleton-shimmer 1.4s infinite linear;
+}
+
+/* Skeleton group — stack of lines */
+.se-skeleton-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+/* ── Chat thread: typing indicator polish ────────────────────── */
+.se-chat-thread .se-chat-msg:last-child {
+  margin-bottom: 0;
+}
+
+/* ── AI-confirm test-pairs section: inherit setup styles ─────── */
+#ai-confirm-test-pairs-section {
+  margin-top: 1rem;
+}
+
+/* ── Step-bar Quality label ──────────────────────────────────── */

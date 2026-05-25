@@ -67,7 +67,7 @@
         <li class="se-step is-active" data-step="1" data-testid="dot-step-1"><span class="se-step-num">1</span><span class="se-step-label">Setup</span></li>
         <li class="se-step" data-step="2" data-testid="dot-step-2"><span class="se-step-num">2</span><span class="se-step-label">Data</span></li>
         <li class="se-step" data-step="3" data-testid="dot-step-3"><span class="se-step-num">3</span><span class="se-step-label">Variables</span></li>
-        <li class="se-step" data-step="4" data-testid="dot-step-4"><span class="se-step-num">4</span><span class="se-step-label">Clean</span></li>
+        <li class="se-step" data-step="4" data-testid="dot-step-4"><span class="se-step-num">4</span><span class="se-step-label">Quality</span></li>
         <li class="se-step" data-step="5" data-testid="dot-step-5"><span class="se-step-num">5</span><span class="se-step-label">Normality</span></li>
         <li class="se-step" data-step="6" data-testid="dot-step-6"><span class="se-step-num">6</span><span class="se-step-label">Plan</span></li>
         <li class="se-step" data-step="7" data-testid="dot-step-7"><span class="se-step-num">7</span><span class="se-step-label">Results</span></li>
@@ -1003,6 +1003,26 @@
 
         <!-- hidden compat divs kept for JS backward compat -->
         <div id="ai-detail-tests" class="is-hidden"><ul id="ai-detail-tests-list"></ul></div>
+
+        <!-- ── Planned test pairs (from AI setup; shown when test_pairs available) ── -->
+        <div id="ai-confirm-test-pairs-section" class="se-plan-section is-hidden" data-testid="ai-confirm-pairs-section">
+          <div class="se-plan-section-head">
+            <span class="se-plan-section-icon">🔬</span>
+            <span class="se-plan-section-title">Planned statistical tests</span>
+          </div>
+          <table class="se-setup-pairs-table">
+            <thead>
+              <tr>
+                <th>Variable A</th>
+                <th></th>
+                <th>Variable B</th>
+                <th>Test</th>
+                <th>Reason</th>
+              </tr>
+            </thead>
+            <tbody id="ai-confirm-pairs-tbody"></tbody>
+          </table>
+        </div>
 
         <!-- ── Primary actions ── -->
         <div class="se-plan-actions">
