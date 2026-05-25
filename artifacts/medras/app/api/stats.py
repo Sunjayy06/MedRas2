@@ -841,14 +841,30 @@ async def variable_assistant_endpoint(
     ai_intent = await ai_chatbox.parse_variable_intent(
         payload.message, {"classifications": stored_classifications}
     )
-    if ai_intent and ai_intent.get("action") in ("rename", "recode", "exclude", "include", "set_type"):
-        intent = {
-            "action": ai_intent["action"],
-            "column": ai_intent.get("column"),
-            "new_name": ai_intent.get("new_name"),
-            "new_type": ai_intent.get("new_type"),
-            "recode_map": ai_intent.get("recode_map") or {},
-        }
+
+    # Normalize the AI action → apply_action() supported names + params shape.
+    # apply_action() uses {action, column, params:{}} — NOT top-level new_name/new_type.
+    # Unsupported actions (recode, include) fall through to rule-based.
+    _ai_action = (ai_intent or {}).get("action")
+    _ai_col    = (ai_intent or {}).get("column")
+    if ai_intent and _ai_col:
+        if _ai_action == "rename" and ai_intent.get("new_name"):
+            intent = {
+                "action": "rename",
+                "column": _ai_col,
+                "params": {"new_name": ai_intent["new_name"]},
+            }
+        elif _ai_action in ("exclude",):
+            intent = {"action": "exclude_column", "column": _ai_col, "params": {}}
+        elif _ai_action == "set_type" and ai_intent.get("new_type"):
+            intent = {
+                "action": "change_type",
+                "column": _ai_col,
+                "params": {"new_type": ai_intent["new_type"]},
+            }
+        else:
+            # recode / include / unrecognised → rule-based fallback
+            intent = variable_assistant.parse_intent(payload.message, columns)
     else:
         # 2. Rule-based fallback (guaranteed to always produce an intent).
         intent = variable_assistant.parse_intent(payload.message, columns)

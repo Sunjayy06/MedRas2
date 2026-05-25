@@ -3179,13 +3179,14 @@ async function _applyQualityHandler() {
     // Route to screen-missing if any columns have high missingness
     // that haven't been handled already (the dedicated screen gives the
     // researcher AI-assisted per-column decision cards).
-    const missingWrap = document.getElementById("dq-missing-wrap");
-    const hasMissingRows = missingWrap &&
-      missingWrap.style.display !== "none" &&
-      missingWrap.querySelectorAll("[data-missing-col]").length > 0;
-    if (hasMissingRows) {
-      showScreen("missing");
+    // Route to screen-missing based on state.classifications (> 5% missing),
+    // not DOM content — the DOM isn't populated until renderMissingScreen() runs.
+    const highMissingCols = (state.classifications || []).filter(
+      (c) => (c.pct_missing || 0) > 0.05
+    );
+    if (highMissingCols.length > 0) {
       renderMissingScreen();
+      showScreen("missing");
       return;
     }
     showScreen("normality");
@@ -4133,11 +4134,6 @@ function _refreshAiDetailPanels() {
 // ---------------------------------------------------------------------------
 // screen-setup — unified study setup (upload-path primary)
 // ---------------------------------------------------------------------------
-
-const _STUDY_TYPE_ICONS = {
-  comparison: "📊", correlation: "📈", association: "🔗",
-  survival: "⏳", diagnostic: "🔬", descriptive: "📋",
-};
 
 function renderSetupScreen(plan) {
   if (!plan) return;
