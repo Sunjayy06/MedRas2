@@ -670,7 +670,7 @@ async def quality_check(job_id: str) -> Dict[str, Any]:
         raise HTTPException(status_code=404, detail="Dataset expired or not found.")
     classifications = entry.meta.get("classifications") or variable_classifier.classify_dataframe(entry.df)
     entry.meta["classifications"] = classifications
-    return data_quality.quality_report(entry.df, classifications=classifications)
+    return await asyncio.to_thread(data_quality.quality_report, entry.df, classifications)
 
 
 class QualityAction(BaseModel):
@@ -693,10 +693,13 @@ async def apply_quality(request: Request, payload: ApplyQualityRequest) -> Dict[
     entry = dataset_store.get(payload.job_id)
     if entry is None:
         raise HTTPException(status_code=404, detail="Dataset expired or not found.")
-    new_df, log_counts = data_quality.apply_actions(
-        entry.df,
-        actions=[a.model_dump() for a in payload.actions],
-        remove_exact_duplicates=payload.remove_exact_duplicates,
+    _actions_list = [a.model_dump() for a in payload.actions]
+    new_df, log_counts = await asyncio.to_thread(
+        lambda: data_quality.apply_actions(
+            entry.df,
+            actions=_actions_list,
+            remove_exact_duplicates=payload.remove_exact_duplicates,
+        )
     )
     dataset_store.replace_df(payload.job_id, new_df)
     dataset_store.update_meta(
@@ -1160,7 +1163,9 @@ async def get_normality(job_id: str) -> Dict[str, Any]:
         raise HTTPException(status_code=404, detail="Dataset expired or not found.")
     classifications = entry.meta.get("classifications") or variable_classifier.classify_dataframe(entry.df)
     entry.meta["classifications"] = classifications
-    out = normality_service.normality_for_dataset(entry.df, classifications, include_qq=True)
+    out = await asyncio.to_thread(
+        normality_service.normality_for_dataset, entry.df, classifications, True
+    )
     entry.meta["normality"] = out
     return {"job_id": job_id, **out}
 
@@ -1209,12 +1214,13 @@ async def generate_plan(job_id: str) -> Dict[str, Any]:
     assignment = entry.meta.get("assignment") or {}
     normality_data = entry.meta.get("normality")
     if not normality_data:
-        normality_data = normality_service.normality_for_dataset(
-            entry.df, classifications, include_qq=False
+        normality_data = await asyncio.to_thread(
+            normality_service.normality_for_dataset, entry.df, classifications, False
         )
         entry.meta["normality"] = normality_data
     session_view = _build_session_view(entry, classifications, assignment)
-    plan_dict = plan_service.generate_plan(
+    plan_dict = await asyncio.to_thread(
+        plan_service.generate_plan,
         entry.df, classifications, assignment, normality_data, session=session_view,
     )
     entry.meta["plan"] = plan_dict
@@ -1236,16 +1242,18 @@ async def run_analysis(payload: RunAnalysisRequest) -> Dict[str, Any]:
     assignment = entry.meta.get("assignment") or {}
     plan_dict = entry.meta.get("plan")
     if not plan_dict:
-        normality_data = entry.meta.get("normality") or normality_service.normality_for_dataset(
-            entry.df, classifications, include_qq=False
+        normality_data = entry.meta.get("normality") or await asyncio.to_thread(
+            normality_service.normality_for_dataset, entry.df, classifications, False
         )
         session_view = _build_session_view(entry, classifications, assignment)
-        plan_dict = plan_service.generate_plan(
+        plan_dict = await asyncio.to_thread(
+            plan_service.generate_plan,
             entry.df, classifications, assignment, normality_data, session=session_view,
         )
         entry.meta["plan"] = plan_dict
     session_view = _build_session_view(entry, classifications, assignment)
-    res = results_service.run_plan(
+    res = await asyncio.to_thread(
+        results_service.run_plan,
         entry.df, classifications, assignment, plan_dict,
         confirmed_test_ids=payload.confirmed_test_ids or None,
         confirmed_graph_ids=payload.confirmed_graph_ids or None,
@@ -1416,13 +1424,15 @@ async def run_correlation(
     )
     entry.meta["classifications"] = classifications
 
-    corr_plan = plan_service.generate_correlation_plan(
-        entry.df, classifications, payload.outcome_col
+    corr_plan = await asyncio.to_thread(
+        plan_service.generate_correlation_plan,
+        entry.df, classifications, payload.outcome_col,
     )
     entry.meta["correlation_plan"] = corr_plan
 
-    corr_results = results_service.run_correlation_plan(
-        entry.df, classifications, corr_plan
+    corr_results = await asyncio.to_thread(
+        results_service.run_correlation_plan,
+        entry.df, classifications, corr_plan,
     )
 
     # Build methods_text so the Word export has a populated Methods section
@@ -1771,7 +1781,8 @@ async def rerun_partial(request: Request, payload: RerunPartialRequest) -> Dict[
             "summary": "",
         }
         session_view = _build_session_view(entry, classifications, assignment)
-        delta_res = results_service.run_plan(
+        delta_res = await asyncio.to_thread(
+            results_service.run_plan,
             entry.df,
             classifications,
             assignment,
@@ -1813,7 +1824,8 @@ async def analyze(request: Request, payload: AnalyzeRequest) -> Dict[str, Any]:
     classifications = entry.meta.get("classifications") or variable_classifier.classify_dataframe(entry.df)
     df = variable_classifier.encode_for_analysis(entry.df, classifications)
     try:
-        result = stats_tests.run_primary_analysis(
+        result = await asyncio.to_thread(
+            stats_tests.run_primary_analysis,
             df,
             outcome=payload.outcome,
             group=payload.group,
