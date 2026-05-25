@@ -237,79 +237,26 @@
       </section>
 
       <!-- ============================================================ -->
-      <!-- DASHBOARD PREVIEW — 2 live cards only                        -->
+      <!-- NOT A CHATBOT — standalone callout                          -->
       <!-- ============================================================ -->
-      <section id="dashboard-preview" class="hp-dash-section" data-testid="dash-section">
+      <section class="hp-notbot-section" data-testid="notbot-section">
         <div class="hp-section-inner">
-          <header class="hp-section-head hp-section-head--center">
-            <p class="hp-eyebrow-sm">Inside MedRAS</p>
-            <h2 class="hp-section-title">What it looks like in action</h2>
-            <p class="hp-section-sub">Two live capabilities you can open right now.</p>
-          </header>
-
-          <div class="hp-dash-grid" data-testid="list-dash">
-
-            <!-- Card — Analytics (Sigma, live) -->
-            <article class="dash-card" data-ws-card="analytics" data-testid="dash-card-5">
-              <div class="dash-mock" style="padding:1rem 1rem 0.5rem;display:flex;flex-direction:column;gap:0.45rem;">
-                <span class="dash-mock-title">Analytics · Sigma output</span>
-                <div style="font-size:9.5px;color:#64748b;margin:-0.1rem 0 0.2rem;">Haemoglobin (g/dL) — Group A vs Group B · Mann-Whitney U</div>
-                <div style="display:flex;align-items:flex-end;gap:0.35rem;height:52px;">
-                  <div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex:1;">
-                    <span style="font-size:8.5px;color:#1e293b;font-weight:600;">11.2</span>
-                    <div style="width:100%;background:#6366f1;border-radius:3px 3px 0 0;height:38px;"></div>
-                    <span style="font-size:8.5px;color:#64748b;">Group A</span>
-                  </div>
-                  <div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex:1;">
-                    <span style="font-size:8.5px;color:#1e293b;font-weight:600;">13.7</span>
-                    <div style="width:100%;background:#22c55e;border-radius:3px 3px 0 0;height:52px;"></div>
-                    <span style="font-size:8.5px;color:#64748b;">Group B</span>
-                  </div>
-                  <div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex:1;">
-                    <span style="font-size:8.5px;color:#1e293b;font-weight:600;">12.4</span>
-                    <div style="width:100%;background:#94a3b8;border-radius:3px 3px 0 0;height:44px;"></div>
-                    <span style="font-size:8.5px;color:#64748b;">Control</span>
-                  </div>
-                </div>
-                <div style="display:flex;gap:0.4rem;flex-wrap:wrap;margin-top:0.1rem;">
-                  <span style="font-size:9px;background:#eff6ff;color:#1d4ed8;border-radius:4px;padding:2px 6px;font-weight:600;">U = 312, p = 0.003</span>
-                  <span style="font-size:9px;background:#f0fdf4;color:#15803d;border-radius:4px;padding:2px 6px;font-weight:600;">r = 0.41 (medium)</span>
-                  <span style="font-size:9px;background:#fef3c7;color:#92400e;border-radius:4px;padding:2px 6px;font-weight:600;">Shapiro-Wilk passed</span>
-                </div>
-              </div>
-              <div class="dash-card-body">
-                <span class="dash-card-live-badge">Live — Available now</span>
-                <h3 class="dash-card-name">Sigma · Analytics</h3>
-                <p class="dash-card-desc">Upload your Excel. Normality-aware tests, effect sizes, significance badges and APA narratives — generated automatically.</p>
-              </div>
-            </article>
-
-            <!-- Card — AI assistant (in development preview) -->
-            <article class="dash-card" data-ws-card="assistant" data-testid="dash-card-3">
-              <div class="dash-mock" style="padding:1rem;display:flex;flex-direction:column;gap:0.45rem;">
-                <span class="dash-mock-title">AI assistant</span>
-                <div style="display:flex;flex-direction:column;gap:0.4rem;margin-top:0.15rem;">
-                  <div style="align-self:flex-end;background:#6366f1;color:#fff;border-radius:10px 10px 3px 10px;padding:0.4rem 0.65rem;font-size:10px;max-width:82%;line-height:1.4;">
-                    Which test should I use for two unpaired non-normal groups with n=28?
-                  </div>
-                  <div style="align-self:flex-start;background:#f1f5f9;color:#1e293b;border-radius:10px 10px 10px 3px;padding:0.4rem 0.65rem;font-size:10px;max-width:88%;line-height:1.4;">
-                    Use the <strong>Mann-Whitney U test</strong> (Wilcoxon rank-sum). With n=28 per group and non-normal distribution confirmed by Shapiro-Wilk, a parametric t-test would be inappropriate. MedRAS Sigma will run this automatically.
-                  </div>
-                  <div style="align-self:flex-end;background:#6366f1;color:#fff;border-radius:10px 10px 3px 10px;padding:0.4rem 0.65rem;font-size:10px;max-width:82%;line-height:1.4;">
-                    How do I report the effect size?
-                  </div>
-                  <div style="align-self:flex-start;background:#f1f5f9;color:#1e293b;border-radius:10px 10px 10px 3px;padding:0.4rem 0.65rem;font-size:10px;max-width:88%;line-height:1.4;">
-                    Report <strong>r = Z / √N</strong> (rank-biserial correlation). Values: small ≥0.1, medium ≥0.3, large ≥0.5. Sigma includes this automatically.
-                  </div>
-                </div>
-              </div>
-              <div class="dash-card-body">
-                <span class="dash-card-dev-badge">In development</span>
-                <h3 class="dash-card-name">AI assistant</h3>
-                <p class="dash-card-desc">Ask methodology, statistics, or writing questions in plain language. Guidance is always grounded — AI never fabricates numbers or tests.</p>
-              </div>
-            </article>
-
+          <div class="hp-notbot-inner">
+            <div class="hp-notbot-copy">
+              <p class="hp-eyebrow-sm">What MedRAS is</p>
+              <h2 class="hp-notbot-headline" data-testid="text-about-heading">Not a chatbot.<br>A research operating system.</h2>
+              <p class="hp-notbot-body">MedRAS is structured and menu-driven. Statistical results come from validated libraries — not language models. AI assists only with planning and writing, and every suggestion requires your explicit approval.</p>
+            </div>
+            <div class="hp-notbot-tags" aria-hidden="true">
+              <span class="hp-notbot-tag hp-notbot-tag--yes">✓ Library-backed numbers</span>
+              <span class="hp-notbot-tag hp-notbot-tag--yes">✓ Locked study values</span>
+              <span class="hp-notbot-tag hp-notbot-tag--yes">✓ Track-change AI drafts</span>
+              <span class="hp-notbot-tag hp-notbot-tag--yes">✓ Compliance pre-flight</span>
+              <span class="hp-notbot-tag hp-notbot-tag--no">✗ AI-generated statistics</span>
+              <span class="hp-notbot-tag hp-notbot-tag--no">✗ Hallucinated citations</span>
+              <span class="hp-notbot-tag hp-notbot-tag--no">✗ Silent AI number edits</span>
+              <span class="hp-notbot-tag hp-notbot-tag--no">✗ Data stored on servers</span>
+            </div>
           </div>
         </div>
       </section>
@@ -347,12 +294,12 @@
           <div class="hp-about-grid">
             <div class="hp-about-left" data-testid="about-card">
               <p class="hp-eyebrow-sm about-eyebrow">About MedRAS</p>
-              <h2 class="hp-about-headline" data-testid="text-about-heading">Not a chatbot.<br>A research operating system.</h2>
+              <h2 class="hp-about-headline">Built for Indian and international academic publishing.</h2>
               <p class="hp-about-body">
-                MedRAS is purpose-built for medical, biomedical, and academic researchers who need methodological rigour at every step. The interface is structured and menu-driven; statistical computation is performed by validated libraries, not by language models. AI assists with planning and writing — never with numerical results.
+                MedRAS is purpose-built for medical, biomedical, and academic researchers who need methodological rigour at every step — from ICMR ethics submissions to journal-ready manuscripts.
               </p>
               <p class="hp-about-body">
-                Built from Chennai, designed for researchers navigating the demands of Indian and international academic publishing — from ICMR ethics submissions to journal-ready manuscripts.
+                Built from Chennai, for researchers navigating the demands of Indian and international academic publishing.
               </p>
             </div>
             <div class="hp-about-right">

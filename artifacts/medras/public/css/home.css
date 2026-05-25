@@ -668,6 +668,77 @@ body.home {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
+   NOT A CHATBOT — standalone callout
+═══════════════════════════════════════════════════════════════════════════ */
+.hp-notbot-section {
+  background: linear-gradient(160deg, #060d1f 0%, #0f1d3d 55%, #08122e 100%);
+  padding: 72px 0;
+}
+
+.hp-notbot-inner {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 64px;
+  align-items: center;
+}
+
+.hp-notbot-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.hp-notbot-section .hp-eyebrow-sm {
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.hp-notbot-headline {
+  font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
+  font-size: clamp(28px, 3.2vw, 42px);
+  font-weight: 800;
+  color: #fff;
+  margin: 0;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+
+.hp-notbot-body {
+  font-size: 15px;
+  color: rgba(255, 255, 255, 0.65);
+  margin: 0;
+  line-height: 1.7;
+  max-width: 440px;
+}
+
+.hp-notbot-tags {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.hp-notbot-tag {
+  font-size: 13px;
+  font-weight: 600;
+  padding: 10px 14px;
+  border-radius: 8px;
+  line-height: 1.3;
+}
+
+.hp-notbot-tag--yes {
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  color: #6ee7b7;
+}
+
+.hp-notbot-tag--no {
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.16);
+  color: rgba(255, 255, 255, 0.38);
+  text-decoration: line-through;
+  text-decoration-color: rgba(239, 68, 68, 0.4);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
    PRINCIPLES STRIP — 3 pillars
 ═══════════════════════════════════════════════════════════════════════════ */
 .hp-principles-section {
@@ -831,10 +902,12 @@ body.home {
   .hp-modules-grid {
     grid-template-columns: repeat(2, 1fr);
   }
-  .hp-dash-grid {
+  .hp-notbot-inner {
     grid-template-columns: 1fr;
-    max-width: 560px;
-    margin: 0 auto;
+    gap: 40px;
+  }
+  .hp-notbot-tags {
+    grid-template-columns: repeat(2, 1fr);
   }
   .hp-about-grid {
     grid-template-columns: 1fr;
