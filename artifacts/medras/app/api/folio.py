@@ -162,7 +162,7 @@ async def import_docx(file: UploadFile = File(...)) -> Dict[str, Any]:
     if len(content) < 100:
         raise HTTPException(400, "File appears empty or corrupt.")
     try:
-        model = _extract_docx(content)
+        model = await asyncio.to_thread(_extract_docx, content)
     except Exception as exc:
         log.exception("DOCX extraction failed")
         raise HTTPException(422, f"Could not read document: {exc}") from exc

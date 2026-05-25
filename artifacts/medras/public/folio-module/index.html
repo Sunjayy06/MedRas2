@@ -158,6 +158,12 @@
   <!-- Hidden file input -->
   <input type="file" id="file-input" accept=".docx" style="display:none">
 
+  <!-- Start blank option -->
+  <div style="text-align:center;margin-bottom:24px;">
+    <span style="font-size:12px;color:var(--fl-muted);">Don't have a Word file yet?&ensp;</span>
+    <button id="btn-new-blank" style="background:none;border:none;font-size:12px;color:var(--fl-primary);font-weight:600;cursor:pointer;text-decoration:underline;padding:0;">Start a new blank document →</button>
+  </div>
+
   <!-- Feature list -->
   <div style="padding: 20px 24px; background: var(--fl-surface); border-radius: var(--fl-radius); border: 1px solid var(--fl-border);">
     <p style="font-size: 12px; font-weight: 600; color: var(--fl-muted); text-transform: uppercase; letter-spacing:.06em; margin-bottom: 12px;">What Folio does to your document</p>
@@ -196,6 +202,27 @@
   var sigmaBanner = document.getElementById('sigma-banner');
   var sigmaBtn    = document.getElementById('sigma-import-btn');
   var toastEl     = document.getElementById('toast');
+  var btnNewBlank = document.getElementById('btn-new-blank');
+
+  // ── Start blank document ───────────────────────────────────────────────────
+  if (btnNewBlank) {
+    btnNewBlank.addEventListener('click', function () {
+      var doc = {
+        title: 'Untitled Document',
+        sections: [
+          { id: _uid(), level: 1, title: 'Introduction', paragraphs: [{ id: _uid(), text: '' }] },
+          { id: _uid(), level: 1, title: 'Methods',      paragraphs: [{ id: _uid(), text: '' }] },
+          { id: _uid(), level: 1, title: 'Results',      paragraphs: [{ id: _uid(), text: '' }] },
+          { id: _uid(), level: 1, title: 'Discussion',   paragraphs: [{ id: _uid(), text: '' }] },
+          { id: _uid(), level: 1, title: 'Conclusion',   paragraphs: [{ id: _uid(), text: '' }] },
+          { id: _uid(), level: 1, title: 'References',   paragraphs: [] },
+        ],
+        references: [], tables: [], figures: [],
+      };
+      sessionStorage.setItem('folio.doc', JSON.stringify(doc));
+      window.location.href = 'editor.html';
+    });
+  }
 
   // ── Toast ──────────────────────────────────────────────────────────────────
   function toast(msg, duration) {
