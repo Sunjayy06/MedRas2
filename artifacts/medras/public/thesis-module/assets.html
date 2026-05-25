@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Figures &amp; Annexures · Scriptorium · MedRAS</title>
 <link rel="stylesheet" href="/thesis-module/css/style.css" />
+<link rel="stylesheet" href="/css/medras-nav.css" />
 <style>
   .th-asset-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap:14px; margin-top:12px; }
   .th-asset-card { border:1px solid var(--th-line); border-radius:10px; background:#fff; padding:10px; display:flex; flex-direction:column; gap:8px; }
@@ -15,7 +16,7 @@
   .th-asset-bin { background:transparent; border:0; color:var(--th-amber); cursor:pointer; font-weight:700; }
 </style>
 </head>
-<body>
+<body data-medras-module="scriptorium">
 <header class="th-header">
   <a class="th-brand" href="/thesis-module/"><span class="th-brand-mark">S</span><span>MedRAS — Scriptorium</span></a>
   <nav class="th-nav"><a href="/thesis-module/dashboard.html">← Dashboard</a><a href="/thesis-module/export.html">Export →</a></nav>
@@ -245,5 +246,6 @@
   })();
 })();
 </script>
+<script src="/js/medras-nav.js" defer></script>
 </body>
 </html>

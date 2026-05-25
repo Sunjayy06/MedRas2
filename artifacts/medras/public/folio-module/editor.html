@@ -89,5 +89,12 @@
 <script src="/js/medras-nav.js"></script>
 <script src="js/folio-core.js"></script>
 <script src="js/folio-editor.js"></script>
+<script>
+  try {
+    sessionStorage.setItem('medras.nav.returnHint', JSON.stringify({
+      module: 'folio', label: 'your document', url: '/folio-module/editor.html',
+    }));
+  } catch (_) {}
+</script>
 </body>
 </html>

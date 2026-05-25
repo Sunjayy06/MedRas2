@@ -174,9 +174,26 @@
 
     bar.appendChild(list);
 
-    /* Right: home link */
+    /* Right: return hint (if a session is waiting) + home link */
     var right = document.createElement('div');
     right.className = 'mn-right';
+
+    /* Return hint — read standardised medras.nav.returnHint key */
+    var returnHint = null;
+    try {
+      var rawHint = sessionStorage.getItem('medras.nav.returnHint');
+      if (rawHint) returnHint = JSON.parse(rawHint);
+    } catch (_) {}
+
+    if (returnHint && returnHint.module && returnHint.url && returnHint.label
+        && returnHint.module !== active) {
+      var hint = document.createElement('a');
+      hint.className = 'mn-return';
+      hint.href = returnHint.url;
+      hint.title = 'Return to your in-progress session';
+      hint.textContent = '\u2190 Return to ' + returnHint.label;
+      right.appendChild(hint);
+    }
 
     var homeLink = document.createElement('a');
     homeLink.href = '/';

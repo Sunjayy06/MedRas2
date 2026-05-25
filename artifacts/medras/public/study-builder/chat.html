@@ -178,5 +178,14 @@
 
 <script src="/study-builder/js/sb.js"></script>
   <script src="/js/medras-nav.js" defer></script>
+  <script>
+    try {
+      if (sessionStorage.getItem('sb.session_id')) {
+        sessionStorage.setItem('medras.nav.returnHint', JSON.stringify({
+          module: 'helix', label: 'your research question', url: '/study-builder/chat.html',
+        }));
+      }
+    } catch (_) {}
+  </script>
 </body>
 </html>

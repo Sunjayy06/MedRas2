@@ -1255,6 +1255,7 @@ function ingestDataset(data) {
     state.results = null;
     state.chatThreads = { normality: [], plan: [], results: [] };
     state.chatOpened  = { normality: false, plan: false, results: false };
+    try { sessionStorage.removeItem('medras.nav.returnHint'); } catch (_) {}
   }
   state.jobId = data.job_id;
   state.summary = data.summary;
@@ -3570,6 +3571,11 @@ async function runAnalysis() {
     showScreen("results");
     renderResults();
     openChatbox("results");
+    try {
+      sessionStorage.setItem('medras.nav.returnHint', JSON.stringify({
+        module: 'sigma', label: 'your analysis', url: '/analysis.html',
+      }));
+    } catch (_) {}
   } catch (err) {
     setStatus(status, `Run failed: ${err.message}`, "error");
   }

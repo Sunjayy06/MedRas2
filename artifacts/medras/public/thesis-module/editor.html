@@ -446,5 +446,12 @@
 })();
 </script>
 <script src="/js/medras-nav.js" defer></script>
+<script>
+  try {
+    sessionStorage.setItem('medras.nav.returnHint', JSON.stringify({
+      module: 'scriptorium', label: 'your thesis chapter', url: '/thesis-module/editor.html',
+    }));
+  } catch (_) {}
+</script>
 </body>
 </html>
