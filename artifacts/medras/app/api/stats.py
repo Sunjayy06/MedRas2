@@ -1041,7 +1041,7 @@ async def chatbox_opening(kind: str, job_id: str) -> Dict[str, Any]:
     if kind not in _VALID_CHATBOX_KINDS:
         raise HTTPException(status_code=404, detail="Unknown chatbox kind.")
     ctx = _chatbox_context(job_id, kind)
-    return {"role": "system", "text": chatboxes.opening_message(kind, ctx)}
+    return {"role": "system", "text": await ai_chatbox.opening_message(kind, ctx)}
 
 
 @router.post("/chat/{kind}")

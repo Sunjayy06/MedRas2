@@ -390,7 +390,51 @@ async def chat(
 
 
 async def opening_message(kind: str, context: Dict[str, Any]) -> str:
-    """Fast, context-aware opening message (uses rule-based path for speed)."""
+    """AI-powered context-aware opening message for each chatbox screen.
+
+    Generates a 1–2 sentence greeting that references specific details from the
+    session data (e.g. how many variables are normal, which tests are planned,
+    whether any results are significant) and invites the researcher to ask a
+    question.  Falls back to the rule-based chatboxes.opening_message() if
+    both LLM providers are unavailable.
+    """
+    system_prompt = _build_system_prompt(kind, context)
+
+    user_msg = (
+        "Write a 1–2 sentence opening message for this screen. "
+        "Reference 1–2 specific details from the session data above "
+        "(e.g. how many variables are normal, which tests are planned, "
+        "or whether any results are statistically significant). "
+        "End with a natural, open-ended invitation for the researcher to "
+        "ask a question. "
+        "Plain prose only — no bullet points, no markdown, no JSON."
+    )
+
+    # Small token budget — this is just a brief greeting
+    tokens = 160
+
+    # Gemini primary for most kinds, OpenAI for results/plan
+    if kind in _OPENAI_PRIMARY_KINDS:
+        raw = await asyncio.to_thread(
+            _openai_call_sync, system_prompt, user_msg, tokens, _OPENAI_MODEL_STANDARD
+        )
+        if raw is None:
+            raw = await asyncio.to_thread(_gemini_call_sync, system_prompt, user_msg, tokens)
+    else:
+        raw = await asyncio.to_thread(_gemini_call_sync, system_prompt, user_msg, tokens)
+        if raw is None:
+            raw = await asyncio.to_thread(
+                _openai_call_sync, system_prompt, user_msg, tokens, _OPENAI_MODEL_STANDARD
+            )
+
+    if raw and len(raw.strip()) > 10:
+        # Strip any accidental JSON or markdown the model may have emitted
+        text = _strip_action_json(raw.strip())
+        text = re.sub(r"^```[^\n]*\n?|```$", "", text, flags=re.MULTILINE).strip()
+        if text:
+            return text
+
+    # Rule-based fallback — always available
     return chatboxes.opening_message(kind, context)
 
 
