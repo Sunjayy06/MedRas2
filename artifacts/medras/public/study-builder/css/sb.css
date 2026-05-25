@@ -1,23 +1,27 @@
-/* MedRAS Research Assistant — complete stylesheet */
+/* MedRAS Helix — Study Builder  (UI Overhaul 2026-05) */
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap');
+
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
-  --bg:      #08091a;
-  --surface: #0f1628;
-  --s2:      #161d33;
+  --bg:      #060910;
+  --surface: #0d1422;
+  --s2:      #131c2e;
   --border:  rgba(255,255,255,.07);
-  --border2: rgba(255,255,255,.12);
+  --border2: rgba(255,255,255,.13);
   --teal:    #0891b2;
-  --teal-lt: #06b6d4;
-  --teal-dim:rgba(8,145,178,.13);
+  --teal-lt: #22d3ee;
+  --teal-dim:rgba(8,145,178,.14);
   --text:    #e2e8f0;
-  --muted:   rgba(226,232,240,.48);
-  --muted2:  rgba(226,232,240,.22);
-  --radius:  14px;
-  --font:    -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", sans-serif;
+  --muted:   rgba(226,232,240,.52);
+  --muted2:  rgba(226,232,240,.24);
+  --radius:  12px;
+  --font:    'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-display: 'Plus Jakarta Sans', 'Inter', sans-serif;
 }
 html, body { height: 100%; }
 body {
   font-family: var(--font);
+  -webkit-font-smoothing: antialiased;
   background: var(--bg);
   color: var(--text);
   display: flex;

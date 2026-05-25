@@ -1,10 +1,12 @@
 /* ============================================================
-   Folio — Document Management Module
+   Folio — Document Management Module  (UI Overhaul 2026-05)
    Theme: slate / warm-paper
    ============================================================ */
 
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap');
+
 :root {
-  --fl-bg:        #f8f7f4;
+  --fl-bg:        #f6f5f2;
   --fl-surface:   #ffffff;
   --fl-border:    #e2ddd6;
   --fl-primary:   #7c3aed;
@@ -14,10 +16,10 @@
   --fl-hint:      #a8a29e;
   --fl-paper:     #fefce8;
   --fl-paper-b:   #fef9c3;
-  --fl-sidebar-l: #1e1b4b;
+  --fl-sidebar-l: #12102a;
   --fl-sidebar-t: #e0e7ff;
-  --fl-sidebar-m: rgba(255,255,255,.06);
-  --fl-sidebar-a: rgba(124,58,237,.35);
+  --fl-sidebar-m: rgba(255,255,255,.07);
+  --fl-sidebar-a: rgba(124,58,237,.3);
   --fl-danger:    #dc2626;
   --fl-warn:      #d97706;
   --fl-success:   #16a34a;
@@ -25,6 +27,7 @@
   --fl-ref-b:     #ede9fe;
   --fl-radius:    10px;
   --fl-nav-h:     48px;
+  --fl-font-display: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif;
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -32,7 +35,7 @@
 html { font-size: 15px; -webkit-font-smoothing: antialiased; }
 
 body {
-  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
   background: var(--fl-bg);
   color: var(--fl-text);
   min-height: 100vh;

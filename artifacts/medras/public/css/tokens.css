@@ -1,0 +1,217 @@
+/* =========================================================================
+   MedRAS — Shared Design Tokens  (imported first on every page)
+   ========================================================================= */
+
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap');
+
+:root {
+  /* ── Brand palette ────────────────────────────────────────────────── */
+  --tk-navy-950: #030a1a;
+  --tk-navy-900: #060d1f;
+  --tk-navy-800: #0c1733;
+  --tk-navy-700: #132044;
+  --tk-navy-600: #1c3060;
+  --tk-navy-100: #dde6f5;
+  --tk-navy-50:  #eef3fb;
+
+  --tk-blue-600: #2563eb;
+  --tk-blue-500: #3b82f6;
+  --tk-blue-400: #60a5fa;
+  --tk-blue-300: #93c5fd;
+
+  --tk-teal-600: #0891b2;
+  --tk-teal-500: #06b6d4;
+  --tk-teal-400: #22d3ee;
+
+  --tk-green-700: #15803d;
+  --tk-green-600: #16a34a;
+  --tk-green-500: #22c55e;
+
+  --tk-gold-500:  #f59e0b;
+  --tk-gold-400:  #fbbf24;
+  --tk-gold-warm: #ffc857;
+
+  --tk-purple-600: #7c3aed;
+  --tk-purple-500: #8b5cf6;
+
+  --tk-red-600: #dc2626;
+  --tk-red-500: #ef4444;
+
+  /* ── Neutral text / surfaces ─────────────────────────────────────── */
+  --tk-text-primary:   #111827;
+  --tk-text-secondary: #374151;
+  --tk-text-muted:     #6b7280;
+  --tk-text-faint:     #9ca3af;
+
+  --tk-surface-white:  #ffffff;
+  --tk-surface-soft:   #f9fafb;
+  --tk-surface-muted:  #f3f4f6;
+
+  --tk-border-light:  #e5e7eb;
+  --tk-border-medium: #d1d5db;
+
+  /* ── Typography ──────────────────────────────────────────────────── */
+  --tk-font-display: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, sans-serif;
+  --tk-font-body:    'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --tk-font-mono:    'SF Mono', 'Cascadia Mono', 'Roboto Mono', Consolas, monospace;
+
+  /* Heading scale */
+  --tk-h1: clamp(36px, 4vw, 56px);
+  --tk-h2: clamp(24px, 3vw, 36px);
+  --tk-h3: clamp(18px, 2vw, 22px);
+  --tk-body-lg:  16px;
+  --tk-body:     15px;
+  --tk-body-sm:  13.5px;
+  --tk-caption:  12px;
+
+  /* ── Radius ──────────────────────────────────────────────────────── */
+  --tk-r-xs:  4px;
+  --tk-r-sm:  6px;
+  --tk-r-md:  10px;
+  --tk-r-lg:  14px;
+  --tk-r-xl:  18px;
+  --tk-r-2xl: 24px;
+  --tk-r-full: 9999px;
+
+  /* ── Shadows ─────────────────────────────────────────────────────── */
+  --tk-shadow-xs:  0 1px 2px rgba(0,0,0,.05);
+  --tk-shadow-sm:  0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.04);
+  --tk-shadow-md:  0 4px 14px rgba(0,0,0,.08), 0 2px 4px rgba(0,0,0,.04);
+  --tk-shadow-lg:  0 10px 28px rgba(0,0,0,.10), 0 4px 8px rgba(0,0,0,.04);
+  --tk-shadow-xl:  0 20px 48px rgba(0,0,0,.14), 0 8px 16px rgba(0,0,0,.06);
+  --tk-shadow-card: 0 2px 8px rgba(0,0,0,.06), 0 0 1px rgba(0,0,0,.06);
+
+  /* Dark-surface specific shadows */
+  --tk-shadow-dark-md: 0 4px 24px rgba(0,0,0,.35), 0 2px 8px rgba(0,0,0,.18);
+  --tk-shadow-dark-lg: 0 12px 40px rgba(0,0,0,.45), 0 4px 12px rgba(0,0,0,.25);
+
+  /* ── Transitions ─────────────────────────────────────────────────── */
+  --tk-t-fast:   100ms ease-out;
+  --tk-t-base:   150ms ease-out;
+  --tk-t-slow:   250ms ease-out;
+
+  /* ── Spacing scale (t-shirt) ─────────────────────────────────────── */
+  --tk-sp-1:  4px;
+  --tk-sp-2:  8px;
+  --tk-sp-3:  12px;
+  --tk-sp-4:  16px;
+  --tk-sp-5:  20px;
+  --tk-sp-6:  24px;
+  --tk-sp-8:  32px;
+  --tk-sp-10: 40px;
+  --tk-sp-12: 48px;
+  --tk-sp-16: 64px;
+  --tk-sp-20: 80px;
+
+  /* ── Button geometry ─────────────────────────────────────────────── */
+  --tk-btn-h-md: 44px;
+  --tk-btn-h-sm: 36px;
+  --tk-btn-h-lg: 52px;
+  --tk-btn-px-md: 20px;
+  --tk-btn-px-sm: 14px;
+  --tk-btn-px-lg: 28px;
+  --tk-btn-r:     10px;
+  --tk-btn-fs-md: 14.5px;
+  --tk-btn-fw:    600;
+
+  /* ── Max widths ──────────────────────────────────────────────────── */
+  --tk-max-text:  680px;
+  --tk-max-card:  880px;
+  --tk-max-wide:  1120px;
+  --tk-max-full:  1440px;
+}
+
+/* ── Shared button reset ─────────────────────────────────────────────── */
+.tk-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: var(--tk-btn-h-md);
+  padding: 0 var(--tk-btn-px-md);
+  border-radius: var(--tk-btn-r);
+  font-family: var(--tk-font-body);
+  font-size: var(--tk-btn-fs-md);
+  font-weight: var(--tk-btn-fw);
+  border: 1px solid transparent;
+  cursor: pointer;
+  text-decoration: none;
+  transition:
+    background var(--tk-t-base),
+    border-color var(--tk-t-base),
+    color var(--tk-t-base),
+    box-shadow var(--tk-t-base),
+    transform var(--tk-t-base);
+  white-space: nowrap;
+  user-select: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+.tk-btn:active { transform: translateY(1px); }
+.tk-btn[disabled], .tk-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* Primary — solid blue */
+.tk-btn-primary {
+  background: var(--tk-blue-600);
+  color: #fff;
+  box-shadow: 0 1px 3px rgba(37,99,235,.25), 0 4px 12px rgba(37,99,235,.18);
+}
+.tk-btn-primary:hover {
+  background: #1d4fd8;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(37,99,235,.3), 0 8px 20px rgba(37,99,235,.22);
+}
+
+/* Ghost — outlined */
+.tk-btn-ghost {
+  background: transparent;
+  border-color: var(--tk-border-medium);
+  color: var(--tk-text-secondary);
+}
+.tk-btn-ghost:hover {
+  background: var(--tk-surface-muted);
+  border-color: var(--tk-border-light);
+  transform: translateY(-1px);
+}
+
+/* Ghost light — on dark surfaces */
+.tk-btn-ghost-light {
+  background: rgba(255,255,255,.07);
+  border-color: rgba(255,255,255,.16);
+  color: rgba(255,255,255,.88);
+}
+.tk-btn-ghost-light:hover {
+  background: rgba(255,255,255,.12);
+  border-color: rgba(255,255,255,.24);
+  color: #fff;
+  transform: translateY(-1px);
+}
+
+/* Destructive */
+.tk-btn-danger {
+  background: var(--tk-red-600);
+  color: #fff;
+}
+.tk-btn-danger:hover {
+  background: #b91c1c;
+  transform: translateY(-1px);
+}
+
+/* Small variant */
+.tk-btn-sm {
+  height: var(--tk-btn-h-sm);
+  padding: 0 var(--tk-btn-px-sm);
+  font-size: 13px;
+  border-radius: 8px;
+}
+
+/* Large variant */
+.tk-btn-lg {
+  height: var(--tk-btn-h-lg);
+  padding: 0 var(--tk-btn-px-lg);
+  font-size: 16px;
+}

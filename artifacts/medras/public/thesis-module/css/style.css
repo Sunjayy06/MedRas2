@@ -1,28 +1,31 @@
 /* ============================================================
-   Scriptorium (Thesis &amp; Article Writing) — emerald / parchment theme
-   (visually distinct from the navy Proposal module so the user
-   can tell which module they're in at a glance)
+   Scriptorium (Thesis & Article Writing) — emerald / parchment theme
+   (visually distinct from the navy Proposal module)
+   UI Overhaul 2026-05
    ============================================================ */
 
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap');
+
 :root {
-  --th-ink-900:   #0a1f1a;
-  --th-ink-800:   #0f2e26;
-  --th-ink-700:   #143b30;
+  --th-ink-900:   #071410;
+  --th-ink-800:   #0c2219;
+  --th-ink-700:   #133224;
   --th-emerald:   #10b981;
   --th-emerald-d: #059669;
   --th-gold:      #f5b431;
-  --th-gold-soft: #fff3c8;
-  --th-paper:     #f7f5ee;
-  --th-paper-2:   #ecebe1;
-  --th-line:      #d6d3c4;
-  --th-text:      #1c2620;
-  --th-text-soft: #5b6760;
+  --th-gold-soft: #fff8e6;
+  --th-paper:     #f9f7f1;
+  --th-paper-2:   #eeece3;
+  --th-line:      #dad7c8;
+  --th-text:      #1a201c;
+  --th-text-soft: #56645d;
   --th-danger:    #dc2626;
   --th-amber:     #d97706;
   --th-success:   #059669;
-  --th-radius:    14px;
-  --th-shadow:    0 22px 50px -22px rgba(10, 31, 26, 0.35);
+  --th-radius:    12px;
+  --th-shadow:    0 22px 50px -20px rgba(7, 20, 16, 0.4);
   --th-mono:      ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --th-font-display: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif;
 }
 
 * { box-sizing: border-box; }
@@ -30,6 +33,7 @@
 html, body {
   margin: 0; padding: 0;
   font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  -webkit-font-smoothing: antialiased;
   color: var(--th-text);
   background: var(--th-paper);
   min-height: 100vh;
@@ -41,14 +45,16 @@ a:hover { text-decoration: underline; }
 
 /* --- Header --- */
 .th-header {
-  padding: 18px 28px;
+  padding: 16px 28px;
   display: flex; align-items: center; justify-content: space-between;
-  background: var(--th-ink-900); color: #fff;
-  border-bottom: 3px solid var(--th-emerald);
-  position: sticky; top: 0; z-index: 30;
+  background: rgba(7, 20, 16, 0.92); color: #fff;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 2px solid var(--th-emerald);
+  position: sticky; top: 36px; z-index: 30;
 }
 .th-brand { display: flex; align-items: center; gap: 12px;
-  font-weight: 700; font-size: 17px; color: #fff; }
+  font-family: var(--th-font-display); font-weight: 700; font-size: 17px; color: #fff; }
 .th-brand-mark {
   width: 34px; height: 34px; border-radius: 8px;
   display: grid; place-items: center;

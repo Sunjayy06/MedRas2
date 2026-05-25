@@ -4,154 +4,77 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>MedRAS — Medical Research Acceleration System</title>
-    <meta
-      name="description"
-      content="MedRAS is a structured research operating system for medical and academic research. Plan, calculate, analyse, write, and verify — end to end."
-    />
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%237c3aed'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-family='Inter,sans-serif' font-size='18' font-weight='700' fill='white'%3EM%3C/text%3E%3C/svg%3E" />
-    <link rel="stylesheet" href="/css/style.css?v=2026050144" />
-    <link rel="stylesheet" href="/css/home.css?v=2026050144" />
+    <meta name="description" content="MedRAS is a structured research operating system for medical and academic research. Plan, calculate, analyse, write, and verify — end to end." />
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%233b82f6'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-family='Inter,sans-serif' font-size='18' font-weight='700' fill='white'%3EM%3C/text%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="/css/tokens.css" />
+    <link rel="stylesheet" href="/css/style.css?v=2026052501" />
+    <link rel="stylesheet" href="/css/home.css?v=2026052501" />
     <link rel="stylesheet" href="/css/medras-nav.css" />
   </head>
   <body class="home" data-medras-module="">
-    <header class="site-header" data-testid="site-header">
-      <div class="header-inner">
-        <a href="/" class="brand" data-testid="link-home">
-          <span class="brand-mark">M</span>
-          <span class="brand-text">MedRAS</span>
-        </a>
-        <nav class="primary-nav" aria-label="Primary">
-          <a href="/" class="nav-link" data-testid="link-nav-home">Home</a>
-          <a href="#modules" class="nav-link" data-testid="link-nav-modules">Modules</a>
-          <a href="/proposal-module/" class="nav-link" data-testid="link-nav-proposal">Proposal Writing</a>
-          <a href="#lifecycle" class="nav-link" data-testid="link-nav-workflow">Workflow</a>
-          <a href="#about" class="nav-link" data-testid="link-nav-about">About</a>
-        </nav>
-      </div>
-    </header>
 
     <main>
+
       <!-- ============================================================ -->
-      <!-- HERO SLIDER (6 slides)                                       -->
+      <!-- HERO — single panel, no slider                               -->
       <!-- ============================================================ -->
-      <section class="hero-slider" data-slider data-testid="hero-slider">
-        <div class="slider-viewport">
-          <div class="slider-track">
-
-            <!-- Slide 0 — Identity / Brand -->
-            <article class="slide slide--brand" data-testid="slide-brand">
-              <span class="slide-brand-badge">From Chennai, for researchers everywhere</span>
-              <h1 class="slide-brand-headline">
-                Your research<br/>
-                <span class="grad-text">operating system.</span>
-              </h1>
-              <p class="slide-brand-sub">
-                A structured research OS for medical and academic researchers.
-                From objective to submission-ready manuscript — guided,
-                validated, compliance-aware.
-              </p>
-            </article>
-
-            <!-- Slide 1 — Sample Size -->
-            <article class="slide slide--ss" data-testid="slide-ss">
-              <span class="slide-status">Module 02 · Available</span>
-              <span class="slide-pill">Sample Size Calculator</span>
-              <h2 class="slide-keyword">Know your n.</h2>
-              <p class="slide-tagline">
-                Before you collect a single data point, know exactly how many
-                patients you need. Formula-driven. Power-aware. 14 study designs.
-              </p>
-              <a class="slide-btn" href="/sample-size.html" data-testid="link-slide-ss">
-                Open calculator →
-              </a>
-            </article>
-
-            <!-- Slide 2 — Statistical Analysis -->
-            <article class="slide slide--stats" data-testid="slide-stats">
-              <span class="slide-status">Module 03 · Beta</span>
-              <span class="slide-pill">Statistical Analysis Engine</span>
-              <h2 class="slide-keyword">Upload. Analyse. Done.</h2>
-              <p class="slide-tagline">
-                Upload your Excel. MedRAS cleans it, classifies it, tests
-                normality, selects the right statistical test, and writes your
-                Results section.
-              </p>
-              <a class="slide-btn" href="/analysis.html" data-testid="link-slide-stats">
-                Open analysis engine →
-              </a>
-            </article>
-
-            <!-- Slide 3 — Proposal Generator -->
-            <article class="slide slide--prop" data-testid="slide-prop">
-              <span class="slide-status">Module 04 · Available</span>
-              <span class="slide-pill">Prologue — Proposal Writer</span>
-              <h2 class="slide-keyword">Write your proposal.</h2>
-              <p class="slide-tagline">
-                Draft ICMR, ethics committee, and university research proposals
-                directly from your methodology. No template hunting. No blank
-                page.
-              </p>
-              <a class="slide-btn" href="/proposal-module/"
-                 data-testid="link-slide-prop">Open module →</a>
-            </article>
-
-            <!-- Slide 4 — Thesis Writer -->
-            <article class="slide slide--write" data-testid="slide-write">
-              <span class="slide-status">Module 05 · Available</span>
-              <span class="slide-pill">Scriptorium — Thesis &amp; Articles</span>
-              <h2 class="slide-keyword">Write your paper.</h2>
-              <p class="slide-tagline">
-                Guided 9-station flow for Indian MD / DNB / PhD theses and
-                journal-ready articles — AI-assisted drafting with locked
-                numbers, track changes, and compliance checks.
-              </p>
-              <a class="slide-btn" href="/thesis-module/"
-                 data-testid="link-slide-write">Open module →</a>
-            </article>
-
-            <!-- Slide 5 — Plagiarism -->
-            <article class="slide slide--verify" data-testid="slide-verify">
-              <span class="slide-status">Module 06 · Available</span>
-              <span class="slide-pill">Novus — Plagiarism &amp; AI Reduction</span>
-              <h2 class="slide-keyword">Verify before you submit.</h2>
-              <p class="slide-tagline">
-                Originality scoring, AI-likelihood detection, and a 3-stage
-                rewrite pipeline — aligned with Turnitin, iThenticate, and
-                Aarjav standards.
-              </p>
-              <a class="slide-btn" href="/plagiarism-module/"
-                 data-testid="link-slide-verify">Open module →</a>
-            </article>
-
+      <section class="hp-hero" data-testid="hero-section">
+        <div class="hp-hero-inner">
+          <span class="hp-eyebrow" data-testid="hero-eyebrow">From Chennai, for researchers everywhere</span>
+          <h1 class="hp-hero-headline" data-testid="hero-headline">
+            Your research<br>
+            <span class="hp-grad">operating system.</span>
+          </h1>
+          <p class="hp-hero-sub" data-testid="hero-sub">
+            A structured OS for medical and academic researchers — from objective to submission-ready manuscript. Guided, validated, compliance-aware.
+          </p>
+          <div class="hp-hero-ctas" data-testid="hero-ctas">
+            <a href="/study-builder/chat.html" class="hp-cta-primary" data-testid="link-hero-helix">Start with Helix →</a>
+            <a href="/analysis.html" class="hp-cta-secondary" data-testid="link-hero-sigma">Run Sigma</a>
+            <a href="/proposal-module/" class="hp-cta-secondary" data-testid="link-hero-proposal">Write Proposal</a>
+          </div>
+          <div class="hp-status-row" data-testid="hero-status">
+            <span class="hp-status-dot"></span>
+            <span>7 modules live &middot; All processing in-browser &middot; No account required</span>
           </div>
         </div>
-        <button type="button" class="slider-nav is-prev"
-                data-slider-prev aria-label="Previous slide"
-                data-testid="button-slider-prev">‹</button>
-        <button type="button" class="slider-nav is-next"
-                data-slider-next aria-label="Next slide"
-                data-testid="button-slider-next">›</button>
-        <div class="slider-dots" aria-label="Slide indicators"></div>
+
+        <!-- Workflow strip -->
+        <div class="hp-workflow-strip" data-testid="workflow-strip">
+          <div class="hp-workflow-inner">
+            <span class="hp-workflow-step" data-testid="ws-1"><span class="hp-ws-n">1</span>Design</span>
+            <span class="hp-workflow-arrow" aria-hidden="true">→</span>
+            <span class="hp-workflow-step" data-testid="ws-2"><span class="hp-ws-n">2</span>Size</span>
+            <span class="hp-workflow-arrow" aria-hidden="true">→</span>
+            <span class="hp-workflow-step" data-testid="ws-3"><span class="hp-ws-n">3</span>Propose</span>
+            <span class="hp-workflow-arrow" aria-hidden="true">→</span>
+            <span class="hp-workflow-step" data-testid="ws-4"><span class="hp-ws-n">4</span>Collect</span>
+            <span class="hp-workflow-arrow" aria-hidden="true">→</span>
+            <span class="hp-workflow-step" data-testid="ws-5"><span class="hp-ws-n">5</span>Analyse</span>
+            <span class="hp-workflow-arrow" aria-hidden="true">→</span>
+            <span class="hp-workflow-step" data-testid="ws-6"><span class="hp-ws-n">6</span>Write</span>
+            <span class="hp-workflow-arrow" aria-hidden="true">→</span>
+            <span class="hp-workflow-step" data-testid="ws-7"><span class="hp-ws-n">7</span>Polish</span>
+            <span class="hp-workflow-arrow" aria-hidden="true">→</span>
+            <span class="hp-workflow-step" data-testid="ws-8"><span class="hp-ws-n">8</span>Submit</span>
+          </div>
+        </div>
       </section>
 
       <!-- ============================================================ -->
-      <!-- MODULES GRID — Features                                       -->
-      <!-- ============================================================ -->
-      <!-- ============================================================ -->
-      <!-- RECENT ANALYSES — session history                           -->
+      <!-- RECENT ANALYSES — session history (hidden by default)        -->
       <!-- ============================================================ -->
       <section id="recent-analyses" class="recent-analyses-section"
                data-testid="recent-analyses-section"
-               style="display:none;padding:2.5rem 2rem 0;max-width:1280px;margin:0 auto;">
-        <header style="margin-bottom:1.25rem;">
-          <p class="home-eyebrow">Continue where you left off</p>
-          <h2 class="home-section-title" style="margin-bottom:0.35rem;">Recent analyses</h2>
-          <p class="home-section-sub" style="margin-top:0;">
-            Your last 5 completed sessions, kept for 15 days from the last access.
-          </p>
-        </header>
-        <div id="recent-analyses-list"
-             style="display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:1rem;"></div>
+               style="display:none;">
+        <div class="hp-section-inner">
+          <header class="hp-section-head">
+            <p class="hp-eyebrow-sm">Continue where you left off</p>
+            <h2 class="hp-section-title">Recent analyses</h2>
+            <p class="hp-section-sub">Your last 5 completed sessions, kept for 15 days from the last access.</p>
+          </header>
+          <div id="recent-analyses-list" class="hp-recent-grid"></div>
+        </div>
       </section>
 
       <script>
@@ -167,11 +90,11 @@
           catch (_) { return new Date(ts * 1000).toLocaleString(); }
         }
         function fmtExpiry(days) {
-          if (days <= 0) return { text: "Expired", color: "#c43838", bold: true };
-          if (days < 1) return { text: "Expires today", color: "#b45d00", bold: true };
-          if (days < 2) return { text: "Expires tomorrow", color: "#b45d00", bold: true };
-          if (days <= 2) return { text: Math.ceil(days) + " days remaining", color: "#b45d00", bold: true };
-          return { text: Math.ceil(days) + " days remaining", color: "#5a6787", bold: false };
+          if (days <= 0) return { text: "Expired", color: "#dc2626", bold: true };
+          if (days < 1) return { text: "Expires today", color: "#d97706", bold: true };
+          if (days < 2) return { text: "Expires tomorrow", color: "#d97706", bold: true };
+          if (days <= 2) return { text: Math.ceil(days) + " days remaining", color: "#d97706", bold: true };
+          return { text: Math.ceil(days) + " days remaining", color: "#6b7280", bold: false };
         }
         async function loadRecentAnalyses() {
           try {
@@ -188,12 +111,12 @@
               const exp = fmtExpiry(s.expires_in_days || 0);
               const href = "/analysis.html?restore=" + encodeURIComponent(s.job_id);
               const vars = (s.variable_count || 0) + " variable" + (s.variable_count !== 1 ? "s" : "") + " analysed";
-              return '<div style="background:#fff;border:1px solid #dde3f0;border-radius:10px;padding:1.1rem 1.25rem;display:flex;flex-direction:column;gap:0.45rem;box-shadow:0 1px 4px rgba(7,20,48,0.05);">'
-                + '<div style="font-weight:600;font-size:0.95rem;color:#1a2e5a;line-height:1.3;">' + escRa(s.title) + '</div>'
-                + '<div style="font-size:0.79rem;color:#5a6787;">' + fmtDate(s.completed_at) + '</div>'
-                + '<div style="font-size:0.79rem;color:#5a6787;">' + escRa(vars) + '</div>'
-                + '<div style="font-size:0.79rem;color:' + exp.color + ';font-weight:' + (exp.bold ? '600' : '400') + ';">' + exp.text + '</div>'
-                + '<a href="' + href + '" style="margin-top:0.4rem;display:inline-block;padding:0.45rem 1rem;background:#1a2e5a;color:#fff;border-radius:6px;font-size:0.82rem;font-weight:600;text-decoration:none;text-align:center;" data-testid="btn-open-session-' + escRa(s.job_id) + '">Open and continue</a>'
+              return '<div class="hp-recent-card">'
+                + '<div class="hp-recent-title">' + escRa(s.title) + '</div>'
+                + '<div class="hp-recent-meta">' + fmtDate(s.completed_at) + '</div>'
+                + '<div class="hp-recent-meta">' + escRa(vars) + '</div>'
+                + '<div class="hp-recent-exp" style="color:' + exp.color + ';font-weight:' + (exp.bold ? '600' : '400') + ';">' + exp.text + '</div>'
+                + '<a href="' + href + '" class="hp-recent-btn" data-testid="btn-open-session-' + escRa(s.job_id) + '">Open and continue</a>'
                 + '</div>';
             }).join("");
           } catch (_) {}
@@ -206,578 +129,275 @@
       })();
       </script>
 
-      <section id="modules" class="modules-section">
-        <header class="modules-head">
-          <div>
-            <p class="home-eyebrow">Phase 1 — Nine modules</p>
-            <h2 class="home-section-title">Nine modules built for medical research</h2>
-            <p class="home-section-sub">
-              Each module is a standalone capability you use when your study needs it. Available modules are live; the rest are on the way.
-            </p>
-          </div>
-          <div class="carousel-arrows" aria-label="Modules carousel controls">
-            <button type="button" class="carousel-arrow"
-                    data-rail-prev="modules" aria-label="Previous modules"
-                    data-testid="button-modules-prev">‹</button>
-            <button type="button" class="carousel-arrow"
-                    data-rail-next="modules" aria-label="Next modules"
-                    data-testid="button-modules-next">›</button>
-          </div>
-        </header>
+      <!-- ============================================================ -->
+      <!-- MODULES GRID — 3×3 desktop grid                             -->
+      <!-- ============================================================ -->
+      <section id="modules" class="hp-modules-section" data-testid="modules-section">
+        <div class="hp-section-inner">
+          <header class="hp-section-head">
+            <p class="hp-eyebrow-sm">Nine modules</p>
+            <h2 class="hp-section-title">Built for every stage of research</h2>
+            <p class="hp-section-sub">Each module is a standalone capability. Available modules are live; the rest are on the way.</p>
+          </header>
 
-        <div class="modules-rail" data-rail="modules" data-testid="list-modules">
-          <a class="m-card" href="/study-builder/chat.html" data-testid="card-module-1">
-            <span class="m-card-num">01</span>
-            <h3 class="m-card-title">Helix</h3>
-            <p class="m-card-desc">
-              <strong>Study Builder.</strong> Translate a research objective into a structured methodology — study type, design, variables and analysis plan in one place.
-            </p>
-            <div class="m-card-footer">
+          <div class="hp-modules-grid" data-testid="list-modules">
+
+            <a class="m-card" href="/study-builder/chat.html" data-testid="card-module-1" style="--m-accent:#0891b2;">
+              <div class="m-card-head">
+                <span class="m-card-num">01</span>
+                <span class="m-card-status" data-state="available">Available</span>
+              </div>
+              <h3 class="m-card-title">Helix</h3>
+              <p class="m-card-desc"><strong>Study Builder.</strong> Translate a research objective into a structured methodology — study type, design, variables and analysis plan in one place.</p>
               <span class="m-card-cta">Open module →</span>
-              <span class="m-card-status" data-state="available">Available</span>
-            </div>
-          </a>
+            </a>
 
-          <a class="m-card" href="/sample-size.html" data-testid="card-module-2">
-            <span class="m-card-num">02</span>
-            <h3 class="m-card-title">Cohort</h3>
-            <p class="m-card-desc">
-              <strong>Sample Size Calculator.</strong> Formula-driven <em>n</em> with explicit power, alpha and effect size — 14 study designs covered.
-            </p>
-            <div class="m-card-footer">
+            <a class="m-card" href="/sample-size.html" data-testid="card-module-2" style="--m-accent:#2563eb;">
+              <div class="m-card-head">
+                <span class="m-card-num">02</span>
+                <span class="m-card-status" data-state="available">Available</span>
+              </div>
+              <h3 class="m-card-title">Cohort</h3>
+              <p class="m-card-desc"><strong>Sample Size Calculator.</strong> Formula-driven <em>n</em> with explicit power, alpha and effect size — 14 study designs covered.</p>
               <span class="m-card-cta">Open calculator →</span>
-              <span class="m-card-status" data-state="available">Available</span>
-            </div>
-          </a>
+            </a>
 
-          <a class="m-card" href="/analysis.html" data-testid="card-module-3">
-            <span class="m-card-num">03</span>
-            <h3 class="m-card-title">Sigma</h3>
-            <p class="m-card-desc">
-              <strong>Statistical Analysis Engine.</strong> Upload Excel, classify variables, run normality-aware tests and get publication-ready tables, figures and APA write-ups.
-            </p>
-            <div class="m-card-footer">
+            <a class="m-card" href="/analysis.html" data-testid="card-module-3" style="--m-accent:#7c3aed;">
+              <div class="m-card-head">
+                <span class="m-card-num">03</span>
+                <span class="m-card-status" data-state="beta">Available · Beta</span>
+              </div>
+              <h3 class="m-card-title">Sigma</h3>
+              <p class="m-card-desc"><strong>Statistical Analysis Engine.</strong> Upload Excel, classify variables, run normality-aware tests and get publication-ready tables, figures and APA write-ups.</p>
               <span class="m-card-cta">Open analysis engine →</span>
-              <span class="m-card-status" data-state="beta">Available · Beta</span>
-            </div>
-          </a>
+            </a>
 
-          <a class="m-card" href="/proposal-module/" data-testid="card-module-4">
-            <span class="m-card-num">04</span>
-            <h3 class="m-card-title">Prologue</h3>
-            <p class="m-card-desc">
-              <strong>Proposal Writer.</strong> From research idea to submission-ready proposal — guided step by step. Supports ICMR, IEC, UGC, DST-SERB, NIH, WHO and more.
-            </p>
-            <div class="m-card-footer">
+            <a class="m-card" href="/proposal-module/" data-testid="card-module-4" style="--m-accent:#3b82f6;">
+              <div class="m-card-head">
+                <span class="m-card-num">04</span>
+                <span class="m-card-status" data-state="available">Available</span>
+              </div>
+              <h3 class="m-card-title">Prologue</h3>
+              <p class="m-card-desc"><strong>Proposal Writer.</strong> From research idea to submission-ready proposal — guided step by step. Supports ICMR, IEC, UGC, DST-SERB, NIH, WHO and more.</p>
               <span class="m-card-cta">Open module →</span>
-              <span class="m-card-status" data-state="available">Available</span>
-            </div>
-          </a>
+            </a>
 
-          <a class="m-card" href="/thesis-module/" data-testid="card-module-5">
-            <span class="m-card-num">05</span>
-            <h3 class="m-card-title">Scriptorium</h3>
-            <p class="m-card-desc">
-              <strong>Write from scratch.</strong> Guided 9-station flow for Indian MD / DNB / PhD theses and journal-ready papers. AI drafts each chapter using your retrieved references; every suggestion needs your ✓; your study numbers are locked in yellow and cannot be altered by AI.
-            </p>
-            <div class="m-card-footer">
+            <a class="m-card" href="/thesis-module/" data-testid="card-module-5" style="--m-accent:#10b981;">
+              <div class="m-card-head">
+                <span class="m-card-num">05</span>
+                <span class="m-card-status" data-state="beta">Available · Beta</span>
+              </div>
+              <h3 class="m-card-title">Scriptorium</h3>
+              <p class="m-card-desc"><strong>Write from scratch.</strong> Guided 9-station flow for Indian MD / DNB / PhD theses and journal-ready papers. AI drafts with locked numbers and track changes.</p>
               <span class="m-card-cta">Open module →</span>
-              <span class="m-card-status" data-state="beta">Available · Beta</span>
-            </div>
-          </a>
+            </a>
 
-          <a class="m-card" href="/plagiarism-module/" data-testid="card-module-6">
-            <span class="m-card-num">06</span>
-            <h3 class="m-card-title">Novus</h3>
-            <p class="m-card-desc">
-              <strong>Plagiarism &amp; AI Reduction.</strong> Originality scoring, AI-likelihood detection, and a 3-stage rewrite pipeline that reduces similarity while preserving academic integrity.
-            </p>
-            <div class="m-card-footer">
+            <a class="m-card" href="/plagiarism-module/" data-testid="card-module-6" style="--m-accent:#f59e0b;">
+              <div class="m-card-head">
+                <span class="m-card-num">06</span>
+                <span class="m-card-status" data-state="available">Available</span>
+              </div>
+              <h3 class="m-card-title">Novus</h3>
+              <p class="m-card-desc"><strong>Plagiarism &amp; AI Reduction.</strong> Originality scoring, AI-likelihood detection, and a 3-stage rewrite pipeline that preserves academic integrity.</p>
               <span class="m-card-cta">Open module →</span>
-              <span class="m-card-status" data-state="available">Available</span>
-            </div>
-          </a>
+            </a>
 
-          <a class="m-card" href="/folio-module/" data-testid="card-module-7">
-            <span class="m-card-num">07</span>
-            <h3 class="m-card-title">Folio</h3>
-            <p class="m-card-desc">
-              <strong>Polish an existing document.</strong> Import your draft DOCX — Folio auto-renumbers every reference, table and figure on deletion, reformats citations in one click (Vancouver / APA / Harvard), and applies supervisor feedback you paste in plain English.
-            </p>
-            <div class="m-card-footer">
+            <a class="m-card" href="/folio-module/" data-testid="card-module-7" style="--m-accent:#8b5cf6;">
+              <div class="m-card-head">
+                <span class="m-card-num">07</span>
+                <span class="m-card-status" data-state="available">Available</span>
+              </div>
+              <h3 class="m-card-title">Folio</h3>
+              <p class="m-card-desc"><strong>Polish an existing document.</strong> Import your draft DOCX — auto-renumber references, reformat citations (Vancouver / APA / Harvard), apply supervisor feedback.</p>
               <span class="m-card-cta">Open module →</span>
-              <span class="m-card-status" data-state="available">Available</span>
-            </div>
-          </a>
+            </a>
 
-          <div class="m-card m-card-soon" data-testid="card-module-8">
-            <span class="m-card-num">08</span>
-            <h3 class="m-card-title">Compass</h3>
-            <p class="m-card-desc">
-              <strong>Journal Finder.</strong> Describe your study or paste your abstract — Compass matches it against thousands of journals by scope, impact factor, indexing, open-access status and submission requirements.
-            </p>
-            <div class="m-card-footer">
+            <div class="m-card m-card-soon" data-testid="card-module-8" style="--m-accent:#6b7280;">
+              <div class="m-card-head">
+                <span class="m-card-num">08</span>
+                <span class="m-card-status" data-state="coming-soon">In development</span>
+              </div>
+              <h3 class="m-card-title">Compass</h3>
+              <p class="m-card-desc"><strong>Journal Finder.</strong> Describe your study or paste your abstract — Compass matches it against thousands of journals by scope, impact factor, and indexing.</p>
               <span class="m-card-cta m-card-cta-muted">Coming soon</span>
-              <span class="m-card-status" data-state="coming-soon">In development</span>
             </div>
+
+            <div class="m-card m-card-soon" data-testid="card-module-9" style="--m-accent:#6b7280;">
+              <div class="m-card-head">
+                <span class="m-card-num">09</span>
+                <span class="m-card-status" data-state="coming-soon">In development</span>
+              </div>
+              <h3 class="m-card-title">Fieldwork</h3>
+              <p class="m-card-desc"><strong>Data Collection.</strong> Build and deploy research-grade data collection forms — participant enrolment, CRFs, follow-up schedules — with built-in validation.</p>
+              <span class="m-card-cta m-card-cta-muted">Coming soon</span>
+            </div>
+
           </div>
+        </div>
+      </section>
 
-          <div class="m-card m-card-soon" data-testid="card-module-9">
-            <span class="m-card-num">09</span>
-            <h3 class="m-card-title">Fieldwork</h3>
-            <p class="m-card-desc">
-              <strong>Data Collection.</strong> Build and deploy research-grade data collection forms — participant enrolment, CRFs, follow-up schedules — with built-in validation and export to analysis-ready formats.
-            </p>
-            <div class="m-card-footer">
-              <span class="m-card-cta m-card-cta-muted">Coming soon</span>
-              <span class="m-card-status" data-state="coming-soon">In development</span>
+      <!-- ============================================================ -->
+      <!-- DASHBOARD PREVIEW — 2 live cards only                        -->
+      <!-- ============================================================ -->
+      <section id="dashboard-preview" class="hp-dash-section" data-testid="dash-section">
+        <div class="hp-section-inner">
+          <header class="hp-section-head hp-section-head--center">
+            <p class="hp-eyebrow-sm">Inside MedRAS</p>
+            <h2 class="hp-section-title">What it looks like in action</h2>
+            <p class="hp-section-sub">Two live capabilities you can open right now.</p>
+          </header>
+
+          <div class="hp-dash-grid" data-testid="list-dash">
+
+            <!-- Card — Analytics (Sigma, live) -->
+            <article class="dash-card" data-ws-card="analytics" data-testid="dash-card-5">
+              <div class="dash-mock" style="padding:1rem 1rem 0.5rem;display:flex;flex-direction:column;gap:0.45rem;">
+                <span class="dash-mock-title">Analytics · Sigma output</span>
+                <div style="font-size:9.5px;color:#64748b;margin:-0.1rem 0 0.2rem;">Haemoglobin (g/dL) — Group A vs Group B · Mann-Whitney U</div>
+                <div style="display:flex;align-items:flex-end;gap:0.35rem;height:52px;">
+                  <div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex:1;">
+                    <span style="font-size:8.5px;color:#1e293b;font-weight:600;">11.2</span>
+                    <div style="width:100%;background:#6366f1;border-radius:3px 3px 0 0;height:38px;"></div>
+                    <span style="font-size:8.5px;color:#64748b;">Group A</span>
+                  </div>
+                  <div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex:1;">
+                    <span style="font-size:8.5px;color:#1e293b;font-weight:600;">13.7</span>
+                    <div style="width:100%;background:#22c55e;border-radius:3px 3px 0 0;height:52px;"></div>
+                    <span style="font-size:8.5px;color:#64748b;">Group B</span>
+                  </div>
+                  <div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex:1;">
+                    <span style="font-size:8.5px;color:#1e293b;font-weight:600;">12.4</span>
+                    <div style="width:100%;background:#94a3b8;border-radius:3px 3px 0 0;height:44px;"></div>
+                    <span style="font-size:8.5px;color:#64748b;">Control</span>
+                  </div>
+                </div>
+                <div style="display:flex;gap:0.4rem;flex-wrap:wrap;margin-top:0.1rem;">
+                  <span style="font-size:9px;background:#eff6ff;color:#1d4ed8;border-radius:4px;padding:2px 6px;font-weight:600;">U = 312, p = 0.003</span>
+                  <span style="font-size:9px;background:#f0fdf4;color:#15803d;border-radius:4px;padding:2px 6px;font-weight:600;">r = 0.41 (medium)</span>
+                  <span style="font-size:9px;background:#fef3c7;color:#92400e;border-radius:4px;padding:2px 6px;font-weight:600;">Shapiro-Wilk passed</span>
+                </div>
+              </div>
+              <div class="dash-card-body">
+                <span class="dash-card-live-badge">Live — Available now</span>
+                <h3 class="dash-card-name">Sigma · Analytics</h3>
+                <p class="dash-card-desc">Upload your Excel. Normality-aware tests, effect sizes, significance badges and APA narratives — generated automatically.</p>
+              </div>
+            </article>
+
+            <!-- Card — AI assistant (in development preview) -->
+            <article class="dash-card" data-ws-card="assistant" data-testid="dash-card-3">
+              <div class="dash-mock" style="padding:1rem;display:flex;flex-direction:column;gap:0.45rem;">
+                <span class="dash-mock-title">AI assistant</span>
+                <div style="display:flex;flex-direction:column;gap:0.4rem;margin-top:0.15rem;">
+                  <div style="align-self:flex-end;background:#6366f1;color:#fff;border-radius:10px 10px 3px 10px;padding:0.4rem 0.65rem;font-size:10px;max-width:82%;line-height:1.4;">
+                    Which test should I use for two unpaired non-normal groups with n=28?
+                  </div>
+                  <div style="align-self:flex-start;background:#f1f5f9;color:#1e293b;border-radius:10px 10px 10px 3px;padding:0.4rem 0.65rem;font-size:10px;max-width:88%;line-height:1.4;">
+                    Use the <strong>Mann-Whitney U test</strong> (Wilcoxon rank-sum). With n=28 per group and non-normal distribution confirmed by Shapiro-Wilk, a parametric t-test would be inappropriate. MedRAS Sigma will run this automatically.
+                  </div>
+                  <div style="align-self:flex-end;background:#6366f1;color:#fff;border-radius:10px 10px 3px 10px;padding:0.4rem 0.65rem;font-size:10px;max-width:82%;line-height:1.4;">
+                    How do I report the effect size?
+                  </div>
+                  <div style="align-self:flex-start;background:#f1f5f9;color:#1e293b;border-radius:10px 10px 10px 3px;padding:0.4rem 0.65rem;font-size:10px;max-width:88%;line-height:1.4;">
+                    Report <strong>r = Z / √N</strong> (rank-biserial correlation). Values: small ≥0.1, medium ≥0.3, large ≥0.5. Sigma includes this automatically.
+                  </div>
+                </div>
+              </div>
+              <div class="dash-card-body">
+                <span class="dash-card-dev-badge">In development</span>
+                <h3 class="dash-card-name">AI assistant</h3>
+                <p class="dash-card-desc">Ask methodology, statistics, or writing questions in plain language. Guidance is always grounded — AI never fabricates numbers or tests.</p>
+              </div>
+            </article>
+
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- PRINCIPLES STRIP — replaces testimonials                     -->
+      <!-- ============================================================ -->
+      <section class="hp-principles-section" data-testid="principles-section">
+        <div class="hp-section-inner">
+          <div class="hp-principles-grid">
+            <div class="hp-principle" data-testid="principle-1">
+              <span class="hp-principle-icon">📐</span>
+              <h3 class="hp-principle-title">Library-backed statistics</h3>
+              <p class="hp-principle-body">Every numerical result — sample sizes, p-values, effect sizes — comes from validated statistical libraries. Not a language model. Not a guess.</p>
+            </div>
+            <div class="hp-principle" data-testid="principle-2">
+              <span class="hp-principle-icon">✍️</span>
+              <h3 class="hp-principle-title">AI for writing only</h3>
+              <p class="hp-principle-body">LLMs are strictly used for drafting text and translating consent forms. Every AI suggestion requires your explicit approval. Your locked study numbers cannot be altered.</p>
+            </div>
+            <div class="hp-principle" data-testid="principle-3">
+              <span class="hp-principle-icon">✅</span>
+              <h3 class="hp-principle-title">Compliance-aware exports</h3>
+              <p class="hp-principle-body">Proposals and theses export with IEC headers, consent forms in 11 languages, and pre-flight compliance checks before submission — aligned with ICMR and NBEMS guidelines.</p>
             </div>
           </div>
         </div>
       </section>
 
       <!-- ============================================================ -->
-      <!-- LIFECYCLE — horizontal swipe                                  -->
+      <!-- ABOUT — 2-column layout                                      -->
       <!-- ============================================================ -->
-      <section id="lifecycle" class="lifecycle" data-testid="lifecycle">
-        <header class="lifecycle-head">
-          <p class="home-eyebrow">The MedRAS methodology</p>
-          <h2 class="home-section-title">From research question to submission, in eight steps</h2>
-          <p class="home-section-sub">
-            One pathway, methodologically rigorous from the first hypothesis to the final manuscript.
-          </p>
-        </header>
-
-        <div class="lifecycle-rail" data-lifecycle-rail data-testid="list-lifecycle">
-          <article class="life-card" data-testid="life-card-1">
-            <span class="life-step">1</span>
-            <span class="life-icon" style="background:#f5f3ff;">🎯</span>
-            <h3 class="life-name">Define &amp; design</h3>
-            <p class="life-desc">State your objective and pick a study type — RCT, cohort, cross-sectional, diagnostic, and more.</p>
-            <span class="life-status" data-state="available">Start here</span>
-          </article>
-
-          <article class="life-card" data-testid="life-card-2">
-            <span class="life-step">2</span>
-            <span class="life-icon" style="background:#f5f3ff;">📐</span>
-            <h3 class="life-name">Power &amp; sample size</h3>
-            <p class="life-desc">Get your required n with power, alpha, effect size and dropout built in.</p>
-            <span class="life-status" data-state="available">Available now</span>
-          </article>
-
-          <article class="life-card" data-testid="life-card-3">
-            <span class="life-step">3</span>
-            <span class="life-icon" style="background:#fffbeb;">📝</span>
-            <h3 class="life-name">Proposal &amp; approval</h3>
-            <p class="life-desc">Draft ICMR and ethics proposals from your methodology automatically.</p>
-            <span class="life-status" data-state="available">Available now</span>
-          </article>
-
-          <article class="life-card" data-testid="life-card-4">
-            <span class="life-step">4</span>
-            <span class="life-icon" style="background:#eff6ff;">📊</span>
-            <h3 class="life-name">Collect &amp; clean</h3>
-            <p class="life-desc">Upload your Excel. MedRAS classifies variables and prepares them for analysis.</p>
-            <span class="life-status" data-state="beta">Beta</span>
-          </article>
-
-          <article class="life-card" data-testid="life-card-5">
-            <span class="life-step">5</span>
-            <span class="life-icon" style="background:#f0fdf4;">📈</span>
-            <h3 class="life-name">Analyse &amp; visualise</h3>
-            <p class="life-desc">Normality-aware tests run automatically. Tables, graphs and interpretation generated.</p>
-            <span class="life-status" data-state="beta">Beta</span>
-          </article>
-
-          <article class="life-card" data-testid="life-card-6">
-            <span class="life-step">6</span>
-            <span class="life-icon" style="background:#f0fdfa;">✅</span>
-            <h3 class="life-name">Draft &amp; verify</h3>
-            <p class="life-desc">Manuscript compiled from your results, plagiarism-checked, and compliance-verified before submission.</p>
-            <span class="life-status" data-state="available">Available now</span>
-          </article>
-
-          <article class="life-card" data-testid="life-card-7">
-            <span class="life-step">7</span>
-            <span class="life-icon" style="background:#fdf4ff;">📄</span>
-            <h3 class="life-name">Polish &amp; manage</h3>
-            <p class="life-desc">Import your draft into Folio — auto-renumber references, reformat citations, and apply supervisor feedback from plain English.</p>
-            <span class="life-status" data-state="available">Available now</span>
-          </article>
-
-          <article class="life-card" data-testid="life-card-8">
-            <span class="life-step">8</span>
-            <span class="life-icon" style="background:#f0f9ff;">🔭</span>
-            <h3 class="life-name">Find &amp; submit</h3>
-            <p class="life-desc">Compass matches your manuscript to the right journal by scope and impact factor. Fieldwork brings structured data collection into the same workflow.</p>
-            <span class="life-status" data-state="coming-soon">Coming soon</span>
-          </article>
-        </div>
-      </section>
-
-      <!-- ============================================================ -->
-      <!-- DASHBOARD PREVIEW SLIDER (sample mockups — replace later)     -->
-      <!-- ============================================================ -->
-      <section id="dashboard-preview" class="dash-section" data-testid="dash-section">
-        <header class="dash-head">
-          <div>
-            <p class="home-eyebrow">Inside MedRAS</p>
-            <h2 class="home-section-title">Inside your MedRAS workspace</h2>
-            <p class="home-section-sub">
-              The dashboards, AI tools and panels you live in once your study is up and running.
-            </p>
-          </div>
-          <div class="carousel-arrows" aria-label="Dashboard preview controls">
-            <button type="button" class="carousel-arrow"
-                    data-rail-prev="dash" aria-label="Previous preview"
-                    data-testid="button-dash-prev">‹</button>
-            <button type="button" class="carousel-arrow"
-                    data-rail-next="dash" aria-label="Next preview"
-                    data-testid="button-dash-next">›</button>
-          </div>
-        </header>
-
-        <div class="dash-rail" data-rail="dash" data-testid="list-dash">
-
-          <!-- Card 1 — Trend report -->
-          <article class="dash-card" data-ws-card="trend" data-testid="dash-card-1">
-            <div class="dash-mock" style="padding:1rem 1rem 0.5rem;display:flex;flex-direction:column;gap:0.55rem;">
-              <span class="dash-mock-title">Trend report</span>
-              <div style="display:flex;gap:0.4rem;flex-wrap:wrap;margin-bottom:0.1rem;">
-                <span style="font-size:10px;background:#eff6ff;color:#1d4ed8;border-radius:4px;padding:2px 7px;font-weight:600;">Haemoglobin · 2019–2024</span>
-                <span style="font-size:10px;background:#f0fdf4;color:#15803d;border-radius:4px;padding:2px 7px;font-weight:600;">p &lt; 0.001</span>
-              </div>
-              <!-- Mini SVG sparkline -->
-              <svg viewBox="0 0 200 60" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:54px;">
-                <polyline points="0,52 40,44 80,38 120,28 160,18 200,10"
-                          fill="none" stroke="#6366f1" stroke-width="2.5" stroke-linejoin="round"/>
-                <polyline points="0,52 40,44 80,38 120,28 160,18 200,10
-                                  200,60 0,60"
-                          fill="url(#trendGrad)" stroke="none"/>
-                <defs>
-                  <linearGradient id="trendGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stop-color="#6366f1" stop-opacity="0.18"/>
-                    <stop offset="100%" stop-color="#6366f1" stop-opacity="0"/>
-                  </linearGradient>
-                </defs>
-                <circle cx="200" cy="10" r="3.5" fill="#6366f1"/>
-                <text x="155" y="8" font-size="9" fill="#6366f1" font-weight="600">↑ 14.2 g/dL</text>
-              </svg>
-              <div style="display:flex;justify-content:space-between;font-size:9.5px;color:#94a3b8;margin-top:-4px;">
-                <span>2019</span><span>2020</span><span>2021</span><span>2022</span><span>2023</span><span>2024</span>
-              </div>
-              <p style="font-size:10px;color:#475569;margin:0.25rem 0 0;line-height:1.4;">
-                Mean Hb rose 1.8 g/dL over 5 years (Kendall τ = 0.94). Trend driven by post-COVID iron supplementation protocols.
+      <section id="about" class="hp-about-section" data-testid="about-section">
+        <div class="hp-section-inner">
+          <div class="hp-about-grid">
+            <div class="hp-about-left" data-testid="about-card">
+              <p class="hp-eyebrow-sm about-eyebrow">About MedRAS</p>
+              <h2 class="hp-about-headline" data-testid="text-about-heading">Not a chatbot.<br>A research operating system.</h2>
+              <p class="hp-about-body">
+                MedRAS is purpose-built for medical, biomedical, and academic researchers who need methodological rigour at every step. The interface is structured and menu-driven; statistical computation is performed by validated libraries, not by language models. AI assists with planning and writing — never with numerical results.
+              </p>
+              <p class="hp-about-body">
+                Built from Chennai, designed for researchers navigating the demands of Indian and international academic publishing — from ICMR ethics submissions to journal-ready manuscripts.
               </p>
             </div>
-            <div class="dash-card-body">
-              <h3 class="dash-card-name">Trend report</h3>
-              <p class="dash-card-desc">Longitudinal trend analysis across study cohorts with significance testing — generated automatically from your Sigma results.</p>
-            </div>
-          </article>
-
-          <!-- Card 2 — Project tracker -->
-          <article class="dash-card" data-ws-card="tracker" data-testid="dash-card-2">
-            <div class="dash-mock" style="padding:1rem;display:flex;flex-direction:column;gap:0.45rem;">
-              <span class="dash-mock-title">Project tracker</span>
-              <div style="display:flex;flex-direction:column;gap:0.38rem;margin-top:0.2rem;">
-                <div style="display:flex;align-items:center;gap:0.5rem;background:#f8fafc;border-radius:6px;padding:0.38rem 0.5rem;">
-                  <span style="width:8px;height:8px;border-radius:50%;background:#22c55e;flex-shrink:0;"></span>
-                  <div style="flex:1;min-width:0;">
-                    <div style="font-size:10px;font-weight:600;color:#1e293b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Effect of metformin on HbA1c — RCT</div>
-                    <div style="font-size:9px;color:#64748b;">Analysis complete · Export ready</div>
-                  </div>
-                  <span style="font-size:9px;color:#15803d;font-weight:600;white-space:nowrap;">Step 8/8</span>
-                </div>
-                <div style="display:flex;align-items:center;gap:0.5rem;background:#f8fafc;border-radius:6px;padding:0.38rem 0.5rem;">
-                  <span style="width:8px;height:8px;border-radius:50%;background:#f59e0b;flex-shrink:0;"></span>
-                  <div style="flex:1;min-width:0;">
-                    <div style="font-size:10px;font-weight:600;color:#1e293b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Maternal anaemia in tribal populations</div>
-                    <div style="font-size:9px;color:#64748b;">Proposal draft · Awaiting IEC approval</div>
-                  </div>
-                  <span style="font-size:9px;color:#b45309;font-weight:600;white-space:nowrap;">Step 6/8</span>
-                </div>
-                <div style="display:flex;align-items:center;gap:0.5rem;background:#f8fafc;border-radius:6px;padding:0.38rem 0.5rem;">
-                  <span style="width:8px;height:8px;border-radius:50%;background:#6366f1;flex-shrink:0;"></span>
-                  <div style="flex:1;min-width:0;">
-                    <div style="font-size:10px;font-weight:600;color:#1e293b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Post-COVID pulmonary function — Cohort</div>
-                    <div style="font-size:9px;color:#64748b;">References verified · Writing in progress</div>
-                  </div>
-                  <span style="font-size:9px;color:#4f46e5;font-weight:600;white-space:nowrap;">Step 4/9</span>
-                </div>
-                <div style="display:flex;align-items:center;gap:0.5rem;background:#f8fafc;border-radius:6px;padding:0.38rem 0.5rem;">
-                  <span style="width:8px;height:8px;border-radius:50%;background:#e2e8f0;flex-shrink:0;"></span>
-                  <div style="flex:1;min-width:0;">
-                    <div style="font-size:10px;font-weight:600;color:#94a3b8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Thyroid dysfunction in PCOS — planned</div>
-                    <div style="font-size:9px;color:#94a3b8;">Not started</div>
-                  </div>
-                  <span style="font-size:9px;color:#94a3b8;font-weight:600;white-space:nowrap;">Step 0/8</span>
-                </div>
-              </div>
-            </div>
-            <div class="dash-card-body">
-              <h3 class="dash-card-name">Project tracker</h3>
-              <p class="dash-card-desc">All your active studies in one view — current module step, milestone status, and what needs attention next.</p>
-            </div>
-          </article>
-
-          <!-- Card 3 — AI assistant -->
-          <article class="dash-card" data-ws-card="assistant" data-testid="dash-card-3">
-            <div class="dash-mock" style="padding:1rem;display:flex;flex-direction:column;gap:0.45rem;">
-              <span class="dash-mock-title">AI assistant</span>
-              <div style="display:flex;flex-direction:column;gap:0.4rem;margin-top:0.15rem;">
-                <div style="align-self:flex-end;background:#6366f1;color:#fff;border-radius:10px 10px 3px 10px;padding:0.4rem 0.65rem;font-size:10px;max-width:82%;line-height:1.4;">
-                  Which test should I use for two unpaired non-normal groups with n=28?
-                </div>
-                <div style="align-self:flex-start;background:#f1f5f9;color:#1e293b;border-radius:10px 10px 10px 3px;padding:0.4rem 0.65rem;font-size:10px;max-width:88%;line-height:1.4;">
-                  Use the <strong>Mann-Whitney U test</strong> (Wilcoxon rank-sum). With n=28 per group and non-normal distribution confirmed by Shapiro-Wilk (p&lt;0.05), a parametric t-test would be inappropriate. MedRAS Sigma will run this automatically.
-                </div>
-                <div style="align-self:flex-end;background:#6366f1;color:#fff;border-radius:10px 10px 3px 10px;padding:0.4rem 0.65rem;font-size:10px;max-width:82%;line-height:1.4;">
-                  How do I report the effect size for this?
-                </div>
-                <div style="align-self:flex-start;background:#f1f5f9;color:#1e293b;border-radius:10px 10px 10px 3px;padding:0.4rem 0.65rem;font-size:10px;max-width:88%;line-height:1.4;">
-                  Report <strong>r = Z / √N</strong> (rank-biserial correlation). Values: small ≥0.1, medium ≥0.3, large ≥0.5. Sigma includes this in the output table automatically.
-                </div>
-              </div>
-            </div>
-            <div class="dash-card-body">
-              <h3 class="dash-card-name">AI assistant</h3>
-              <p class="dash-card-desc">Ask methodology, statistics, or writing questions in plain language. Guidance is always grounded — AI never fabricates numbers or tests.</p>
-            </div>
-          </article>
-
-          <!-- Card 4 — Journal finder -->
-          <article class="dash-card" data-ws-card="journal" data-testid="dash-card-4">
-            <div class="dash-mock" style="padding:1rem;display:flex;flex-direction:column;gap:0.45rem;">
-              <span class="dash-mock-title">Journal finder</span>
-              <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:0.35rem 0.6rem;font-size:10px;color:#64748b;margin-bottom:0.1rem;">
-                🔎 Prospective RCT · Cardiology · India · Open access preferred
-              </div>
-              <div style="display:flex;flex-direction:column;gap:0.3rem;">
-                <div style="display:flex;align-items:center;justify-content:space-between;background:#f0fdf4;border-radius:6px;padding:0.35rem 0.55rem;">
+            <div class="hp-about-right">
+              <ul class="hp-about-features" data-testid="about-features">
+                <li class="hp-about-feature">
+                  <span class="hp-af-icon">🧪</span>
                   <div>
-                    <div style="font-size:10px;font-weight:700;color:#15803d;">Indian Heart Journal</div>
-                    <div style="font-size:9px;color:#64748b;">Elsevier · IF 1.6 · MEDLINE indexed</div>
+                    <strong>14 study designs</strong>
+                    <span>RCT, cohort, case-control, cross-sectional, diagnostic, survival, and more</span>
                   </div>
-                  <span style="font-size:9px;font-weight:700;color:#15803d;background:#dcfce7;border-radius:4px;padding:2px 6px;">96% match</span>
-                </div>
-                <div style="display:flex;align-items:center;justify-content:space-between;background:#f8fafc;border-radius:6px;padding:0.35rem 0.55rem;">
+                </li>
+                <li class="hp-about-feature">
+                  <span class="hp-af-icon">📊</span>
                   <div>
-                    <div style="font-size:10px;font-weight:700;color:#1e293b;">BMC Cardiovascular Disorders</div>
-                    <div style="font-size:9px;color:#64748b;">Springer · IF 2.3 · Open access</div>
+                    <strong>Normality-aware analysis</strong>
+                    <span>Automatic Shapiro-Wilk testing and test selection — parametric or non-parametric</span>
                   </div>
-                  <span style="font-size:9px;font-weight:700;color:#4f46e5;background:#ede9fe;border-radius:4px;padding:2px 6px;">88% match</span>
-                </div>
-                <div style="display:flex;align-items:center;justify-content:space-between;background:#f8fafc;border-radius:6px;padding:0.35rem 0.55rem;">
+                </li>
+                <li class="hp-about-feature">
+                  <span class="hp-af-icon">📄</span>
                   <div>
-                    <div style="font-size:10px;font-weight:700;color:#1e293b;">Journal of Cardiology</div>
-                    <div style="font-size:9px;color:#64748b;">Elsevier · IF 3.1 · Subscription</div>
+                    <strong>Multi-format proposal export</strong>
+                    <span>ICMR, IEC, UGC, DST-SERB, NIH, WHO, CTRI and university formats</span>
                   </div>
-                  <span style="font-size:9px;font-weight:700;color:#b45309;background:#fef3c7;border-radius:4px;padding:2px 6px;">74% match</span>
-                </div>
-              </div>
+                </li>
+                <li class="hp-about-feature">
+                  <span class="hp-af-icon">🌐</span>
+                  <div>
+                    <strong>11-language consent forms</strong>
+                    <span>English + Hindi, Tamil, Telugu, Kannada, Malayalam, Marathi, Bengali, Gujarati, Punjabi, Odia</span>
+                  </div>
+                </li>
+                <li class="hp-about-feature">
+                  <span class="hp-af-icon">🔒</span>
+                  <div>
+                    <strong>Privacy by design</strong>
+                    <span>All files processed in-memory. Nothing is stored on our servers.</span>
+                  </div>
+                </li>
+              </ul>
             </div>
-            <div class="dash-card-body">
-              <h3 class="dash-card-name">Journal finder</h3>
-              <p class="dash-card-desc">Target journals ranked by scope match, impact factor, and open-access preference — pulled from your study type and topic automatically.</p>
-            </div>
-          </article>
-
-          <!-- Card 5 — Analytics view (Sigma output) -->
-          <article class="dash-card" data-ws-card="analytics" data-testid="dash-card-5">
-            <div class="dash-mock" style="padding:1rem 1rem 0.5rem;display:flex;flex-direction:column;gap:0.45rem;">
-              <span class="dash-mock-title">Analytics · Sigma output</span>
-              <div style="font-size:9.5px;color:#64748b;margin:-0.1rem 0 0.2rem;">Haemoglobin (g/dL) — Group A vs Group B · Mann-Whitney U</div>
-              <!-- Bar chart -->
-              <div style="display:flex;align-items:flex-end;gap:0.35rem;height:52px;">
-                <div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex:1;">
-                  <span style="font-size:8.5px;color:#1e293b;font-weight:600;">11.2</span>
-                  <div style="width:100%;background:#6366f1;border-radius:3px 3px 0 0;height:38px;"></div>
-                  <span style="font-size:8.5px;color:#64748b;">Group A</span>
-                </div>
-                <div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex:1;">
-                  <span style="font-size:8.5px;color:#1e293b;font-weight:600;">13.7</span>
-                  <div style="width:100%;background:#22c55e;border-radius:3px 3px 0 0;height:52px;"></div>
-                  <span style="font-size:8.5px;color:#64748b;">Group B</span>
-                </div>
-                <div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex:1;">
-                  <span style="font-size:8.5px;color:#1e293b;font-weight:600;">12.4</span>
-                  <div style="width:100%;background:#94a3b8;border-radius:3px 3px 0 0;height:44px;"></div>
-                  <span style="font-size:8.5px;color:#64748b;">Control</span>
-                </div>
-              </div>
-              <div style="display:flex;gap:0.4rem;flex-wrap:wrap;margin-top:0.1rem;">
-                <span style="font-size:9px;background:#eff6ff;color:#1d4ed8;border-radius:4px;padding:2px 6px;font-weight:600;">U = 312, p = 0.003</span>
-                <span style="font-size:9px;background:#f0fdf4;color:#15803d;border-radius:4px;padding:2px 6px;font-weight:600;">r = 0.41 (medium)</span>
-                <span style="font-size:9px;background:#fef3c7;color:#92400e;border-radius:4px;padding:2px 6px;font-weight:600;">Shapiro-Wilk passed</span>
-              </div>
-            </div>
-            <div class="dash-card-body">
-              <h3 class="dash-card-name">Analytics view</h3>
-              <p class="dash-card-desc">Normality-aware statistical tests with effect sizes, significance badges, and auto-generated result narratives — ready to paste into your manuscript.</p>
-            </div>
-          </article>
-
-        </div>
-      </section>
-
-      <!-- ============================================================ -->
-      <!-- TESTIMONIALS MARQUEE (sample quotes — replace later)          -->
-      <!-- ============================================================ -->
-      <section id="testimonials" class="testimonials-section" data-testid="testimonials-section">
-        <header class="testimonials-head">
-          <p class="home-eyebrow">
-            What researchers say
-            <span class="sample-pill" data-testid="badge-sample-testimonials">Sample quotes</span>
-          </p>
-          <h2 class="home-section-title">Trusted by research teams</h2>
-          <p class="home-section-sub">
-            Placeholder testimonials, shown for layout. Real quotes from researchers will appear here.
-          </p>
-        </header>
-
-        <div class="testimonials-track-wrap">
-          <!-- Same set is rendered twice for the seamless infinite loop. -->
-          <div class="testimonials-track" data-testid="testimonials-track">
-            <article class="t-card" data-testid="t-card-1">
-              <p class="t-quote">Sample testimonial: MedRAS shaved weeks off our methodology section. The sample-size workflow alone saved hours of back-and-forth with our statistician.</p>
-              <div class="t-meta">
-                <span class="t-avatar">DA</span>
-                <div class="t-who">
-                  <span class="t-name">Dr. Sample Author</span>
-                  <span class="t-role">Sample role · Sample hospital</span>
-                </div>
-              </div>
-            </article>
-            <article class="t-card" data-testid="t-card-2">
-              <p class="t-quote">Sample testimonial: Finally, a tool that respects methodological rigour. The classifier picked up on our continuous variables out of the box.</p>
-              <div class="t-meta">
-                <span class="t-avatar">RP</span>
-                <div class="t-who">
-                  <span class="t-name">Sample Researcher P.</span>
-                  <span class="t-role">PhD candidate · Sample university</span>
-                </div>
-              </div>
-            </article>
-            <article class="t-card" data-testid="t-card-3">
-              <p class="t-quote">Sample testimonial: We replaced three different tools with MedRAS. The flow from objective to draft is the cleanest I’ve used.</p>
-              <div class="t-meta">
-                <span class="t-avatar">MK</span>
-                <div class="t-who">
-                  <span class="t-name">Prof. Sample K.</span>
-                  <span class="t-role">Department of Sample · Sample institute</span>
-                </div>
-              </div>
-            </article>
-            <article class="t-card" data-testid="t-card-4">
-              <p class="t-quote">Sample testimonial: The Results section was generated in APA format and was almost ready to paste into our manuscript. Huge time saver.</p>
-              <div class="t-meta">
-                <span class="t-avatar">SN</span>
-                <div class="t-who">
-                  <span class="t-name">Dr. Sample N.</span>
-                  <span class="t-role">Senior Resident · Sample medical college</span>
-                </div>
-              </div>
-            </article>
-            <article class="t-card" data-testid="t-card-5">
-              <p class="t-quote">Sample testimonial: I love that statistics are computed by validated libraries, not by an LLM. That’s the right call for clinical research.</p>
-              <div class="t-meta">
-                <span class="t-avatar">AV</span>
-                <div class="t-who">
-                  <span class="t-name">Sample Investigator V.</span>
-                  <span class="t-role">Clinical Research Associate</span>
-                </div>
-              </div>
-            </article>
-
-            <!-- Duplicate set (aria-hidden) for seamless marquee loop -->
-            <article class="t-card" aria-hidden="true" data-testid="t-card-clone-1">
-              <p class="t-quote">Sample testimonial: MedRAS shaved weeks off our methodology section. The sample-size workflow alone saved hours of back-and-forth with our statistician.</p>
-              <div class="t-meta">
-                <span class="t-avatar">DA</span>
-                <div class="t-who">
-                  <span class="t-name">Dr. Sample Author</span>
-                  <span class="t-role">Sample role · Sample hospital</span>
-                </div>
-              </div>
-            </article>
-            <article class="t-card" aria-hidden="true" data-testid="t-card-clone-2">
-              <p class="t-quote">Sample testimonial: Finally, a tool that respects methodological rigour. The classifier picked up on our continuous variables out of the box.</p>
-              <div class="t-meta">
-                <span class="t-avatar">RP</span>
-                <div class="t-who">
-                  <span class="t-name">Sample Researcher P.</span>
-                  <span class="t-role">PhD candidate · Sample university</span>
-                </div>
-              </div>
-            </article>
-            <article class="t-card" aria-hidden="true" data-testid="t-card-clone-3">
-              <p class="t-quote">Sample testimonial: We replaced three different tools with MedRAS. The flow from objective to draft is the cleanest I’ve used.</p>
-              <div class="t-meta">
-                <span class="t-avatar">MK</span>
-                <div class="t-who">
-                  <span class="t-name">Prof. Sample K.</span>
-                  <span class="t-role">Department of Sample · Sample institute</span>
-                </div>
-              </div>
-            </article>
-            <article class="t-card" aria-hidden="true" data-testid="t-card-clone-4">
-              <p class="t-quote">Sample testimonial: The Results section was generated in APA format and was almost ready to paste into our manuscript. Huge time saver.</p>
-              <div class="t-meta">
-                <span class="t-avatar">SN</span>
-                <div class="t-who">
-                  <span class="t-name">Dr. Sample N.</span>
-                  <span class="t-role">Senior Resident · Sample medical college</span>
-                </div>
-              </div>
-            </article>
-            <article class="t-card" aria-hidden="true" data-testid="t-card-clone-5">
-              <p class="t-quote">Sample testimonial: I love that statistics are computed by validated libraries, not by an LLM. That’s the right call for clinical research.</p>
-              <div class="t-meta">
-                <span class="t-avatar">AV</span>
-                <div class="t-who">
-                  <span class="t-name">Sample Investigator V.</span>
-                  <span class="t-role">Clinical Research Associate</span>
-                </div>
-              </div>
-            </article>
           </div>
         </div>
       </section>
 
-      <!-- ============================================================ -->
-      <!-- ABOUT                                                         -->
-      <!-- ============================================================ -->
-      <section
-        id="about"
-        class="about-section"
-        data-testid="about-section"
-        data-reveal
-      >
-        <div class="about-inner">
-          <div class="about-lede">
-            <span class="about-accent" aria-hidden="true"></span>
-            <p class="home-eyebrow about-eyebrow">About MedRAS</p>
-            <h2
-              class="about-headline"
-              data-testid="text-about-heading"
-            >
-              Not a chatbot. A research operating system.
-            </h2>
-          </div>
-          <div class="about-card-wrap">
-            <article class="about-card" data-testid="about-card">
-              <p class="about-body">
-                MedRAS is purpose-built for medical, biomedical, and academic
-                researchers who need methodological rigour at every step. The
-                interface is structured and menu-driven; statistical computation is
-                performed by validated libraries, not by language models. AI assists
-                with planning and writing — never with numerical results.
-              </p>
-            </article>
-          </div>
-        </div>
-      </section>
       <!-- ============================================================ -->
       <!-- WORKSPACE DETAIL MODAL                                       -->
       <!-- ============================================================ -->
@@ -796,260 +416,22 @@
           </div>
         </div>
       </div>
+
     </main>
 
     <footer class="site-footer">
       <div class="footer-inner">
-        <p data-testid="text-footer">
-          MedRAS &middot; Medical Research Acceleration System
-        </p>
+        <p data-testid="text-footer">MedRAS &middot; Medical Research Acceleration System</p>
         <p class="footer-meta">Documents are processed securely and never stored.</p>
       </div>
     </footer>
 
-    <script src="/js/app.js?v=2026050144" defer></script>
-    <script src="/js/home.js?v=2026050144" defer></script>
+    <script src="/js/app.js?v=2026052501" defer></script>
+    <script src="/js/home.js?v=2026052501" defer></script>
     <script src="/js/medras-nav.js" defer></script>
     <script>
     (function () {
-      /* ── visual HTML for each card (left panel of modal) ── */
       var VIS = {};
-
-      VIS.trend = '<div style="padding:1.5rem;color:white;font-family:-apple-system,sans-serif">'
-        + '<div style="display:flex;gap:.3rem;flex-wrap:wrap;margin-bottom:.6rem">'
-        +   '<span style="font-size:7.5px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);border-radius:4px;padding:1px 7px;color:rgba(255,255,255,.4);letter-spacing:.05em;text-transform:uppercase">Demo Dataset</span>'
-        +   '<span style="font-size:7.5px;background:rgba(99,102,241,.12);border:1px solid rgba(99,102,241,.22);border-radius:4px;padding:1px 7px;color:#a5b4fc;letter-spacing:.05em;text-transform:uppercase">AI Interpretation</span>'
-        + '</div>'
-        + '<div style="font-size:9.5px;color:rgba(255,255,255,.45);letter-spacing:.06em;text-transform:uppercase;margin-bottom:.75rem">Haemoglobin g/dL \u00b7 District Hospital \u00b7 2019\u20132024</div>'
-        + '<div style="display:flex;gap:.4rem;flex-wrap:wrap;margin-bottom:.8rem">'
-        +   '<span style="font-size:9.5px;background:#6366f1;border-radius:20px;padding:3px 10px;font-weight:600">\u25aa Haemoglobin</span>'
-        +   '<span style="font-size:9.5px;background:rgba(255,255,255,.1);border-radius:20px;padding:3px 10px;color:rgba(255,255,255,.6)">\u25b8 Ferritin</span>'
-        +   '<span style="font-size:9.5px;background:rgba(255,255,255,.1);border-radius:20px;padding:3px 10px;color:rgba(255,255,255,.6)">\u25b8 Serum Iron</span>'
-        + '</div>'
-        + '<svg viewBox="0 0 280 130" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:120px">'
-        +   '<line x1="0" y1="104" x2="280" y2="104" stroke="rgba(255,255,255,.07)" stroke-width=".5"/>'
-        +   '<line x1="0" y1="78"  x2="280" y2="78"  stroke="rgba(255,255,255,.07)" stroke-width=".5"/>'
-        +   '<line x1="0" y1="52"  x2="280" y2="52"  stroke="rgba(255,255,255,.07)" stroke-width=".5"/>'
-        +   '<line x1="0" y1="26"  x2="280" y2="26"  stroke="rgba(255,255,255,.07)" stroke-width=".5"/>'
-        +   '<defs><linearGradient id="hbG" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#6366f1" stop-opacity=".22"/><stop offset="100%" stop-color="#6366f1" stop-opacity="0"/></linearGradient></defs>'
-        +   '<polyline points="0,100 56,88 112,76 168,56 224,36 280,16" fill="none" stroke="#818cf8" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>'
-        +   '<polyline points="0,100 56,88 112,76 168,56 224,36 280,16 280,118 0,118" fill="url(#hbG)" stroke="none"/>'
-        +   '<polyline points="0,96 56,90 112,84 168,74 224,62 280,48" fill="none" stroke="#34d399" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="4,3"/>'
-        +   '<circle cx="0"   cy="100" r="3"   fill="#818cf8"/><circle cx="56"  cy="88"  r="3" fill="#818cf8"/>'
-        +   '<circle cx="112" cy="76"  r="3"   fill="#818cf8"/><circle cx="168" cy="56"  r="3" fill="#818cf8"/>'
-        +   '<circle cx="224" cy="36"  r="3"   fill="#818cf8"/>'
-        +   '<circle cx="280" cy="16"  r="4.5" fill="#818cf8" stroke="#fff" stroke-width="1.5"/>'
-        +   '<text x="232" y="12" font-size="9" fill="#a5b4fc" font-weight="700">\u2191 14.2 g/dL</text>'
-        +   '<text x="0"   y="127" font-size="8.5" fill="rgba(255,255,255,.35)" text-anchor="middle">2019</text>'
-        +   '<text x="56"  y="127" font-size="8.5" fill="rgba(255,255,255,.35)" text-anchor="middle">2020</text>'
-        +   '<text x="112" y="127" font-size="8.5" fill="rgba(255,255,255,.35)" text-anchor="middle">2021</text>'
-        +   '<text x="168" y="127" font-size="8.5" fill="rgba(255,255,255,.35)" text-anchor="middle">2022</text>'
-        +   '<text x="224" y="127" font-size="8.5" fill="rgba(255,255,255,.35)" text-anchor="middle">2023</text>'
-        +   '<text x="280" y="127" font-size="8.5" fill="rgba(255,255,255,.35)" text-anchor="middle">2024</text>'
-        + '</svg>'
-        + '<div style="display:flex;gap:1rem;font-size:9px;margin:.3rem 0 .75rem">'
-        +   '<span style="display:flex;align-items:center;gap:4px"><span style="width:12px;height:2.5px;background:#818cf8;display:inline-block;border-radius:2px"></span>Haemoglobin</span>'
-        +   '<span style="display:flex;align-items:center;gap:4px"><span style="width:12px;border-top:1.5px dashed #34d399;display:inline-block"></span>Ferritin</span>'
-        + '</div>'
-        + '<div style="display:flex;gap:.4rem;flex-wrap:wrap;margin-bottom:.9rem">'
-        +   '<span style="font-size:9px;background:rgba(129,140,248,.2);border:1px solid rgba(129,140,248,.4);border-radius:5px;padding:2px 8px;font-weight:600">\u03c4 = 0.94 \u00b7 p &lt; 0.001</span>'
-        +   '<span style="font-size:9px;background:rgba(52,211,153,.15);border:1px solid rgba(52,211,153,.3);border-radius:5px;padding:2px 8px;font-weight:600">\u2191 1.8 g/dL over 5 yr</span>'
-        +   '<span style="font-size:9px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);border-radius:5px;padding:2px 8px">Mann-Kendall \u2713</span>'
-        + '</div>'
-        + '<table style="width:100%;border-collapse:collapse;font-size:9.5px">'
-        +   '<thead><tr style="border-bottom:1px solid rgba(255,255,255,.12)">'
-        +     '<th style="text-align:left;padding:4px 5px;color:rgba(255,255,255,.42);font-weight:600;letter-spacing:.05em">YEAR</th>'
-        +     '<th style="text-align:right;padding:4px 5px;color:rgba(255,255,255,.42);font-weight:600;letter-spacing:.05em">MEAN Hb</th>'
-        +     '<th style="text-align:right;padding:4px 5px;color:rgba(255,255,255,.42);font-weight:600;letter-spacing:.05em">95% CI</th>'
-        +     '<th style="text-align:right;padding:4px 5px;color:rgba(255,255,255,.42);font-weight:600;letter-spacing:.05em">FERRITIN</th>'
-        +   '</tr></thead><tbody>'
-        +   '<tr style="border-bottom:1px solid rgba(255,255,255,.06)"><td style="padding:4px 5px;color:rgba(255,255,255,.65)">2019</td><td style="padding:4px 5px;text-align:right;color:#a5b4fc;font-weight:600">11.2</td><td style="padding:4px 5px;text-align:right;color:rgba(255,255,255,.42)">[10.8,\u200a11.6]</td><td style="padding:4px 5px;text-align:right;color:#6ee7b7">18.4</td></tr>'
-        +   '<tr style="border-bottom:1px solid rgba(255,255,255,.06)"><td style="padding:4px 5px;color:rgba(255,255,255,.65)">2020</td><td style="padding:4px 5px;text-align:right;color:#a5b4fc;font-weight:600">11.8</td><td style="padding:4px 5px;text-align:right;color:rgba(255,255,255,.42)">[11.4,\u200a12.2]</td><td style="padding:4px 5px;text-align:right;color:#6ee7b7">21.2</td></tr>'
-        +   '<tr style="border-bottom:1px solid rgba(255,255,255,.06)"><td style="padding:4px 5px;color:rgba(255,255,255,.65)">2021</td><td style="padding:4px 5px;text-align:right;color:#a5b4fc;font-weight:600">12.3</td><td style="padding:4px 5px;text-align:right;color:rgba(255,255,255,.42)">[11.9,\u200a12.7]</td><td style="padding:4px 5px;text-align:right;color:#6ee7b7">24.6</td></tr>'
-        +   '<tr style="border-bottom:1px solid rgba(255,255,255,.06)"><td style="padding:4px 5px;color:rgba(255,255,255,.65)">2022</td><td style="padding:4px 5px;text-align:right;color:#a5b4fc;font-weight:600">12.9</td><td style="padding:4px 5px;text-align:right;color:rgba(255,255,255,.42)">[12.5,\u200a13.3]</td><td style="padding:4px 5px;text-align:right;color:#6ee7b7">28.1</td></tr>'
-        +   '<tr style="border-bottom:1px solid rgba(255,255,255,.06)"><td style="padding:4px 5px;color:rgba(255,255,255,.65)">2023</td><td style="padding:4px 5px;text-align:right;color:#a5b4fc;font-weight:600">13.5</td><td style="padding:4px 5px;text-align:right;color:rgba(255,255,255,.42)">[13.1,\u200a13.9]</td><td style="padding:4px 5px;text-align:right;color:#6ee7b7">32.4</td></tr>'
-        +   '<tr><td style="padding:4px 5px;color:rgba(255,255,255,.65)">2024</td><td style="padding:4px 5px;text-align:right;color:#a5b4fc;font-weight:600">14.2</td><td style="padding:4px 5px;text-align:right;color:rgba(255,255,255,.42)">[13.7,\u200a14.7]</td><td style="padding:4px 5px;text-align:right;color:#6ee7b7">38.7</td></tr>'
-        + '</tbody></table>'
-        + '<div style="margin-top:.7rem;background:rgba(99,102,241,.12);border-left:2.5px solid #6366f1;padding:.5rem .75rem;font-size:9.5px;line-height:1.55;border-radius:0 7px 7px 0;color:rgba(255,255,255,.85)">'
-        +   '<span style="font-size:8px;font-weight:700;color:#a5b4fc;letter-spacing:.06em;text-transform:uppercase;display:block;margin-bottom:3px">\uD83E\uDD16 MedRAS AI Interpretation</span>'
-        +   'AI-detected pattern in demo cohort: upward trend observed across the 5-year period. Response appears stronger in age \u226550 subgroup in this demo. <strong style="color:#fbbf24">\u26a0 Variance increase flagged \u00b7 Month\u202f3 (2021)</strong>\u202f\u2014 recommend researcher review. <em style="color:rgba(255,255,255,.45);font-style:normal;font-size:9px">Generated from MedRAS demo dataset.</em>'
-        + '</div>'
-        + '<div style="margin-top:.65rem;border-top:1px solid rgba(255,255,255,.1);padding-top:.55rem">'
-        +   '<div style="font-size:8px;font-weight:700;color:rgba(255,255,255,.38);letter-spacing:.06em;text-transform:uppercase;margin-bottom:.38rem">Trending in Research</div>'
-        +   '<div style="display:flex;flex-direction:column;gap:.26rem">'
-        +     '<div style="font-size:9px;color:rgba(255,255,255,.65);display:flex;align-items:center;gap:.4rem"><span style="color:#4ade80;font-size:9px">\u2191</span>GLP-1 obesity trials \u00b7 +340% publications since 2022</div>'
-        +     '<div style="font-size:9px;color:rgba(255,255,255,.65);display:flex;align-items:center;gap:.4rem"><span style="color:#4ade80;font-size:9px">\u2191</span>AI ECG interpretation \u00b7 88 new papers this quarter</div>'
-        +     '<div style="font-size:9px;color:rgba(255,255,255,.65);display:flex;align-items:center;gap:.4rem"><span style="color:#4ade80;font-size:9px">\u2191</span>CGM outcome studies accelerating \u00b7 2.1\u00d7 YoY</div>'
-        +   '</div>'
-        +   '<div style="font-size:7.5px;color:rgba(255,255,255,.25);margin-top:.35rem">AI-detected pattern \u00b7 For orientation only \u00b7 Not a systematic review</div>'
-        + '</div>'
-        + '</div>';
-
-      VIS.tracker = '<div style="padding:1.5rem;color:white;font-family:-apple-system,sans-serif">'
-        + '<div style="display:flex;gap:.3rem;flex-wrap:wrap;margin-bottom:.55rem">'
-        +   '<span style="font-size:7.5px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);border-radius:4px;padding:1px 7px;color:rgba(255,255,255,.4);letter-spacing:.05em;text-transform:uppercase">Simulated Activity</span>'
-        + '</div>'
-        + '<div style="font-size:9.5px;color:rgba(255,255,255,.45);letter-spacing:.06em;text-transform:uppercase;margin-bottom:.65rem">Active studies \u00b7 4 total</div>'
-        + '<div style="display:flex;gap:.4rem;flex-wrap:wrap;margin-bottom:.9rem">'
-        +   '<span style="background:rgba(34,197,94,.15);border:1px solid rgba(34,197,94,.3);border-radius:5px;padding:2px 8px;font-size:9.5px;font-weight:600;color:#4ade80">1 complete</span>'
-        +   '<span style="background:rgba(245,158,11,.15);border:1px solid rgba(245,158,11,.3);border-radius:5px;padding:2px 8px;font-size:9.5px;font-weight:600;color:#fbbf24">2 in progress</span>'
-        +   '<span style="background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);border-radius:5px;padding:2px 8px;font-size:9.5px;color:rgba(255,255,255,.5)">1 planned</span>'
-        + '</div>'
-        /* study 1 — complete */
-        + '<div style="background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.2);border-radius:9px;padding:.65rem .75rem;margin-bottom:.45rem">'
-        +   '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.3rem">'
-        +     '<span style="font-size:10px;font-weight:700;color:#fff">Effect of metformin on HbA1c \u2014 RCT</span>'
-        +     '<span style="font-size:9px;font-weight:700;color:#4ade80;white-space:nowrap;margin-left:.5rem">8/8 \u2713</span>'
-        +   '</div>'
-        +   '<div style="font-size:9px;color:rgba(255,255,255,.5);margin-bottom:.4rem">Sigma \u00b7 Scriptorium \u00b7 Novus \u00b7 Complete</div>'
-        +   '<div style="background:rgba(255,255,255,.1);border-radius:4px;height:4px"><div style="background:#4ade80;height:100%;width:100%;border-radius:4px"></div></div>'
-        + '</div>'
-        /* study 2 — amber */
-        + '<div style="background:rgba(245,158,11,.07);border:1px solid rgba(245,158,11,.2);border-radius:9px;padding:.65rem .75rem;margin-bottom:.45rem">'
-        +   '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.3rem">'
-        +     '<span style="font-size:10px;font-weight:700;color:#fff">Maternal anaemia in tribal populations</span>'
-        +     '<span style="font-size:9px;font-weight:700;color:#fbbf24;white-space:nowrap;margin-left:.5rem">6/8</span>'
-        +   '</div>'
-        +   '<div style="font-size:9px;color:rgba(255,255,255,.5);margin-bottom:.4rem">Prologue \u00b7 IEC submission pending \u00b7 Next: Scriptorium</div>'
-        +   '<div style="background:rgba(255,255,255,.1);border-radius:4px;height:4px"><div style="background:#fbbf24;height:100%;width:75%;border-radius:4px"></div></div>'
-        + '</div>'
-        /* study 3 — purple */
-        + '<div style="background:rgba(99,102,241,.08);border:1px solid rgba(99,102,241,.2);border-radius:9px;padding:.65rem .75rem;margin-bottom:.45rem">'
-        +   '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.3rem">'
-        +     '<span style="font-size:10px;font-weight:700;color:#fff">Post-COVID pulmonary function \u2014 Cohort</span>'
-        +     '<span style="font-size:9px;font-weight:700;color:#a5b4fc;white-space:nowrap;margin-left:.5rem">4/9</span>'
-        +   '</div>'
-        +   '<div style="font-size:9px;color:rgba(255,255,255,.5);margin-bottom:.4rem">Scriptorium \u00b7 References verified \u00b7 Writing in progress</div>'
-        +   '<div style="background:rgba(255,255,255,.1);border-radius:4px;height:4px"><div style="background:#6366f1;height:100%;width:44%;border-radius:4px"></div></div>'
-        + '</div>'
-        /* study 4 — planned */
-        + '<div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:9px;padding:.65rem .75rem">'
-        +   '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.3rem">'
-        +     '<span style="font-size:10px;font-weight:700;color:rgba(255,255,255,.42)">Thyroid dysfunction in PCOS \u2014 planned</span>'
-        +     '<span style="font-size:9px;font-weight:700;color:rgba(255,255,255,.35);white-space:nowrap;margin-left:.5rem">0/8</span>'
-        +   '</div>'
-        +   '<div style="font-size:9px;color:rgba(255,255,255,.3);margin-bottom:.4rem">Not started \u00b7 Awaiting funding approval</div>'
-        +   '<div style="background:rgba(255,255,255,.1);border-radius:4px;height:4px"><div style="background:rgba(255,255,255,.2);height:100%;width:2%;border-radius:4px"></div></div>'
-        + '</div>'
-        + '<div style="margin-top:.7rem;border-top:1px solid rgba(255,255,255,.1);padding-top:.6rem">'
-        +   '<div style="font-size:8px;font-weight:700;color:rgba(255,255,255,.38);letter-spacing:.06em;text-transform:uppercase;margin-bottom:.42rem">Study\u202f2 milestone timeline</div>'
-        +   '<div style="display:flex;flex-direction:column;gap:.28rem">'
-        +     '<div style="display:flex;align-items:center;gap:.45rem;font-size:9.5px"><span>\u2705</span><span style="color:rgba(255,255,255,.75)">Ethics approval</span><span style="margin-left:auto;color:rgba(255,255,255,.35);font-size:9px">14 Jan</span></div>'
-        +     '<div style="display:flex;align-items:center;gap:.45rem;font-size:9.5px"><span style="color:#fbbf24">\uD83D\uDFE1</span><span style="color:rgba(255,255,255,.75)">Consent forms distributed</span><span style="margin-left:auto;font-size:9px;color:#fbbf24">92/120 \u00b7 76%</span></div>'
-        +     '<div style="display:flex;align-items:center;gap:.45rem;font-size:9.5px"><span>\uD83D\uDD04</span><span style="color:rgba(255,255,255,.75)">Data collection</span><span style="margin-left:auto;font-size:9px;color:#4ade80;display:flex;align-items:center;gap:3px"><span style="width:4px;height:4px;min-width:4px;border-radius:50%;background:#4ade80;display:inline-block;animation:ws-dot 1.8s 0s infinite ease-in-out"></span>Active</span></div>'
-        +     '<div style="display:flex;align-items:center;gap:.45rem;font-size:9.5px;opacity:.4"><span>\u23f3</span><span>Data cleaning</span><span style="margin-left:auto;font-size:9px">Pending</span></div>'
-        +     '<div style="display:flex;align-items:center;gap:.45rem;font-size:9.5px;opacity:.4"><span>\u23f3</span><span>Statistical analysis</span><span style="margin-left:auto;font-size:9px">Queued</span></div>'
-        +   '</div>'
-        +   '<div style="margin-top:.45rem;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.22);border-radius:6px;padding:.38rem .55rem;font-size:9px;color:#fbbf24">'
-        +     '\u26a0 Enrollment pace 23% below projected timeline \u00b7 Supervisor comments pending'
-        +   '</div>'
-        + '</div>'
-        + '</div>';
-
-      VIS.assistant = '<div style="padding:1.5rem;color:white;font-family:-apple-system,sans-serif;display:flex;flex-direction:column;gap:.5rem;min-height:320px">'
-        + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.25rem">'
-        +   '<span style="font-size:9.5px;color:rgba(255,255,255,.45);letter-spacing:.06em;text-transform:uppercase">Methodology assistant</span>'
-        +   '<span style="display:flex;align-items:center;gap:4px;font-size:8.5px;color:#4ade80"><span style="width:5px;height:5px;min-width:5px;border-radius:50%;background:#4ade80;display:inline-block;animation:ws-dot 2s 0s infinite ease-in-out"></span>Live</span>'
-        + '</div>'
-        /* user msg 1 */
-        + '<div style="align-self:flex-end;background:#6366f1;color:#fff;border-radius:12px 12px 3px 12px;padding:.5rem .75rem;font-size:10px;max-width:86%;line-height:1.5">'
-        +   'My study has 2 independent groups (n\u202f=\u202f28 each). Data is non-normal. Which test?'
-        + '</div>'
-        /* AI msg 1 */
-        + '<div style="align-self:flex-start;background:rgba(255,255,255,.1);border-radius:12px 12px 12px 3px;padding:.5rem .75rem;font-size:10px;max-width:92%;line-height:1.5">'
-        +   'Use <strong style="color:#a5b4fc">Mann-Whitney U</strong> (Wilcoxon rank-sum). With non-normal data and equal group sizes, a parametric t-test is inappropriate. Sigma selects this automatically.'
-        +   '<div style="font-size:8px;color:rgba(255,255,255,.4);margin-top:.3rem;padding-top:.28rem;border-top:1px solid rgba(255,255,255,.1)">Why suggested: non-normal distribution detected \u00b7 two independent groups \u00b7 t-test assumptions not met</div>'
-        + '</div>'
-        /* user msg 2 */
-        + '<div style="align-self:flex-end;background:#6366f1;color:#fff;border-radius:12px 12px 3px 12px;padding:.5rem .75rem;font-size:10px;max-width:86%;line-height:1.5">'
-        +   'How do I report the effect size in APA 7th edition?'
-        + '</div>'
-        /* AI msg 2 */
-        + '<div style="align-self:flex-start;background:rgba(255,255,255,.1);border-radius:12px 12px 12px 3px;padding:.5rem .75rem;font-size:10px;max-width:92%;line-height:1.5">'
-        +   'Report <strong style="color:#a5b4fc">r\u202f=\u202fZ\u202f/\u202f\u221aN</strong> (rank-biserial). APA: <em>&ldquo;U\u202f=\u202f312, p\u202f=\u202f.003, r\u202f=\u202f.41&rdquo;</em>. Sigma includes this in the output table automatically.'
-        +   '<div style="font-size:8px;color:rgba(255,255,255,.4);margin-top:.3rem;padding-top:.28rem;border-top:1px solid rgba(255,255,255,.1)">Why suggested: rank-biserial r is the standard effect size for Mann-Whitney U \u00b7 required for APA 7th edition reporting</div>'
-        + '</div>'
-        /* user msg 3 */
-        + '<div style="align-self:flex-end;background:#6366f1;color:#fff;border-radius:12px 12px 3px 12px;padding:.5rem .75rem;font-size:10px;max-width:86%;line-height:1.5">'
-        +   'What minimum n detects r\u202f=\u202f0.3 at 80% power (\u03b1\u202f=\u202f.05)?'
-        + '</div>'
-        /* typing indicator */
-        + '<div style="align-self:flex-start;background:rgba(255,255,255,.1);border-radius:12px 12px 12px 3px;padding:.55rem .85rem;display:flex;gap:5px;align-items:center">'
-        +   '<span style="width:6px;height:6px;border-radius:50%;background:#a5b4fc;display:inline-block;animation:ws-dot 1.2s 0s infinite ease-in-out"></span>'
-        +   '<span style="width:6px;height:6px;border-radius:50%;background:#a5b4fc;display:inline-block;animation:ws-dot 1.2s .2s infinite ease-in-out"></span>'
-        +   '<span style="width:6px;height:6px;border-radius:50%;background:#a5b4fc;display:inline-block;animation:ws-dot 1.2s .4s infinite ease-in-out"></span>'
-        + '</div>'
-        + '<div style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.22);border-radius:6px;padding:.38rem .6rem;font-size:9px;color:#fbbf24;margin-top:.1rem">'
-        +   '\u26a0 Reviewer concern: subgroup n\u202f=\u202f28 per arm gives ~35% power for r\u202f=\u202f0.3. Consider descriptive reporting only.'
-        + '</div>'
-        + '<div style="display:flex;justify-content:space-between;align-items:center;font-size:8.5px;color:rgba(255,255,255,.28);padding-top:.38rem;border-top:1px solid rgba(255,255,255,.08);margin-top:.35rem">'
-        +   '<span>\u2192 Routing to Cohort sample-size engine</span><span>2:41\u202fpm</span>'
-        + '</div>'
-        + '</div>';
-
-      VIS.journal = '<div style="padding:1.5rem;color:white;font-family:-apple-system,sans-serif">'
-        + '<div style="display:flex;gap:.3rem;flex-wrap:wrap;margin-bottom:.55rem">'
-        +   '<span style="font-size:7.5px;background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.18);border-radius:4px;padding:1px 7px;color:#6ee7b7;letter-spacing:.05em;text-transform:uppercase">Verified Metadata</span>'
-        + '</div>'
-        + '<div style="font-size:9.5px;color:rgba(255,255,255,.45);letter-spacing:.06em;text-transform:uppercase;margin-bottom:.6rem">Journal finder \u00b7 5 results</div>'
-        + '<div style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);border-radius:7px;padding:.45rem .7rem;font-size:9.5px;color:rgba(255,255,255,.6);margin-bottom:.35rem;line-height:1.4">'
-        +   '\uD83D\uDD0E Prospective RCT \u00b7 Cardiology \u00b7 India \u00b7 Open access preferred \u00b7 IF \u2265 1.5'
-        + '</div>'
-        + '<div style="font-size:7.5px;color:rgba(255,255,255,.28);margin-bottom:.55rem;padding-left:.1rem">Scores show estimated scope similarity \u00b7 Not an acceptance guarantee \u00b7 Verify directly with journal</div>'
-        + '<div style="display:flex;flex-direction:column;gap:.4rem">'
-        /* journal 1 — 96% */
-        +   '<div style="background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.25);border-radius:8px;padding:.55rem .65rem">'
-        +     '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:.5rem">'
-        +       '<div>'
-        +         '<div style="font-size:10px;font-weight:700;color:#fff;margin-bottom:2px">Indian Heart Journal</div>'
-        +         '<div style="font-size:9px;color:rgba(255,255,255,.5)">Elsevier \u00b7 IF 1.6 \u00b7 Q3 \u00b7 MEDLINE \u00b7 Open access</div>'
-        +         '<div style="display:flex;gap:.3rem;flex-wrap:wrap;margin-top:.3rem">'
-        +           '<span style="font-size:8px;background:rgba(255,255,255,.08);border-radius:4px;padding:1px 6px;color:rgba(255,255,255,.5)">\u23f1 8\u20138\u202fwk review</span>'
-        +           '<span style="font-size:8px;background:rgba(34,197,94,.15);border-radius:4px;padding:1px 6px;color:#4ade80;font-weight:600">OA</span>'
-        +           '<span style="font-size:8px;background:rgba(52,211,153,.12);border-radius:4px;padding:1px 6px;color:#6ee7b7;font-weight:600">Verified</span>'
-        +         '</div>'
-        +       '</div>'
-        +       '<span style="font-size:8.5px;font-weight:700;color:#4ade80;background:rgba(34,197,94,.18);border-radius:5px;padding:2px 9px;white-space:nowrap;flex-shrink:0">High match</span>'
-        +     '</div>'
-        +     '<div style="margin-top:.4rem;background:rgba(255,255,255,.05);border-radius:5px;padding:.3rem .5rem;font-size:8.5px;color:rgba(255,255,255,.5);display:flex;align-items:center;gap:.4rem">'
-        +       '<span style="color:#a5b4fc">\uD83D\uDCC4</span>Similar: Iron therapy outcomes in tribal populations \u00b7 IHJ 2024'
-        +     '</div>'
-        +   '</div>'
-        /* journal 2 — 88% */
-        +   '<div style="background:rgba(99,102,241,.08);border:1px solid rgba(99,102,241,.2);border-radius:8px;padding:.55rem .65rem">'
-        +     '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:.5rem">'
-        +       '<div><div style="font-size:10px;font-weight:700;color:#fff;margin-bottom:2px">BMC Cardiovascular Disorders</div><div style="font-size:9px;color:rgba(255,255,255,.5)">Springer \u00b7 IF 2.3 \u00b7 Q2 \u00b7 PubMed \u00b7 OA \u00b7 APC \u00a31,990</div></div>'
-        +       '<span style="font-size:8.5px;font-weight:700;color:#a5b4fc;background:rgba(99,102,241,.18);border-radius:5px;padding:2px 9px;white-space:nowrap;flex-shrink:0">Good match</span>'
-        +     '</div>'
-        +   '</div>'
-        /* journal 3 — 74% */
-        +   '<div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:.55rem .65rem">'
-        +     '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:.5rem">'
-        +       '<div><div style="font-size:10px;font-weight:700;color:#fff;margin-bottom:2px">Journal of Cardiology</div><div style="font-size:9px;color:rgba(255,255,255,.5)">Elsevier \u00b7 IF 3.1 \u00b7 Q2 \u00b7 Scopus \u00b7 Subscription</div></div>'
-        +       '<span style="font-size:8.5px;font-weight:700;color:#fbbf24;background:rgba(245,158,11,.15);border-radius:5px;padding:2px 9px;white-space:nowrap;flex-shrink:0">Moderate match</span>'
-        +     '</div>'
-        +   '</div>'
-        /* journal 4 — 68% */
-        +   '<div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:.55rem .65rem">'
-        +     '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:.5rem">'
-        +       '<div><div style="font-size:10px;font-weight:700;color:#fff;margin-bottom:2px">Heart Asia</div><div style="font-size:9px;color:rgba(255,255,255,.5)">BMJ \u00b7 IF 2.8 \u00b7 Q2 \u00b7 PubMed \u00b7 OA \u00b7 APC \u00a32,200</div></div>'
-        +       '<span style="font-size:8.5px;font-weight:700;color:#94a3b8;background:rgba(255,255,255,.06);border-radius:5px;padding:2px 9px;white-space:nowrap;flex-shrink:0">Moderate match</span>'
-        +     '</div>'
-        +   '</div>'
-        /* journal 5 — 61% */
-        +   '<div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:.55rem .65rem">'
-        +     '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:.5rem">'
-        +       '<div>'
-        +         '<div style="font-size:10px;font-weight:700;color:#fff;margin-bottom:2px">IJCP \u2014 Indian J Clin Practice</div>'
-        +         '<div style="font-size:9px;color:rgba(255,255,255,.5)">Medknow \u00b7 IF 0.9 \u00b7 Scopus \u00b7 Open access \u00b7 Free APC</div>'
-        +         '<div style="font-size:8.5px;color:#fbbf24;margin-top:.28rem;display:flex;align-items:center;gap:.3rem"><span>\u26a0</span>Potential indexing concern \u00b7 Verify current status independently</div>'
-        +       '</div>'
-        +       '<span style="font-size:8.5px;font-weight:700;color:#94a3b8;background:rgba(255,255,255,.06);border-radius:5px;padding:2px 9px;white-space:nowrap;flex-shrink:0">Low match</span>'
-        +     '</div>'
-        +   '</div>'
-        + '</div>'
-        + '<div style="margin-top:.6rem;border-top:1px solid rgba(255,255,255,.1);padding-top:.5rem;font-size:7.5px;color:rgba(255,255,255,.25)">Scope similarity estimated from study design, topic, and journal aims \u00b7 Verified metadata only</div>'
-        + '</div>';
 
       VIS.analytics = '<div style="padding:1.5rem;color:white;font-family:-apple-system,sans-serif">'
         + '<div style="display:flex;gap:.3rem;flex-wrap:wrap;margin-bottom:.55rem">'
@@ -1067,64 +449,34 @@
         +   '</tr></thead><tbody>'
         +   '<tr style="border-bottom:1px solid rgba(255,255,255,.06)"><td style="padding:4px 5px;color:#fff;font-weight:600">Haemoglobin</td><td style="padding:4px 5px;color:rgba(255,255,255,.6)">Mann-Whitney U</td><td style="padding:4px 5px;text-align:right;color:#a5b4fc;font-weight:600">312</td><td style="padding:4px 5px;text-align:right;color:#4ade80;font-weight:600">.003</td><td style="padding:4px 5px;text-align:right;color:#fbbf24">r\u202f=\u202f.41 \u25b2</td></tr>'
         +   '<tr style="border-bottom:1px solid rgba(255,255,255,.06)"><td style="padding:4px 5px;color:#fff;font-weight:600">Ferritin</td><td style="padding:4px 5px;color:rgba(255,255,255,.6)">Mann-Whitney U</td><td style="padding:4px 5px;text-align:right;color:#a5b4fc;font-weight:600">287</td><td style="padding:4px 5px;text-align:right;color:#4ade80;font-weight:600">.011</td><td style="padding:4px 5px;text-align:right;color:#fbbf24">r\u202f=\u202f.36 \u25b2</td></tr>'
-        +   '<tr style="border-bottom:1px solid rgba(255,255,255,.06)"><td style="padding:4px 5px;color:#fff;font-weight:600">Age</td><td style="padding:4px 5px;color:rgba(255,255,255,.6)">Mann-Whitney U</td><td style="padding:4px 5px;text-align:right;color:#a5b4fc;font-weight:600">390</td><td style="padding:4px 5px;text-align:right;color:rgba(255,255,255,.5)">.421</td><td style="padding:4px 5px;text-align:right;color:rgba(255,255,255,.4)">r\u202f=\u202f.09 \u2014</td></tr>'
         +   '<tr><td style="padding:4px 5px;color:#fff;font-weight:600">BMI</td><td style="padding:4px 5px;color:rgba(255,255,255,.6)">Independent t</td><td style="padding:4px 5px;text-align:right;color:#a5b4fc;font-weight:600">t\u202f=\u202f2.14</td><td style="padding:4px 5px;text-align:right;color:#4ade80;font-weight:600">.036</td><td style="padding:4px 5px;text-align:right;color:rgba(255,255,255,.5)">d\u202f=\u202f.48 \u25b2</td></tr>'
         + '</tbody></table>'
         + '<div style="background:rgba(99,102,241,.12);border-left:2.5px solid #6366f1;padding:.55rem .75rem;font-size:9.5px;line-height:1.55;border-radius:0 7px 7px 0;color:rgba(255,255,255,.85);margin-bottom:.75rem">'
         +   'Haemoglobin was significantly higher in Group B (Mdn\u202f=\u202f13.7\u202fg/dL) than Group A (Mdn\u202f=\u202f11.2\u202fg/dL), U\u202f=\u202f312, p\u202f=\u202f.003, r\u202f=\u202f.41, indicating a medium effect.'
         + '</div>'
-        + '<div style="font-size:7.5px;color:rgba(255,255,255,.28);margin-bottom:.6rem">AI interpretation generated from displayed demo statistical output \u00b7 Upload your dataset in Sigma for real analysis</div>'
-        + '<div style="display:flex;gap:.4rem;flex-wrap:wrap">'
-        +   '<span style="background:#6366f1;border-radius:6px;padding:4px 10px;font-size:9px;font-weight:600">\uD83D\uDCCB Copy APA</span>'
-        +   '<span style="background:rgba(255,255,255,.1);border-radius:6px;padding:4px 10px;font-size:9px">\uD83D\uDCC4 Export .docx</span>'
-        +   '<span style="background:rgba(255,255,255,.1);border-radius:6px;padding:4px 10px;font-size:9px">\uD83D\uDCCA PNG chart</span>'
-        + '</div>'
-        + '<div style="margin-top:.7rem;border-top:1px solid rgba(255,255,255,.1);padding-top:.6rem">'
-        +   '<div style="font-size:8px;font-weight:700;color:rgba(255,255,255,.38);letter-spacing:.06em;text-transform:uppercase;margin-bottom:.38rem">Assumption checks</div>'
-        +   '<div style="display:flex;flex-direction:column;gap:.26rem">'
-        +     '<div style="font-size:9px;display:flex;align-items:flex-start;gap:.4rem"><span style="color:#4ade80;flex-shrink:0;font-size:9px">\u2713</span><span style="color:rgba(255,255,255,.72)">Shapiro-Wilk \u00b7 Group B normal (p\u202f=\u202f.14)</span></div>'
-        +     '<div style="font-size:9px;display:flex;align-items:flex-start;gap:.4rem"><span style="color:#fbbf24;flex-shrink:0;font-size:9px">\u26a0</span><span style="color:rgba(255,255,255,.72)">Normality violated \u00b7 Group A (p\u202f=\u202f.023) \u2192 non-parametric applied</span></div>'
-        +     '<div style="font-size:9px;display:flex;align-items:flex-start;gap:.4rem"><span style="color:#4ade80;flex-shrink:0;font-size:9px">\u2713</span><span style="color:rgba(255,255,255,.72)">Levene\u2019s \u00b7 variance homogeneity acceptable (p\u202f=\u202f.41)</span></div>'
-        +   '</div>'
-        + '</div>'
-        + '<div style="margin-top:.55rem">'
-        +   '<div style="font-size:8px;font-weight:700;color:rgba(255,255,255,.38);letter-spacing:.06em;text-transform:uppercase;margin-bottom:.36rem">Suggested next steps</div>'
-        +   '<div style="display:flex;flex-direction:column;gap:.26rem">'
-        +     '<div style="font-size:9px;color:rgba(255,255,255,.65);display:flex;gap:.38rem"><span style="color:#818cf8;flex-shrink:0">\u2192</span>ROC analysis \u00b7 Haemoglobin diagnostic threshold (AUC)</div>'
-        +     '<div style="font-size:9px;color:rgba(255,255,255,.65);display:flex;gap:.38rem"><span style="color:#818cf8;flex-shrink:0">\u2192</span>Logistic regression \u00b7 adjust for age and BMI confounders</div>'
-        +     '<div style="font-size:9px;color:rgba(255,255,255,.65);display:flex;gap:.38rem"><span style="color:#818cf8;flex-shrink:0">\u2192</span>Subgroup analysis \u00b7 stratify by intervention type</div>'
-        +   '</div>'
-        + '</div>'
         + '</div>';
 
-      /* ── Card metadata ── */
+      VIS.assistant = '<div style="padding:1.5rem;color:white;font-family:-apple-system,sans-serif;display:flex;flex-direction:column;gap:.6rem;">'
+        + '<div style="font-size:9px;text-transform:uppercase;letter-spacing:.07em;color:rgba(255,255,255,.35);margin-bottom:.2rem">AI assistant preview</div>'
+        + '<div style="align-self:flex-end;background:#6366f1;color:#fff;border-radius:10px 10px 3px 10px;padding:.5rem .75rem;font-size:10.5px;max-width:85%;line-height:1.45;">Which test for two unpaired non-normal groups, n=28?</div>'
+        + '<div style="align-self:flex-start;background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.12);color:rgba(255,255,255,.9);border-radius:10px 10px 10px 3px;padding:.5rem .75rem;font-size:10.5px;max-width:90%;line-height:1.5;"><strong>Mann-Whitney U</strong> (Wilcoxon rank-sum). Non-normal confirmed by Shapiro-Wilk \u2014 parametric t-test inappropriate. Sigma runs this automatically.</div>'
+        + '<div style="align-self:flex-end;background:#6366f1;color:#fff;border-radius:10px 10px 3px 10px;padding:.5rem .75rem;font-size:10.5px;max-width:85%;line-height:1.45;">How do I report effect size?</div>'
+        + '<div style="align-self:flex-start;background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.12);color:rgba(255,255,255,.9);border-radius:10px 10px 10px 3px;padding:.5rem .75rem;font-size:10.5px;max-width:90%;line-height:1.5;"><strong>r = Z / \u221aN</strong> (rank-biserial). Small \u22650.1, medium \u22650.3, large \u22650.5. Sigma includes this in output automatically.</div>'
+        + '</div>';
+
       var CARDS = {
-        trend: {
-          eyebrow: 'Sigma \u00b7 In Development', eyebrowClass: 'is-dev',
-          title: 'Trend report',
-          desc: 'Track how any variable in your dataset evolves across time or study periods. Sigma computes trend significance using Kendall \u03c4 and Mann-Kendall tests, annotates inflection points, and formats the chart ready for your manuscript.',
+        analytics: {
+          eyebrow: 'Sigma \u00b7 Available \u2014 Beta', eyebrowClass: 'is-live',
+          title: 'Analytics \u00b7 Sigma',
+          desc: 'Upload your Excel sheet. Sigma classifies variables, selects the right test automatically (normality-aware), runs the analysis, and generates APA-formatted result tables and graphs ready to paste into your manuscript.',
           caps: [
-            [false, 'Year-on-year comparisons with 95% confidence intervals'],
-            [false, 'Kendall \u03c4, Mann-Kendall and Spearman rank correlation'],
-            [false, 'Multi-variable overlay with automatic anomaly detection'],
-            [false, 'Annotated inflection points and step-change detection'],
-            [false, 'Use directly in publication-ready trend reporting'],
-            [false, 'Supports longitudinal and repeated-measure datasets'],
+            [true,  'Normality testing (Shapiro-Wilk) with automatic test selection'],
+            [true,  'Parametric and non-parametric tests with effect sizes'],
+            [true,  'Effect size labels (small / medium / large) per Cohen\u2019s thresholds'],
+            [true,  'Publication-ready APA 7th edition result tables'],
+            [true,  'One-click result narrative for your manuscript Results section'],
           ],
-          cta: 'Try Sigma \u2014 Beta \u2192', ctaHref: '/analysis.html', ctaClass: 'is-primary',
-        },
-        tracker: {
-          eyebrow: 'Workspace \u00b7 In Development', eyebrowClass: 'is-dev',
-          title: 'Project tracker',
-          desc: 'Every active study in one dashboard \u2014 current module, step status, milestone dates, and what is blocking you. Never lose track of where a study is in the pipeline.',
-          caps: [
-            [false, 'Cross-module step tracking (Prologue, Sigma, Scriptorium, Novus)'],
-            [false, 'Milestone timeline with IEC and ethics submission status'],
-            [false, 'Collaborator assignment and note threads per study'],
-            [false, 'Deadline alerts and stalled-study nudges'],
-            [false, 'Export study timeline as PDF or Gantt chart'],
-          ],
-          cta: 'Coming soon', ctaHref: '#', ctaClass: 'is-coming',
+          cta: 'Open Sigma \u2192', ctaHref: '/analysis.html', ctaClass: 'is-primary',
         },
         assistant: {
           eyebrow: 'AI \u00b7 In Development', eyebrowClass: 'is-dev',
@@ -1139,35 +491,8 @@
           ],
           cta: 'Coming soon', ctaHref: '#', ctaClass: 'is-coming',
         },
-        journal: {
-          eyebrow: 'Publishing \u00b7 In Development', eyebrowClass: 'is-dev',
-          title: 'Journal finder',
-          desc: 'Describe your study or paste your abstract and MedRAS matches it against journals ranked by scope match, impact factor, indexing, open-access status, and submission requirements.',
-          caps: [
-            [false, 'Scope matching via abstract NLP against thousands of journals'],
-            [false, 'Impact factor, quartile, and acceptance rate data'],
-            [false, 'Open access eligibility and APC cost'],
-            [false, 'MEDLINE, PubMed, Scopus, and UGC indexing status'],
-            [false, 'Per-journal submission checklist (word limit, format, turnaround)'],
-          ],
-          cta: 'Coming soon', ctaHref: '#', ctaClass: 'is-coming',
-        },
-        analytics: {
-          eyebrow: 'Sigma \u00b7 Available \u2014 Beta', eyebrowClass: 'is-live',
-          title: 'Analytics \u00b7 Sigma',
-          desc: 'Upload your Excel sheet. Sigma classifies variables, selects the right test automatically (normality-aware), runs the analysis, and generates APA-formatted result tables and graphs ready to paste into your manuscript.',
-          caps: [
-            [true,  'Normality testing (Shapiro-Wilk) with automatic test selection'],
-            [true,  'Parametric and non-parametric tests with effect sizes'],
-            [true,  'Effect size labels (small / medium / large) per Cohen\u2019s thresholds'],
-            [true,  'Publication-ready APA 7th edition result tables'],
-            [true,  'One-click result narrative for your manuscript Results section'],
-          ],
-          cta: 'Open Sigma \u2192', ctaHref: '/analysis.html', ctaClass: 'is-primary',
-        },
       };
 
-      /* ── Modal DOM refs ── */
       var bd      = document.getElementById('ws-bd');
       var visEl   = document.getElementById('ws-vis');
       var eyEl    = document.getElementById('ws-eyebrow');
@@ -1207,7 +532,6 @@
       }
       document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeModal(); });
 
-      /* ── Wire up cards ── */
       function initCards() {
         document.querySelectorAll('[data-ws-card]').forEach(function (card) {
           var mock = card.querySelector('.dash-mock');

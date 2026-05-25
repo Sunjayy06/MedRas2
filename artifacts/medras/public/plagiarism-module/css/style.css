@@ -1,17 +1,20 @@
 /* ============================================================
-   Plagiarism & AI-Reduction Module — navy theme
+   Plagiarism & AI-Reduction Module — Novus  (UI Overhaul 2026-05)
    ============================================================ */
 
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap');
+
 :root {
-  --pm-navy-900: #07142e;
-  --pm-navy-800: #0c1f47;
-  --pm-navy-700: #142a5e;
-  --pm-navy-600: #1d3a7e;
-  --pm-navy-100: #e3eaf7;
-  --pm-accent: #ffc857;        /* warm gold */
-  --pm-accent-dark: #e0a82e;
-  --pm-cyan: #5bd1d7;
-  --pm-violet: #8b5cf6;
+  --pm-navy-900: #030b1c;
+  --pm-navy-800: #061228;
+  --pm-navy-700: #0c1d3e;
+  --pm-navy-600: #162d5c;
+  --pm-navy-100: #d4e0f8;
+  --pm-accent: #ffc857;
+  --pm-accent-dark: #f5a623;
+  --pm-accent-glow: rgba(255, 200, 87, 0.22);
+  --pm-cyan: #22d3ee;
+  --pm-violet: #a78bfa;
   --pm-success: #34d399;
   --pm-warn: #fbbf24;
   --pm-danger: #f87171;
@@ -20,8 +23,9 @@
   --pm-text: #1f2937;
   --pm-text-soft: #6b7280;
   --pm-border: #e5e7eb;
-  --pm-radius: 14px;
-  --pm-shadow: 0 24px 60px -25px rgba(7, 20, 46, 0.45);
+  --pm-radius: 12px;
+  --pm-shadow: 0 24px 60px -20px rgba(3, 11, 28, 0.55);
+  --pm-font-display: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif;
 }
 
 * { box-sizing: border-box; }
@@ -30,6 +34,7 @@ html, body {
   margin: 0;
   padding: 0;
   font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  -webkit-font-smoothing: antialiased;
   color: var(--pm-text);
   background: linear-gradient(160deg, var(--pm-navy-900) 0%, var(--pm-navy-700) 60%, var(--pm-navy-800) 100%);
   min-height: 100vh;
@@ -41,17 +46,18 @@ a:hover { text-decoration: underline; }
 /* ---- Header ---- */
 
 .pm-header {
-  padding: 22px 32px;
+  padding: 18px 32px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   color: #fff;
   position: sticky;
-  top: 0;
+  top: 36px;
   z-index: 10;
-  background: rgba(7, 20, 46, 0.85);
-  backdrop-filter: blur(8px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(3, 11, 28, 0.88);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
 }
 .pm-header .pm-brand {
   display: flex;
@@ -108,11 +114,12 @@ a:hover { text-decoration: underline; }
   font-weight: 600;
 }
 .pm-h1 {
-  font-size: clamp(34px, 5vw, 50px);
-  line-height: 1.05;
+  font-family: var(--pm-font-display);
+  font-size: clamp(34px, 5vw, 52px);
+  line-height: 1.04;
   margin: 0 0 18px;
-  letter-spacing: -0.02em;
-  font-weight: 700;
+  letter-spacing: -0.025em;
+  font-weight: 800;
 }
 .pm-h1 .pm-grad {
   background: linear-gradient(90deg, var(--pm-accent) 0%, var(--pm-cyan) 100%);

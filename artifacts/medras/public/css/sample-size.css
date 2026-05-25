@@ -9,9 +9,15 @@
 }
 
 .module-page-hero {
-  background: linear-gradient(180deg, var(--color-navy-800) 0%, var(--color-navy-900) 100%);
+  background: linear-gradient(160deg, var(--color-navy-900) 0%, var(--color-navy-700) 60%, var(--color-navy-800) 100%);
   color: #ffffff;
-  padding: 56px 24px 64px;
+  padding: 64px 24px 72px;
+}
+
+.module-page-hero h1 {
+  font-family: 'Plus Jakarta Sans', 'Inter', sans-serif !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.025em !important;
 }
 
 .module-page-hero-inner {

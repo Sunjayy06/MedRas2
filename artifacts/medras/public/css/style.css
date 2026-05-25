@@ -1,15 +1,16 @@
 /* =========================================================================
    MedRAS — Global Styles
-   Design tokens
    ========================================================================= */
 
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap');
+
 :root {
-  --color-navy-900: #0e1a33;
-  --color-navy-800: #1a2744;
-  --color-navy-700: #243358;
-  --color-navy-100: #e7ecf6;
-  --color-accent: #2f6fed;
-  --color-accent-dark: #1e54c8;
+  --color-navy-900: #060d1f;
+  --color-navy-800: #0c1733;
+  --color-navy-700: #132044;
+  --color-navy-100: #dde6f5;
+  --color-accent: #3b82f6;
+  --color-accent-dark: #2563eb;
   --color-success: #1f8a4c;
   --color-warning: #b76e00;
   --color-danger: #b3261e;
@@ -82,14 +83,14 @@ ul {
 }
 
 /* =========================================================================
-   Header
+   Header — legacy .site-header is hidden; mn-bar (medras-nav.css) replaces it
    ========================================================================= */
 
 .site-header {
-  background: var(--color-navy-800);
-  color: #ffffff;
-  border-bottom: 1px solid var(--color-navy-900);
+  display: none !important;
 }
+
+/* Keep the home-page site-footer (not affected) */
 
 .header-inner {
   max-width: var(--container-width);
@@ -145,15 +146,22 @@ ul {
    ========================================================================= */
 
 .hero {
-  background: linear-gradient(180deg, var(--color-navy-800) 0%, var(--color-navy-900) 100%);
+  background: linear-gradient(160deg, var(--color-navy-900) 0%, var(--color-navy-700) 60%, var(--color-navy-800) 100%);
   color: #ffffff;
-  padding: 96px 24px 112px;
+  padding: 72px 24px 88px;
 }
 
 .hero-inner {
   max-width: 760px;
   margin: 0 auto;
   text-align: center;
+}
+
+.hero-inner h1,
+.hero h1 {
+  font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
+  font-weight: 800;
+  letter-spacing: -0.025em;
 }
 
 .eyebrow {

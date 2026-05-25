@@ -20,7 +20,9 @@ html.mn-active body {
   right: 0;
   height: 36px;
   z-index: 10000;
-  background: #060d1f;
+  background: rgba(6, 13, 31, 0.82);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border-bottom: 1px solid rgba(255,255,255,.07);
   display: flex;
   align-items: center;
@@ -47,7 +49,7 @@ html.mn-active body {
   width: 20px;
   height: 20px;
   border-radius: 4px;
-  background: #2f6fed;
+  background: #3b82f6;
   color: #fff;
   font-size: 11px;
   font-weight: 800;
@@ -95,7 +97,7 @@ html.mn-active body {
 .mn-item-active {
   color: #fff;
   font-weight: 600;
-  border-bottom-color: #2f6fed;
+  border-bottom-color: #3b82f6;
 }
 
 /* ── Coming-soon placeholder items ─────────────────────────────── */
