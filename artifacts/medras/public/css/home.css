@@ -116,8 +116,9 @@ body.home {
 .hp-hero-ctas {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 8px;
   margin-bottom: 28px;
+  max-width: 680px;
 }
 
 .hp-cta-primary {
