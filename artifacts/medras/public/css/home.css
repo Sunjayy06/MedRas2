@@ -739,67 +739,19 @@ body.home {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   PRINCIPLES STRIP — 3 pillars
-═══════════════════════════════════════════════════════════════════════════ */
-.hp-principles-section {
-  padding: 80px 0;
-  background: #fff;
-  border-top: 1px solid #e5e7eb;
-  border-bottom: 1px solid #e5e7eb;
-}
-
-.hp-principles-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 40px;
-}
-
-.hp-principle {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.hp-principle-icon {
-  font-size: 28px;
-  line-height: 1;
-}
-
-.hp-principle-title {
-  font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
-  font-size: 17px;
-  font-weight: 700;
-  color: #111827;
-  margin: 0;
-  letter-spacing: -0.01em;
-}
-
-.hp-principle-body {
-  font-size: 14px;
-  color: #6b7280;
-  margin: 0;
-  line-height: 1.65;
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   ABOUT — 2-column
+   ABOUT — single-column centred
 ═══════════════════════════════════════════════════════════════════════════ */
 .hp-about-section {
-  padding: 80px 0;
+  padding: 72px 0;
   background: #f7f8fc;
+  border-top: 1px solid #e5e7eb;
 }
 
-.hp-about-grid {
-  display: grid;
-  grid-template-columns: 1fr 1.1fr;
-  gap: 64px;
-  align-items: start;
-}
-
-.hp-about-left {
+.hp-about-solo {
+  max-width: 640px;
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 16px;
 }
 
 .about-eyebrow {
@@ -808,7 +760,7 @@ body.home {
 
 .hp-about-headline {
   font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
-  font-size: clamp(24px, 3vw, 34px);
+  font-size: clamp(22px, 2.8vw, 32px);
   font-weight: 800;
   color: #111827;
   margin: 0;
@@ -821,52 +773,6 @@ body.home {
   color: #4b5563;
   margin: 0;
   line-height: 1.7;
-}
-
-.hp-about-features {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-
-.hp-about-feature {
-  display: flex;
-  align-items: flex-start;
-  gap: 14px;
-  padding: 14px 16px;
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 10px;
-  box-shadow: 0 1px 3px rgba(0,0,0,.04);
-}
-
-.hp-af-icon {
-  font-size: 18px;
-  line-height: 1;
-  flex-shrink: 0;
-  margin-top: 2px;
-}
-
-.hp-about-feature > div {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.hp-about-feature strong {
-  font-size: 14px;
-  font-weight: 700;
-  color: #111827;
-  display: block;
-}
-
-.hp-about-feature span {
-  font-size: 12.5px;
-  color: #6b7280;
-  line-height: 1.5;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -909,14 +815,6 @@ body.home {
   .hp-notbot-tags {
     grid-template-columns: repeat(2, 1fr);
   }
-  .hp-about-grid {
-    grid-template-columns: 1fr;
-    gap: 40px;
-  }
-  .hp-principles-grid {
-    grid-template-columns: 1fr 1fr;
-    gap: 28px;
-  }
 }
 
 @media (max-width: 720px) {
@@ -924,7 +822,6 @@ body.home {
   .hp-hero-inner { padding-bottom: 56px; }
   .hp-section-inner { padding: 0 20px; }
   .hp-modules-grid { grid-template-columns: 1fr; }
-  .hp-principles-grid { grid-template-columns: 1fr; gap: 28px; }
   .ws-modal { grid-template-columns: 1fr; }
   .ws-modal-vis { border-radius: 16px 16px 0 0; min-height: 200px; }
   .hp-workflow-inner { gap: 4px 2px; }
