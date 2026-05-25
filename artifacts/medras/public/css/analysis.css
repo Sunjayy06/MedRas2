@@ -380,13 +380,13 @@
   font-weight: 700;
 }
 /* --- ACTIVE state: blue with halo ring --- */
-.se-step.is-active { color: #185fa5; }
-.se-step.is-active .se-step-label { font-weight: 600; color: #185fa5; }
+.se-step.is-active { color: #3b82f6; }
+.se-step.is-active .se-step-label { font-weight: 700; color: #3b82f6; }
 .se-step.is-active .se-step-num {
-  background: #185fa5;
+  background: #3b82f6;
   color: #ffffff;
-  border-color: #185fa5;
-  box-shadow: 0 0 0 3px #b5d4f4;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.22);
 }
 /* --- FUTURE state: dimmed, NOT clickable --- */
 .se-step.is-future {

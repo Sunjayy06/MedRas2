@@ -3,9 +3,9 @@
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
-  --bg:      #060910;
-  --surface: #0d1422;
-  --s2:      #131c2e;
+  --bg:      #030b1c;
+  --surface: #0c1d3e;
+  --s2:      #0f2347;
   --border:  rgba(255,255,255,.07);
   --border2: rgba(255,255,255,.13);
   --teal:    #0891b2;
@@ -30,18 +30,22 @@ body {
   overflow-x: hidden;
 }
 
+/* mn-bar offset */
+html.mn-active body { padding-top: 36px; }
+
 /* ── Nav ─────────────────────────────────────────── */
 .rn {
   height: 50px;
-  background: rgba(8,9,26,.9);
-  backdrop-filter: blur(10px);
+  background: rgba(3,11,28,.92);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
   gap: .75rem;
   padding: 0 1.5rem;
   position: sticky;
-  top: 0;
+  top: 36px;
   z-index: 200;
   flex-shrink: 0;
 }
