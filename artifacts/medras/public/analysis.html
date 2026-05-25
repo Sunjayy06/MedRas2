@@ -1070,6 +1070,76 @@
       </section>
 
       <!-- ===========================================================
+           SCREEN SETUP · Unified study setup (upload-path primary)
+           Replaces the old ai-confirm screen for the main upload flow.
+           =========================================================== -->
+      <section class="se-screen se-screen-narrow is-hidden" id="screen-setup" data-testid="screen-setup">
+        <header class="se-screen-head">
+          <h2>Study Setup</h2>
+          <p>Describe your study — AI will identify the objective, planned tests, and sample size. Or review the auto-detected plan below.</p>
+        </header>
+
+        <!-- ── Plain-English description (feeds /setup-study) ── -->
+        <div class="se-describe-bar" data-testid="setup-describe-bar">
+          <label class="se-describe-label" for="setup-study-description">
+            <span class="se-chat-ai-badge">AI</span>
+            Describe your study <span class="se-describe-hint">(optional — helps AI pick the correct analysis)</span>
+          </label>
+          <div class="se-describe-row">
+            <textarea id="setup-study-description" class="se-describe-input" rows="2"
+              placeholder="e.g. I have 60 diabetic patients and 60 controls. I want to compare HbA1c between the two groups."
+              maxlength="1500" data-testid="setup-study-description"></textarea>
+            <button type="button" class="btn btn-secondary" data-action="setup-reanalyse" data-testid="btn-setup-reanalyse">Re-analyse</button>
+          </div>
+          <div id="setup-describe-status" class="se-status" role="status" aria-live="polite"></div>
+        </div>
+
+        <!-- ── AI plan card (populated from state.aiStudy) ── -->
+        <div class="se-plan-card" id="setup-plan-card" data-testid="setup-plan-card">
+          <div class="se-plan-card-icon" id="setup-plan-icon">📊</div>
+          <div class="se-plan-card-body">
+            <div class="se-plan-type-label" id="setup-study-type-display">—</div>
+            <p class="se-plan-description" id="setup-objective-display">—</p>
+            <div class="se-setup-meta-row">
+              <span class="se-setup-meta-chip" id="setup-sample-size-display" style="display:none"></span>
+              <span class="se-setup-meta-chip" id="setup-outcome-display" style="display:none"></span>
+            </div>
+            <p class="se-plan-reasoning" id="setup-reasoning-display" style="display:none"></p>
+          </div>
+        </div>
+
+        <!-- ── Planned test pairs ── -->
+        <div class="se-plan-section" id="setup-test-pairs-section">
+          <div class="se-plan-section-head">
+            <span class="se-plan-section-icon">📋</span>
+            <span class="se-plan-section-title">Planned comparisons</span>
+          </div>
+          <table class="se-setup-pairs-table" id="setup-pairs-table">
+            <thead>
+              <tr>
+                <th>Variable A</th>
+                <th></th>
+                <th>Variable B</th>
+                <th>Test</th>
+                <th>Reason</th>
+              </tr>
+            </thead>
+            <tbody id="setup-pairs-tbody"></tbody>
+          </table>
+          <p class="se-hint se-setup-no-pairs-hint is-hidden" id="setup-no-pairs-hint">
+            No specific test pairs suggested — proceed to variable classification to build the analysis plan.
+          </p>
+        </div>
+
+        <div id="setup-status" class="se-status" role="status" aria-live="polite" data-testid="status-setup"></div>
+
+        <div class="se-actions">
+          <button type="button" class="btn btn-secondary" data-action="setup-back">&larr; Back</button>
+          <button type="button" class="btn btn-primary" data-action="setup-proceed">✓ Proceed to Variables &rarr;</button>
+        </div>
+      </section>
+
+      <!-- ===========================================================
            SCREEN CORR-RESULTS · Correlation analysis results
            =========================================================== -->
       <section class="se-screen is-hidden" id="screen-corr-results" data-testid="screen-corr-results">

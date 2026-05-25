@@ -833,7 +833,25 @@ async def variable_assistant_endpoint(
         raise HTTPException(status_code=404, detail="Dataset expired or not found.")
 
     columns = list(entry.df.columns)
-    intent = variable_assistant.parse_intent(payload.message, columns)
+    stored_classifications = entry.meta.get("classifications") or []
+
+    # 1. AI-powered intent parsing (Gemini 2.5 Flash primary, OpenAI secondary).
+    #    parse_variable_intent() returns a structured dict on success or None if
+    #    the message is a question / explanation request.
+    ai_intent = await ai_chatbox.parse_variable_intent(
+        payload.message, {"classifications": stored_classifications}
+    )
+    if ai_intent and ai_intent.get("action") in ("rename", "recode", "exclude", "include", "set_type"):
+        intent = {
+            "action": ai_intent["action"],
+            "column": ai_intent.get("column"),
+            "new_name": ai_intent.get("new_name"),
+            "new_type": ai_intent.get("new_type"),
+            "recode_map": ai_intent.get("recode_map") or {},
+        }
+    else:
+        # 2. Rule-based fallback (guaranteed to always produce an intent).
+        intent = variable_assistant.parse_intent(payload.message, columns)
 
     # Informational intents (no DataFrame mutation): the assistant either
     # gives a tailored suggestion ("what should I do?") or a clarification
@@ -1447,7 +1465,7 @@ async def value_counts(job_id: str, column: str = Query(..., min_length=1, max_l
 
 class MissingDecision(BaseModel):
     column: str = Field(..., min_length=1, max_length=200)
-    action: Literal["drop_rows", "impute_median", "impute_mode", "leave"] = "leave"
+    action: Literal["drop_rows", "impute_mean", "impute_median", "impute_mode", "leave"] = "leave"
 
 
 class ApplyMissingRequest(BaseModel):
@@ -1475,6 +1493,13 @@ async def apply_missing_decisions(
             actions_taken.append(
                 f"Dropped {before - after} rows with missing {col}."
             )
+        elif dec.action == "impute_mean":
+            mean_val = pd.to_numeric(df[col], errors="coerce").mean()
+            if pd.notna(mean_val):
+                df[col] = pd.to_numeric(df[col], errors="coerce").fillna(mean_val)
+                actions_taken.append(
+                    f"Imputed missing {col} with mean ({mean_val:.2f})."
+                )
         elif dec.action == "impute_median":
             med = pd.to_numeric(df[col], errors="coerce").median()
             if pd.notna(med):
@@ -1545,13 +1570,16 @@ async def setup_study(request: Request, payload: SetupStudyRequest) -> Dict[str,
     )
     entry.meta["classifications"] = classifications
     columns = list(entry.df.columns)
-    result = ai_bridge_service.identify_study(
+    n_rows = len(entry.df)
+    result = await ai_chatbox.plan_study_setup(
         description=payload.description,
-        outcome_hint=payload.outcome_hint,
         columns=columns,
         classifications=classifications,
-        study_type_hint=None,
+        n_rows=n_rows,
     )
+    # Augment with outcome_hint if provided and AI didn't detect an outcome
+    if payload.outcome_hint.strip() and not result.get("outcome_col"):
+        result["outcome_col"] = payload.outcome_hint.strip()
     entry.meta["ai_study"] = result
     if payload.description.strip():
         entry.meta["study_description"] = payload.description.strip()
@@ -1624,11 +1652,21 @@ async def rerun_partial(request: Request, payload: RerunPartialRequest) -> Dict[
 
     remove_set = set(payload.remove_test_ids)
 
-    # Build a mini-plan containing ONLY the new tests that must be run.
-    existing_plan_ids = {t["id"] for t in (plan_dict.get("tests") or [])}
+    # Build a mini-plan for ALL add_test_ids so the researcher can force-rerun
+    # an existing comparison as well as add new ones.
+    plan_tests_by_id: Dict[str, Any] = {
+        t["id"]: t for t in (plan_dict.get("tests") or [])
+    }
     new_test_entries: List[Dict[str, Any]] = []
     for tid in payload.add_test_ids:
-        if tid not in existing_plan_ids:
+        if tid in remove_set:
+            # Contradictory request — skip
+            continue
+        existing_plan_entry = plan_tests_by_id.get(tid)
+        if existing_plan_entry:
+            # Reuse the stored plan metadata (title, columns, parametric flag).
+            new_test_entries.append(dict(existing_plan_entry))
+        else:
             new_test_entries.append({
                 "id": tid,
                 "title": tid.replace("_", " ").title(),

@@ -3372,3 +3372,67 @@ td.se-corr-p-sig {
   letter-spacing: 0;
   flex-shrink: 0;
 }
+
+/* ── screen-setup: test pairs table ──────────────────────────── */
+.se-setup-pairs-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.83rem;
+  margin-top: 0.5rem;
+}
+.se-setup-pairs-table th {
+  background: #f1f5f9;
+  color: #374151;
+  font-weight: 600;
+  padding: 0.4rem 0.6rem;
+  text-align: left;
+  border-bottom: 1px solid #e2e8f0;
+}
+.se-setup-pairs-table td {
+  padding: 0.4rem 0.6rem;
+  border-bottom: 1px solid #f1f5f9;
+  vertical-align: top;
+}
+.se-pairs-vs {
+  color: #6b7280;
+  font-weight: 700;
+  text-align: center;
+}
+.se-pairs-test {
+  color: #1e3a5f;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.se-pairs-reason {
+  color: #4b5563;
+  font-size: 0.8rem;
+}
+.se-col-code {
+  background: #eff6ff;
+  color: #1d4ed8;
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 0.82rem;
+}
+.se-setup-meta-row {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: 0.4rem;
+}
+.se-setup-meta-chip {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+  border-radius: 12px;
+  padding: 0.15rem 0.7rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.se-setup-no-pairs-hint {
+  color: #6b7280;
+  font-size: 0.83rem;
+  font-style: italic;
+  margin-top: 0.5rem;
+}

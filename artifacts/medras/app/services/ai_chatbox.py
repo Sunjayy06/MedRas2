@@ -326,3 +326,151 @@ async def chat(
 async def opening_message(kind: str, context: Dict[str, Any]) -> str:
     """Fast, context-aware opening message (uses rule-based path for speed)."""
     return chatboxes.opening_message(kind, context)
+
+
+# ---------------------------------------------------------------------------
+# Variable intent parser — natural language → structured action dict
+# ---------------------------------------------------------------------------
+
+_VALID_VA_ACTIONS = frozenset({"rename", "recode", "exclude", "include", "set_type"})
+
+
+async def parse_variable_intent(
+    message: str,
+    context: Dict[str, Any],
+) -> Optional[Dict[str, Any]]:
+    """Parse a plain-English variable command into a structured intent dict.
+
+    Returns a dict ``{"action": str, "column": str, ...}`` on success, or
+    ``None`` when the message is a question / not parseable as a mutation.
+    """
+    classifications = (context or {}).get("classifications") or []
+    cols = [c.get("column", "") for c in classifications[:30] if c.get("column")]
+
+    system = (
+        f"You parse variable-management instructions for a statistical tool.\n"
+        f"Available columns: {', '.join(cols) if cols else '(unknown)'}\n\n"
+        f"If the input is an actionable mutation command, return ONLY this JSON:\n"
+        f'{{"action":"rename"|"recode"|"exclude"|"include"|"set_type",'
+        f'"column":"<exact column name>",'
+        f'"new_name":"<str or null>",'
+        f'"new_type":"scale"|"ordinal"|"nominal"|"id"|null,'
+        f'"recode_map":{{}} }}\n'
+        f"If the input is a question or explanation request, return exactly: null\n"
+        f"Return ONLY the JSON object or null — no prose, no markdown."
+    )
+
+    raw = await asyncio.to_thread(_gemini_call_sync, system, message)
+    if raw is None:
+        raw = await asyncio.to_thread(_openai_call_sync, system, message)
+    if not raw:
+        return None
+
+    raw = raw.strip()
+    if raw.lower() in ("null", "none", ""):
+        return None
+
+    # Strip markdown fences if the model added them
+    raw = re.sub(r"^```(?:json)?\s*", "", raw, flags=re.MULTILINE)
+    raw = re.sub(r"```\s*$", "", raw, flags=re.MULTILINE).strip()
+
+    try:
+        obj = json.loads(raw)
+        if isinstance(obj, dict) and obj.get("action") in _VALID_VA_ACTIONS and obj.get("column"):
+            return {
+                "action": obj["action"],
+                "column": obj["column"],
+                "new_name": obj.get("new_name"),
+                "new_type": obj.get("new_type"),
+                "recode_map": obj.get("recode_map") or {},
+            }
+    except (json.JSONDecodeError, ValueError):
+        pass
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Study plan generator — description → rich plan JSON for screen-setup
+# ---------------------------------------------------------------------------
+
+async def plan_study_setup(
+    description: str,
+    columns: List[str],
+    classifications: List[Dict[str, Any]],
+    n_rows: int = 0,
+) -> Dict[str, Any]:
+    """Generate a rich study plan from a plain-English description.
+
+    Returns:
+        {
+            study_type, outcome_col, objective, sample_size,
+            test_pairs: [{"col_a", "col_b", "test_name", "reason"}],
+            reasoning, confidence, source
+        }
+    """
+    col_summary = ", ".join(
+        f"{c.get('column','?')} ({c.get('detected_type','?')})"
+        for c in (classifications or [])[:20]
+    ) or ", ".join((columns or [])[:20])
+
+    system = (
+        f"You are a biostatistics planning assistant. Dataset: {n_rows} rows.\n"
+        f"Columns: {col_summary}\n\n"
+        f"Return ONLY this JSON schema — no markdown, no prose:\n"
+        f"{{\n"
+        f'  "study_type": "comparison"|"correlation"|"association"|"survival"|"diagnostic"|"descriptive",\n'
+        f'  "outcome_col": "<exact column name or null>",\n'
+        f'  "objective": "<one clear plain-English sentence>",\n'
+        f'  "sample_size": <integer or null>,\n'
+        f'  "test_pairs": [\n'
+        f'    {{"col_a":"<col>","col_b":"<col>","test_name":"<test>","reason":"<1 sentence>"}}\n'
+        f'  ],\n'
+        f'  "reasoning": "<2–3 sentence explanation>"\n'
+        f"}}"
+    )
+
+    prompt = (description or "").strip() or "Suggest an appropriate study plan based on the columns."
+
+    raw = await asyncio.to_thread(_gemini_call_sync, system, prompt)
+    if raw is None:
+        raw = await asyncio.to_thread(_openai_call_sync, system, prompt)
+
+    if not raw:
+        return {
+            "study_type": "descriptive",
+            "outcome_col": None,
+            "objective": "Describe the dataset variables.",
+            "sample_size": n_rows or None,
+            "test_pairs": [],
+            "reasoning": "AI service unavailable. Configure the analysis manually.",
+            "confidence": 0,
+            "source": "fallback",
+        }
+
+    clean = raw.strip()
+    clean = re.sub(r"^```(?:json)?\s*", "", clean, flags=re.MULTILINE)
+    clean = re.sub(r"```\s*$", "", clean, flags=re.MULTILINE).strip()
+
+    try:
+        plan = json.loads(clean)
+        return {
+            "study_type": plan.get("study_type", "descriptive"),
+            "outcome_col": plan.get("outcome_col"),
+            "objective": plan.get("objective", ""),
+            "sample_size": plan.get("sample_size"),
+            "test_pairs": plan.get("test_pairs") or [],
+            "reasoning": plan.get("reasoning", ""),
+            "confidence": 0.85,
+            "source": "ai",
+        }
+    except (json.JSONDecodeError, ValueError):
+        return {
+            "study_type": "descriptive",
+            "outcome_col": None,
+            "objective": "Could not parse AI response.",
+            "sample_size": None,
+            "test_pairs": [],
+            "reasoning": clean[:400] if clean else "",
+            "confidence": 0,
+            "source": "parse_error",
+        }

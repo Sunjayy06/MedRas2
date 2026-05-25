@@ -140,7 +140,7 @@ const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 // screen 1 / intake would defeat the resume banner (there's nothing to
 // resume to) and would also wipe the saved session every time the page
 // reloads cold.
-const RESUMABLE_SCREENS = new Set(["preview", "ai-confirm", "3", "4", "normality", "plan", "results", "export"]);
+const RESUMABLE_SCREENS = new Set(["preview", "setup", "ai-confirm", "3", "4", "normality", "plan", "results", "export"]);
 
 function saveSession() {
   if (!state.jobId) return;
@@ -279,6 +279,7 @@ function renderResumeBanner(saved) {
       case "4":          return "Step 4 · Review data";
       case "3":          return "Step 3 · Variables";
       case "preview":    return "Step 2 · Data preview";
+      case "setup":      return "Step 2.5 · Study setup";
       case "ai-confirm": return "Step 2.5 · Study setup";
       case "normality":  return "Step 5 · Normality";
       case "plan":       return "Step 6 · Plan and Run";
@@ -333,7 +334,7 @@ function renderResumeBanner(saved) {
 
 const SCREENS = [
   "1", "intake", "2a", "2c", "2c-custom", "preview",
-  "ai-confirm", "corr-results",
+  "setup", "ai-confirm", "corr-results",
   "3", "4", "missing",
   "normality", "plan", "results", "export",
 ];
@@ -342,7 +343,7 @@ const SCREENS = [
 //               5 Normality, 6 Plan and Run, 7 Results, 8 Export.
 const SCREEN_TO_STEP = {
   "1": 1, "intake": 1,
-  "2a": 2, "2c": 2, "2c-custom": 2, "preview": 2, "ai-confirm": 2,
+  "2a": 2, "2c": 2, "2c-custom": 2, "preview": 2, "setup": 2, "ai-confirm": 2,
   "3": 3,
   "4": 4, "missing": 4,
   "normality": 5, "plan": 6, "results": 7, "corr-results": 7, "export": 8,
@@ -1947,8 +1948,8 @@ function bindPreview() {
       }
 
       _showAiBridgeOverlay(false);
-      renderAiConfirmScreen();
-      showScreen("ai-confirm");
+      renderSetupScreen(state.aiStudy);
+      showScreen("setup");
     } catch (err) {
       _showAiBridgeOverlay(false);
       setStatus(status, `Could not confirm: ${err.message}`, "error");
@@ -4129,6 +4130,104 @@ function _refreshAiDetailPanels() {
   }
 }
 
+// ---------------------------------------------------------------------------
+// screen-setup — unified study setup (upload-path primary)
+// ---------------------------------------------------------------------------
+
+const _STUDY_TYPE_ICONS = {
+  comparison: "📊", correlation: "📈", association: "🔗",
+  survival: "⏳", diagnostic: "🔬", descriptive: "📋",
+};
+
+function renderSetupScreen(plan) {
+  if (!plan) return;
+
+  const typeEl   = document.getElementById("setup-study-type-display");
+  const objEl    = document.getElementById("setup-objective-display");
+  const reasonEl = document.getElementById("setup-reasoning-display");
+  const nEl      = document.getElementById("setup-sample-size-display");
+  const outEl    = document.getElementById("setup-outcome-display");
+  const iconEl   = document.getElementById("setup-plan-icon");
+  const tbody    = document.getElementById("setup-pairs-tbody");
+  const noPairs  = document.getElementById("setup-no-pairs-hint");
+
+  const st = (plan.study_type || "descriptive").toLowerCase();
+  if (typeEl)   typeEl.textContent = st.charAt(0).toUpperCase() + st.slice(1) + " study";
+  if (iconEl)   iconEl.textContent = _STUDY_TYPE_ICONS[st] || "📊";
+  if (objEl)    objEl.textContent  = plan.objective || "—";
+  if (reasonEl) {
+    reasonEl.textContent = plan.reasoning || "";
+    reasonEl.style.display = plan.reasoning ? "" : "none";
+  }
+  if (nEl) {
+    if (plan.sample_size) {
+      nEl.textContent = `N = ${plan.sample_size}`;
+      nEl.style.display = "";
+    } else {
+      nEl.style.display = "none";
+    }
+  }
+  if (outEl) {
+    if (plan.outcome_col) {
+      outEl.textContent = `Outcome: ${plan.outcome_col}`;
+      outEl.style.display = "";
+    } else {
+      outEl.style.display = "none";
+    }
+  }
+
+  const pairs = plan.test_pairs || [];
+  if (tbody) {
+    tbody.innerHTML = pairs.map((p) => `
+      <tr>
+        <td><code class="se-col-code">${escapeHtml(p.col_a || "")}</code></td>
+        <td class="se-pairs-vs">↔</td>
+        <td><code class="se-col-code">${escapeHtml(p.col_b || "")}</code></td>
+        <td class="se-pairs-test">${escapeHtml(p.test_name || "")}</td>
+        <td class="se-pairs-reason">${escapeHtml(p.reason || "")}</td>
+      </tr>`).join("");
+  }
+  if (noPairs) noPairs.classList.toggle("is-hidden", pairs.length > 0);
+}
+
+function bindScreenSetup() {
+  const screen = document.getElementById("screen-setup");
+  if (!screen) return;
+
+  screen.querySelector('[data-action="setup-back"]')?.addEventListener("click", () => showScreen("preview"));
+
+  screen.querySelector('[data-action="setup-proceed"]')?.addEventListener("click", () => {
+    // Carry the AI study plan into the rest of the flow (same as ai-confirm proceed)
+    if (state.aiStudy) {
+      state.studyType  = state.aiStudy.study_type  || state.studyType  || "comparison";
+      state.outcomeCol = state.aiStudy.outcome_col || state.outcomeCol || null;
+    }
+    showScreen("3");
+  });
+
+  screen.querySelector('[data-action="setup-reanalyse"]')?.addEventListener("click", async () => {
+    const desc    = document.getElementById("setup-study-description")?.value.trim() || "";
+    const statusEl = document.getElementById("setup-describe-status");
+    if (!state.jobId) return;
+    setStatus(statusEl, "Re-analysing…", "info");
+    try {
+      const res = await fetch("/api/stats/setup-study", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ job_id: state.jobId, description: desc, outcome_hint: "" }),
+      });
+      if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
+      const plan = await res.json();
+      state.aiStudy = plan;
+      renderSetupScreen(plan);
+      setStatus(statusEl, "Plan updated.", "success");
+      setTimeout(() => setStatus(statusEl, ""), 2500);
+    } catch (err) {
+      setStatus(statusEl, `Could not re-analyse: ${err.message}`, "error");
+    }
+  });
+}
+
 function bindAiConfirm() {
   const screen = document.getElementById("screen-ai-confirm");
   if (!screen) return;
@@ -5200,6 +5299,7 @@ function initApp() {
     bindScreen2C();
     bindCustomWizard();
     bindPreview();
+    bindScreenSetup();
     bindAiConfirm();
     bindCorrResults();
     bindScreen3();
