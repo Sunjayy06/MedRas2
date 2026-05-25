@@ -3852,11 +3852,43 @@ async function handleResultsChatResponse(res) {
           remove_test_ids: removeIds,
         }),
       });
-      state.results = rerunRes.results;
-      renderResults();
+      // Merge new/changed tests into state.results without a full rerender.
+      // Only patch the tabs/panes for tests that actually changed.
+      const incoming = rerunRes.results;
+      if (!state.results) {
+        state.results = incoming;
+        renderResults();
+      } else {
+        const oldTests = state.results.tests || [];
+        const newTests = incoming.tests || [];
+        // Build a lookup of the new results keyed by test id
+        const newById = Object.fromEntries(newTests.map((t) => [t.id, t]));
+        // Remove tests that were in removeIds
+        const filtered = oldTests.filter((t) => !removeIds.includes(t.id));
+        // Update any test that was re-run (exists in newById)
+        const merged = filtered.map((t) => newById[t.id] ? newById[t.id] : t);
+        // Append any brand-new tests from addIds that weren't present before
+        const existingIds = new Set(filtered.map((t) => t.id));
+        for (const t of newTests) {
+          if (!existingIds.has(t.id)) merged.push(t);
+        }
+        state.results = { ...state.results, ...incoming, tests: merged };
+        // Patch only the tabs and active pane — rebuild tab bar, keep active selection
+        const tabs   = document.getElementById("results-tabs");
+        const active = tabs ? (tabs.querySelector(".se-results-tab.is-active")?.dataset.tab || null) : null;
+        renderResults();
+        // Re-activate the previously active tab if it still exists; else show first
+        if (active && tabs) {
+          const matchBtn = tabs.querySelector(`[data-tab="${active}"]`);
+          if (matchBtn) {
+            tabs.querySelectorAll(".se-results-tab").forEach((b) => b.classList.toggle("is-active", b === matchBtn));
+            renderResultsPane(active);
+          }
+        }
+      }
       state.chatThreads.results.push({
         role: "action",
-        text: "Analysis updated. The results panel above has been refreshed.",
+        text: "Analysis updated. Affected result panels have been patched.",
       });
     } catch (err) {
       state.chatThreads.results.push({
@@ -4190,10 +4222,16 @@ function bindScreenSetup() {
   const screen = document.getElementById("screen-setup");
   if (!screen) return;
 
+  const statusEl    = document.getElementById("setup-describe-status");
+  const adjustBox   = document.getElementById("setup-adjust-box");
+  const descTa      = document.getElementById("setup-study-description");
+  const corrTa      = document.getElementById("setup-correction-input");
+
+  // ── Back ──────────────────────────────────────────────────────────────────
   screen.querySelector('[data-action="setup-back"]')?.addEventListener("click", () => showScreen("preview"));
 
+  // ── Proceed ───────────────────────────────────────────────────────────────
   screen.querySelector('[data-action="setup-proceed"]')?.addEventListener("click", () => {
-    // Carry the AI study plan into the rest of the flow (same as ai-confirm proceed)
     if (state.aiStudy) {
       state.studyType  = state.aiStudy.study_type  || state.studyType  || "comparison";
       state.outcomeCol = state.aiStudy.outcome_col || state.outcomeCol || null;
@@ -4201,9 +4239,9 @@ function bindScreenSetup() {
     showScreen("3");
   });
 
+  // ── Re-analyse (free-text path) ───────────────────────────────────────────
   screen.querySelector('[data-action="setup-reanalyse"]')?.addEventListener("click", async () => {
-    const desc    = document.getElementById("setup-study-description")?.value.trim() || "";
-    const statusEl = document.getElementById("setup-describe-status");
+    const desc = descTa?.value.trim() || "";
     if (!state.jobId) return;
     setStatus(statusEl, "Re-analysing…", "info");
     try {
@@ -4220,6 +4258,72 @@ function bindScreenSetup() {
       setTimeout(() => setStatus(statusEl, ""), 2500);
     } catch (err) {
       setStatus(statusEl, `Could not re-analyse: ${err.message}`, "error");
+    }
+  });
+
+  // ── Proposal document upload path (dual-path intake) ─────────────────────
+  const fileInput = document.getElementById("setup-proposal-file");
+  if (fileInput) {
+    fileInput.addEventListener("change", async () => {
+      const file = fileInput.files?.[0];
+      if (!file) return;
+      setStatus(statusEl, "Reading document…", "info");
+      try {
+        const text = await file.text();
+        // Truncate to 1500 chars to fit textarea maxlength
+        const excerpt = text.replace(/\s+/g, " ").trim().slice(0, 1500);
+        if (descTa) {
+          descTa.value = excerpt;
+          descTa.dispatchEvent(new Event("input"));
+        }
+        setStatus(statusEl, "Document loaded — click Re-analyse to update the plan.", "success");
+        setTimeout(() => setStatus(statusEl, ""), 4000);
+      } catch (err) {
+        setStatus(statusEl, `Could not read file: ${err.message}`, "error");
+      }
+      // Reset so re-selecting same file fires change again
+      fileInput.value = "";
+    });
+  }
+
+  // ── Inline correction: open / cancel ─────────────────────────────────────
+  screen.querySelector('[data-action="setup-adjust-open"]')?.addEventListener("click", () => {
+    adjustBox?.classList.remove("is-hidden");
+    corrTa?.focus();
+  });
+
+  screen.querySelector('[data-action="setup-adjust-cancel"]')?.addEventListener("click", () => {
+    adjustBox?.classList.add("is-hidden");
+    if (corrTa) corrTa.value = "";
+  });
+
+  // ── Inline correction: submit → /adjust-setup ─────────────────────────────
+  screen.querySelector('[data-action="setup-adjust-submit"]')?.addEventListener("click", async () => {
+    const correction = corrTa?.value.trim() || "";
+    if (!correction || !state.jobId) return;
+    const adjStatusEl = document.getElementById("setup-describe-status");
+    setStatus(adjStatusEl, "Updating plan…", "info");
+    try {
+      const res = await fetch("/api/stats/adjust-setup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          job_id: state.jobId,
+          description: descTa?.value.trim() || "",
+          correction,
+          outcome_hint: "",
+        }),
+      });
+      if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
+      const plan = await res.json();
+      state.aiStudy = plan;
+      renderSetupScreen(plan);
+      adjustBox?.classList.add("is-hidden");
+      if (corrTa) corrTa.value = "";
+      setStatus(adjStatusEl, "Plan revised.", "success");
+      setTimeout(() => setStatus(adjStatusEl, ""), 2500);
+    } catch (err) {
+      setStatus(adjStatusEl, `Could not adjust: ${err.message}`, "error");
     }
   });
 }

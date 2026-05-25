@@ -3436,3 +3436,35 @@ td.se-corr-p-sig {
   font-style: italic;
   margin-top: 0.5rem;
 }
+
+/* ── Screen-setup: dual-path intake & correction box ── */
+.se-setup-upload-row {
+  margin-top: 0.5rem;
+  font-size: 0.83rem;
+  color: #6b7280;
+}
+.se-setup-upload-label {
+  display: inline;
+}
+.se-setup-upload-link {
+  color: #1d4ed8;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  font-weight: 500;
+}
+.se-setup-upload-link:hover {
+  color: #1e3a5f;
+}
+.se-plan-chatbox {
+  background: #f8fafc;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  padding: 0.9rem 1rem;
+  margin-top: 0.75rem;
+}
+.se-plan-chatbox-hint {
+  font-size: 0.82rem;
+  color: #4b5563;
+  margin: 0 0 0.5rem;
+}

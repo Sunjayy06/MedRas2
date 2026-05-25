@@ -64,12 +64,12 @@
 
       <!-- 8-step progress tracker -->
       <ol class="se-steps" aria-label="Eight-step workflow" data-testid="step-tracker">
-        <li class="se-step is-active" data-step="1" data-testid="dot-step-1"><span class="se-step-num">1</span><span class="se-step-label">Start</span></li>
-        <li class="se-step" data-step="2" data-testid="dot-step-2"><span class="se-step-num">2</span><span class="se-step-label">Data input</span></li>
+        <li class="se-step is-active" data-step="1" data-testid="dot-step-1"><span class="se-step-num">1</span><span class="se-step-label">Setup</span></li>
+        <li class="se-step" data-step="2" data-testid="dot-step-2"><span class="se-step-num">2</span><span class="se-step-label">Data</span></li>
         <li class="se-step" data-step="3" data-testid="dot-step-3"><span class="se-step-num">3</span><span class="se-step-label">Variables</span></li>
-        <li class="se-step" data-step="4" data-testid="dot-step-4"><span class="se-step-num">4</span><span class="se-step-label">Quality &amp; Missing</span></li>
+        <li class="se-step" data-step="4" data-testid="dot-step-4"><span class="se-step-num">4</span><span class="se-step-label">Clean</span></li>
         <li class="se-step" data-step="5" data-testid="dot-step-5"><span class="se-step-num">5</span><span class="se-step-label">Normality</span></li>
-        <li class="se-step" data-step="6" data-testid="dot-step-6"><span class="se-step-num">6</span><span class="se-step-label">Plan and Run</span></li>
+        <li class="se-step" data-step="6" data-testid="dot-step-6"><span class="se-step-num">6</span><span class="se-step-label">Plan</span></li>
         <li class="se-step" data-step="7" data-testid="dot-step-7"><span class="se-step-num">7</span><span class="se-step-label">Results</span></li>
         <li class="se-step" data-step="8" data-testid="dot-step-8"><span class="se-step-num">8</span><span class="se-step-label">Export</span></li>
       </ol>
@@ -1079,11 +1079,11 @@
           <p>Describe your study — AI will identify the objective, planned tests, and sample size. Or review the auto-detected plan below.</p>
         </header>
 
-        <!-- ── Plain-English description (feeds /setup-study) ── -->
+        <!-- ── Dual-path intake: free-text OR proposal upload ── -->
         <div class="se-describe-bar" data-testid="setup-describe-bar">
           <label class="se-describe-label" for="setup-study-description">
             <span class="se-chat-ai-badge">AI</span>
-            Describe your study <span class="se-describe-hint">(optional — helps AI pick the correct analysis)</span>
+            Describe your study <span class="se-describe-hint">(optional — AI identifies objective, tests &amp; sample size)</span>
           </label>
           <div class="se-describe-row">
             <textarea id="setup-study-description" class="se-describe-input" rows="2"
@@ -1091,7 +1091,27 @@
               maxlength="1500" data-testid="setup-study-description"></textarea>
             <button type="button" class="btn btn-secondary" data-action="setup-reanalyse" data-testid="btn-setup-reanalyse">Re-analyse</button>
           </div>
+          <!-- Proposal document upload path -->
+          <div class="se-setup-upload-row" data-testid="setup-upload-row">
+            <label class="se-setup-upload-label">
+              or <label class="se-setup-upload-link" for="setup-proposal-file">upload a proposal / protocol document</label>
+              to auto-fill the description
+            </label>
+            <input type="file" id="setup-proposal-file" accept=".txt,.md" class="is-hidden" data-testid="setup-proposal-file" />
+          </div>
           <div id="setup-describe-status" class="se-status" role="status" aria-live="polite"></div>
+        </div>
+
+        <!-- ── Inline correction (adjust-setup) ── -->
+        <div class="se-plan-chatbox is-hidden" id="setup-adjust-box" data-testid="setup-adjust-box">
+          <p class="se-plan-chatbox-hint">Describe what to correct — AI will revise the plan:</p>
+          <div class="se-describe-row">
+            <textarea id="setup-correction-input" class="se-describe-input" rows="2"
+              placeholder="e.g. The outcome should be 'Complication rate', not 'BMI'. It's a prospective cohort."
+              maxlength="800" data-testid="setup-correction-input"></textarea>
+            <button type="button" class="btn btn-primary" data-action="setup-adjust-submit" data-testid="btn-setup-adjust-submit">Update Plan</button>
+          </div>
+          <button type="button" class="btn btn-tertiary" style="margin-top:0.35rem;" data-action="setup-adjust-cancel">Cancel</button>
         </div>
 
         <!-- ── AI plan card (populated from state.aiStudy) ── -->
@@ -1135,7 +1155,8 @@
 
         <div class="se-actions">
           <button type="button" class="btn btn-secondary" data-action="setup-back">&larr; Back</button>
-          <button type="button" class="btn btn-primary" data-action="setup-proceed">✓ Proceed to Variables &rarr;</button>
+          <button type="button" class="btn btn-secondary" data-action="setup-adjust-open" data-testid="btn-setup-adjust-open">✎ Something looks wrong</button>
+          <button type="button" class="btn btn-primary" data-action="setup-proceed" data-testid="btn-setup-proceed">✓ Proceed to Variables &rarr;</button>
         </div>
       </section>
 

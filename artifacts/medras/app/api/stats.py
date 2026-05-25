@@ -1005,7 +1005,7 @@ def _chatbox_context(job_id: str, kind: str) -> Dict[str, Any]:
     if kind == "variables":
         return {
             "classifications": entry.meta.get("classifications") or [],
-            "issues": entry.meta.get("issues") or [],
+            "issues": entry.meta.get("variable_issues") or [],
         }
     if kind == "normality":
         return {"columns": (entry.meta.get("normality") or {}).get("columns") or []}
@@ -1599,6 +1599,57 @@ async def setup_study(request: Request, payload: SetupStudyRequest) -> Dict[str,
     entry.meta["ai_study"] = result
     if payload.description.strip():
         entry.meta["study_description"] = payload.description.strip()
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Adjust setup — inline correction loop for screen-setup
+# ---------------------------------------------------------------------------
+
+
+class AdjustSetupRequest(BaseModel):
+    job_id: str = Field(..., min_length=1, max_length=64)
+    description: str = Field(default="", max_length=2000)
+    correction: str = Field(default="", max_length=1000)
+    outcome_hint: str = Field(default="", max_length=200)
+
+
+@router.post("/adjust-setup")
+@limiter.limit("10/minute")
+async def adjust_setup(request: Request, payload: AdjustSetupRequest) -> Dict[str, Any]:
+    """Inline correction loop for screen-setup.
+
+    Combines the researcher's original description with a correction hint and
+    calls ``plan_study_setup`` to return an updated rich plan.  Results are
+    stored back in ``entry.meta["ai_study"]`` so they survive a page refresh.
+    """
+    entry = dataset_store.get(payload.job_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Dataset expired or not found.")
+    classifications = (
+        entry.meta.get("classifications")
+        or variable_classifier.classify_dataframe(entry.df)
+    )
+    entry.meta["classifications"] = classifications
+    columns = list(entry.df.columns)
+    n_rows = len(entry.df)
+    # Merge stored description + correction into the new prompt
+    stored_desc = entry.meta.get("study_description") or ""
+    merged = " ".join(filter(None, [
+        payload.description or stored_desc,
+        payload.correction,
+    ]))
+    result = await ai_chatbox.plan_study_setup(
+        description=merged,
+        columns=columns,
+        classifications=classifications,
+        n_rows=n_rows,
+    )
+    if payload.outcome_hint.strip() and not result.get("outcome_col"):
+        result["outcome_col"] = payload.outcome_hint.strip()
+    entry.meta["ai_study"] = result
+    if merged.strip():
+        entry.meta["study_description"] = merged.strip()
     return result
 
 
