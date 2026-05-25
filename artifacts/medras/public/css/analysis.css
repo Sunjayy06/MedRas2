@@ -3237,3 +3237,138 @@ td.se-corr-p-sig {
   0%, 60%, 100% { transform: translateY(0); opacity: 0.55; }
   30%           { transform: translateY(-5px); opacity: 1; }
 }
+
+/* ── Study description bar (screen-ai-confirm) ────────────────── */
+.se-describe-bar {
+  background: #f0f4ff;
+  border: 1px solid #c7d2fe;
+  border-radius: 8px;
+  padding: 0.85rem 1rem;
+  margin-bottom: 1.25rem;
+}
+.se-describe-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #1e3a5f;
+  margin-bottom: 0.55rem;
+}
+.se-describe-hint {
+  font-weight: 400;
+  opacity: 0.7;
+  font-size: 0.82rem;
+}
+.se-describe-row {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+}
+.se-describe-input {
+  flex: 1;
+  border: 1px solid #c7d2fe;
+  border-radius: 6px;
+  padding: 0.45rem 0.65rem;
+  font-size: 0.875rem;
+  resize: vertical;
+  min-height: 3.2rem;
+  font-family: inherit;
+  color: #1e3a5f;
+  background: #fff;
+}
+.se-describe-input:focus {
+  outline: none;
+  border-color: #4a6eb5;
+  box-shadow: 0 0 0 2px rgba(74,110,181,0.18);
+}
+
+/* ── Missing data screen cards ────────────────────────────────── */
+.se-missing-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 0.9rem 1.1rem;
+  margin-bottom: 0.75rem;
+  background: #fff;
+}
+.se-missing-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.65rem;
+}
+.se-missing-pct {
+  font-size: 0.82rem;
+  color: #b45309;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 12px;
+  padding: 0.2rem 0.6rem;
+  font-weight: 600;
+}
+.se-missing-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.85rem;
+}
+.se-missing-actions label {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.875rem;
+  cursor: pointer;
+  padding: 0.3rem 0.65rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  background: #f9fafb;
+}
+.se-missing-actions label:has(input:checked) {
+  border-color: #4a6eb5;
+  background: #eff6ff;
+  color: #1e3a5f;
+  font-weight: 600;
+}
+
+/* ── Missing-data chatbox panel ───────────────────────────────── */
+.se-chat-header {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.6rem 0.85rem;
+  background: #f8faff;
+  border: 1px solid #dbeafe;
+  border-radius: 8px 8px 0 0;
+}
+.se-chat-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #1e3a5f;
+  flex: 1;
+}
+.se-chat-panel {
+  border: 1px solid #dbeafe;
+  border-top: none;
+  border-radius: 0 0 8px 8px;
+  background: #fff;
+  padding: 0.75rem;
+}
+.se-chat-toggle-btn {
+  font-size: 0.8rem;
+  padding: 0.25rem 0.65rem;
+}
+
+/* ── AI badge (shared) ────────────────────────────────────────── */
+.se-chat-ai-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #4a6eb5 0%, #7c3aed 100%);
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  flex-shrink: 0;
+}

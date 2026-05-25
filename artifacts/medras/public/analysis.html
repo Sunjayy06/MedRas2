@@ -67,7 +67,7 @@
         <li class="se-step is-active" data-step="1" data-testid="dot-step-1"><span class="se-step-num">1</span><span class="se-step-label">Start</span></li>
         <li class="se-step" data-step="2" data-testid="dot-step-2"><span class="se-step-num">2</span><span class="se-step-label">Data input</span></li>
         <li class="se-step" data-step="3" data-testid="dot-step-3"><span class="se-step-num">3</span><span class="se-step-label">Variables</span></li>
-        <li class="se-step" data-step="4" data-testid="dot-step-4"><span class="se-step-num">4</span><span class="se-step-label">Review data</span></li>
+        <li class="se-step" data-step="4" data-testid="dot-step-4"><span class="se-step-num">4</span><span class="se-step-label">Quality &amp; Missing</span></li>
         <li class="se-step" data-step="5" data-testid="dot-step-5"><span class="se-step-num">5</span><span class="se-step-label">Normality</span></li>
         <li class="se-step" data-step="6" data-testid="dot-step-6"><span class="se-step-num">6</span><span class="se-step-label">Plan and Run</span></li>
         <li class="se-step" data-step="7" data-testid="dot-step-7"><span class="se-step-num">7</span><span class="se-step-label">Results</span></li>
@@ -768,6 +768,46 @@
       </div>
 
       <!-- ===========================================================
+           SCREEN MISSING · Step 4b — Missing data decisions
+           =========================================================== -->
+      <section class="se-screen se-screen-narrow is-hidden" id="screen-missing" data-testid="screen-missing">
+        <header class="se-screen-head">
+          <h2>Step 4b · Missing data decisions</h2>
+          <p>These variables have more than 5% missing values. Choose how to handle each one before running normality testing. The AI assistant can help you decide.</p>
+        </header>
+
+        <!-- Cards rendered by renderMissingScreen() -->
+        <div id="missing-decisions-container" data-testid="missing-decisions-container"></div>
+
+        <!-- AI assistant chatbox -->
+        <div class="se-chatbox" id="cb-missing-wrap" style="margin-top:1.5rem">
+          <div class="se-chat-header">
+            <span class="se-chat-ai-badge">AI</span>
+            <span class="se-chat-title">Missing data assistant</span>
+            <button type="button" class="btn btn-tertiary se-chat-toggle-btn" data-action="cb-missing-toggle" data-testid="btn-missing-ai-toggle">Ask AI for guidance</button>
+          </div>
+          <div class="se-chat-panel is-hidden" id="cb-missing-panel">
+            <div class="se-chat-thread" id="cb-missing-thread" data-testid="cb-missing-thread"></div>
+            <div class="se-chat-chips" id="cb-missing-chips"></div>
+            <div class="se-chat-input-row">
+              <input type="text" id="cb-missing-input" class="se-chat-input" maxlength="400"
+                     placeholder="e.g. 35% of BMI values are missing — what should I do?" data-testid="cb-missing-input">
+              <button type="button" class="btn btn-primary" data-action="cb-missing-send" data-testid="cb-missing-send">Send</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="missing-screen-status" class="se-status" role="status" aria-live="polite" data-testid="status-missing-screen"></div>
+
+        <div class="se-actions">
+          <button type="button" class="btn btn-secondary" data-action="back-to-quality-from-missing" data-testid="button-back-quality">&larr; Back to Quality Check</button>
+          <button type="button" class="btn btn-primary" id="btn-apply-missing" data-action="apply-missing-and-continue" data-testid="button-apply-missing">
+            Apply decisions and continue &rarr;
+          </button>
+        </div>
+      </section>
+
+      <!-- ===========================================================
            SCREEN NORMALITY · Step 5
            =========================================================== -->
       <section class="se-screen se-screen-narrow is-hidden" id="screen-normality" data-testid="screen-normality">
@@ -910,9 +950,24 @@
            =========================================================== -->
       <section class="se-screen se-screen-narrow is-hidden" id="screen-ai-confirm" data-testid="screen-ai-confirm">
         <header class="se-screen-head">
-          <h2>Analysis Plan</h2>
-          <p>Here's what I've identified from your data. Review and proceed — or tell me what to change.</p>
+          <h2>Study Setup</h2>
+          <p>Describe your study in plain English — MedRAS will identify the study type and outcome. Or review the auto-detected plan below.</p>
         </header>
+
+        <!-- ── Plain-English study description (feeds /setup-study) ── -->
+        <div class="se-describe-bar" id="ai-describe-bar" data-testid="ai-describe-bar">
+          <label class="se-describe-label" for="ai-study-description">
+            <span class="se-chat-ai-badge">AI</span>
+            Describe your study <span class="se-describe-hint">(optional — helps AI pick the correct analysis)</span>
+          </label>
+          <div class="se-describe-row">
+            <textarea id="ai-study-description" class="se-describe-input" rows="2"
+              placeholder="e.g. I have 60 diabetic patients and 60 controls. I want to compare HbA1c between the two groups."
+              maxlength="1500" data-testid="ai-study-description"></textarea>
+            <button type="button" class="btn btn-secondary" id="btn-re-analyse" data-action="re-analyse-study" data-testid="btn-re-analyse">Re-analyse</button>
+          </div>
+          <div id="ai-describe-status" class="se-status" role="status" aria-live="polite" data-testid="status-describe"></div>
+        </div>
 
         <!-- ── Study-type summary card ── -->
         <div class="se-plan-card" id="ai-confirm-card" data-testid="ai-confirm-card">

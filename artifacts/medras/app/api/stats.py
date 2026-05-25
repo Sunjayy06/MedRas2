@@ -961,10 +961,18 @@ class ChatboxRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=600)
 
 
+_VALID_CHATBOX_KINDS = frozenset({"variables", "normality", "plan", "results"})
+
+
 def _chatbox_context(job_id: str, kind: str) -> Dict[str, Any]:
     entry = dataset_store.get(job_id)
     if entry is None:
         raise HTTPException(status_code=404, detail="Dataset expired or not found.")
+    if kind == "variables":
+        return {
+            "classifications": entry.meta.get("classifications") or [],
+            "issues": entry.meta.get("issues") or [],
+        }
     if kind == "normality":
         return {"columns": (entry.meta.get("normality") or {}).get("columns") or []}
     if kind == "plan":
@@ -976,7 +984,7 @@ def _chatbox_context(job_id: str, kind: str) -> Dict[str, Any]:
 
 @router.get("/chat/{kind}/opening/{job_id}")
 async def chatbox_opening(kind: str, job_id: str) -> Dict[str, Any]:
-    if kind not in ("normality", "plan", "results"):
+    if kind not in _VALID_CHATBOX_KINDS:
         raise HTTPException(status_code=404, detail="Unknown chatbox kind.")
     ctx = _chatbox_context(job_id, kind)
     return {"role": "system", "text": chatboxes.opening_message(kind, ctx)}
@@ -987,7 +995,7 @@ async def chatbox_opening(kind: str, job_id: str) -> Dict[str, Any]:
 async def chatbox_reply(
     request: Request, kind: str, payload: ChatboxRequest,
 ) -> Dict[str, Any]:
-    if kind not in ("normality", "plan", "results"):
+    if kind not in _VALID_CHATBOX_KINDS:
         raise HTTPException(status_code=404, detail="Unknown chatbox kind.")
     ctx = _chatbox_context(payload.job_id, kind)
     return await ai_chatbox.chat(kind, payload.message, ctx)
@@ -1490,7 +1498,90 @@ async def apply_missing_decisions(
 
 
 # ---------------------------------------------------------------------------
-# Partial re-run — add / remove tests from an existing results set
+# Unified AI chat endpoint — variables | normality | plan | results
+# ---------------------------------------------------------------------------
+
+
+class AiChatRequest(BaseModel):
+    job_id: str = Field(..., min_length=1, max_length=64)
+    kind: str = Field(..., pattern="^(variables|normality|plan|results)$")
+    message: str = Field(..., min_length=1, max_length=600)
+
+
+@router.post("/ai-chat")
+@limiter.limit("60/minute")
+async def ai_chat_unified(request: Request, payload: AiChatRequest) -> Dict[str, Any]:
+    """Unified AI chatbox endpoint — routes to ai_chatbox.chat() for all four kinds."""
+    ctx = _chatbox_context(payload.job_id, payload.kind)
+    return await ai_chatbox.chat(payload.kind, payload.message, ctx)
+
+
+# ---------------------------------------------------------------------------
+# Study setup — plain-English description → study type + outcome column
+# ---------------------------------------------------------------------------
+
+
+class SetupStudyRequest(BaseModel):
+    job_id: str = Field(..., min_length=1, max_length=64)
+    description: str = Field(default="", max_length=2000)
+    outcome_hint: str = Field(default="", max_length=200)
+
+
+@router.post("/setup-study")
+@limiter.limit("10/minute")
+async def setup_study(request: Request, payload: SetupStudyRequest) -> Dict[str, Any]:
+    """AI reads a plain-English study description and identifies study type + outcome.
+
+    Returns the same shape as ``/ai-bridge`` and stores the result in the session.
+    Use in place of or alongside ``/ai-bridge`` when the researcher has typed a
+    description on the AI-confirm / setup screen.
+    """
+    entry = dataset_store.get(payload.job_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Dataset expired or not found.")
+    classifications = (
+        entry.meta.get("classifications")
+        or variable_classifier.classify_dataframe(entry.df)
+    )
+    entry.meta["classifications"] = classifications
+    columns = list(entry.df.columns)
+    result = ai_bridge_service.identify_study(
+        description=payload.description,
+        outcome_hint=payload.outcome_hint,
+        columns=columns,
+        classifications=classifications,
+        study_type_hint=None,
+    )
+    entry.meta["ai_study"] = result
+    if payload.description.strip():
+        entry.meta["study_description"] = payload.description.strip()
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Handle missing — apply missing-data decisions (named alias)
+# ---------------------------------------------------------------------------
+
+
+class HandleMissingRequest(BaseModel):
+    job_id: str = Field(..., min_length=1, max_length=64)
+    decisions: List[MissingDecision] = Field(default_factory=list, max_length=100)
+
+
+@router.post("/handle-missing")
+async def handle_missing(payload: HandleMissingRequest) -> Dict[str, Any]:
+    """Named alias for ``/apply-missing-decisions``.
+
+    Accepts the same payload and produces the same response; exists so the
+    ``screen-missing`` frontend can call a semantically distinct endpoint.
+    """
+    return await apply_missing_decisions(
+        ApplyMissingRequest(job_id=payload.job_id, decisions=payload.decisions)
+    )
+
+
+# ---------------------------------------------------------------------------
+# Partial re-run — true delta: run only new tests, merge into existing results
 # ---------------------------------------------------------------------------
 
 
@@ -1503,10 +1594,11 @@ class RerunPartialRequest(BaseModel):
 @router.post("/rerun-partial")
 @limiter.limit("10/minute")
 async def rerun_partial(request: Request, payload: RerunPartialRequest) -> Dict[str, Any]:
-    """Add or remove tests from the existing analysis and re-run only the delta.
+    """True delta re-run: execute only the requested new tests and merge.
 
-    The updated results are merged back into the stored results so downstream
-    export and correction endpoints see the full picture.
+    - ``add_test_ids``: tests to run and splice into existing results.
+    - ``remove_test_ids``: tests to drop from the existing results.
+    No existing test is re-run unless it is listed in ``add_test_ids``.
     """
     entry = dataset_store.get(payload.job_id)
     if entry is None:
@@ -1524,41 +1616,70 @@ async def rerun_partial(request: Request, payload: RerunPartialRequest) -> Dict[
             detail="No plan found — complete the plan step before requesting a re-run.",
         )
 
-    remove_set = set(payload.remove_test_ids)
-    existing_tests: List[Dict[str, Any]] = list(plan_dict.get("tests") or [])
-    existing_ids = {t["id"] for t in existing_tests}
+    # Index existing test RESULTS so we can merge without re-running them.
+    existing_results: Dict[str, Any] = entry.meta.get("results") or {}
+    existing_tests_by_id: Dict[str, Any] = {
+        t["id"]: t for t in (existing_results.get("tests") or [])
+    }
 
-    # Append requested new tests that are not already in the plan.
+    remove_set = set(payload.remove_test_ids)
+
+    # Build a mini-plan containing ONLY the new tests that must be run.
+    existing_plan_ids = {t["id"] for t in (plan_dict.get("tests") or [])}
+    new_test_entries: List[Dict[str, Any]] = []
     for tid in payload.add_test_ids:
-        if tid not in existing_ids:
-            existing_tests.append({
+        if tid not in existing_plan_ids:
+            new_test_entries.append({
                 "id": tid,
                 "title": tid.replace("_", " ").title(),
-                "why": "Added on researcher request via Results assistant.",
-                "columns": [],
+                "why": "Added via Results assistant.",
+                "columns": list(filter(None, [
+                    assignment.get("outcome"),
+                    assignment.get("group"),
+                ])),
                 "parametric": None,
             })
-            existing_ids.add(tid)
 
-    # Confirmed IDs = all present tests minus the ones to remove.
-    confirmed_ids = [t["id"] for t in existing_tests if t["id"] not in remove_set]
+    # Execute only the new tests (delta run).
+    if new_test_entries:
+        mini_plan: Dict[str, Any] = {
+            "tests": new_test_entries,
+            "graphs": [],
+            "outputs": [],
+            "summary": "",
+        }
+        session_view = _build_session_view(entry, classifications, assignment)
+        delta_res = results_service.run_plan(
+            entry.df,
+            classifications,
+            assignment,
+            mini_plan,
+            confirmed_test_ids=[t["id"] for t in new_test_entries],
+            confirmed_graph_ids=[],
+            session=session_view,
+        )
+        for new_t in (delta_res.get("tests") or []):
+            existing_tests_by_id[new_t["id"]] = new_t
 
-    plan_dict = dict(plan_dict)
-    plan_dict["tests"] = existing_tests
-    entry.meta["plan"] = plan_dict
+    # Remove dropped tests.
+    for rid in remove_set:
+        existing_tests_by_id.pop(rid, None)
 
-    session_view = _build_session_view(entry, classifications, assignment)
-    res = results_service.run_plan(
-        entry.df,
-        classifications,
-        assignment,
-        plan_dict,
-        confirmed_test_ids=confirmed_ids,
-        confirmed_graph_ids=None,
-        session=session_view,
-    )
-    entry.meta["results"] = res
-    return {"job_id": payload.job_id, "results": res}
+    # Build and store the merged results dict.
+    merged_results = dict(existing_results)
+    merged_results["tests"] = list(existing_tests_by_id.values())
+    entry.meta["results"] = merged_results
+
+    # Keep the stored plan in sync (add new entries, drop removed ones).
+    updated_plan = dict(plan_dict)
+    plan_tests = [t for t in (plan_dict.get("tests") or []) if t["id"] not in remove_set]
+    for t in new_test_entries:
+        if not any(p["id"] == t["id"] for p in plan_tests):
+            plan_tests.append(t)
+    updated_plan["tests"] = plan_tests
+    entry.meta["plan"] = updated_plan
+
+    return {"job_id": payload.job_id, "results": merged_results}
 
 
 @router.post("/analyze")

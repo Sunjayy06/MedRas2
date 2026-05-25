@@ -334,7 +334,7 @@ function renderResumeBanner(saved) {
 const SCREENS = [
   "1", "intake", "2a", "2c", "2c-custom", "preview",
   "ai-confirm", "corr-results",
-  "3", "4",
+  "3", "4", "missing",
   "normality", "plan", "results", "export",
 ];
 // Map a logical screen id to which step number is "active" in the tracker.
@@ -344,7 +344,7 @@ const SCREEN_TO_STEP = {
   "1": 1, "intake": 1,
   "2a": 2, "2c": 2, "2c-custom": 2, "preview": 2, "ai-confirm": 2,
   "3": 3,
-  "4": 4,
+  "4": 4, "missing": 4,
   "normality": 5, "plan": 6, "results": 7, "corr-results": 7, "export": 8,
 };
 
@@ -2760,9 +2760,14 @@ async function sendAssistantMessage(message) {
   const text = (message || "").trim();
   if (!text) return;
   state.assistantThread.push({ role: "user", text });
+  state.assistantThread.push({ role: "typing", text: "" });
   renderAssistantThread();
   const input = $("#assistant-input");
-  if (input) input.value = "";
+  if (input) { input.value = ""; input.disabled = true; }
+
+  const clearTyping = () => {
+    state.assistantThread = state.assistantThread.filter((m) => m.role !== "typing");
+  };
 
   try {
     const res = await api("/variable-assistant", {
@@ -2770,19 +2775,38 @@ async function sendAssistantMessage(message) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ job_id: state.jobId, message: text }),
     });
+    clearTyping();
     if (res.status === "applied") {
-      state.assistantThread.push({ role: "action", text: res.confirmation_message || "Done." });
+      state.assistantThread.push({ role: "action", text: "✓ " + (res.confirmation_message || "Done.") });
       state.classifications = res.classifications || [];
       state.issues = res.issues || [];
       state.autoCoding = res.auto_coding_plan || [];
       renderClassify();
     } else {
-      state.assistantThread.push({ role: "clarify", text: res.confirmation_message || "Could you rephrase?" });
+      // Mutation not understood — route to AI chatbox for explanation / guidance
+      let aiReplied = false;
+      if (state.jobId) {
+        try {
+          const aiRes = await api("/ai-chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ job_id: state.jobId, kind: "variables", message: text }),
+          });
+          state.assistantThread.push({ role: aiRes.role || "ai", text: aiRes.text || res.confirmation_message || "Could you rephrase?" });
+          aiReplied = true;
+        } catch (_) {}
+      }
+      if (!aiReplied) {
+        state.assistantThread.push({ role: "clarify", text: res.confirmation_message || "Could you rephrase that as a command? e.g. 'rename X to Y' or 'exclude Z'." });
+      }
       renderAssistantThread();
     }
   } catch (err) {
+    clearTyping();
     state.assistantThread.push({ role: "clarify", text: `Could not run: ${err.message}` });
     renderAssistantThread();
+  } finally {
+    if (input) input.disabled = false;
   }
 }
 
@@ -3150,6 +3174,18 @@ async function _applyQualityHandler() {
           }),
         });
       } catch (_) { /* tolerate; loadNormality doesn't need assignment */ }
+    }
+    // Route to screen-missing if any columns have high missingness
+    // that haven't been handled already (the dedicated screen gives the
+    // researcher AI-assisted per-column decision cards).
+    const missingWrap = document.getElementById("dq-missing-wrap");
+    const hasMissingRows = missingWrap &&
+      missingWrap.style.display !== "none" &&
+      missingWrap.querySelectorAll("[data-missing-col]").length > 0;
+    if (hasMissingRows) {
+      showScreen("missing");
+      renderMissingScreen();
+      return;
     }
     showScreen("normality");
     loadNormality();
@@ -4272,6 +4308,208 @@ function bindAiConfirm() {
       renderAiConfirmScreen();
     });
   }
+
+  // ── Re-analyse from plain-English study description ───────────────────
+  // Researcher can type a description; clicking "Re-analyse" calls
+  // /setup-study which feeds the description to the AI bridge and returns
+  // an updated study type + outcome column.
+  const reAnalyseBtn = document.getElementById("btn-re-analyse");
+  if (reAnalyseBtn) {
+    reAnalyseBtn.addEventListener("click", async () => {
+      const descEl  = document.getElementById("ai-study-description");
+      const descSts = document.getElementById("ai-describe-status");
+      const desc    = (descEl ? descEl.value : "").trim();
+      if (!desc) {
+        if (descEl) descEl.focus();
+        return;
+      }
+      setStatus(descSts, "Analysing your description…", "loading");
+      reAnalyseBtn.disabled = true;
+      try {
+        const result = await api("/setup-study", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            job_id: state.jobId,
+            description: desc,
+            outcome_hint: "",
+          }),
+        });
+        state.aiStudy = result;
+        setStatus(descSts, "Updated.", "success");
+        setTimeout(() => setStatus(descSts, ""), 2500);
+        renderAiConfirmScreen();
+      } catch (err) {
+        setStatus(descSts, `Could not re-analyse: ${err.message}`, "error");
+      } finally {
+        reAnalyseBtn.disabled = false;
+      }
+    });
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Screen MISSING — Missing data decision cards + AI assistant        */
+/* ------------------------------------------------------------------ */
+
+function renderMissingScreen() {
+  const container = document.getElementById("missing-decisions-container");
+  if (!container) return;
+
+  // Collect high-missing columns from state
+  const missingCols = (state.classifications || []).filter(
+    (c) => (c.missing_pct || c.missing_fraction * 100 || 0) > 5
+  );
+
+  if (!missingCols.length) {
+    // No high-missing columns — skip this screen and go straight to normality
+    showScreen("normality");
+    loadNormality();
+    return;
+  }
+
+  container.innerHTML = missingCols.map((c) => {
+    const col = c.column || "?";
+    const pct = ((c.missing_pct || (c.missing_fraction || 0) * 100) || 0).toFixed(1);
+    const slug = col.replace(/[^a-z0-9]/gi, "_");
+    return `<div class="se-missing-card" data-testid="missing-card-${slug}">
+      <div class="se-missing-card-header">
+        <strong>${escapeHtml(col)}</strong>
+        <span class="se-missing-pct">${pct}% missing</span>
+      </div>
+      <div class="se-missing-actions">
+        <label><input type="radio" name="missing-${slug}" value="leave" checked data-missing-col="${escapeAttr(col)}"> Leave as-is</label>
+        <label><input type="radio" name="missing-${slug}" value="impute_median" data-missing-col="${escapeAttr(col)}"> Impute with median</label>
+        <label><input type="radio" name="missing-${slug}" value="impute_mode" data-missing-col="${escapeAttr(col)}"> Impute with mode</label>
+        <label><input type="radio" name="missing-${slug}" value="drop_rows" data-missing-col="${escapeAttr(col)}"> Drop rows with missing</label>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function bindScreenMissing() {
+  // ── Back to screen-4 (quality check) ───────────────────────────────────
+  const backBtn = document.querySelector('[data-action="back-to-quality-from-missing"]');
+  if (backBtn) backBtn.addEventListener("click", () => showScreen("4"));
+
+  // ── Apply decisions and continue → normality ───────────────────────────
+  const applyBtn = document.getElementById("btn-apply-missing");
+  if (applyBtn) {
+    applyBtn.addEventListener("click", async () => {
+      const status = document.getElementById("missing-screen-status");
+
+      // Collect all radio decisions
+      const decisions = [];
+      document.querySelectorAll("[data-missing-col]").forEach((radio) => {
+        if (radio.checked) {
+          decisions.push({ column: radio.dataset.missingCol, action: radio.value });
+        }
+      });
+
+      setStatus(status, "Applying missing-data decisions…", "loading");
+      applyBtn.disabled = true;
+      try {
+        await api("/handle-missing", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ job_id: state.jobId, decisions }),
+        });
+        setStatus(status, "");
+        showScreen("normality");
+        loadNormality();
+      } catch (err) {
+        setStatus(status, `Could not apply: ${err.message}`, "error");
+        applyBtn.disabled = false;
+      }
+    });
+  }
+
+  // ── AI assistant chatbox toggle ────────────────────────────────────────
+  const toggleBtn = document.querySelector('[data-action="cb-missing-toggle"]');
+  const panel     = document.getElementById("cb-missing-panel");
+  if (toggleBtn && panel) {
+    toggleBtn.addEventListener("click", () => {
+      const isOpen = !panel.classList.contains("is-hidden");
+      panel.classList.toggle("is-hidden");
+      if (!isOpen) {
+        // First open: show an opening message
+        if (!state._missingChatOpened) {
+          state._missingChatOpened = true;
+          if (!state._missingThread) state._missingThread = [];
+          state._missingThread.push({
+            role: "ai",
+            text: "I can help you decide how to handle missing data. Ask me about any variable — tell me the column name and I'll suggest the best approach.",
+          });
+          _renderMissingThread();
+        }
+        document.getElementById("cb-missing-input")?.focus();
+      }
+    });
+  }
+
+  // ── AI chatbox send button ─────────────────────────────────────────────
+  const sendBtn = document.querySelector('[data-action="cb-missing-send"]');
+  if (sendBtn) sendBtn.addEventListener("click", _sendMissingChatMessage);
+
+  const missingInput = document.getElementById("cb-missing-input");
+  if (missingInput) {
+    missingInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        _sendMissingChatMessage();
+      }
+    });
+  }
+}
+
+function _renderMissingThread() {
+  const out = document.getElementById("cb-missing-thread");
+  if (!out) return;
+  const thread = state._missingThread || [];
+  out.innerHTML = thread.map((m, i) => {
+    if (m.role === "typing") {
+      return `<div class="se-chat-msg is-typing"><span class="se-typing-dot"></span><span class="se-typing-dot"></span><span class="se-typing-dot"></span></div>`;
+    }
+    const cls = ({ user: "is-user", ai: "is-ai", clarify: "is-clarify" })[m.role] || "is-ai";
+    return `<div class="se-chat-msg ${cls}" data-testid="cb-missing-msg-${i}">${escapeHtml(m.text)}</div>`;
+  }).join("");
+  out.scrollTop = out.scrollHeight;
+}
+
+async function _sendMissingChatMessage() {
+  const input = document.getElementById("cb-missing-input");
+  const msg   = (input ? input.value : "").trim();
+  if (!msg) return;
+
+  if (!state._missingThread) state._missingThread = [];
+  state._missingThread.push({ role: "user", text: msg });
+  state._missingThread.push({ role: "typing", text: "" });
+  _renderMissingThread();
+  if (input) { input.value = ""; input.disabled = true; }
+
+  const clearTyping = () => {
+    state._missingThread = (state._missingThread || []).filter((m) => m.role !== "typing");
+  };
+  try {
+    const res = await api("/ai-chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ job_id: state.jobId, kind: "variables", message: msg }),
+    });
+    clearTyping();
+    state._missingThread.push({ role: res.role || "ai", text: res.text || "" });
+  } catch (err) {
+    clearTyping();
+    state._missingThread.push({ role: "clarify", text: `Error: ${err.message}` });
+  } finally {
+    if (input) input.disabled = false;
+  }
+  _renderMissingThread();
+}
+
+// Tiny helper — attribute-safe escape (no innerHTML risk in data-*)
+function escapeAttr(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 
 /* ------------------------------------------------------------------ */
@@ -4966,6 +5204,7 @@ function initApp() {
     bindCorrResults();
     bindScreen3();
     bindScreen4();
+    bindScreenMissing();
     bindSoon();
     bindNormality();
     bindPlan();
