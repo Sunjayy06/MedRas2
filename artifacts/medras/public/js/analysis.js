@@ -1917,33 +1917,34 @@ function bindPreview() {
       // Show a full-page loading overlay so users know analysis is in progress
       _showAiBridgeOverlay(true);
 
-      // Call the AI bridge to identify study type + outcome column.
+      // Call /setup-study (primary) to identify study type, objective, test pairs.
       // This never blocks navigation — errors fall back gracefully.
       const description =
         (state.intake && (state.intake.objectives || state.intake.instructions || "")) || "";
       const outcomeHint =
         (state.intake && (state.intake.outcomes || "")) || "";
       try {
-        const bridgeResult = await api("/ai-bridge", {
+        const setupResult = await api("/setup-study", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             job_id: state.jobId,
             description,
             outcome_hint: outcomeHint,
-            study_type_hint: (state.intake && state.intake.study_type) || null,
           }),
         });
-        state.aiStudy = bridgeResult;
+        state.aiStudy = setupResult;
       } catch (_) {
-        // AI bridge failure is non-fatal — show confirmation screen anyway
+        // /setup-study failure is non-fatal — show setup screen with manual fallback
         state.aiStudy = {
-          study_type: "correlation",
+          study_type: "descriptive",
           outcome_col: null,
+          objective: "Could not contact AI service. Configure manually.",
+          sample_size: null,
+          test_pairs: [],
+          reasoning: "AI service unavailable. Please describe your study above.",
           confidence: 0,
-          reasoning: "Could not contact AI service. Please select manually.",
-          source: "heuristic",
-          all_predictors: state.columns.map((c) => c.column || c),
+          source: "fallback",
         };
       }
 
@@ -3090,6 +3091,7 @@ function renderMissingDecisions() {
         <div class="se-missing-opts" role="radiogroup" aria-label="Decision for ${escapeHtml(colKey)}">
           ${opt("exclude",       "Exclude",       "remove this variable from all analyses")}
           ${opt("keep",          "Keep",          "note the missing rate in the report")}
+          ${isNum ? opt("impute_mean",   "Impute mean",   "fill missing values with the column mean") : ""}
           ${isNum ? opt("impute_median", "Impute median", "fill missing values with the column median") : ""}
           ${isCat ? opt("impute_mode",   "Impute mode",   "fill missing values with the most common value") : ""}
         </div>
@@ -3176,13 +3178,11 @@ async function _applyQualityHandler() {
         });
       } catch (_) { /* tolerate; loadNormality doesn't need assignment */ }
     }
-    // Route to screen-missing if any columns have high missingness
-    // that haven't been handled already (the dedicated screen gives the
-    // researcher AI-assisted per-column decision cards).
-    // Route to screen-missing based on state.classifications (> 5% missing),
+    // Route to screen-missing based on state.classifications (>= 5% missing),
     // not DOM content — the DOM isn't populated until renderMissingScreen() runs.
+    // The classifier stores missing_pct on a 0–100 scale, so the threshold is 5.
     const highMissingCols = (state.classifications || []).filter(
-      (c) => (c.pct_missing || 0) > 0.05
+      (c) => (c.missing_pct || 0) >= 5
     );
     if (highMissingCols.length > 0) {
       renderMissingScreen();
@@ -4474,8 +4474,9 @@ function renderMissingScreen() {
       </div>
       <div class="se-missing-actions">
         <label><input type="radio" name="missing-${slug}" value="leave" checked data-missing-col="${escapeAttr(col)}"> Leave as-is</label>
-        <label><input type="radio" name="missing-${slug}" value="impute_median" data-missing-col="${escapeAttr(col)}"> Impute with median</label>
-        <label><input type="radio" name="missing-${slug}" value="impute_mode" data-missing-col="${escapeAttr(col)}"> Impute with mode</label>
+        <label><input type="radio" name="missing-${slug}" value="impute_mean" data-missing-col="${escapeAttr(col)}"> Fill with mean</label>
+        <label><input type="radio" name="missing-${slug}" value="impute_median" data-missing-col="${escapeAttr(col)}"> Fill with median</label>
+        <label><input type="radio" name="missing-${slug}" value="impute_mode" data-missing-col="${escapeAttr(col)}"> Fill with mode (most frequent)</label>
         <label><input type="radio" name="missing-${slug}" value="drop_rows" data-missing-col="${escapeAttr(col)}"> Drop rows with missing</label>
       </div>
     </div>`;
@@ -4509,6 +4510,19 @@ function bindScreenMissing() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ job_id: state.jobId, decisions }),
         });
+        // Reclassify so downstream screens (normality, plan) see the updated
+        // imputed/dropped columns rather than stale classification data.
+        setStatus(status, "Reclassifying variables…", "loading");
+        try {
+          const reclassData = await api("/classify", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ job_id: state.jobId, overrides: {} }),
+          });
+          if (reclassData && reclassData.classifications) {
+            state.classifications = reclassData.classifications;
+          }
+        } catch (_) { /* reclassify failure is non-fatal — proceed anyway */ }
         setStatus(status, "");
         showScreen("normality");
         loadNormality();
