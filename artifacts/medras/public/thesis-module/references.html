@@ -140,7 +140,7 @@
     const journal = r.journal || r.source || '';
     const link = r.doi ? `https://doi.org/${esc(r.doi)}` : (r.url || '');
     return `
-      <div class="th-ref-row" data-doi="${esc(r.doi || '')}">
+      <div class="th-ref-row" data-id="${esc(r._id || r.doi || '')}" data-doi="${esc(r.doi || '')}">
         <div style="font-weight:700; color:${r.verified ? 'var(--th-emerald-d)' : 'var(--th-amber)'}">
           ${r.verified ? '✓' : '?'}
         </div>
@@ -173,9 +173,9 @@
     list.querySelectorAll('button[data-act=remove]').forEach((btn) => {
       btn.addEventListener('click', (e) => {
         const row = e.currentTarget.closest('.th-ref-row');
-        const doi = row.dataset.doi;
+        const id = row.dataset.id;
         ThesisState.patch((st) => {
-          st.references = (st.references || []).filter((r) => (r.doi || '') !== doi);
+          st.references = (st.references || []).filter((r) => (r._id || r.doi || '') !== id);
           return st;
         });
         renderLib();

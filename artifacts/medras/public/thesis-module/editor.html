@@ -469,7 +469,8 @@
   // ---------- inline cite picker ----------
 
   let _pickerOpen = false;
-  let _atRange = null;   // saved Selection range capturing where [@ was typed
+  let _atRange = null;       // saved Selection range capturing where [@ was typed
+  let _refPanelTimer = null; // debounce handle for prose-to-panel citation scan
 
   function openCitePicker() {
     if (_pickerOpen) return;
@@ -575,43 +576,46 @@
     const canvas = document.getElementById('th-editor-canvas');
     const tag = '[CITE_' + num + ']';
 
-    // Cursor-aware: replace the [@... token exactly where it was typed
+    // Cursor-aware: replace [@... token or insert at saved caret position
     if (_atRange) {
       const node = _atRange.startContainer;
       const offset = _atRange.startOffset;
+      const savedRange = _atRange;
       _atRange = null;
       if (node && node.nodeType === Node.TEXT_NODE) {
         const before = node.textContent.substring(0, offset);
         const atIdx = before.lastIndexOf('[@');
+        let rng = document.createRange();
         if (atIdx !== -1) {
-          const rng = document.createRange();
+          // Replace [@... token typed by the user
           rng.setStart(node, atIdx);
           rng.setEnd(node, offset);
-          const sel2 = window.getSelection();
-          sel2.removeAllRanges();
-          sel2.addRange(rng);
-          document.execCommand('insertText', false, tag);
-          ThesisState.setChapter(chapterId, { text: canvas.innerText });
-          renderChapterRefPanel();
-          return;
+        } else {
+          // Button path: no [@] token — insert at saved caret position
+          rng.setStart(node, offset);
+          rng.collapse(true);
         }
+        const sel2 = window.getSelection();
+        sel2.removeAllRanges();
+        sel2.addRange(rng);
+        document.execCommand('insertText', false, tag);
+        ThesisState.setChapter(chapterId, { text: canvas.innerText });
+        renderChapterRefPanel();
+        return;
       }
     }
 
-    // Fallback: replace trailing [@... at end-of-text
-    let text = canvas.innerText;
-    const replaced = text.replace(/\[@[^\]]*$/, tag);
-    if (replaced !== text) {
-      canvas.innerText = replaced;
-      ThesisState.setChapter(chapterId, { text: replaced });
-      renderChapterRefPanel();
-      const rng2 = document.createRange();
-      const sel3 = window.getSelection();
-      rng2.selectNodeContents(canvas);
-      rng2.collapse(false);
-      sel3.removeAllRanges();
-      sel3.addRange(rng2);
-    }
+    // Last resort: append tag at end of canvas text
+    const text = canvas.innerText.trimEnd();
+    canvas.innerText = text + (text ? ' ' : '') + tag;
+    ThesisState.setChapter(chapterId, { text: canvas.innerText });
+    renderChapterRefPanel();
+    const rng2 = document.createRange();
+    const sel3 = window.getSelection();
+    rng2.selectNodeContents(canvas);
+    rng2.collapse(false);
+    sel3.removeAllRanges();
+    sel3.addRange(rng2);
   }
 
   document.getElementById('th-cite-search').addEventListener('input', (e) => {
@@ -623,6 +627,14 @@
 
   document.getElementById('th-ref-insert').addEventListener('click', () => {
     if (mode !== 'write') { ThesisState.toast('Switch to Write mode to insert a citation.'); return; }
+    // Capture current caret before picker opens (focus moves to search input)
+    const canvas = document.getElementById('th-editor-canvas');
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount && canvas.contains(sel.getRangeAt(0).startContainer)) {
+      _atRange = sel.getRangeAt(0).cloneRange();
+    } else {
+      _atRange = null;  // will fall through to append-at-end path
+    }
     openCitePicker();
     renderPickerResults('');
   });
@@ -748,7 +760,9 @@
     const text = document.getElementById('th-editor-canvas').innerText;
     ThesisState.setChapter(chapterId, { text });
     updateWC();
-    renderChapterRefPanel();
+    // Debounce panel re-render to 400 ms (avoids redundant work on each keystroke)
+    clearTimeout(_refPanelTimer);
+    _refPanelTimer = setTimeout(renderChapterRefPanel, 400);
     // Caret-local detection: check only text in the current node up to cursor position
     const sel = window.getSelection();
     let caretLocal = '';
