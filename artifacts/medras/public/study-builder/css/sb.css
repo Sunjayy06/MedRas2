@@ -1067,6 +1067,81 @@ a.fi-title:hover { color: var(--teal-lt); }
   margin-right: .15rem;
   white-space: nowrap;
 }
+
+/* ── Export trigger button ───────────────────────── */
+.export-btn-wrap {
+  position: relative;
+}
+.export-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  background: rgba(255,255,255,.04);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: .22rem .75rem;
+  font-size: .72rem;
+  font-weight: 500;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background .13s, color .13s, border-color .13s;
+  white-space: nowrap;
+}
+.export-trigger:hover {
+  background: rgba(255,255,255,.08);
+  color: var(--text);
+  border-color: rgba(255,255,255,.2);
+}
+.export-arrow { opacity: .55; font-size: .8em; }
+
+/* ── Export dropdown panel ───────────────────────── */
+.export-dropdown {
+  display: none;
+  position: absolute;
+  bottom: calc(100% + 5px);
+  left: 0;
+  min-width: 220px;
+  background: #111827;
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 10px;
+  padding: .3rem;
+  z-index: 260;
+  box-shadow: 0 6px 28px rgba(0,0,0,.55);
+}
+.export-dropdown.open { display: block; }
+.export-dd-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: .36rem .8rem;
+  font-size: .77rem;
+  font-weight: 500;
+  color: var(--muted);
+  background: none;
+  border: none;
+  border-radius: 7px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background .12s, color .12s;
+}
+.export-dd-item:hover {
+  background: rgba(255,255,255,.07);
+  color: var(--text);
+}
+.export-dd-copy {
+  color: var(--teal-lt);
+}
+.export-dd-copy:hover {
+  background: var(--teal-dim);
+  color: #fff;
+}
+.export-dd-divider {
+  height: 1px;
+  background: rgba(255,255,255,.07);
+  margin: .28rem .5rem;
+}
+
+/* ── Copy chips (for-all area in chat-bar-meta) ──── */
 .export-chip {
   background: rgba(255,255,255,.04);
   border: 1px solid var(--border);

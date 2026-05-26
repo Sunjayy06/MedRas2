@@ -89,8 +89,11 @@
   let folioItems = JSON.parse(sessionStorage.getItem('sb.folio') || '[]');
 
   /* ── Conversation-wide citation tracking ── */
-  /* Key: DOI URL (preferred) or title — deduplicates papers across answers */
+  /* Key: normalised DOI (preferred) or lowercased title */
   const convPapersMap = new Map();
+
+  /* ── Export dropdown state — only one open at a time ── */
+  let _openExportDd = null;
 
   /* ── Statistical highlight regex ── */
   const STAT_RE = /(\bp\s*[<>=≤≥]\s*0\.\d+\b|\bOR\s+[\d.]+\b|\bRR\s+[\d.]+\b|\bHR\s+[\d.]+\b|\bNNT\s+\d+\b|\bARR\s+[\d.]+%?\b|\bRRR\s+[\d.]+%?\b|95\s*%\s*CI[^,;.]{0,30}|\bCIs?\b\s*[\[(][\d., –\-]+[\])]|\bn\s*=\s*[\d,]+\b|\bN\s*=\s*[\d,]+\b|[\d.]+\s*%\s*(?:reduction|increase|improvement|decrease|sensitivity|specificity|accuracy)|\bSMD\s+[\d.]+\b|\bWMD\s+[\d.]+\b|\bMD\s+[\d.]+\b|\baOR\s+[\d.]+\b)/gi;
@@ -586,7 +589,9 @@
       (d.papers || []).forEach((p) => {
         if (!p.title || p.title.length <= 3) return;
         if (p.evidence_type === 'uploaded_pdf') return;
-        const key = (p.url && p.url.trim()) || p.title.toLowerCase().trim();
+        /* Dedup by DOI first (normalised lowercase), then lowercased title */
+        const rawDoi = (p.doi && String(p.doi).trim()) || _extractDoi(p.url || '');
+        const key    = rawDoi ? rawDoi.toLowerCase() : p.title.toLowerCase().trim();
         if (!convPapersMap.has(key)) convPapersMap.set(key, p);
       });
       if (copyAllWrap && convPapersMap.size > 0) copyAllWrap.style.display = '';
@@ -896,37 +901,72 @@
 
     const n    = exportable.length;
     const row  = mk('div', 'export-row');
-    const lbl  = mk('span', 'export-label');
-    lbl.textContent = `Export ${n} citation${n !== 1 ? 's' : ''} as:`;
-    row.appendChild(lbl);
 
-    [
-      { label:'BibTeX',     file:'citations.bib',          fn: _toBibtex    },
-      { label:'RIS',        file:'citations.ris',          fn: _toRis       },
-      { label:'Vancouver',  file:'citations_vancouver.txt', fn: _toVancouver },
-      { label:'APA 7th',   file:'citations_apa.txt',       fn: _toApa       },
-      { label:'Plain text', file:'citations.txt',          fn: _toPlainText },
-    ].forEach(({ label, file, fn }) => {
-      const btn = mk('button', 'export-chip');
-      btn.textContent = label;
-      btn.addEventListener('click', () => _dlText(file, fn(exportable)));
-      row.appendChild(btn);
-    });
+    /* Single trigger button */
+    const wrap = mk('div', 'export-btn-wrap');
+    const trig = mk('button', 'export-trigger');
+    trig.innerHTML = `Export ${n} citation${n !== 1 ? 's' : ''} <span class="export-arrow">\u25be</span>`;
 
+    /* Dropdown panel */
+    const dd = mk('div', 'export-dropdown');
+
+    /* Copy options via backend */
     [
       { label: 'Copy Vancouver', style: 'vancouver' },
-      { label: 'Copy APA',       style: 'apa'       },
+      { label: 'Copy APA 7th',   style: 'apa'       },
     ].forEach(({ label, style }) => {
-      const copyBtn = mk('button', 'export-chip export-copy');
-      copyBtn.textContent = label;
-      copyBtn.addEventListener('click', () =>
-        _copyViaBackend(exportable, style, copyBtn, label)
-      );
-      row.appendChild(copyBtn);
+      const item = mk('button', 'export-dd-item export-dd-copy');
+      item.textContent = label;
+      item.addEventListener('click', () => {
+        dd.classList.remove('open'); _openExportDd = null;
+        _copyViaBackend(exportable, style, item, label);
+      });
+      dd.appendChild(item);
     });
 
+    /* Divider */
+    dd.appendChild(mk('div', 'export-dd-divider'));
+
+    /* Download options (client-side for instant response) */
+    [
+      { label: 'Download Vancouver (.txt)', file: 'citations_vancouver.txt', fn: _toVancouver },
+      { label: 'Download APA 7th (.txt)',   file: 'citations_apa.txt',       fn: _toApa       },
+      { label: 'Download BibTeX (.bib)',     file: 'citations.bib',           fn: _toBibtex    },
+      { label: 'Download RIS (.ris)',        file: 'citations.ris',           fn: _toRis       },
+    ].forEach(({ label, file, fn }) => {
+      const item = mk('button', 'export-dd-item');
+      item.textContent = label;
+      item.addEventListener('click', () => {
+        dd.classList.remove('open'); _openExportDd = null;
+        _dlText(file, fn(exportable));
+      });
+      dd.appendChild(item);
+    });
+
+    /* Toggle open/close; close any other open dropdown first */
+    trig.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (_openExportDd && _openExportDd !== dd) {
+        _openExportDd.classList.remove('open');
+        _openExportDd = null;
+      }
+      if (dd.classList.toggle('open')) {
+        _openExportDd = dd;
+      } else {
+        _openExportDd = null;
+      }
+    });
+
+    wrap.appendChild(trig);
+    wrap.appendChild(dd);
+    row.appendChild(wrap);
     return row;
   }
+
+  /* Close open export dropdown on any outside click */
+  document.addEventListener('click', () => {
+    if (_openExportDd) { _openExportDd.classList.remove('open'); _openExportDd = null; }
+  });
 
   /* ── Copy via backend (with client-side fallback) ── */
 
@@ -981,6 +1021,12 @@
     if (!url) return '';
     const m = url.match(/doi\.org\/(.+)$/i);
     return m ? decodeURIComponent(m[1]).trim() : '';
+  }
+
+  function _getDoi(p) {
+    /* Explicit doi field first, then extract from URL */
+    const direct = p.doi && String(p.doi).trim();
+    return direct || _extractDoi(p.url || '');
   }
 
   function _extractNct(url) {
@@ -1064,7 +1110,7 @@
 
       /* WHO IRIS — use institutional name directly (not personal-name formatter) */
       if (src === 'who_iris' && !(p.authors && p.authors.length)) {
-        const doi = _extractDoi(p.url || '');
+        const doi = _getDoi(p);
         let ref   = `${i + 1}. World Health Organization. ${p.title || 'Untitled'}.`;
         if (p.journal) ref += ` ${p.journal}.`;
         if (p.year)    ref += ` ${p.year}.`;
@@ -1073,12 +1119,23 @@
         return ref.trim();
       }
 
-      const auth = _fmtVancouverAuthors(p.authors || []);
-      const doi  = _extractDoi(p.url);
-      let   ref  = `${i + 1}. ${auth}${auth ? ' ' : ''}${p.title || 'Untitled'}.`;
+      const auth  = _fmtVancouverAuthors(p.authors || []);
+      const doi   = _getDoi(p);
+      const vol   = (p.volume || '').toString().trim();
+      const issue = (p.issue  || '').toString().trim();
+      const pages = (p.pages  || '').toString().trim();
+      let   ref   = `${i + 1}. ${auth}${auth ? ' ' : ''}${p.title || 'Untitled'}.`;
       if (p.journal && src !== 'uploaded') ref += ` ${p.journal}.`;
-      if (p.year)    ref += ` ${p.year}.`;
-      if (doi)       ref += ` doi: ${doi}`;
+      /* Vancouver date/volume: "Year;Vol(Issue):Pages." */
+      if (vol || issue || pages) {
+        let yrVol = p.year ? ` ${p.year}` : ' n.d.';
+        if (vol) { yrVol += `;${vol}`; if (issue) yrVol += `(${issue})`; }
+        if (pages) yrVol += `:${pages}`;
+        ref += `${yrVol}.`;
+      } else if (p.year) {
+        ref += ` ${p.year}.`;
+      }
+      if (doi)        ref += ` doi: ${doi}`;
       else if (p.url) ref += ` Available from: ${p.url}`;
       return ref.trim();
     }).join('\n');
@@ -1124,7 +1181,7 @@
 
       /* WHO IRIS — use institutional name directly (not personal-name formatter) */
       if (src === 'who_iris' && !(p.authors && p.authors.length)) {
-        const doi      = _extractDoi(p.url || '');
+        const doi      = _getDoi(p);
         const year     = p.year ? `(${p.year})` : '(n.d.)';
         const rawTitle = (p.title || 'Untitled').trim();
         const title    = rawTitle.charAt(0).toUpperCase() + rawTitle.slice(1);
@@ -1136,14 +1193,22 @@
       }
 
       const auth     = _fmtApaAuthors(p.authors || []);
-      const doi      = _extractDoi(p.url);
+      const doi      = _getDoi(p);
       const year     = p.year ? `(${p.year})` : '(n.d.)';
       const rawTitle = (p.title || 'Untitled').trim();
       const title    = rawTitle.charAt(0).toUpperCase() + rawTitle.slice(1);
+      const vol      = (p.volume || '').toString().trim();
+      const issue    = (p.issue  || '').toString().trim();
+      const pages    = (p.pages  || '').toString().trim();
       let ref = auth ? `${auth} ${year}. ` : `${year}. `;
       ref += `${title}.`;
-      /* Journal name in asterisks (plain-text italics per APA convention) */
-      if (p.journal && src !== 'uploaded') ref += ` *${p.journal}*.`;
+      /* Journal with vol/issue/pages in APA italics format */
+      if (p.journal && src !== 'uploaded') {
+        let jPart = ` *${p.journal}*`;
+        if (vol) { jPart += `, *${vol}*`; if (issue) jPart += `(${issue})`; }
+        if (pages) jPart += `, ${pages}`;
+        ref += jPart + '.';
+      }
       if (doi)        ref += ` https://doi.org/${doi}`;
       else if (p.url) ref += ` ${p.url}`;
       return ref.trim();

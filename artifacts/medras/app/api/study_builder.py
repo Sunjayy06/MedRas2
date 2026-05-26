@@ -140,6 +140,12 @@ def _cy_extract_doi(url: str) -> str:
     return _urlparse.unquote(m.group(1)).strip() if m else ''
 
 
+def _cy_get_doi(p: dict) -> str:
+    """Return DOI: explicit field first, then extracted from URL."""
+    doi = (p.get('doi') or '').strip()
+    return doi if doi else _cy_extract_doi(p.get('url', '') or '')
+
+
 def _cy_extract_nct(url: str) -> str:
     m = _re.search(r'(NCT\d+)', url or '', _re.IGNORECASE)
     return m.group(1) if m else ''
@@ -187,9 +193,12 @@ def _cy_format_one(p: dict, idx: int, style: str) -> str:
     src     = (p.get('source') or '').lower()
     title   = (p.get('title') or 'Untitled').strip()
     url     = p.get('url', '') or ''
-    doi     = _cy_extract_doi(url)
+    doi     = _cy_get_doi(p)
     year    = p.get('year', '') or ''
     journal = p.get('journal', '') or ''
+    volume  = (p.get('volume') or '').strip()
+    issue   = (p.get('issue')  or '').strip()
+    pages   = (p.get('pages')  or '').strip()
     authors = list(p.get('authors') or [])
 
     # ClinicalTrials.gov — special registration format
@@ -235,7 +244,15 @@ def _cy_format_one(p: dict, idx: int, style: str) -> str:
         ref  = f'{idx}. {auth + " " if auth else ""}{title}.'
         if journal and src not in ('uploaded', 'uploaded_pdf'):
             ref += f' {journal}.'
-        if year:
+        # Vancouver date/volume: "Year;Vol(Issue):Pages."
+        if volume or issue or pages:
+            yr_vol = f' {year}' if year else ' n.d.'
+            if volume:
+                yr_vol += f';{volume}'
+                if issue: yr_vol += f'({issue})'
+            if pages: yr_vol += f':{pages}'
+            ref += yr_vol + '.'
+        elif year:
             ref += f' {year}.'
         if doi:   ref += f' doi: {doi}'
         elif url: ref += f' Available from: {url}'
@@ -245,7 +262,12 @@ def _cy_format_one(p: dict, idx: int, style: str) -> str:
         ttl_cap = title[0].upper() + title[1:]
         ref  = f'{auth + " " if auth else ""}{yr}. {ttl_cap}.'
         if journal and src not in ('uploaded', 'uploaded_pdf'):
-            ref += f' *{journal}*.'
+            j_part = f' *{journal}*'
+            if volume:
+                j_part += f', *{volume}*'
+                if issue: j_part += f'({issue})'
+            if pages: j_part += f', {pages}'
+            ref += j_part + '.'
         if doi:   ref += f' https://doi.org/{doi}'
         elif url: ref += f' {url}'
 
