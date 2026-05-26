@@ -326,6 +326,76 @@
   margin-top: 0.35rem;
 }
 
+/* ── Citation superscript links ──────────────────────────────────────── */
+.ra-cite { font-size: 0.7em; }
+.ra-cite-link {
+  color: #22d3ee;
+  text-decoration: none;
+}
+.ra-cite-link:hover { text-decoration: underline; }
+
+/* ── Sources collapsible panel ───────────────────────────────────────── */
+.ra-sources-panel {
+  margin-top: 0.55rem;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 7px;
+  overflow: hidden;
+}
+.ra-sources-toggle {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: rgba(226, 232, 240, 0.55);
+  cursor: pointer;
+  padding: 0.35rem 0.65rem;
+  list-style: none;
+  background: rgba(255, 255, 255, 0.03);
+  user-select: none;
+}
+.ra-sources-toggle:hover { color: rgba(226, 232, 240, 0.8); }
+.ra-sources-toggle::-webkit-details-marker { display: none; }
+
+.ra-sources-list {
+  margin: 0;
+  padding: 0.45rem 0.75rem 0.6rem 1rem;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+.ra-sources-list li {
+  font-size: 0.74rem;
+  color: #94a3b8;
+  line-height: 1.5;
+  transition: background 0.25s;
+  border-radius: 4px;
+  padding: 0.1rem 0.2rem;
+}
+.ra-sources-list li.ra-src-highlight {
+  background: rgba(8, 145, 178, 0.14);
+  color: #e2e8f0;
+}
+.ra-src-num {
+  font-weight: 700;
+  color: #0891b2;
+  margin-right: 0.25rem;
+  font-size: 0.7rem;
+}
+.ra-src-authors { color: #7f90aa; }
+.ra-src-journal { font-style: italic; color: #7f90aa; }
+.ra-src-link {
+  color: #e2e8f0;
+  text-decoration: none;
+  font-weight: 500;
+}
+.ra-src-link:hover { color: #22d3ee; text-decoration: underline; }
+.ra-src-doi {
+  font-size: 0.68rem;
+  color: #0891b2;
+  text-decoration: none;
+  margin-left: 0.2rem;
+}
+.ra-src-doi:hover { text-decoration: underline; }
+
 /* ── Trigger button (placed by the consuming page) ───────────────────── */
 .btn-ra-open {
   background: rgba(8, 145, 178, 0.12);
