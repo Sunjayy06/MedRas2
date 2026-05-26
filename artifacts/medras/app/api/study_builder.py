@@ -27,6 +27,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import re as _re
+import urllib.parse as _urlparse
 from typing import Optional
 
 from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
@@ -117,6 +119,137 @@ class PdfUploadResponse(BaseModel):
     title:       str
     page_count:  int
     chunk_count: int
+
+
+class CitationRequest(BaseModel):
+    papers: list[dict] = Field(..., description="Paper dicts from an /ask response")
+    style:  str        = Field(..., pattern="^(vancouver|apa)$")
+
+
+class CitationResponse(BaseModel):
+    citations: list[str]
+    formatted: str   # newline-joined, ready to copy
+
+
+# ── Citation formatters (server-side) ─────────────────────────────────────────
+
+def _cy_extract_doi(url: str) -> str:
+    if not url:
+        return ''
+    m = _re.search(r'doi\.org/(.+)$', url, _re.IGNORECASE)
+    return _urlparse.unquote(m.group(1)).strip() if m else ''
+
+
+def _cy_extract_nct(url: str) -> str:
+    m = _re.search(r'(NCT\d+)', url or '', _re.IGNORECASE)
+    return m.group(1) if m else ''
+
+
+def _cy_fmt_vancouver_authors(authors: list) -> str:
+    if not authors:
+        return ''
+    fmt = []
+    for a in list(authors)[:6]:
+        parts = str(a).strip().split()
+        if len(parts) < 2:
+            fmt.append(str(a))
+        else:
+            last     = parts[-1]
+            initials = ''.join(n[0].upper() for n in parts[:-1] if n)
+            fmt.append(f'{last} {initials}')
+    if len(authors) > 6:
+        fmt.append('et al')
+    return ', '.join(fmt) + '.'
+
+
+def _cy_fmt_apa_authors(authors: list) -> str:
+    if not authors:
+        return ''
+    fmt = []
+    for a in list(authors)[:20]:
+        parts = str(a).strip().split()
+        if len(parts) < 2:
+            fmt.append(str(a))
+        else:
+            last     = parts[-1]
+            initials = ' '.join(n[0].upper() + '.' for n in parts[:-1] if n)
+            fmt.append(f'{last}, {initials}')
+    if len(authors) > 20:
+        return ', '.join(fmt[:19]) + ', \u2026 ' + fmt[-1]
+    if len(fmt) == 1:
+        return fmt[0]
+    last = fmt.pop()
+    return ', '.join(fmt) + ', & ' + last
+
+
+def _cy_format_one(p: dict, idx: int, style: str) -> str:
+    """Format a single paper dict as a Vancouver or APA citation string."""
+    src     = (p.get('source') or '').lower()
+    title   = (p.get('title') or 'Untitled').strip()
+    url     = p.get('url', '') or ''
+    doi     = _cy_extract_doi(url)
+    year    = p.get('year', '') or ''
+    journal = p.get('journal', '') or ''
+    authors = list(p.get('authors') or [])
+
+    # ClinicalTrials.gov — special registration format
+    if src == 'clinicaltrials':
+        sponsor = str(authors[0]) if authors else 'Unknown Sponsor'
+        nct     = _cy_extract_nct(url)
+        ttl_cap = title[0].upper() + title[1:]
+        if style == 'vancouver':
+            ref = (f'{idx}. {sponsor}. {ttl_cap} '
+                   f'[Clinical trial registration]. ClinicalTrials.gov.')
+            if nct:   ref += f' {nct}'
+            elif url: ref += f' Available from: {url}'
+        else:
+            yr  = f'({year})' if year else '(n.d.)'
+            ref = (f'{sponsor} {yr}. *{ttl_cap}* '
+                   f'[Clinical trial registration]. ClinicalTrials.gov.')
+            if nct:   ref += f' {nct}'
+            elif url: ref += f' {url}'
+        return ref.strip()
+
+    # WHO IRIS — use "World Health Organization" as-is (institutional, not personal name)
+    if src == 'who_iris' and not authors:
+        ttl_cap = title[0].upper() + title[1:]
+        if style == 'vancouver':
+            ref = f'{idx}. World Health Organization. {title}.'
+            if journal:
+                ref += f' {journal}.'
+            if year:
+                ref += f' {year}.'
+            if doi:   ref += f' doi: {doi}'
+            elif url: ref += f' Available from: {url}'
+        else:
+            yr  = f'({year})' if year else '(n.d.)'
+            ref = f'World Health Organization {yr}. {ttl_cap}.'
+            if journal:
+                ref += f' *{journal}*.'
+            if doi:   ref += f' https://doi.org/{doi}'
+            elif url: ref += f' {url}'
+        return ref.strip()
+
+    if style == 'vancouver':
+        auth = _cy_fmt_vancouver_authors(authors)
+        ref  = f'{idx}. {auth + " " if auth else ""}{title}.'
+        if journal and src not in ('uploaded', 'uploaded_pdf'):
+            ref += f' {journal}.'
+        if year:
+            ref += f' {year}.'
+        if doi:   ref += f' doi: {doi}'
+        elif url: ref += f' Available from: {url}'
+    else:  # apa
+        auth = _cy_fmt_apa_authors(authors)
+        yr   = f'({year})' if year else '(n.d.)'
+        ttl_cap = title[0].upper() + title[1:]
+        ref  = f'{auth + " " if auth else ""}{yr}. {ttl_cap}.'
+        if journal and src not in ('uploaded', 'uploaded_pdf'):
+            ref += f' *{journal}*.'
+        if doi:   ref += f' https://doi.org/{doi}'
+        elif url: ref += f' {url}'
+
+    return ref.strip()
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -390,6 +523,31 @@ async def delete_pdf(
     """Remove the uploaded PDF from the session to free memory."""
     sessions.clear_pdf(session_id)
     log.info("PDF cleared for session %s", session_id[:8])
+
+
+@router.post("/format-citations", response_model=CitationResponse)
+async def format_citations(body: CitationRequest) -> CitationResponse:
+    """Format a list of paper dicts as numbered Vancouver or APA citations.
+
+    Uploaded PDFs (evidence_type == 'uploaded_pdf') are excluded automatically.
+    ClinicalTrials.gov entries and WHO IRIS entries receive source-specific
+    formatting per academic convention.
+    """
+    exportable = [
+        p for p in body.papers
+        if (p.get('title') or '').strip()
+        and p.get('evidence_type') != 'uploaded_pdf'
+    ]
+    citations = [
+        _cy_format_one(p, i + 1, body.style)
+        for i, p in enumerate(exportable)
+    ]
+    sep = '\n' if body.style == 'vancouver' else '\n\n'
+    log.info(
+        "format-citations style=%s papers=%d exportable=%d",
+        body.style, len(body.papers), len(exportable),
+    )
+    return CitationResponse(citations=citations, formatted=sep.join(citations))
 
 
 @router.post("/ask", response_model=AskResponse)

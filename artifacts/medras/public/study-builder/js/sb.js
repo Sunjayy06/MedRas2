@@ -32,6 +32,11 @@
   const folioEmpty     = document.getElementById('folio-empty');
   const folioFoot      = document.getElementById('folio-foot');
 
+  /* ── Copy-all DOM ── */
+  const copyAllWrap  = document.getElementById('copy-all-wrap');
+  const copyAllVan   = document.getElementById('copy-all-van');
+  const copyAllApa   = document.getElementById('copy-all-apa');
+
   /* ── Labels ── */
   const SRC_LABELS = {
     pubmed:'PubMed', cochrane:'Cochrane', europe_pmc:'Europe PMC',
@@ -82,6 +87,10 @@
 
   /* ── Folio state (persisted to sessionStorage) ── */
   let folioItems = JSON.parse(sessionStorage.getItem('sb.folio') || '[]');
+
+  /* ── Conversation-wide citation tracking ── */
+  /* Key: DOI URL (preferred) or title — deduplicates papers across answers */
+  const convPapersMap = new Map();
 
   /* ── Statistical highlight regex ── */
   const STAT_RE = /(\bp\s*[<>=≤≥]\s*0\.\d+\b|\bOR\s+[\d.]+\b|\bRR\s+[\d.]+\b|\bHR\s+[\d.]+\b|\bNNT\s+\d+\b|\bARR\s+[\d.]+%?\b|\bRRR\s+[\d.]+%?\b|95\s*%\s*CI[^,;.]{0,30}|\bCIs?\b\s*[\[(][\d., –\-]+[\])]|\bn\s*=\s*[\d,]+\b|\bN\s*=\s*[\d,]+\b|[\d.]+\s*%\s*(?:reduction|increase|improvement|decrease|sensitivity|specificity|accuracy)|\bSMD\s+[\d.]+\b|\bWMD\s+[\d.]+\b|\bMD\s+[\d.]+\b|\baOR\s+[\d.]+\b)/gi;
@@ -148,6 +157,8 @@
     pdfAttached    = false;
     uploading      = false;
     folioItems     = [];
+    convPapersMap.clear();
+    if (copyAllWrap) copyAllWrap.style.display = 'none';
     sessionStorage.removeItem('sb.session_id');
     sessionStorage.removeItem('medras.nav.returnHint');
     sessionStorage.removeItem('sb.folio');
@@ -570,6 +581,15 @@
       el.appendChild(buildSources(d.papers, d.sources_searched || []));
       const exportRow = buildExportRow(d.papers);
       if (exportRow) el.appendChild(exportRow);
+
+      /* Track unique papers across the whole conversation */
+      (d.papers || []).forEach((p) => {
+        if (!p.title || p.title.length <= 3) return;
+        if (p.evidence_type === 'uploaded_pdf') return;
+        const key = (p.url && p.url.trim()) || p.title.toLowerCase().trim();
+        if (!convPapersMap.has(key)) convPapersMap.set(key, p);
+      });
+      if (copyAllWrap && convPapersMap.size > 0) copyAllWrap.style.display = '';
     }
 
     /* 7 — Follow-up chips */
@@ -881,38 +901,78 @@
     row.appendChild(lbl);
 
     [
-      { label:'BibTeX',     ext:'.bib', fn: _toBibtex    },
-      { label:'RIS',        ext:'.ris', fn: _toRis       },
-      { label:'Vancouver',  ext:'.txt', fn: _toVancouver },
-      { label:'APA 7th',   ext:'.txt', fn: _toApa       },
-      { label:'Plain text', ext:'.txt', fn: _toPlainText },
-    ].forEach(({ label, ext, fn }) => {
+      { label:'BibTeX',     file:'citations.bib',          fn: _toBibtex    },
+      { label:'RIS',        file:'citations.ris',          fn: _toRis       },
+      { label:'Vancouver',  file:'citations_vancouver.txt', fn: _toVancouver },
+      { label:'APA 7th',   file:'citations_apa.txt',       fn: _toApa       },
+      { label:'Plain text', file:'citations.txt',          fn: _toPlainText },
+    ].forEach(({ label, file, fn }) => {
       const btn = mk('button', 'export-chip');
       btn.textContent = label;
-      btn.addEventListener('click', () =>
-        _dlText(`medras-citations${ext}`, fn(exportable))
-      );
+      btn.addEventListener('click', () => _dlText(file, fn(exportable)));
       row.appendChild(btn);
     });
 
     [
-      { label: 'Copy Vancouver', fn: _toVancouver },
-      { label: 'Copy APA',      fn: _toApa       },
-    ].forEach(({ label, fn }) => {
+      { label: 'Copy Vancouver', style: 'vancouver' },
+      { label: 'Copy APA',       style: 'apa'       },
+    ].forEach(({ label, style }) => {
       const copyBtn = mk('button', 'export-chip export-copy');
       copyBtn.textContent = label;
-      copyBtn.addEventListener('click', () => {
-        navigator.clipboard.writeText(fn(exportable))
-          .then(() => {
-            copyBtn.textContent = 'Copied \u2713';
-            setTimeout(() => { copyBtn.textContent = label; }, 2000);
-          })
-          .catch(() => _dlText('medras-citations.txt', fn(exportable)));
-      });
+      copyBtn.addEventListener('click', () =>
+        _copyViaBackend(exportable, style, copyBtn, label)
+      );
       row.appendChild(copyBtn);
     });
 
     return row;
+  }
+
+  /* ── Copy via backend (with client-side fallback) ── */
+
+  async function _copyViaBackend(papers, style, btn, originalLabel) {
+    const prev  = btn.textContent;
+    btn.textContent = 'Copying\u2026';
+    btn.disabled    = true;
+    try {
+      const res = await fetch('/api/study-builder/format-citations', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ papers, style }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      await navigator.clipboard.writeText(data.formatted);
+      btn.textContent = 'Copied \u2713';
+      setTimeout(() => { btn.textContent = originalLabel; btn.disabled = false; }, 2000);
+    } catch (_) {
+      /* Fallback: format client-side then copy */
+      const text = style === 'vancouver' ? _toVancouver(papers) : _toApa(papers);
+      navigator.clipboard.writeText(text)
+        .then(() => {
+          btn.textContent = 'Copied \u2713';
+          setTimeout(() => { btn.textContent = originalLabel; btn.disabled = false; }, 2000);
+        })
+        .catch(() => {
+          _dlText('medras-citations.txt', text);
+          btn.textContent = originalLabel;
+          btn.disabled = false;
+        });
+    }
+  }
+
+  /* Wire up the conversation-wide copy-all buttons */
+  if (copyAllVan) {
+    copyAllVan.addEventListener('click', () => {
+      const papers = Array.from(convPapersMap.values());
+      _copyViaBackend(papers, 'vancouver', copyAllVan, 'Copy all \u2014 Vancouver');
+    });
+  }
+  if (copyAllApa) {
+    copyAllApa.addEventListener('click', () => {
+      const papers = Array.from(convPapersMap.values());
+      _copyViaBackend(papers, 'apa', copyAllApa, 'Copy all \u2014 APA');
+    });
   }
 
   /* ── Format generators ── */
@@ -921,6 +981,12 @@
     if (!url) return '';
     const m = url.match(/doi\.org\/(.+)$/i);
     return m ? decodeURIComponent(m[1]).trim() : '';
+  }
+
+  function _extractNct(url) {
+    if (!url) return '';
+    const m = url.match(/NCT\d+/i);
+    return m ? m[0] : '';
   }
 
   function _bibtexKey(p, idx) {
@@ -984,10 +1050,33 @@
 
   function _toVancouver(papers) {
     return papers.map((p, i) => {
+      const src = (p.source || '').toLowerCase();
+
+      /* ClinicalTrials.gov — registration format */
+      if (src === 'clinicaltrials') {
+        const sponsor = (p.authors && p.authors[0]) || 'Unknown Sponsor';
+        const nct     = _extractNct(p.url || '');
+        let ref = `${i + 1}. ${sponsor}. ${p.title || 'Untitled'} [Clinical trial registration]. ClinicalTrials.gov.`;
+        if (nct)    ref += ` ${nct}`;
+        else if (p.url) ref += ` Available from: ${p.url}`;
+        return ref.trim();
+      }
+
+      /* WHO IRIS — use institutional name directly (not personal-name formatter) */
+      if (src === 'who_iris' && !(p.authors && p.authors.length)) {
+        const doi = _extractDoi(p.url || '');
+        let ref   = `${i + 1}. World Health Organization. ${p.title || 'Untitled'}.`;
+        if (p.journal) ref += ` ${p.journal}.`;
+        if (p.year)    ref += ` ${p.year}.`;
+        if (doi)       ref += ` doi: ${doi}`;
+        else if (p.url) ref += ` Available from: ${p.url}`;
+        return ref.trim();
+      }
+
       const auth = _fmtVancouverAuthors(p.authors || []);
       const doi  = _extractDoi(p.url);
       let   ref  = `${i + 1}. ${auth}${auth ? ' ' : ''}${p.title || 'Untitled'}.`;
-      if (p.journal) ref += ` ${p.journal}.`;
+      if (p.journal && src !== 'uploaded') ref += ` ${p.journal}.`;
       if (p.year)    ref += ` ${p.year}.`;
       if (doi)       ref += ` doi: ${doi}`;
       else if (p.url) ref += ` Available from: ${p.url}`;
@@ -1018,15 +1107,44 @@
 
   function _toApa(papers) {
     return papers.map((p) => {
-      const auth  = _fmtApaAuthors(p.authors || []);
-      const doi   = _extractDoi(p.url);
-      const year  = p.year ? `(${p.year})` : '(n.d.)';
+      const src = (p.source || '').toLowerCase();
+
+      /* ClinicalTrials.gov — registration format */
+      if (src === 'clinicaltrials') {
+        const sponsor  = (p.authors && p.authors[0]) || 'Unknown Sponsor';
+        const yr       = p.year ? `(${p.year})` : '(n.d.)';
+        const rawTitle = (p.title || 'Untitled').trim();
+        const title    = rawTitle.charAt(0).toUpperCase() + rawTitle.slice(1);
+        const nct      = _extractNct(p.url || '');
+        let ref = `${sponsor} ${yr}. *${title}* [Clinical trial registration]. ClinicalTrials.gov.`;
+        if (nct)    ref += ` ${nct}`;
+        else if (p.url) ref += ` ${p.url}`;
+        return ref.trim();
+      }
+
+      /* WHO IRIS — use institutional name directly (not personal-name formatter) */
+      if (src === 'who_iris' && !(p.authors && p.authors.length)) {
+        const doi      = _extractDoi(p.url || '');
+        const year     = p.year ? `(${p.year})` : '(n.d.)';
+        const rawTitle = (p.title || 'Untitled').trim();
+        const title    = rawTitle.charAt(0).toUpperCase() + rawTitle.slice(1);
+        let ref = `World Health Organization ${year}. ${title}.`;
+        if (p.journal) ref += ` *${p.journal}*.`;
+        if (doi)       ref += ` https://doi.org/${doi}`;
+        else if (p.url) ref += ` ${p.url}`;
+        return ref.trim();
+      }
+
+      const auth     = _fmtApaAuthors(p.authors || []);
+      const doi      = _extractDoi(p.url);
+      const year     = p.year ? `(${p.year})` : '(n.d.)';
       const rawTitle = (p.title || 'Untitled').trim();
-      const title = rawTitle.charAt(0).toUpperCase() + rawTitle.slice(1);
+      const title    = rawTitle.charAt(0).toUpperCase() + rawTitle.slice(1);
       let ref = auth ? `${auth} ${year}. ` : `${year}. `;
       ref += `${title}.`;
-      if (p.journal) ref += ` ${p.journal}.`;
-      if (doi)       ref += ` https://doi.org/${doi}`;
+      /* Journal name in asterisks (plain-text italics per APA convention) */
+      if (p.journal && src !== 'uploaded') ref += ` *${p.journal}*.`;
+      if (doi)        ref += ` https://doi.org/${doi}`;
       else if (p.url) ref += ` ${p.url}`;
       return ref.trim();
     }).join('\n\n');

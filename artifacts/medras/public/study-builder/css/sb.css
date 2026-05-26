@@ -1043,6 +1043,15 @@ a.fi-title:hover { color: var(--teal-lt); }
 /* Source card needs position:relative for the absolute pin button */
 .src-card { position: relative; }
 
+/* ── Conversation-wide copy-all wrap ─────────────── */
+.copy-all-wrap {
+  display: flex;
+  align-items: center;
+  gap: .3rem;
+  flex-wrap: nowrap;
+}
+@media (max-width: 600px) { .copy-all-wrap { display: none !important; } }
+
 /* ── Citation export row ─────────────────────────── */
 .export-row {
   display: flex;
