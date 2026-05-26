@@ -962,7 +962,7 @@ async def improve_section(
     suggestions_in = raw.get("suggestions") or []
     if not isinstance(suggestions_in, list):
         return {"suggestions": [], "sources": records,
-                "domain": search["domain"], "databases": search["databases"]}
+                "domain": _impr_domain, "databases": _impr_databases}
 
     suggestions_out: List[Dict[str, Any]] = []
     for s in suggestions_in[:8]:

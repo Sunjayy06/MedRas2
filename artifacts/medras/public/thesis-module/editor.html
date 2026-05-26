@@ -15,6 +15,10 @@
 .th-refpanel-body{flex:1;min-width:0}
 .th-refpanel-remove{background:none;border:none;color:var(--th-text-soft);cursor:pointer;font-size:11px;padding:2px 4px;margin-left:auto;flex-shrink:0;border-radius:4px}
 .th-refpanel-remove:hover{color:#c0392b;background:var(--th-paper-2)}
+.th-refpanel-reorder{display:flex;flex-direction:column;gap:1px;flex-shrink:0}
+.th-refpanel-mv{background:none;border:none;color:var(--th-text-soft);cursor:pointer;font-size:10px;padding:1px 3px;border-radius:3px;line-height:1.2}
+.th-refpanel-mv:hover:not(:disabled){color:var(--th-emerald-d);background:var(--th-paper-2)}
+.th-refpanel-mv:disabled{opacity:.3;cursor:default}
 #th-cite-picker{display:none;position:fixed;top:72px;left:50%;transform:translateX(-50%);width:480px;max-width:96vw;background:#fff;border:1.5px solid var(--th-emerald-d);border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,.15);z-index:1001}
 #th-cite-overlay{display:none;position:fixed;inset:0;z-index:1000}
 .th-cite-option:hover{background:var(--th-paper-2)}
@@ -255,43 +259,84 @@
       listEl.innerHTML = '<div style="padding:6px 0;font-size:11.5px;color:var(--th-text-soft);font-style:italic">None cited yet — type [@ to insert.</div>';
       return;
     }
+    const total = refs.length;
     listEl.innerHTML = citedArr.map(({ r, idx, num }) => {
       const auth = (r.authors || []).slice(0, 2).join(', ') + ((r.authors || []).length > 2 ? ' et al.' : '');
       return `<div class="th-refpanel-card" data-idx="${idx}">
+        <div class="th-refpanel-reorder">
+          <button class="th-refpanel-mv" data-mv="${idx}" data-dir="-1" title="Move up (renumbers)" ${idx === 0 ? 'disabled' : ''}>↑</button>
+          <button class="th-refpanel-mv" data-mv="${idx}" data-dir="1" title="Move down (renumbers)" ${idx === total - 1 ? 'disabled' : ''}>↓</button>
+        </div>
         <span class="th-refpanel-num">[${num}]</span>
         <div class="th-refpanel-body">
           <div class="th-refpanel-title">${esc((r.title || '').slice(0, 65))}${(r.title || '').length > 65 ? '…' : ''}</div>
           <div class="th-refpanel-meta">${esc(auth)} · ${esc(String(r.year || 'n.d.'))}</div>
         </div>
-        <button class="th-refpanel-remove" title="Remove from library and renumber all chapters" data-remove="${idx}">✕</button>
+        <button class="th-refpanel-remove" title="Remove (orphaned [CITE_?] tags remain for review)" data-remove="${idx}">✕</button>
       </div>`;
     }).join('');
     listEl.querySelectorAll('button[data-remove]').forEach((btn) => {
       btn.addEventListener('click', () => removeReference(parseInt(btn.dataset.remove, 10)));
     });
+    listEl.querySelectorAll('button[data-mv]').forEach((btn) => {
+      btn.addEventListener('click', () => moveReference(parseInt(btn.dataset.mv, 10), parseInt(btn.dataset.dir, 10)));
+    });
+  }
+
+  function _renumberChapters(s, removedNum, totalBefore) {
+    Object.keys(s.chapters || {}).forEach((chId) => {
+      const ch = s.chapters[chId] || {};
+      if (!ch.text) return;
+      // Mark removed cite as orphan [CITE_?] rather than silently deleting
+      let t = ch.text.replace(new RegExp('\\[CITE_' + removedNum + '\\]', 'g'), '[CITE_?]');
+      for (let n = removedNum + 1; n <= totalBefore; n++) {
+        t = t.replace(new RegExp('\\[CITE_' + n + '\\]', 'g'), '[CITE_' + (n - 1) + ']');
+      }
+      s.chapters[chId] = Object.assign({}, ch, { text: t });
+    });
   }
 
   function removeReference(idx) {
-    if (!window.confirm('Remove this reference from your library? [CITE_n] tags will be renumbered throughout every chapter.')) return;
+    if (!window.confirm('Remove this reference? Citations to it will be marked [CITE_?] for review. All higher [CITE_n] tags will be renumbered.')) return;
     ThesisState.patch((s) => {
       const refs = s.references || [];
       const removedNum = idx + 1;
       s.references = refs.filter((_, i) => i !== idx);
-      Object.keys(s.chapters || {}).forEach((chId) => {
-        const ch = s.chapters[chId] || {};
-        if (!ch.text) return;
-        let t = ch.text.replace(new RegExp('\\[CITE_' + removedNum + '\\]', 'g'), '');
-        for (let n = removedNum + 1; n <= refs.length; n++) {
-          t = t.replace(new RegExp('\\[CITE_' + n + '\\]', 'g'), '[CITE_' + (n - 1) + ']');
-        }
-        s.chapters[chId] = Object.assign({}, ch, { text: t });
-      });
+      _renumberChapters(s, removedNum, refs.length);
       return s;
     });
     renderEditor();
     renderSideRefs();
     renderChapterRefPanel();
-    ThesisState.toast('Reference removed and all [CITE_n] tags renumbered.');
+    ThesisState.toast('Reference removed. Orphaned [CITE_?] tags remain for your review.');
+  }
+
+  function moveReference(idx, dir) {
+    const s = ThesisState.get();
+    const refs = s.references || [];
+    const swapIdx = idx + dir;
+    if (swapIdx < 0 || swapIdx >= refs.length) return;
+    const numA = idx + 1;
+    const numB = swapIdx + 1;
+    // Swap refs, then renumber in-chapter tags: A↔B using a temp sentinel
+    ThesisState.patch((ss) => {
+      const r = ss.references || [];
+      [r[idx], r[swapIdx]] = [r[swapIdx], r[idx]];
+      ss.references = r;
+      Object.keys(ss.chapters || {}).forEach((chId) => {
+        const ch = ss.chapters[chId] || {};
+        if (!ch.text) return;
+        let t = ch.text
+          .replace(new RegExp('\\[CITE_' + numA + '\\]', 'g'), '[CITE___TMP__]')
+          .replace(new RegExp('\\[CITE_' + numB + '\\]', 'g'), '[CITE_' + numA + ']')
+          .replace(/\[CITE___TMP__\]/g, '[CITE_' + numB + ']');
+        ss.chapters[chId] = Object.assign({}, ch, { text: t });
+      });
+      return ss;
+    });
+    renderEditor();
+    renderSideRefs();
+    renderChapterRefPanel();
   }
 
   // ---------- inline cite picker ----------
@@ -329,7 +374,52 @@
       return;
     }
     if (!filtered.length) {
-      list.innerHTML = '<div style="padding:12px;color:var(--th-text-soft);font-size:12.5px">No match. Try different terms.</div>';
+      const qEsc = esc(q);
+      list.innerHTML = `<div style="padding:10px 12px;font-size:12.5px">
+        <div style="color:var(--th-text-soft);margin-bottom:8px">No match in your library.</div>
+        <button id="th-cite-pubmed" class="th-btn th-btn-light th-btn-sm" style="width:100%;text-align:left"
+          data-query="${qEsc}">🔍 Search PubMed for "${qEsc}"</button>
+        <div id="th-cite-pubmed-results" style="margin-top:6px"></div>
+      </div>`;
+      list.querySelector('#th-cite-pubmed').addEventListener('click', async (e) => {
+        const btn = e.currentTarget;
+        const resDiv = list.querySelector('#th-cite-pubmed-results');
+        btn.disabled = true;
+        resDiv.innerHTML = '<span style="color:var(--th-text-soft);font-size:12px">Searching…</span>';
+        try {
+          const data = await ThesisState.api('/references/search', { query: btn.dataset.query, limit: 5 });
+          const results = data.results || [];
+          if (!results.length) { resDiv.textContent = 'No PubMed results.'; return; }
+          resDiv.innerHTML = results.map((r, i) => {
+            const auth = (r.authors || []).slice(0, 2).join(', ') + ((r.authors || []).length > 2 ? ' et al.' : '');
+            return `<div data-pm="${i}" style="padding:6px 0;border-top:1px solid var(--th-line);display:flex;gap:6px;align-items:flex-start;font-size:12px">
+              <div style="flex:1">
+                <div style="font-weight:600">${esc((r.title || '').slice(0, 70))}…</div>
+                <div style="color:var(--th-text-soft)">${esc(auth)} · ${esc(String(r.year || ''))}</div>
+              </div>
+              <button class="th-btn th-btn-primary th-btn-sm" data-add="${i}" style="white-space:nowrap;font-size:11px">Add & cite</button>
+            </div>`;
+          }).join('');
+          resDiv.querySelectorAll('button[data-add]').forEach((ab) => {
+            ab.addEventListener('mousedown', (ev) => {
+              ev.preventDefault();
+              const r = results[parseInt(ab.dataset.add, 10)];
+              const s = ThesisState.get();
+              const existing = new Set((s.references || []).map((x) => (x.doi || '').toLowerCase()));
+              let num;
+              if (r.doi && existing.has(r.doi.toLowerCase())) {
+                num = (s.references || []).findIndex((x) => (x.doi || '').toLowerCase() === r.doi.toLowerCase()) + 1;
+              } else {
+                ThesisState.addReferences([r]);
+                num = (ThesisState.get().references || []).length;
+              }
+              insertCitation(num);
+              renderSideRefs();
+            });
+          });
+        } catch (_) { resDiv.textContent = 'Search failed. Try again.'; }
+        finally { btn.disabled = false; }
+      });
       return;
     }
     list.innerHTML = filtered.slice(0, 10).map(({ r, num }) => {
@@ -690,7 +780,7 @@
           locked_numbers: s.locked_numbers || {},
           domain_hint: setup.domain || undefined,
           extra_context: extraContext,
-          ref_library: (s.references && s.references.length >= 3) ? s.references : undefined,
+          ref_library: (() => { const v = (s.references || []).filter((r) => r.verified); return v.length >= 3 ? v : undefined; })(),
           ...styleParams,
         });
         // Researcher-in-control: NEVER auto-insert. Stage the draft and
@@ -729,7 +819,7 @@
           citation_style: cite,
           locked_numbers: s.locked_numbers || {},
           domain_hint: setup.domain || undefined,
-          ref_library: (s.references && s.references.length >= 3) ? s.references : undefined,
+          ref_library: (() => { const v = (s.references || []).filter((r) => r.verified); return v.length >= 3 ? v : undefined; })(),
           ...styleParams,
         });
         suggestions = res.suggestions || [];
