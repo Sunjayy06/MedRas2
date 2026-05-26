@@ -278,6 +278,7 @@ async def improve_section(request: Request, payload: Dict[str, Any]) -> Dict[str
             style_choice=payload.get("style_choice") or "indian_formal",
             style_sample=payload.get("style_sample"),
             ref_library=ref_library,
+            polish_instruction=payload.get("polish_instruction"),
         )
     except GeneratorError as exc:
         raise HTTPException(status_code=400, detail=str(exc))

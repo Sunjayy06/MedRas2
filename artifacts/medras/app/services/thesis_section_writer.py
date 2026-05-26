@@ -888,6 +888,7 @@ async def improve_section(
     ref_library: Optional[List[Dict[str, Any]]] = None,
     limit_per_db: int = DEFAULT_LIMIT_PER_DB,
     total_limit: int = 12,
+    polish_instruction: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Return per-sentence improvement suggestions for an existing draft.
 
@@ -938,12 +939,17 @@ async def improve_section(
             f"  • {k}: {v}" for k, v in locked_numbers.items()
         )
 
+    polish_block = (
+        f"\nSPECIAL INSTRUCTION: {polish_instruction}\n"
+        if polish_instruction else ""
+    )
     user_text = (
         f"CHAPTER: {chapter_id}\n"
         f"TOPIC: {topic}\n"
         f"CITATION STYLE: {citation_style}\n"
         f"VALID CITATION RANGE: [CITE_1] through [CITE_{n_records}]\n\n"
-        f"{locked_block}\n\n"
+        f"{locked_block}\n"
+        f"{polish_block}\n"
         f"=== BEGIN UNTRUSTED EVIDENCE ===\n"
         f"--- DRAFT ---\n{current_text}\n\n"
         f"--- RETRIEVED PAPERS ---\n{context_block}\n"

@@ -701,7 +701,12 @@
     const canvas = document.getElementById('th-editor-canvas');
     if (mode === 'write') {
       canvas.contentEditable = 'true';
-      canvas.innerText = c.text || '';
+      // Prefer stored HTML (preserves formatted tables from imports); fall back to innerText
+      if (c.html) {
+        canvas.innerHTML = c.html;
+      } else {
+        canvas.innerText = c.text || '';
+      }
       updateWC();
     } else {
       canvas.contentEditable = 'false';
@@ -785,8 +790,10 @@
   // Save while typing (write mode) + [@  cite trigger
   document.getElementById('th-editor-canvas').addEventListener('input', () => {
     if (mode !== 'write') return;
-    const text = document.getElementById('th-editor-canvas').innerText;
-    ThesisState.setChapter(chapterId, { text });
+    const canvas = document.getElementById('th-editor-canvas');
+    const text = canvas.innerText;
+    const html = canvas.innerHTML;
+    ThesisState.setChapter(chapterId, { text, html });
     updateWC();
     // Debounce panel re-render to 400 ms (avoids redundant work on each keystroke)
     clearTimeout(_refPanelTimer);
@@ -819,8 +826,8 @@
 
   document.getElementById('th-save').addEventListener('click', () => {
     if (mode === 'write') {
-      const text = document.getElementById('th-editor-canvas').innerText;
-      ThesisState.setChapter(chapterId, { text });
+      const canvas = document.getElementById('th-editor-canvas');
+      ThesisState.setChapter(chapterId, { text: canvas.innerText, html: canvas.innerHTML });
       ThesisState.toast('Saved.');
       renderSideChapters();
     } else {
@@ -831,8 +838,8 @@
   document.getElementById('th-toggle-mode').addEventListener('click', () => {
     if (mode === 'write') {
       // commit any pending edits before switching
-      const text = document.getElementById('th-editor-canvas').innerText;
-      ThesisState.setChapter(chapterId, { text });
+      const canvas = document.getElementById('th-editor-canvas');
+      ThesisState.setChapter(chapterId, { text: canvas.innerText, html: canvas.innerHTML });
     }
     mode = (mode === 'write') ? 'review' : 'write';
     renderEditor();
@@ -1205,11 +1212,16 @@
   // Directly load content into the canvas (HTML preserved, write mode)
   function _loadIntoCanvas(html, text) {
     const canvas = document.getElementById('th-editor-canvas');
-    canvas.innerHTML = html || esc(text);
-    ThesisState.setChapter(chapterId, { text: canvas.innerText });
+    canvas.innerHTML = html || '';
+    // Persist both html (for re-render) and text (for word count, compliance, export)
+    ThesisState.setChapter(chapterId, { text: canvas.innerText, html: canvas.innerHTML });
     pendingDraft = null; pendingDraftMeta = null; suggestions = [];
     mode = 'write';
-    renderEditor(); renderSideChapters(); renderSuggestList(); renderChapterRefPanel();
+    // Don't call renderEditor() here — that would overwrite innerHTML with innerText
+    canvas.contentEditable = 'true';
+    updateWC();
+    renderSideChapters(); renderSuggestList(); renderChapterRefPanel();
+    document.getElementById('th-toggle-mode').textContent = 'Mode: Write';
   }
 
   async function doImportFromSigma() {
@@ -1369,7 +1381,6 @@
     if (!built.text.trim() && !built.html.trim()) {
       ThesisState.toast('Nothing to import — add a file or paste text.'); return;
     }
-    closeImportModal();
     const isResults = _isResultsChapter();
     const isArticle = _isArticleMode();
     const st = ThesisState.get();
@@ -1377,18 +1388,18 @@
     const status = document.getElementById('th-suggest-status');
 
     if (action === 'use_as_is') {
+      closeImportModal();
       _loadIntoCanvas(built.html, built.text);
-      ThesisState.toast('Content loaded into your chapter — you can edit it or request improvements from the HELPERS panel.');
+      ThesisState.toast('Content loaded — tables are formatted in the editor. Edit freely or use the HELPERS panel for AI suggestions.');
       if (isResults && !isArticle) {
-        // Thesis: after loading results, offer routing to next chapter (Discussion)
         setTimeout(_navigateToNextChapter, 800);
       }
       return;
     }
 
     if (action === 'article_transition') {
-      // Article results: load tables, then have AI add brief transitional prose between them
-      // First load the content as-is
+      // Load tables into canvas first, then generate AI transitions in background
+      closeImportModal();
       _loadIntoCanvas(built.html, built.text);
       if (!setup.title) {
         ThesisState.toast('Content loaded. Add your thesis title in Setup for AI-assisted transitions.', 4000);
@@ -1428,12 +1439,14 @@
       return;
     }
 
-    // Polish and improve path
+    // Polish and improve path — show spinner in modal BEFORE API call
     if (!setup.title) {
       ThesisState.toast('Tip: add your thesis title in Setup for smarter polishing. Loading content for manual editing.', 4000);
+      closeImportModal();
       _loadIntoCanvas(built.html, built.text);
       return;
     }
+    // Show stage 3 spinner while waiting for API (modal stays open)
     showImportStage(3);
     const cite = setup.citation_style || 'vancouver';
     const styleParams = getStyleParams();
@@ -1450,13 +1463,11 @@
         ...styleParams,
       });
       closeImportModal();
-      suggestions = res.suggestions || [];
-      // Load HTML content into canvas first, then show suggestions as track-changes
       _loadIntoCanvas(built.html, built.text);
+      suggestions = res.suggestions || [];
       if (!suggestions.length) {
         if (status) status.textContent = 'Content looks polished already — loaded for manual editing.';
       } else {
-        suggestions = res.suggestions;
         mode = 'review'; renderEditor(); renderSuggestList();
         if (status) status.textContent = suggestions.length + ' polishing suggestions — review each and click ✓ or ✗.';
       }
