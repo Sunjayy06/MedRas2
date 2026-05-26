@@ -155,7 +155,6 @@
     var fig = document.getElementById('th-attach-fig');
     if (fig) fig.href = '/thesis-module/assets.html?chapter=' + encodeURIComponent(chapterId);
     initStylePicker();
-    initImportModal();
     renderSideChapters();
     renderSideLocks();
     renderSideRefs();
@@ -1223,7 +1222,7 @@
       if (n && !seen.has(n)) {
         seen.add(n);
         locked[n] = n;
-        if (++count >= 25) break;
+        if (++count >= 200) break;
       }
     }
     // Researcher's existing locks take priority
@@ -1566,6 +1565,10 @@
   }
 
   init();
+  // initImportModal() is deferred to DOMContentLoaded so the modal HTML
+  // (declared after this </script> block) is guaranteed to exist in the DOM
+  // before any getElementById / addEventListener calls run.
+  document.addEventListener('DOMContentLoaded', initImportModal);
 })();
 </script>
 <!-- ===== Import modal ===== -->
