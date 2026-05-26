@@ -23,6 +23,24 @@
 #th-cite-picker{display:none;position:fixed;top:72px;left:50%;transform:translateX(-50%);width:480px;max-width:96vw;background:#fff;border:1.5px solid var(--th-emerald-d);border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,.15);z-index:1001}
 #th-cite-overlay{display:none;position:fixed;inset:0;z-index:1000}
 .th-cite-option:hover{background:var(--th-paper-2)}
+/* ---- Import modal ---- */
+#th-import-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:2000}
+#th-import-modal{display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
+  width:min(700px,95vw);max-height:88vh;overflow-y:auto;background:#fff;
+  border-radius:12px;box-shadow:0 16px 64px rgba(0,0,0,.22);z-index:2001;padding:24px 26px}
+.th-import-stage{display:none}.th-import-stage.is-active{display:block}
+.th-drop-zone{border:2px dashed var(--th-line);border-radius:8px;padding:26px 16px;
+  text-align:center;cursor:pointer;transition:.15s border-color,background .15s}
+.th-drop-zone.drag-over{border-color:var(--th-emerald-d);background:#f0fdf4}
+.th-drop-zone input[type=file]{display:none}
+.th-tbl-review-row{display:flex;align-items:flex-start;gap:10px;padding:10px 0;
+  border-bottom:1px solid var(--th-line)}
+.th-tbl-mini{font-size:11px;border-collapse:collapse;max-width:380px}
+.th-tbl-mini td,.th-tbl-mini th{border:1px solid var(--th-line);padding:2px 6px;
+  max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.th-tbl-mini th{background:var(--th-paper-2);font-weight:600}
+.th-results-notice{background:#fef3c7;border:1px solid #fcd34d;border-radius:6px;
+  padding:8px 10px;font-size:11.5px;margin-bottom:10px;color:#92400e}
 </style>
 </head>
 <body data-medras-module="scriptorium" data-medras-module="scriptorium">
@@ -137,6 +155,7 @@
     var fig = document.getElementById('th-attach-fig');
     if (fig) fig.href = '/thesis-module/assets.html?chapter=' + encodeURIComponent(chapterId);
     initStylePicker();
+    initImportModal();
     renderSideChapters();
     renderSideLocks();
     renderSideRefs();
@@ -654,11 +673,20 @@
       import_stats: { icon: '↓', label: 'Import stats output', act: 'data' },
       scan_text: { icon: '🔍', label: 'Auto-extract abbreviations', act: 'scan' },
     };
-    // Always include Improve when in review mode
+    const isResults = chapterId === 'results' || chapterId.startsWith('results_');
     const improve = { icon: '✎', label: 'AI: Suggest improvements', act: 'improve' };
-    const items = [improve].concat(helpers.map((h) => map[h]).filter(Boolean));
+    const importBtn = { icon: '↑', label: 'Import existing content', act: 'import' };
+    // For results chapters: remove ai_draft, add sigma_import at top
+    let filteredHelpers = helpers.map((h) => map[h]).filter(Boolean);
+    if (isResults) filteredHelpers = filteredHelpers.filter((it) => it.act !== 'draft');
+    const items = isResults
+      ? [{ icon: '📊', label: 'Import from Sigma', act: 'sigma_import' }, importBtn, improve].concat(filteredHelpers)
+      : [importBtn, improve].concat(filteredHelpers);
     const el = document.getElementById('th-helper-strip');
-    el.innerHTML = items.map((it) => `
+    const notice = isResults
+      ? '<div class="th-results-notice"><strong>Results are researcher-provided.</strong><br>Import via Sigma or file upload — the AI does not generate data for this section.</div>'
+      : '';
+    el.innerHTML = notice + items.map((it) => `
       <button class="th-helper-btn" data-act="${it.act}">
         <span class="th-helper-icon">${it.icon}</span><span>${esc(it.label)}</span>
       </button>`).join('');
@@ -861,6 +889,16 @@
     const setup = s.setup || {};
     const cite = setup.citation_style || 'vancouver';
     const topic = setup.title || chapter.label;
+    if (act === 'import') { openImportModal(); return; }
+    if (act === 'sigma_import') {
+      const sigmaData = _getSigmaData();
+      if (!sigmaData) {
+        ThesisState.toast('No Sigma data found. Run your analysis in Sigma and click "Take to Scriptorium" to send results here.', 5000);
+        return;
+      }
+      openImportModal(true);
+      return;
+    }
     if (act === 'sample_size') { window.open('/sample-size.html', '_blank'); return; }
     if (act === 'stats')       { window.open('/analysis.html', '_blank'); return; }
     if (act === 'study')       { window.open('/#study-builder', '_blank'); return; }
@@ -1023,9 +1061,430 @@
     }
   }
 
+  // ===== Import modal — state =====
+  let _importData = null;       // {prose: str, tables: [{rows, caption}]}
+  let _importTableChoices = []; // [{kept, caption, tableRef}]
+
+  function _isResultsChapter() {
+    return chapterId === 'results' || chapterId.startsWith('results_');
+  }
+  function _isArticleMode() {
+    const st = ThesisState.get();
+    return (st.setup && (st.setup.mode || '').toLowerCase() === 'article');
+  }
+  function _getSigmaData() {
+    try {
+      const raw = sessionStorage.getItem('medras.sigma.results') ||
+                  sessionStorage.getItem('folio.import.from_sigma');
+      if (!raw) return null;
+      const d = JSON.parse(raw);
+      if (d && (d.results || d.text)) return d;
+      return null;
+    } catch (_) { return null; }
+  }
+
+  function openImportModal(preloadSigma) {
+    _importData = null;
+    _importTableChoices = [];
+    // Show / hide the Sigma card at the top
+    const sigmaCard = document.getElementById('th-import-sigma-card');
+    if (sigmaCard) {
+      const sigmaAvail = !!_getSigmaData();
+      sigmaCard.style.display = (_isResultsChapter() && sigmaAvail) ? '' : 'none';
+    }
+    // Reset stage 1 inputs
+    const paste = document.getElementById('th-import-paste');
+    if (paste) paste.value = '';
+    const fileInput = document.getElementById('th-import-file');
+    if (fileInput) fileInput.value = '';
+    const fileLabel = document.getElementById('th-import-file-label');
+    if (fileLabel) fileLabel.textContent = 'Drop a DOCX, PDF, or TXT file here';
+    const s1status = document.getElementById('th-import-s1-status');
+    if (s1status) s1status.textContent = '';
+    // Update title for results chapters
+    const title = document.getElementById('th-import-title');
+    if (title) title.textContent = _isResultsChapter() ? 'Add your results' : 'Import existing content';
+    showImportStage(1);
+    document.getElementById('th-import-overlay').style.display = 'block';
+    document.getElementById('th-import-modal').style.display = 'block';
+    // If Sigma import was requested, auto-trigger it
+    if (preloadSigma) {
+      setTimeout(doImportFromSigma, 80);
+    }
+  }
+
+  function closeImportModal() {
+    document.getElementById('th-import-overlay').style.display = 'none';
+    document.getElementById('th-import-modal').style.display = 'none';
+  }
+
+  function showImportStage(n) {
+    [1, 2, 3].forEach(function(i) {
+      const el = document.getElementById('th-import-s' + i);
+      if (el) el.classList.toggle('is-active', i === n);
+    });
+  }
+
+  // Score tables by keyword overlap with study aim (for article results)
+  function _scoreTables(tables, aimText) {
+    if (!aimText || !tables.length) return tables.map(function(t, i) { return Object.assign({}, t, { score: 0, _rank: i }); });
+    const words = aimText.toLowerCase().split(/\W+/).filter(function(w) { return w.length > 3; });
+    return tables.map(function(t, i) {
+      const cellText = (t.rows || []).flat().join(' ').toLowerCase();
+      const overlap = words.filter(function(w) { return cellText.includes(w); }).length;
+      const score = words.length ? overlap / words.length : 0;
+      return Object.assign({}, t, { score: score, _rank: i });
+    }).sort(function(a, b) { return b.score - a.score; });
+  }
+
+  // Convert kept tables to markdown for the chapter canvas
+  function _tablesToMarkdown(tables) {
+    return tables.map(function(t) {
+      if (!t.rows || !t.rows.length) return '';
+      const rows = t.rows;
+      const cols = Math.max.apply(null, rows.map(function(r) { return r.length; }));
+      const norm = rows.map(function(r) {
+        const out = r.slice();
+        while (out.length < cols) out.push('');
+        return out;
+      });
+      const widths = Array.from({ length: cols }, function(_, ci) {
+        return Math.max.apply(null, norm.map(function(r) { return (r[ci] || '').length; }).concat([3]));
+      });
+      const sep = '|' + widths.map(function(w) { return '-'.repeat(w + 2); }).join('|') + '|';
+      const lines = norm.map(function(r, ri) {
+        const line = '|' + r.map(function(c, ci) { return ' ' + (c || '').padEnd(widths[ci]) + ' '; }).join('|') + '|';
+        return ri === 0 ? line + '\n' + sep : line;
+      });
+      const caption = t.caption ? '\n\n' + t.caption : '';
+      return lines.join('\n') + caption;
+    }).filter(Boolean).join('\n\n---\n\n');
+  }
+
+  async function doImportFromSigma() {
+    const sigmaData = _getSigmaData();
+    if (!sigmaData) {
+      ThesisState.toast('No Sigma data found. Run your analysis in Sigma first.');
+      return;
+    }
+    const prose = (sigmaData.results || sigmaData.text || '').slice(0, 12000);
+    _importData = { prose: prose, tables: [] };
+    showImportStage(2);
+    renderImportPreview();
+  }
+
+  async function doImportExtract() {
+    const file = document.getElementById('th-import-file').files[0];
+    const paste = (document.getElementById('th-import-paste').value || '').trim();
+    const s1status = document.getElementById('th-import-s1-status');
+    if (!file && !paste) {
+      if (s1status) s1status.textContent = 'Upload a file or paste text to continue.';
+      return;
+    }
+    const extractBtn = document.getElementById('th-import-extract');
+    if (extractBtn) extractBtn.disabled = true;
+    if (s1status) s1status.innerHTML = '<span class="th-loading"></span> Extracting…';
+    try {
+      let data;
+      if (file) {
+        const form = new FormData();
+        form.append('file', file);
+        const resp = await fetch('/api/thesis/import-section', { method: 'POST', body: form });
+        if (!resp.ok) {
+          const err = await resp.json().catch(function() { return { detail: resp.statusText }; });
+          throw new Error(err.detail || 'Extraction failed');
+        }
+        data = await resp.json();
+      } else {
+        data = { prose: paste, tables: [] };
+      }
+      _importData = data;
+      if (s1status) s1status.textContent = '';
+      showImportStage(2);
+      renderImportPreview();
+    } catch (e) {
+      if (s1status) s1status.textContent = 'Error: ' + e.message;
+    } finally {
+      if (extractBtn) extractBtn.disabled = false;
+    }
+  }
+
+  function renderImportPreview() {
+    if (!_importData) return;
+    const prose = _importData.prose || '';
+    const tables = _importData.tables || [];
+    // Prose preview
+    const proseEl = document.getElementById('th-import-prose-preview');
+    if (proseEl) proseEl.textContent = prose.slice(0, 500) + (prose.length > 500 ? '…' : '');
+    // Tables
+    const tablesSection = document.getElementById('th-import-tables-section');
+    const tablesList = document.getElementById('th-import-tables-list');
+    const tablesLabel = document.getElementById('th-import-tables-label');
+    if (!tables.length) {
+      if (tablesSection) tablesSection.style.display = 'none';
+      _importTableChoices = [];
+      return;
+    }
+    const isResults = _isResultsChapter();
+    const isArticle = _isArticleMode();
+    const setup = ThesisState.get().setup || {};
+    let displayTables = tables;
+    if (isResults && isArticle) {
+      const aimText = (setup.aim || '') + ' ' + (setup.primary_objective || '') + ' ' + (setup.title || '');
+      displayTables = _scoreTables(tables, aimText);
+      if (tablesLabel) tablesLabel.textContent = 'Tables found (' + tables.length + ') — auto-ranked by relevance to your study aim. Include up to 5 key tables:';
+    } else if (isResults) {
+      if (tablesLabel) tablesLabel.textContent = 'Tables found (' + tables.length + ') — choose which to include:';
+    } else {
+      if (tablesLabel) tablesLabel.textContent = 'Tables found (' + tables.length + ') — all will be included:';
+    }
+    if (tablesSection) tablesSection.style.display = '';
+    _importTableChoices = displayTables.map(function(t, i) {
+      return { kept: isResults && isArticle ? (i < 5) : true, caption: t.caption || '', tableRef: t };
+    });
+    if (!tablesList) return;
+    tablesList.innerHTML = displayTables.map(function(t, i) {
+      const rows = (t.rows || []).slice(0, 4);
+      const score = (t.score !== undefined) ? Math.round(t.score * 100) : null;
+      const checked = _importTableChoices[i].kept ? 'checked' : '';
+      const tableHtml = rows.length
+        ? '<table class="th-tbl-mini">' +
+          rows.map(function(r, ri) {
+            return '<tr>' + r.slice(0, 5).map(function(c) {
+              return ri === 0 ? '<th>' + esc(c) + '</th>' : '<td>' + esc(c) + '</td>';
+            }).join('') + '</tr>';
+          }).join('') +
+          ((t.rows || []).length > 4 ? '<tr><td colspan="99" style="font-style:italic;color:var(--th-text-soft);padding:2px 5px">…' + ((t.rows || []).length - 4) + ' more rows</td></tr>' : '') +
+          '</table>'
+        : '<span style="font-size:11px;color:var(--th-text-soft)">Empty table</span>';
+      return '<div class="th-tbl-review-row" data-ti="' + i + '">' +
+        '<div style="padding-top:3px"><input type="checkbox" class="th-tbl-keep" data-ti="' + i + '" id="th-tbl-chk-' + i + '" ' + checked + '></div>' +
+        '<div style="flex:1;min-width:0">' +
+          '<label for="th-tbl-chk-' + i + '" style="font-size:12px;font-weight:600;cursor:pointer">Table ' + (i + 1) +
+            (score !== null ? ' <span style="font-size:11px;font-weight:400;color:var(--th-text-soft)">· ' + score + '% match</span>' : '') +
+          '</label>' +
+          '<div style="margin-top:4px;overflow:auto;max-width:100%">' + tableHtml + '</div>' +
+          (isResults
+            ? '<div style="margin-top:6px;display:flex;gap:6px;align-items:center">' +
+              '<label style="font-size:11px;color:var(--th-text-soft);white-space:nowrap">Caption:</label>' +
+              '<input class="th-input th-tbl-caption" data-ti="' + i + '" placeholder="e.g. Table 1. Demographic characteristics" ' +
+                'value="' + esc(t.caption || '') + '" style="flex:1;font-size:11.5px;padding:3px 6px">' +
+              '</div>'
+            : '') +
+        '</div></div>';
+    }).join('');
+    tablesList.querySelectorAll('.th-tbl-keep').forEach(function(chk) {
+      chk.addEventListener('change', function() {
+        const ti = parseInt(chk.dataset.ti, 10);
+        if (_importTableChoices[ti]) _importTableChoices[ti].kept = chk.checked;
+      });
+    });
+    tablesList.querySelectorAll('.th-tbl-caption').forEach(function(inp) {
+      inp.addEventListener('input', function() {
+        const ti = parseInt(inp.dataset.ti, 10);
+        if (_importTableChoices[ti]) _importTableChoices[ti].caption = inp.value;
+      });
+    });
+  }
+
+  function _buildImportText() {
+    if (!_importData) return '';
+    const prose = _importData.prose || '';
+    const keptTables = _importTableChoices
+      .filter(function(ch) { return ch.kept; })
+      .map(function(ch) { return Object.assign({}, ch.tableRef, { caption: ch.caption || ch.tableRef.caption || '' }); });
+    const tableMd = _tablesToMarkdown(keptTables);
+    return tableMd ? (prose + (prose ? '\n\n' : '') + tableMd) : prose;
+  }
+
+  async function finishImport(action) {
+    const text = _buildImportText();
+    if (!text.trim()) { ThesisState.toast('Nothing to import — add a file or paste text.'); return; }
+    closeImportModal();
+    if (action === 'use_as_is') {
+      pendingDraft = text;
+      pendingDraftMeta = { sources_count: 0, import: true };
+      suggestions = [];
+      mode = 'review';
+      renderEditor(); renderSuggestList();
+      ThesisState.toast('Content staged — click ✓ to accept it into your chapter, or ✗ to discard.');
+      return;
+    }
+    // Polish and improve path
+    const st = ThesisState.get();
+    const setup = st.setup || {};
+    const status = document.getElementById('th-suggest-status');
+    if (!setup.title) {
+      // No thesis title yet — fall back to use-as-is
+      ThesisState.toast('Tip: add your thesis title in Setup for smarter polishing. Loading content for manual editing.', 4000);
+      pendingDraft = text;
+      pendingDraftMeta = { sources_count: 0, import: true };
+      suggestions = []; mode = 'review';
+      renderEditor(); renderSuggestList();
+      return;
+    }
+    if (status) status.innerHTML = '<span class="th-loading"></span> Polishing imported content against your reference library…';
+    const cite = setup.citation_style || 'vancouver';
+    const styleParams = getStyleParams();
+    try {
+      const res = await ThesisState.api('/improve-section', {
+        chapter_id: chapterId,
+        current_text: text,
+        topic: setup.title || chapter.label,
+        citation_style: cite,
+        locked_numbers: st.locked_numbers || {},
+        domain_hint: setup.domain || undefined,
+        ref_library: (function() { const v = (st.references || []).filter(function(r) { return r.verified; }); return v.length >= 3 ? v : undefined; })(),
+        polish_instruction: 'Polish this imported text to match the academic register of this thesis. Improve sentence structure, ensure tense consistency, and add citations from the provided references where appropriate. NEVER alter any numeric value, measurement, or statistical result.',
+        ...styleParams,
+      });
+      suggestions = res.suggestions || [];
+      if (!suggestions.length) {
+        pendingDraft = text;
+        pendingDraftMeta = { sources_count: 0, import: true };
+        mode = 'review'; renderEditor(); renderSuggestList();
+        if (status) status.textContent = 'Content looks polished already. Click ✓ to accept.';
+      } else {
+        ThesisState.setChapter(chapterId, { text });
+        mode = 'review'; renderEditor(); renderSuggestList();
+        if (status) status.textContent = suggestions.length + ' polishing suggestions — review each and click ✓ or ✗.';
+      }
+    } catch (e) {
+      if (status) status.textContent = '';
+      pendingDraft = text;
+      pendingDraftMeta = { sources_count: 0, import: true };
+      suggestions = []; mode = 'review';
+      renderEditor(); renderSuggestList();
+      ThesisState.toast('Polishing failed (' + e.message + ') — content loaded for manual editing.');
+    }
+  }
+
+  function initImportModal() {
+    document.getElementById('th-import-close').addEventListener('click', closeImportModal);
+    document.getElementById('th-import-overlay').addEventListener('click', closeImportModal);
+    document.getElementById('th-import-cancel1').addEventListener('click', closeImportModal);
+    // Sigma import button
+    document.getElementById('th-import-sigma-go').addEventListener('click', doImportFromSigma);
+    // File drop zone
+    const dropZone = document.getElementById('th-drop-zone');
+    const fileInput = document.getElementById('th-import-file');
+    dropZone.addEventListener('click', function(e) {
+      if (!e.target.matches('button')) fileInput.click();
+    });
+    dropZone.addEventListener('dragover', function(e) { e.preventDefault(); dropZone.classList.add('drag-over'); });
+    dropZone.addEventListener('dragleave', function() { dropZone.classList.remove('drag-over'); });
+    dropZone.addEventListener('drop', function(e) {
+      e.preventDefault(); dropZone.classList.remove('drag-over');
+      if (e.dataTransfer.files[0]) {
+        // Can't programmatically assign DataTransfer to input — use DataTransfer workaround
+        const dt = new DataTransfer();
+        dt.items.add(e.dataTransfer.files[0]);
+        fileInput.files = dt.files;
+        const lbl = document.getElementById('th-import-file-label');
+        if (lbl) lbl.textContent = e.dataTransfer.files[0].name;
+      }
+    });
+    fileInput.addEventListener('change', function() {
+      const lbl = document.getElementById('th-import-file-label');
+      if (lbl && fileInput.files[0]) lbl.textContent = fileInput.files[0].name;
+    });
+    // Extract button
+    document.getElementById('th-import-extract').addEventListener('click', doImportExtract);
+    // Stage 2 buttons
+    document.getElementById('th-import-back2').addEventListener('click', function() { showImportStage(1); });
+    document.getElementById('th-import-use-asis').addEventListener('click', function() { finishImport('use_as_is'); });
+    document.getElementById('th-import-polish').addEventListener('click', function() { finishImport('polish'); });
+  }
+
   init();
 })();
 </script>
+<!-- ===== Import modal ===== -->
+<div id="th-import-overlay"></div>
+<div id="th-import-modal" role="dialog" aria-modal="true" aria-labelledby="th-import-title">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+    <h3 id="th-import-title" style="margin:0;font-size:16px;font-weight:700">Import existing content</h3>
+    <button id="th-import-close" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--th-text-soft);line-height:1;padding:2px 6px" title="Close">×</button>
+  </div>
+
+  <!-- Stage 1: Source selection -->
+  <div id="th-import-s1" class="th-import-stage is-active">
+    <!-- Sigma quick-import (shown only for results chapters with Sigma data available) -->
+    <div id="th-import-sigma-card" style="display:none;margin-bottom:16px;padding:12px 14px;background:#f0fdf4;border:1.5px solid #86efac;border-radius:8px">
+      <div style="font-weight:700;margin-bottom:3px">📊 Import from Sigma</div>
+      <div style="font-size:12.5px;color:var(--th-text-soft);margin-bottom:10px">Your most recent Sigma analysis is available to import directly.</div>
+      <button id="th-import-sigma-go" class="th-btn th-btn-primary th-btn-sm">Import Sigma results →</button>
+    </div>
+
+    <div class="th-drop-zone" id="th-drop-zone" title="Click to browse or drag a file here">
+      <input type="file" id="th-import-file" accept=".docx,.pdf,.txt">
+      <div style="font-size:26px;margin-bottom:8px">📁</div>
+      <div id="th-import-file-label" style="font-weight:600;margin-bottom:4px">Drop a DOCX, PDF, or TXT file here</div>
+      <div style="font-size:12px;color:var(--th-text-soft);margin-bottom:10px">or click to browse</div>
+      <button type="button" class="th-btn th-btn-light th-btn-sm" onclick="document.getElementById('th-import-file').click();event.stopPropagation()">Browse file</button>
+    </div>
+
+    <div style="text-align:center;margin:12px 0;font-size:12px;color:var(--th-text-soft)">— or paste text directly —</div>
+
+    <textarea id="th-import-paste" class="th-input" rows="5"
+      placeholder="Paste your chapter text here…"
+      style="width:100%;font-size:13px;resize:vertical;box-sizing:border-box"></textarea>
+
+    <div id="th-import-s1-status" style="font-size:12.5px;margin-top:6px;min-height:18px;color:var(--th-text-soft)"></div>
+
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">
+      <button id="th-import-cancel1" class="th-btn th-btn-light">Cancel</button>
+      <button id="th-import-extract" class="th-btn th-btn-primary">Extract content →</button>
+    </div>
+  </div>
+
+  <!-- Stage 2: Preview + table review + choice -->
+  <div id="th-import-s2" class="th-import-stage">
+    <div style="font-weight:600;margin-bottom:8px;font-size:13.5px">Extracted content</div>
+    <div id="th-import-prose-preview"
+      style="background:var(--th-paper-2);border-radius:6px;padding:12px;font-size:12.5px;
+             line-height:1.6;max-height:160px;overflow-y:auto;margin-bottom:14px;
+             white-space:pre-wrap;color:var(--th-ink-900)"></div>
+
+    <!-- Tables (hidden when none extracted) -->
+    <div id="th-import-tables-section" style="display:none">
+      <div id="th-import-tables-label" style="font-weight:600;margin-bottom:8px;font-size:13px">Tables found</div>
+      <div id="th-import-tables-list"
+        style="max-height:300px;overflow-y:auto;border:1px solid var(--th-line);border-radius:6px;padding:0 10px"></div>
+    </div>
+
+    <!-- Choice buttons -->
+    <div style="border-top:1px solid var(--th-line);margin-top:16px;padding-top:14px">
+      <div style="font-size:12.5px;color:var(--th-text-soft);margin-bottom:10px">
+        How would you like to import this content?
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:space-between;align-items:center">
+        <button id="th-import-back2" class="th-btn th-btn-light th-btn-sm">← Back</button>
+        <div style="display:flex;gap:8px">
+          <button id="th-import-use-asis" class="th-btn th-btn-light"
+            title="Load content exactly as extracted — you can edit it manually or request AI improvements afterward">
+            Use as-is ✓
+          </button>
+          <button id="th-import-polish" class="th-btn th-btn-primary"
+            title="AI polishes writing quality and adds citations from your reference library — numbers and data are never changed">
+            Polish &amp; improve →
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stage 3: Polishing spinner -->
+  <div id="th-import-s3" class="th-import-stage">
+    <div style="text-align:center;padding:36px 0">
+      <span class="th-loading" style="width:28px;height:28px"></span>
+      <div style="margin-top:14px;font-size:13.5px;color:var(--th-text-soft)">
+        Polishing content and checking against your reference library…
+      </div>
+    </div>
+  </div>
+</div>
+
 <script src="/js/medras-nav.js" defer></script>
 <script>
   try {

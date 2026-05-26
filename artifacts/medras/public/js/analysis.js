@@ -3740,6 +3740,34 @@ function bindResults() {
       window.open("/folio-module/", "_blank");
     });
   }
+
+  /* ── Take to Scriptorium ────────────────────────────────────────── */
+  const scriptoriumBtn = document.getElementById("btn-take-to-scriptorium");
+  if (scriptoriumBtn) {
+    scriptoriumBtn.addEventListener("click", () => {
+      const pane = document.getElementById("results-pane");
+      const resultsText = pane ? (pane.innerText || pane.textContent || "") : "";
+
+      const sigmaResults = {
+        title: (document.title || "Analysis Results").replace(/\s*·.*$/, "").trim(),
+        results: resultsText.slice(0, 12000),
+      };
+
+      try {
+        const saved = sessionStorage.getItem("medras.sigma.state");
+        if (saved) {
+          const st = JSON.parse(saved);
+          if (st.title) sigmaResults.title = st.title;
+        }
+      } catch (_) { /* ignore */ }
+
+      try {
+        sessionStorage.setItem("medras.sigma.results", JSON.stringify(sigmaResults));
+      } catch (_) { /* quota — fail silently; editor falls back to folio key */ }
+
+      window.open("/thesis-module/editor.html?ch=results", "_blank");
+    });
+  }
 }
 
 /* ------------------------------------------------------------------ */

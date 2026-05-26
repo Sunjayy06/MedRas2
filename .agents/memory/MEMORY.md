@@ -1,0 +1,1 @@
+- [Import section flow](import-section.md) — modal with 3 stages; results chapters lock out ai_draft; Sigma data read from medras.sigma.results with folio fallback.

@@ -308,6 +308,116 @@ async def draft_abstract_endpoint(request: Request, payload: Dict[str, Any]) -> 
     return result
 
 
+@router.post("/import-section")
+@limiter.limit("20/minute")
+async def import_section(request: Request, file: UploadFile = File(...)) -> Dict[str, Any]:
+    """Extract prose and tables from a researcher-uploaded DOCX / PDF / TXT file.
+
+    Returns ``{prose: str, tables: [{rows: [[str]], caption: str}]}``.
+
+    * **DOCX** — paragraphs become prose; Word tables are extracted as structured
+      row/cell arrays so the client can render keep/discard review UI.
+    * **PDF** — text extracted per-page via pypdf (no table structure — tables=[]).
+    * **TXT** — raw text treated as prose.
+    """
+    data = await file.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="Empty file.")
+    if len(data) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="File too large (>30 MB).")
+
+    fname = (file.filename or "").lower()
+
+    def _extract() -> Dict[str, Any]:
+        import re
+        prose_parts: List[str] = []
+        tables: List[Dict[str, Any]] = []
+
+        if fname.endswith(".docx"):
+            try:
+                from docx import Document  # type: ignore
+                from docx.oxml.ns import qn  # type: ignore
+                import io
+                doc = Document(io.BytesIO(data))
+                # Walk body children in document order so paragraphs and tables
+                # are interleaved exactly as authored.
+                for child in doc.element.body:
+                    tag = child.tag.split("}")[-1] if "}" in child.tag else child.tag
+                    if tag == "p":
+                        para_text = "".join(
+                            t.text or "" for t in child.iter(qn("w:t"))
+                        ).strip()
+                        if para_text:
+                            prose_parts.append(para_text)
+                    elif tag == "tbl":
+                        rows: List[List[str]] = []
+                        for tr in child.iter(qn("w:tr")):
+                            cells: List[str] = []
+                            prev: str | None = None
+                            for tc in tr.iter(qn("w:tc")):
+                                cell_text = "".join(
+                                    t.text or "" for t in tc.iter(qn("w:t"))
+                                ).strip()
+                                # Skip adjacent duplicate text from merged cells
+                                if cell_text != prev:
+                                    cells.append(cell_text)
+                                prev = cell_text
+                            if cells:
+                                rows.append(cells)
+                        if rows:
+                            tables.append({"rows": rows, "caption": ""})
+            except Exception as exc:
+                raise ValueError(f"Could not read DOCX: {exc}") from exc
+
+        elif fname.endswith(".pdf"):
+            try:
+                from pypdf import PdfReader  # type: ignore
+                import io
+                reader = PdfReader(io.BytesIO(data))
+                for page in reader.pages:
+                    text = (page.extract_text() or "").strip()
+                    if text:
+                        prose_parts.append(text)
+                # PDF: no structural table extraction — tables stays []
+            except Exception as exc:
+                raise ValueError(f"Could not read PDF: {exc}") from exc
+
+        else:
+            # Plain text or unknown
+            prose_parts.append(data.decode("utf-8", errors="replace"))
+
+        prose = "\n\n".join(prose_parts)
+
+        # Strip back matter (References / Bibliography section)
+        ref_match = re.search(
+            r"\b(REFERENCES|BIBLIOGRAPHY|WORKS CITED)\b",
+            prose, flags=re.IGNORECASE,
+        )
+        if ref_match:
+            prose = prose[: ref_match.start()]
+
+        return {
+            "prose": prose.strip()[:12_000],
+            "tables": tables,
+        }
+
+    try:
+        result = await asyncio.to_thread(_extract)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    if not result["prose"].strip() and not result["tables"]:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Could not extract content from the file. "
+                "Try a DOCX or TXT version of the document."
+            ),
+        )
+
+    return result
+
+
 @router.post("/extract-style-sample")
 @limiter.limit("10/minute")
 async def extract_style_sample(
