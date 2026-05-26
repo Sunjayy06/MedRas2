@@ -1246,9 +1246,35 @@ async def condense_for_article(
     def _wc(items: List[Dict[str, str]], field: str = "condensed") -> int:
         return sum(len(re.findall(r"\b\w+\b", p.get(field, ""))) for p in items)
 
-    intro_paras = _extract_paras("introduction")
-    meth_paras  = _extract_paras("methods")
-    disc_paras  = _extract_paras("discussion")
+    def _fill_missing_originals(
+        paras: List[Dict[str, str]], source: str
+    ) -> List[Dict[str, str]]:
+        """Guarantee every paragraph has a non-empty 'original' field.
+
+        When the AI omits 'original', split the source text into
+        proportional sentence-chunk slices and assign the i-th chunk to
+        paragraph i so that a researcher who rejects the AI edit always
+        gets their own prose back rather than losing content.
+        """
+        if all(p.get("original") for p in paras):
+            return paras  # nothing to do
+        n = len(paras)
+        if not n:
+            return paras
+        sentences = re.split(r"(?<=[.!?])\s+", (source or "").strip())
+        if not sentences or sentences == [""]:
+            sentences = [(source or "").strip()]
+        chunk_size = max(1, len(sentences) // n)
+        for i, p in enumerate(paras):
+            if not p.get("original"):
+                start = i * chunk_size
+                end = start + chunk_size if i < n - 1 else len(sentences)
+                paras[i] = dict(p, original=" ".join(sentences[start:end]).strip())
+        return paras
+
+    intro_paras = _fill_missing_originals(_extract_paras("introduction"), introduction_text)
+    meth_paras  = _fill_missing_originals(_extract_paras("methods"),      methods_text)
+    disc_paras  = _fill_missing_originals(_extract_paras("discussion"),   discussion_text)
 
     if not intro_paras or not meth_paras or not disc_paras:
         raise GeneratorError(

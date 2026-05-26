@@ -72,6 +72,21 @@
 .cv-src-panel { background:#fffbf0; border:1px solid var(--th-line); border-radius:8px; padding:12px 14px; font-size:12px; line-height:1.65; color:var(--th-ink-900); max-height:280px; overflow-y:auto; white-space:pre-wrap; margin-bottom:10px; display:none; }
 .cv-src-panel.is-open { display:block; }
 
+/* Side-by-side paragraph card */
+.cv-sbs-card { padding:12px 14px; border-radius:9px; border:1px solid var(--th-line); background:#fff; margin-bottom:10px; transition:border-color .15s; }
+.cv-sbs-card.is-accepted { border-color:var(--th-emerald); }
+.cv-sbs-header { display:flex; align-items:center; gap:8px; margin-bottom:10px; font-size:12px; font-weight:600; }
+.cv-sbs-header .cv-acc-label { color:var(--th-emerald-d); }
+.cv-sbs-header .cv-rej-label { color:#b5681a; }
+.cv-sbs-cols { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+@media (max-width:700px) { .cv-sbs-cols { grid-template-columns:1fr; } }
+.cv-col-label { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--th-text-soft); margin-bottom:6px; }
+.cv-orig-col { padding:10px 12px; background:var(--th-bg); border-radius:6px; border-left:3px solid var(--th-line); font-size:12.5px; line-height:1.7; color:var(--th-text-soft); }
+.cv-cond-col { padding:10px 12px; border-radius:6px; border:1.5px solid var(--th-line); font-size:13px; line-height:1.75; color:var(--th-ink-900); }
+.cv-sbs-card.is-accepted .cv-cond-col { border-color:var(--th-emerald); background:#f4faf5; }
+.cv-sbs-card.is-rejected .cv-cond-col { text-decoration:line-through; color:var(--th-text-soft); background:#fafafa; }
+.cv-sbs-card.is-rejected .cv-orig-col { border-left-color:var(--th-gold); color:var(--th-ink-900); background:#fffbf0; }
+
 .cv-status { padding:10px 14px; border-radius:8px; font-size:13px; }
 .cv-status.ok  { background:#ecf6ed; color:var(--th-emerald-d); border:1px solid var(--th-emerald); }
 .cv-status.err { background:#fdecec; color:#a02; border:1px solid #f5b3b3; }
@@ -612,16 +627,19 @@
     paras.forEach(function(para,i){
       var isAcc = acc[i]!==false;
       var pObj  = (para && typeof para === 'object') ? para : { condensed: String(para||''), original: '' };
-      html += '<div class="cv-suggestion '+(isAcc?'is-accepted':'is-rejected')+'" id="cv-sug-'+secId+'-'+i+'">'+
-        '<button class="cv-toggle-btn '+(isAcc?'':'is-rejected')+'" data-sec="'+secId+'" data-idx="'+i+'">'+(isAcc?'✓':'✗')+'</button>'+
-        '<div style="flex:1; min-width:0;">'+
-        '<div class="cv-para-text">'+esc(pObj.condensed||'')+'</div>'+
-        ((!isAcc && pObj.original)
-          ? '<div style="margin-top:8px; padding:8px 10px; background:var(--th-bg); border-radius:6px; border-left:3px solid var(--th-gold); font-size:12.5px; line-height:1.65; color:var(--th-ink-900);">' +
-            '<span style="display:block; font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--th-text-soft); margin-bottom:4px;">Original thesis text (restored to output)</span>'+
-            esc(pObj.original)+'</div>'
-          : '') +
-        '</div>'+
+      var origText = pObj.original || '(original text unavailable)';
+      html +=
+        '<div class="cv-sbs-card '+(isAcc?'is-accepted':'is-rejected')+'" id="cv-sug-'+secId+'-'+i+'">' +
+          '<div class="cv-sbs-header">' +
+            '<button class="cv-toggle-btn '+(isAcc?'':'is-rejected')+'" data-sec="'+secId+'" data-idx="'+i+'">'+(isAcc?'✓':'✗')+'</button>' +
+            (isAcc
+              ? '<span class="cv-acc-label">Accepted — condensed version goes to output</span>'
+              : '<span class="cv-rej-label">Rejected — original thesis text goes to output</span>') +
+          '</div>' +
+          '<div class="cv-sbs-cols">' +
+            '<div class="cv-orig-col"><div class="cv-col-label">Original thesis text</div>'+esc(origText)+'</div>' +
+            '<div class="cv-cond-col"><div class="cv-col-label">AI condensed</div>'+esc(pObj.condensed||'')+'</div>' +
+          '</div>' +
         '</div>';
     });
 
