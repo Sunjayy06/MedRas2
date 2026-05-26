@@ -268,6 +268,13 @@
 
       const data = await res.json();
 
+      /* Persist session id (upload may have been made on a refreshed tab
+         where sessionId still matches the server — but we sync anyway) */
+      if (data.session_id) {
+        sessionId = data.session_id;
+        sessionStorage.setItem('sb.session_id', sessionId);
+      }
+
       /* Replace progress with a compact success message in thread */
       progressEl.innerHTML =
         `<svg class="pps-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">` +

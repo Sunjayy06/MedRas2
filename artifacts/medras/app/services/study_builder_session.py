@@ -48,6 +48,14 @@ threading.Thread(
 ).start()
 
 
+def session_exists(session_id: Optional[str]) -> bool:
+    """Return ``True`` if *session_id* is currently live (not expired / unknown)."""
+    if not session_id:
+        return False
+    with _lock:
+        return session_id in _sessions
+
+
 def get_or_create(session_id: Optional[str]) -> tuple[str, list[dict]]:
     """Return *(session_id, recent_history)*.
 

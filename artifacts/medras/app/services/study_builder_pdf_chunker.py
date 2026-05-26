@@ -1,4 +1,4 @@
-"""PDF chunking and TF-IDF keyword retrieval for Study Builder.
+"""PDF chunking and TF-IDF retrieval for Study Builder.
 
 No external ML libraries — pure Python with pypdf.
 
@@ -10,16 +10,22 @@ Each chunk records the page range it spans.
 
 Retrieval strategy
 ──────────────────
-Question keywords (stop-words removed) are matched against chunk keywords
-using simple set overlap.  A small numeric-content bonus rewards chunks that
-contain numbers, which tend to carry the quantitative evidence researchers
-most need.
+Question keywords (stop-words removed) are scored against each chunk using
+proper TF-IDF weighting:
+  TF  = occurrences of keyword in chunk / chunk word count
+  IDF = log( N / df )   where N = total chunks, df = chunks containing keyword
+Score = Σ TF·IDF over all query keywords.
+A ×1.2 bonus is applied to chunks that contain digits when score > 0,
+rewarding quantitative evidence that researchers most often need.
+Falls back to the first top_n chunks when no query keywords survive
+stop-word removal.
 """
 
 from __future__ import annotations
 
 import io
 import logging
+import math
 import re
 
 log = logging.getLogger(__name__)
@@ -147,27 +153,59 @@ def retrieve_top_chunks(
     question: str,
     top_n: int = 5,
 ) -> list[dict]:
-    """Return the *top_n* most relevant chunks for *question*.
+    """Return the *top_n* most relevant chunks for *question* using TF-IDF.
 
-    Scoring: keyword overlap with question + 0.5 bonus if the chunk
-    contains any digit and overlap > 0 (numeric evidence reward).
-    Falls back to the first *top_n* chunks if there are no useful keywords.
+    Algorithm
+    ---------
+    For every keyword k surviving stop-word removal from *question*:
+      TF(k, chunk) = count(k in chunk words) / len(chunk words)
+      IDF(k)       = log( N / df(k) )   where df = chunks containing k
+      contribution = TF · IDF
+
+    chunk_score = Σ contributions + optional ×1.2 numeric-evidence bonus.
+
+    Falls back to the first *top_n* chunks when all scores are zero (e.g.
+    no query keywords survive stop-word removal, or the PDF text has no
+    lexical overlap with the question).
     """
     if not chunks:
         return []
 
-    q_kw = _keywords(question)
+    q_kw = list(_keywords(question))
     if not q_kw:
         return chunks[:top_n]
 
-    scored: list[tuple[float, dict]] = []
+    N   = len(chunks)
     _has_num = re.compile(r"\d")
 
-    for chunk in chunks:
-        chunk_kw = _keywords(chunk["text"])
-        overlap  = len(q_kw & chunk_kw)
-        bonus    = 0.5 if overlap > 0 and _has_num.search(chunk["text"]) else 0.0
-        scored.append((overlap + bonus, chunk))
+    # Pre-tokenize every chunk once (O(N · chunk_size))
+    chunk_words: list[list[str]] = [
+        c["text"].lower().split() for c in chunks
+    ]
+
+    scored: list[tuple[float, dict]] = []
+    for chunk, words in zip(chunks, chunk_words):
+        total = len(words) or 1
+        score = 0.0
+        for kw in q_kw:
+            tf = words.count(kw) / total
+            if tf == 0:
+                continue
+            # df: number of chunks that contain this keyword at least once
+            df = sum(1 for wl in chunk_words if kw in wl)
+            idf = math.log(N / df) if df > 0 else 0.0
+            score += tf * idf
+
+        # ×1.2 numeric-evidence bonus for chunks with digits
+        if score > 0 and _has_num.search(chunk["text"]):
+            score *= 1.2
+
+        scored.append((score, chunk))
 
     scored.sort(key=lambda x: x[0], reverse=True)
+
+    # If all TF-IDF scores are zero fall back to document order
+    if scored[0][0] == 0.0:
+        return chunks[:top_n]
+
     return [c for _, c in scored[:top_n]]

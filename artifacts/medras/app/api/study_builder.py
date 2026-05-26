@@ -319,7 +319,12 @@ async def upload_pdf(
     - 415 — not a PDF file
     - 422 — scanned/image-only PDF, corrupted PDF, or extraction failure
     """
-    session_id, _ = sessions.get_or_create(session_id)
+    if not sessions.session_exists(session_id):
+        raise HTTPException(
+            404,
+            "Your research session has expired or could not be found. "
+            "Please ask a question first to start a new session, then attach your PDF.",
+        )
 
     filename = file.filename or "uploaded.pdf"
     ext      = os.path.splitext(filename)[1].lower()
