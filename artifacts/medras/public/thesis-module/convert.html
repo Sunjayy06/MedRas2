@@ -59,7 +59,7 @@
 
 .cv-suggestion { display:flex; gap:10px; padding:12px 14px; border-radius:8px; border:1px solid var(--th-line); background:#fff; margin-bottom:8px; align-items:flex-start; transition:all .15s; }
 .cv-suggestion.is-accepted { border-color:var(--th-emerald); background:#f4faf5; }
-.cv-suggestion.is-rejected { opacity:.45; }
+.cv-suggestion.is-rejected { border-color:var(--th-line); background:#fff; }
 .cv-suggestion.is-rejected .cv-para-text { text-decoration:line-through; color:var(--th-text-soft); }
 .cv-toggle-btn { flex-shrink:0; width:30px; height:30px; border-radius:50%; border:2px solid var(--th-emerald); cursor:pointer; font-size:14px; background:#ecf6ed; color:var(--th-emerald-d); display:flex; align-items:center; justify-content:center; transition:all .15s; }
 .cv-toggle-btn.is-rejected { border-color:#ccc; background:#f5f5f5; color:#aaa; }
@@ -550,18 +550,12 @@
 
   // ---- Step 3 —— Track-change review -----------------------------------
   function computeTotalWc(){
-    var cv   = cvGet();
-    var secs = cv.sections||{};
-    var at   = ARTICLE_TYPES.find(function(x){ return x.id===(cv.article_type||'original_research'); });
+    var cv    = cvGet();
+    var at    = ARTICLE_TYPES.find(function(x){ return x.id===(cv.article_type||'original_research'); });
     var limit = at ? at.totalLimit : 5000;
     var total = 0;
-    ['introduction','methods','discussion'].forEach(function(k){
-      var sec  = secs[k]||{};
-      var paras= sec.paragraphs||[];
-      var acc  = sec.accepted||[];
-      paras.forEach(function(p,i){ if(acc[i]!==false) total+=wc(p); });
-    });
-    total += ((secs.results||{}).word_count)||0;
+    ['introduction','methods','discussion'].forEach(function(k){ total += wc(buildAcceptedText(k)); });
+    total += (((cv.sections||{}).results||{}).word_count)||0;
     return { total:total, limit:limit };
   }
 
@@ -599,17 +593,16 @@
     var tgt  = sec.target||{};
     var src  = sec.source_text||'';
 
-    var acceptedWc = 0;
-    paras.forEach(function(p,i){ if(acc[i]!==false) acceptedWc+=wc(p); });
+    var acceptedWc = wc(buildAcceptedText(secId));
     var inRange = tgt.min && tgt.max && acceptedWc>=tgt.min && acceptedWc<=tgt.max;
     var wcColor = !tgt.min ? 'var(--th-ink-900)' : (inRange ? 'var(--th-emerald-d)' : 'var(--th-amber)');
 
     var html = '<div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-bottom:10px;">';
     if(tgt.min){
-      html += '<span style="font-size:13px; font-weight:600; color:'+wcColor+';">'+acceptedWc.toLocaleString()+' accepted / '+tgt.min+'–'+tgt.max+' target words</span>';
+      html += '<span style="font-size:13px; font-weight:600; color:'+wcColor+';">'+acceptedWc.toLocaleString()+' words in output / '+tgt.min+'–'+tgt.max+' target</span>';
     }
     html += '<div style="display:flex; gap:10px; align-items:center;">';
-    html += '<button class="cv-src-toggle" id="cv-src-tog-'+secId+'">Show original ↓</button>';
+    html += '<button class="cv-src-toggle" id="cv-src-tog-'+secId+'">Show source ↓</button>';
     html += '<button style="font-size:12px; background:none; border:none; cursor:pointer; color:var(--th-emerald-d);" id="cv-acc-all-'+secId+'">✓ Accept all</button>';
     html += '<button style="font-size:12px; background:none; border:none; cursor:pointer; color:var(--th-text-soft);" id="cv-rej-all-'+secId+'">✗ Reject all</button>';
     html += '</div></div>';
@@ -618,9 +611,17 @@
 
     paras.forEach(function(para,i){
       var isAcc = acc[i]!==false;
+      var pObj  = (para && typeof para === 'object') ? para : { condensed: String(para||''), original: '' };
       html += '<div class="cv-suggestion '+(isAcc?'is-accepted':'is-rejected')+'" id="cv-sug-'+secId+'-'+i+'">'+
         '<button class="cv-toggle-btn '+(isAcc?'':'is-rejected')+'" data-sec="'+secId+'" data-idx="'+i+'">'+(isAcc?'✓':'✗')+'</button>'+
-        '<div class="cv-para-text">'+esc(para)+'</div>'+
+        '<div style="flex:1; min-width:0;">'+
+        '<div class="cv-para-text">'+esc(pObj.condensed||'')+'</div>'+
+        ((!isAcc && pObj.original)
+          ? '<div style="margin-top:8px; padding:8px 10px; background:var(--th-bg); border-radius:6px; border-left:3px solid var(--th-gold); font-size:12.5px; line-height:1.65; color:var(--th-ink-900);">' +
+            '<span style="display:block; font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--th-text-soft); margin-bottom:4px;">Original thesis text (restored to output)</span>'+
+            esc(pObj.original)+'</div>'
+          : '') +
+        '</div>'+
         '</div>';
     });
 
@@ -702,7 +703,11 @@
     if(secId==='results') return sec.text||'';
     var paras= sec.paragraphs||[];
     var acc  = sec.accepted||[];
-    return paras.filter(function(_,i){ return acc[i]!==false; }).join('\n\n');
+    return paras.map(function(p,i){
+      var isAcc = acc[i]!==false;
+      var pObj  = (p && typeof p === 'object') ? p : { condensed: String(p||''), original: '' };
+      return isAcc ? (pObj.condensed||'') : (pObj.original||'');
+    }).filter(Boolean).join('\n\n');
   }
 
   function updateAbstractWc(){
@@ -812,6 +817,37 @@
       }).join('') +
       '<div class="cv-wc-cell"><div class="cv-wc-cell-label">Body total</div>'+
       '<div class="cv-wc-cell-val" style="color:'+totalColor+';">'+bodyTotal.toLocaleString()+' / '+limit.toLocaleString()+'</div></div>';
+
+    // Reset button state and remove any stale over-limit warning
+    var existingWarn = document.getElementById('cv-over-warn');
+    if(existingWarn) existingWarn.remove();
+    q('cv-dl-docx').disabled = false;
+    q('cv-dl-pdf').disabled  = false;
+
+    if(bodyTotal > limit){
+      var warnDiv = document.createElement('div');
+      warnDiv.id = 'cv-over-warn';
+      warnDiv.style.cssText = 'margin-top:12px; padding:12px 14px; background:#fff8e1; border:1px solid var(--th-gold); border-radius:8px; font-size:13px; color:#7a5d00;';
+      warnDiv.innerHTML =
+        '<strong>⚠ Body word count exceeds target</strong><br>' +
+        'Your article body ('+bodyTotal.toLocaleString()+' words) exceeds the '+limit.toLocaleString()+
+        '-word limit for '+ esc(at ? at.label : 'this article type') + '. ' +
+        'Return to the Review step and reject more paragraphs, or acknowledge below to download anyway.<br><br>' +
+        '<label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-weight:400;">' +
+        '<input type="checkbox" id="cv-over-ack" style="width:16px; height:16px;" />' +
+        ' I acknowledge my article exceeds the target word count and wish to download anyway' +
+        '</label>';
+      q('cv-wc-summary').closest('section').appendChild(warnDiv);
+      q('cv-dl-docx').disabled = true;
+      q('cv-dl-pdf').disabled  = true;
+      setTimeout(function(){
+        var ack = document.getElementById('cv-over-ack');
+        if(ack){ ack.addEventListener('change', function(){
+          q('cv-dl-docx').disabled = !this.checked;
+          q('cv-dl-pdf').disabled  = !this.checked;
+        }); }
+      }, 0);
+    }
 
     if(!_exportBound){
       _exportBound = true;

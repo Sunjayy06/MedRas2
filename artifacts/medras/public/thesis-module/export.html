@@ -514,6 +514,20 @@
     bindMetaInputs();
     renderLangGrid();
     renderSummary();
+
+    // Gate "Convert to article" button — requires 4 core chapters with content
+    var cvBtn = document.getElementById('th-convert-btn');
+    var cvHint = document.getElementById('th-convert-hint');
+    if (cvBtn) {
+      function _wc(t){ return (String(t||'').match(/\b\w+\b/g)||[]).length; }
+      var CORE_IDS = ['introduction', 'methods', 'results', 'discussion'];
+      var coreReady = CORE_IDS.every(function(id){ return _wc(((s.chapters||{})[id]||{}).text) > 50; });
+      if (!coreReady) {
+        cvBtn.style.opacity = '0.4';
+        cvBtn.style.pointerEvents = 'none';
+        if (cvHint) { cvHint.style.display = ''; cvHint.textContent = 'Write Introduction, Methods, Results and Discussion first to unlock this feature.'; }
+      }
+    }
   })();
 })();
 </script>

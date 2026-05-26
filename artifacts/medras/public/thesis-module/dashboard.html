@@ -139,6 +139,22 @@
         location.href = '/thesis-module/editor.html?ch=' + encodeURIComponent(tr.dataset.ch);
       });
     });
+
+    // Gate "Convert to article" button — requires 4 core chapters to have content
+    const cvBtn = document.getElementById('cv-dash-btn');
+    if (cvBtn) {
+      const CORE_IDS = ['introduction', 'methods', 'results', 'discussion'];
+      const coreReady = CORE_IDS.every((id) => wc(((s.chapters || {})[id] || {}).text) > 50);
+      if (!coreReady) {
+        cvBtn.style.opacity = '0.4';
+        cvBtn.style.pointerEvents = 'none';
+        cvBtn.title = 'Write Introduction, Methods, Results and Discussion first to unlock article conversion.';
+      } else {
+        cvBtn.style.opacity = '';
+        cvBtn.style.pointerEvents = '';
+        cvBtn.title = '';
+      }
+    }
   }
 
   render();

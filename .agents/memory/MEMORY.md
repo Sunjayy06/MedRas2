@@ -1,2 +1,2 @@
 - [Import section flow](import-section.md) — modal with 3 stages; results chapters lock out ai_draft; Sigma data read from medras.sigma.results with folio fallback.
-- [Article conversion wizard](article-conversion.md) — condense_for_article() uses Gemini primary / GPT-4o fallback; Results never AI-touched; PDF builders use Paragraph/Spacer/PageBreak directly (not PE.Paragraph).
+- [Article conversion wizard](article-conversion.md) — condense_for_article() returns {original,condensed} pairs per paragraph; rejected paragraphs restore original thesis text (not drop); PDF builders use Paragraph/Spacer/PageBreak directly (not PE.Paragraph).
