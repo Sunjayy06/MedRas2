@@ -280,14 +280,14 @@
       fd.append('file', f);
       const data = await ThesisState.apiUpload('/references/import-list', fd);
       const entries = data.entries || [];
-      // Only add Crossref-verified entries to enforce zero-hallucination contract
-      const verifiedEntries = entries.filter((e) => e.verified);
-      const unverifiedCount = entries.length - verifiedEntries.length;
-      ThesisState.addReferences(verifiedEntries);
-      ThesisState.libSaveMany(verifiedEntries);
-      const added = (ThesisState.get().references || []).length;
-      importStat.textContent = `Added ${verifiedEntries.length} Crossref-verified references.` +
-        (unverifiedCount > 0 ? ` ${unverifiedCount} entry(ies) could not be verified and were skipped.` : '');
+      const verifiedCount = entries.filter((e) => e.verified).length;
+      const unverifiedCount = entries.length - verifiedCount;
+      // Add ALL parsed entries to session library so the researcher's references are available.
+      // Only Crossref-verified entries go to the persistent IndexedDB library and to AI grounding.
+      ThesisState.addReferences(entries);
+      ThesisState.libSaveMany(entries.filter((e) => e.verified));
+      importStat.textContent = `Imported ${entries.length} references (${verifiedCount} Crossref-verified, ` +
+        `${unverifiedCount} parsed). AI will only cite verified entries.`;
       importFileEl.value = '';
       importNameEl.textContent = 'No file chosen';
       renderLib();

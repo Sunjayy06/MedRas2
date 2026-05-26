@@ -313,7 +313,9 @@
         <span class="th-refpanel-num">[${num}]</span>
         <div class="th-refpanel-body">
           <div class="th-refpanel-title">${esc((r.title || '').slice(0, 65))}${(r.title || '').length > 65 ? '…' : ''}</div>
-          <div class="th-refpanel-meta">${esc(auth)} · ${esc(String(r.year || 'n.d.'))}</div>
+          <div class="th-refpanel-meta">${esc(auth)} · ${esc(String(r.year || 'n.d.'))}${r.journal ? ' · <em>' + esc(r.journal) + '</em>' : ''}</div>
+          ${r.doi ? `<div><a href="https://doi.org/${esc(r.doi)}" target="_blank" rel="noopener" style="font-size:10px;color:var(--th-emerald-d);word-break:break-all">${esc(r.doi)}</a></div>` : ''}
+          ${!r.verified ? '<div style="font-size:10px;color:#b45309;font-style:italic">⚠ unverified — not cited by AI</div>' : ''}
           <div class="th-refpanel-replace-panel" id="th-replace-${idx}" style="display:none;margin-top:6px"></div>
         </div>
         <div style="display:flex;flex-direction:column;gap:2px;flex-shrink:0">
@@ -747,11 +749,24 @@
     ThesisState.setChapter(chapterId, { text });
     updateWC();
     renderChapterRefPanel();
-    const m = text.match(/\[@([^\]]*)$/);
+    // Caret-local detection: check only text in the current node up to cursor position
+    const sel = window.getSelection();
+    let caretLocal = '';
+    let caretRange = null;
+    if (sel && sel.rangeCount) {
+      caretRange = sel.getRangeAt(0).cloneRange();
+      const node = caretRange.startContainer;
+      if (node.nodeType === Node.TEXT_NODE) {
+        caretLocal = node.textContent.slice(0, caretRange.startOffset);
+      } else {
+        // Inline element or BR — fall back to trimmed end of full text
+        caretLocal = text;
+      }
+    }
+    const m = caretLocal.match(/\[@([^\]]*)$/);
     if (m) {
-      // Capture exact caret position so insertCitation() can replace at cursor
-      const sel = window.getSelection();
-      if (sel && sel.rangeCount) { _atRange = sel.getRangeAt(0).cloneRange(); }
+      // Save exact caret range so insertCitation() can replace [@... at the typed position
+      _atRange = caretRange;
       openCitePicker();
       renderPickerResults(m[1] || '');
     } else if (_pickerOpen) {

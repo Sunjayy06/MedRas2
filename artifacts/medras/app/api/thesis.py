@@ -188,7 +188,7 @@ async def import_reference_list(
                 raise ValueError(f"Could not read DOCX: {exc}") from exc
         elif fname.endswith(".pdf"):
             try:
-                from PyPDF2 import PdfReader  # type: ignore
+                from pypdf import PdfReader  # type: ignore
                 import io
                 reader = PdfReader(io.BytesIO(data))
                 pages = [(page.extract_text() or "").strip() for page in reader.pages]
@@ -341,7 +341,7 @@ async def extract_style_sample(
                 raise ValueError(f"Could not read DOCX: {exc}") from exc
         elif fname.endswith(".pdf"):
             try:
-                from PyPDF2 import PdfReader  # type: ignore
+                from pypdf import PdfReader  # type: ignore
                 import io
                 reader = PdfReader(io.BytesIO(data))
                 pages = [
