@@ -9,6 +9,12 @@ Pipeline per question
 
 The AI only ever sees distilled sentences, never full abstracts.
 Every sentence in the answer must trace to a real sentence in a real paper.
+
+PDF chunks (evidence_type == "uploaded_pdf") receive special treatment in
+the evidence block: they are wrapped with === UPLOADED PAPER (PRIMARY SOURCE)
+=== markers so the AI treats them as the researcher's primary evidence and
+explicitly notes when the uploaded paper agrees with or conflicts against
+the retrieved database papers.
 """
 
 from __future__ import annotations
@@ -57,6 +63,10 @@ def _distill(question: str, abstract: str, top_n: int = 4) -> list[str]:
 
     Scoring: keyword overlap with question + statistical-signal boost.
     Sentences shorter than 20 characters are skipped.
+
+    For uploaded PDFs, the "abstract" field contains pre-retrieved chunk text
+    (~2,000 words).  We apply the same scoring to surface the strongest
+    sentences from those chunks rather than returning them verbatim.
     """
     if not abstract or not abstract.strip():
         return []
@@ -90,9 +100,15 @@ def _distill(question: str, abstract: str, top_n: int = 4) -> list[str]:
 # ── GRADE evidence quality ───────────────────────────────────────────────────
 
 def _grade(papers: list[dict]) -> tuple[str, str]:
-    """Return *(grade, explanation)* using GRADE-like logic."""
+    """Return *(grade, explanation)* using GRADE-like logic.
+
+    uploaded_pdf and uploaded papers do not contribute to the grade because
+    they are researcher-provided and their evidence level is unknown.
+    """
     counts: Counter[str] = Counter(
-        p.get("evidence_type", "observational") for p in papers
+        p.get("evidence_type", "observational")
+        for p in papers
+        if p.get("evidence_type") not in ("uploaded", "uploaded_pdf")
     )
     sr  = counts["systematic_review"]
     rct = counts["rct"]
@@ -164,8 +180,10 @@ conclusions. If the evidence does not support a claim, do not make it.
 4. next_questions must be the natural next thing a curious clinician or \
 researcher would actually want to know — not generic advice.
 5. Keep summary to 2–3 sentences maximum.
-6. Sources labelled "researcher-uploaded document" are papers the researcher \
-has directly provided — treat them as primary evidence and cite them where relevant.
+6. Any source marked "=== UPLOADED PAPER (PRIMARY SOURCE) ===" is a paper \
+the researcher directly provided. Treat it as primary evidence, cite it \
+where relevant, and explicitly note when it agrees with or conflicts against \
+the database sources.
 
 === BEGIN DISTILLED EVIDENCE ===
 {evidence}
@@ -190,7 +208,12 @@ Return ONLY valid JSON matching this exact schema — no markdown, no extra keys
 
 
 def _evidence_block(papers: list[dict], distilled: dict[int, list[str]]) -> str:
-    """Build the distilled evidence block for the synthesis prompt."""
+    """Build the distilled evidence block for the synthesis prompt.
+
+    Papers with evidence_type == "uploaded_pdf" are wrapped with
+    === UPLOADED PAPER (PRIMARY SOURCE) === markers so the AI treats them
+    as primary evidence and relates them explicitly to the database results.
+    """
     lines: list[str] = []
     for i, p in enumerate(papers, 1):
         authors  = ", ".join(p.get("authors") or []) or "Authors unknown"
@@ -200,23 +223,40 @@ def _evidence_block(papers: list[dict], distilled: dict[int, list[str]]) -> str:
         ev_type  = p.get("evidence_type", "")
         excerpts = distilled.get(i, [])
 
-        ev_label = (
-            "researcher-uploaded document"
-            if ev_type == "uploaded"
-            else (ev_type or "unknown")
-        )
+        is_pdf = (ev_type == "uploaded_pdf")
+
+        if is_pdf:
+            ev_label = "PRIMARY SOURCE — researcher-uploaded document"
+        elif ev_type == "uploaded":
+            ev_label = "researcher-uploaded document"
+        else:
+            ev_label = ev_type or "unknown"
+
+        pages_str = ""
+        if is_pdf and p.get("pages_used"):
+            pages_str = " Source sections: " + ", ".join(p["pages_used"]) + "."
+
         header = (
             f"[{i}] {authors}. \"{p.get('title', 'Untitled')}\". "
             f"{journal} ({year}). URL: {url}. "
-            f"Study type: {ev_label}."
+            f"Study type: {ev_label}.{pages_str}"
         )
+
         if excerpts:
             excerpt_text = " | ".join(excerpts)
-            lines.append(f"{header}\n    Relevant excerpts: {excerpt_text}")
+            entry = f"{header}\n    Relevant excerpts: {excerpt_text}"
         else:
-            # No distilled sentences — include a short abstract snippet
             fallback = (p.get("abstract") or "")[:300]
-            lines.append(f"{header}\n    Abstract (truncated): {fallback}")
+            entry = f"{header}\n    Abstract (truncated): {fallback}"
+
+        if is_pdf:
+            entry = (
+                "=== UPLOADED PAPER (PRIMARY SOURCE) ===\n"
+                + entry
+                + "\n=== END UPLOADED PAPER ==="
+            )
+
+        lines.append(entry)
 
     return "\n\n".join(lines)
 
@@ -356,7 +396,7 @@ async def synthesize(
         distilled[kept_index] = sents
         kept_papers.append(p)
 
-    # Step 2 — GRADE evidence quality
+    # Step 2 — GRADE evidence quality (excludes uploaded papers)
     grade, grade_expl = _grade(kept_papers)
 
     # Step 3 — build evidence block and history string

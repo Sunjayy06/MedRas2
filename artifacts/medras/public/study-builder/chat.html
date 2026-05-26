@@ -109,11 +109,22 @@
 <!-- ── Input bar (shown during chat) ── -->
 <div class="chat-bar" id="chat-bar" style="display:none">
   <div class="chat-bar-inner">
-    <!-- Attached papers strip (shown when ≥1 paper uploaded) -->
-    <div class="attached-papers-bar" id="attached-papers-bar" style="display:none">
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
-      <span id="attached-papers-label">1 paper attached</span>
-      <span class="ap-note">· included in every answer</span>
+
+    <!-- PDF input pill (shown when a PDF is attached, inside the input bar) -->
+    <div class="pdf-input-pill" id="pdf-input-pill" style="display:none">
+      <svg class="pip-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+        <polyline points="14 2 14 8 20 8"/>
+        <line x1="16" y1="13" x2="8" y2="13"/>
+        <line x1="16" y1="17" x2="8" y2="17"/>
+        <polyline points="10 9 9 9 8 9"/>
+      </svg>
+      <span class="pip-name" id="pip-name">document.pdf</span>
+      <span class="pip-pages" id="pip-pages">0 pages</span>
+      <span class="pip-note">· included in every answer</span>
+      <button class="pip-clear" id="pip-clear" title="Remove PDF from session">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
     </div>
 
     <div class="chat-input-wrap">
@@ -121,11 +132,11 @@
         placeholder="Ask a follow-up or a new question…"
         rows="1" autocomplete="off" spellcheck="true"></textarea>
 
-      <!-- Hidden file input -->
-      <input type="file" id="file-input" accept=".pdf,.docx,.txt" style="display:none">
+      <!-- Hidden file input — PDF only -->
+      <input type="file" id="file-input" accept=".pdf" style="display:none">
 
       <!-- Attach button -->
-      <button class="attach-btn" id="attach-btn" title="Attach a paper (PDF, DOCX, or TXT)">
+      <button class="attach-btn" id="attach-btn" title="Attach a PDF (up to 10 MB)">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
       </button>
 

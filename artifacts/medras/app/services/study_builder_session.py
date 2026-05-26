@@ -2,6 +2,11 @@
 
 Sessions survive 30 minutes of inactivity. Up to 6 turns are stored;
 the last 3 are injected into synthesis context so follow-up questions work.
+
+PDF storage
+───────────
+Each session can hold one uploaded PDF at a time (meta + chunks list).
+``set_pdf`` replaces any prior PDF; ``clear_pdf`` frees the memory.
 """
 
 from __future__ import annotations
@@ -57,7 +62,13 @@ def get_or_create(session_id: Optional[str]) -> tuple[str, list[dict]]:
             sess["last_active"] = now
             return session_id, list(sess["turns"][-_HISTORY_FOR_CONTEXT:])
         new_id = str(uuid.uuid4())
-        _sessions[new_id] = {"turns": [], "uploaded_papers": [], "last_active": now}
+        _sessions[new_id] = {
+            "turns":           [],
+            "uploaded_papers": [],
+            "pdf_meta":        None,
+            "pdf_chunks":      [],
+            "last_active":     now,
+        }
         log.debug("New session %s created", new_id)
         return new_id, []
 
@@ -98,3 +109,44 @@ def get_uploaded_papers(session_id: str) -> list[dict]:
         if session_id not in _sessions:
             return []
         return list(_sessions[session_id].get("uploaded_papers", []))
+
+
+# ── PDF chunk storage ─────────────────────────────────────────────────────────
+
+def set_pdf(session_id: str, meta: dict, chunks: list[dict]) -> None:
+    """Store a PDF (metadata + chunks) for the session, replacing any prior PDF."""
+    with _lock:
+        if session_id not in _sessions:
+            return
+        sess = _sessions[session_id]
+        sess["pdf_meta"]    = meta
+        sess["pdf_chunks"]  = chunks
+        sess["last_active"] = time.time()
+        log.debug(
+            "session %s: stored PDF '%s' (%d chunks)",
+            session_id[:8], meta.get("filename", "?"), len(chunks),
+        )
+
+
+def get_pdf(session_id: str) -> tuple[dict | None, list]:
+    """Return *(meta, chunks)* for the session's uploaded PDF.
+
+    Returns *(None, [])* if no PDF is stored or the session is unknown.
+    """
+    with _lock:
+        if session_id not in _sessions:
+            return None, []
+        sess = _sessions[session_id]
+        return sess.get("pdf_meta"), list(sess.get("pdf_chunks", []))
+
+
+def clear_pdf(session_id: str) -> None:
+    """Remove the uploaded PDF from session memory."""
+    with _lock:
+        if session_id not in _sessions:
+            return
+        sess = _sessions[session_id]
+        sess["pdf_meta"]    = None
+        sess["pdf_chunks"]  = []
+        sess["last_active"] = time.time()
+        log.debug("session %s: PDF cleared", session_id[:8])

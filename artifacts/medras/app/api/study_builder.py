@@ -12,6 +12,14 @@ POST /api/study-builder/upload-paper
   Upload a PDF / DOCX / TXT paper to anchor in the conversation.
   The extracted text is stored in the session and injected into every
   subsequent synthesis call as a researcher-provided evidence source.
+
+POST /api/study-builder/upload-pdf
+  Upload a PDF with intelligent chunking (400 words/chunk, 50-word overlap).
+  Only the top-5 most relevant chunks (TF-IDF keyword overlap) reach the AI
+  per question — never the full document — so 40-page papers work correctly.
+
+DELETE /api/study-builder/upload-pdf
+  Remove the uploaded PDF from the session to free memory.
 """
 
 from __future__ import annotations
@@ -21,7 +29,7 @@ import logging
 import os
 from typing import Optional
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field
 
 from app.services.plagiarism_analyzer import (
@@ -31,6 +39,7 @@ from app.services.plagiarism_analyzer import (
 from app.services.study_builder_pico        import decompose
 from app.services.study_builder_search      import multi_source_search
 from app.services.study_builder_synthesizer import synthesize
+from app.services.study_builder_pdf_chunker import chunk_pdf, retrieve_top_chunks
 from app.services import study_builder_session as sessions
 
 log    = logging.getLogger(__name__)
@@ -42,9 +51,11 @@ _DISCLAIMER = (
     "healthcare professional."
 )
 
-_MAX_UPLOAD_BYTES = 20 * 1024 * 1024   # 20 MB per paper upload
-_ALLOWED_EXTS     = {".pdf", ".docx", ".txt"}
-_MAX_UPLOADED_TEXT = 6000              # chars sent to synthesis per uploaded paper
+_MAX_UPLOAD_BYTES  = 20 * 1024 * 1024   # 20 MB — general upload-paper
+_MAX_PDF_BYTES     = 10 * 1024 * 1024   # 10 MB — upload-pdf (chunked)
+_ALLOWED_EXTS      = {".pdf", ".docx", ".txt"}
+_MAX_UPLOADED_TEXT = 6000               # chars sent to synthesis per general paper
+_PDF_TOP_CHUNKS    = 5                  # chunks retrieved per question
 
 
 # ── Request / Response models ────────────────────────────────────────────────
@@ -88,7 +99,7 @@ class AskResponse(BaseModel):
     synthesis_method:   str
     question_type:      str
     pico:               dict
-    uploaded_count:     int = 0       # how many papers were attached this session
+    uploaded_count:     int = 0       # how many papers/PDFs were attached this session
     disclaimer:         str = _DISCLAIMER
 
 
@@ -98,6 +109,14 @@ class UploadResponse(BaseModel):
     word_count:  int
     preview:     str   # first ~300 chars of extracted text
     paper_index: int   # 1-based index within this session
+
+
+class PdfUploadResponse(BaseModel):
+    session_id:  str
+    filename:    str
+    title:       str
+    page_count:  int
+    chunk_count: int
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -165,7 +184,6 @@ async def _search_all_queries(queries: list[str], top_n: int = 12) -> dict:
                 seen_titles.add(key)
                 merged_papers.append(p)
 
-    # Sort by citation count desc, take top_n
     merged_papers.sort(key=lambda p: p.get("citation_count", 0), reverse=True)
     merged_papers = merged_papers[:top_n]
 
@@ -193,6 +211,43 @@ def _build_uploaded_paper_dict(up: dict) -> dict:
     }
 
 
+def _build_pdf_paper_dict(meta: dict, top_chunks: list[dict]) -> dict:
+    """Build a synthesis paper dict from the top-ranked PDF chunks.
+
+    Chunks are sorted by their document position (chunk_idx) so the AI
+    reads them coherently rather than in relevance order.
+    Page ranges are attached so the frontend can display which sections
+    of the paper were used.
+    """
+    ordered    = sorted(top_chunks, key=lambda c: c.get("chunk_idx", 0))
+    chunk_text = "\n\n".join(c["text"] for c in ordered)
+
+    pages_used: list[str] = []
+    seen: set[tuple] = set()
+    for c in ordered:
+        sp, ep = c.get("start_page", 1), c.get("end_page", 1)
+        key = (sp, ep)
+        if key not in seen:
+            seen.add(key)
+            pages_used.append(f"pp. {sp}–{ep}" if sp != ep else f"p. {sp}")
+
+    return {
+        "title":          meta.get("title") or meta.get("filename", "Uploaded PDF"),
+        "authors":        ["Researcher-provided"],
+        "abstract":       chunk_text,
+        "year":           "",
+        "journal":        "Uploaded document",
+        "url":            "",
+        "source":         "uploaded",
+        "evidence_type":  "uploaded_pdf",
+        "open_access":    False,
+        "citation_count": 0,
+        "pages_used":     pages_used,
+        "page_count":     meta.get("page_count", 0),
+        "filename":       meta.get("filename", ""),
+    }
+
+
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 @router.post("/upload-paper", response_model=UploadResponse)
@@ -200,12 +255,7 @@ async def upload_paper(
     session_id: str        = Form(...),
     file:       UploadFile = File(...),
 ) -> UploadResponse:
-    """Extract text from a PDF / DOCX / TXT and store it in the session.
-
-    The text is prepended to every subsequent ``/ask`` call so the AI can
-    reason about its content and cite it directly.
-    """
-    # Ensure the session exists (create one if the client sent a stale id)
+    """Extract text from a PDF / DOCX / TXT and store it in the session."""
     session_id, _ = sessions.get_or_create(session_id)
 
     filename = file.filename or "uploaded_paper"
@@ -253,6 +303,90 @@ async def upload_paper(
     )
 
 
+@router.post("/upload-pdf", response_model=PdfUploadResponse)
+async def upload_pdf(
+    session_id: str        = Form(...),
+    file:       UploadFile = File(...),
+) -> PdfUploadResponse:
+    """Upload a PDF and store it as retrievable chunks in the session.
+
+    Only the top-5 most relevant chunks (~2,000 words) are sent to the AI
+    per question, so 40-page, 20,000-word papers work correctly without
+    exceeding the AI context window.
+
+    Specific error codes:
+    - 413 — file exceeds 10 MB
+    - 415 — not a PDF file
+    - 422 — scanned/image-only PDF, corrupted PDF, or extraction failure
+    """
+    session_id, _ = sessions.get_or_create(session_id)
+
+    filename = file.filename or "uploaded.pdf"
+    ext      = os.path.splitext(filename)[1].lower()
+
+    if ext != ".pdf":
+        raise HTTPException(
+            415,
+            "Only PDF files are supported here. Please select a .pdf file.",
+        )
+
+    content = await file.read()
+
+    if len(content) > _MAX_PDF_BYTES:
+        size_mb = len(content) / 1_048_576
+        raise HTTPException(
+            413,
+            f"This PDF is {size_mb:.1f} MB, which exceeds the 10 MB limit. "
+            "Please use a smaller file or split the PDF into sections.",
+        )
+
+    try:
+        result = await asyncio.to_thread(chunk_pdf, content, filename)
+    except ValueError as exc:
+        # chunk_pdf raises ValueError with user-friendly messages:
+        # - scanned image PDF
+        # - corrupted / unreadable PDF
+        raise HTTPException(422, str(exc)) from exc
+    except Exception as exc:
+        log.warning("Unexpected PDF extraction error for '%s': %s", filename, exc)
+        raise HTTPException(
+            422,
+            "Could not process this PDF. It may be corrupted or use an "
+            "unsupported encoding. Please try a different file.",
+        ) from exc
+
+    meta = {
+        "filename":    filename,
+        "title":       result["title"],
+        "page_count":  result["page_count"],
+        "total_words": result["total_words"],
+    }
+    sessions.set_pdf(session_id, meta, result["chunks"])
+
+    log.info(
+        "PDF upload [session=%s] '%s' — %d pages, %d words, %d chunks",
+        session_id[:8], filename,
+        result["page_count"], result["total_words"], len(result["chunks"]),
+    )
+
+    return PdfUploadResponse(
+        session_id  = session_id,
+        filename    = filename,
+        title       = result["title"],
+        page_count  = result["page_count"],
+        chunk_count = len(result["chunks"]),
+    )
+
+
+@router.delete("/upload-pdf", status_code=204)
+async def delete_pdf(
+    session_id: str = Query(..., description="Session ID whose PDF should be cleared"),
+) -> None:
+    """Remove the uploaded PDF from the session to free memory."""
+    sessions.clear_pdf(session_id)
+    log.info("PDF cleared for session %s", session_id[:8])
+
+
 @router.post("/ask", response_model=AskResponse)
 async def ask(body: AskRequest) -> AskResponse:
     question = body.question.strip()
@@ -272,14 +406,30 @@ async def ask(body: AskRequest) -> AskResponse:
     # 3. Multi-query parallel database search
     search_result = await _search_all_queries(pico["search_queries"], top_n=12)
 
-    # 4. Inject researcher-uploaded papers as evidence sources (prepended so
-    #    they get the lowest reference numbers and the AI notices them first)
+    # 4a. Inject general uploaded papers (prepended for lowest reference numbers)
     if uploaded_papers:
         up_dicts = [_build_uploaded_paper_dict(up) for up in uploaded_papers]
         search_result["papers"] = up_dicts + search_result["papers"]
         if "uploaded" not in search_result["sources_searched"]:
             search_result["sources_searched"] = (
                 ["uploaded"] + search_result["sources_searched"]
+            )
+
+    # 4b. Inject chunked PDF evidence (highest priority — inserted at position 0)
+    pdf_meta, pdf_chunks = sessions.get_pdf(session_id)
+    has_pdf = bool(pdf_meta and pdf_chunks)
+    if has_pdf:
+        top_chunks = await asyncio.to_thread(
+            retrieve_top_chunks, pdf_chunks, question, _PDF_TOP_CHUNKS
+        )
+        if top_chunks:
+            pdf_paper = _build_pdf_paper_dict(pdf_meta, top_chunks)
+            search_result["papers"].insert(0, pdf_paper)
+            if "uploaded_pdf" not in search_result["sources_searched"]:
+                search_result["sources_searched"].insert(0, "uploaded_pdf")
+            log.info(
+                "PDF evidence [session=%s] '%s' → %d chunks retrieved",
+                session_id[:8], pdf_meta.get("filename", "?"), len(top_chunks),
             )
 
     # 5. Distillation + grading + structured synthesis
@@ -289,7 +439,8 @@ async def ask(body: AskRequest) -> AskResponse:
     answer_summary = (synth["answer"] or "")[:200].replace("\n", " ")
     sessions.add_turn(session_id, question, answer_summary)
 
-    qtype = _classify(question)
+    qtype          = _classify(question)
+    uploaded_count = len(uploaded_papers) + (1 if has_pdf else 0)
 
     return AskResponse(
         answer               = synth["answer"],
@@ -312,5 +463,5 @@ async def ask(body: AskRequest) -> AskResponse:
         synthesis_method     = synth.get("method", "unknown"),
         question_type        = qtype,
         pico                 = pico,
-        uploaded_count       = len(uploaded_papers),
+        uploaded_count       = uploaded_count,
     )

@@ -1,4 +1,4 @@
-/* MedRAS Research Assistant — sb.js  (Phase 3: Paper upload) */
+/* MedRAS Research Assistant — sb.js  (Phase 3: PDF chunked upload) */
 (function () {
   'use strict';
 
@@ -15,8 +15,12 @@
   const raWrap               = document.getElementById('ra-wrap');
   const attachBtn            = document.getElementById('attach-btn');
   const fileInput            = document.getElementById('file-input');
-  const attachedPapersBar    = document.getElementById('attached-papers-bar');
-  const attachedPapersLabel  = document.getElementById('attached-papers-label');
+
+  /* PDF pill elements (in input bar) */
+  const pdfInputPill = document.getElementById('pdf-input-pill');
+  const pipName      = document.getElementById('pip-name');
+  const pipPages     = document.getElementById('pip-pages');
+  const pipClear     = document.getElementById('pip-clear');
 
   /* ── Folio DOM ── */
   const folioPanelEl   = document.getElementById('folio-panel');
@@ -37,11 +41,12 @@
     doaj:'DOAJ', lens:'Lens.org', ieee:'IEEE Xplore',
     wos:'Web of Science', scopus:'Scopus',
     uploaded:'Your uploaded paper',
+    uploaded_pdf:'Uploaded PDF',
   };
   const EV_LABELS = {
     systematic_review:'Sys. Review', rct:'RCT',
     observational:'Observational', guideline:'Guideline',
-    uploaded:'Uploaded Paper',
+    uploaded:'Uploaded Paper', uploaded_pdf:'Uploaded PDF',
   };
   const GRADE_META = {
     HIGH:      { cls:'grade-high',     label:'HIGH EVIDENCE',      icon:'◆' },
@@ -70,8 +75,10 @@
   let sessionId      = sessionStorage.getItem('sb.session_id') || null;
   let busy           = false;
   let inChat         = false;
-  let attachedPapers = [];   /* [{filename, wordCount, paperIndex}] */
   let uploading      = false;
+
+  /* PDF state — at most 1 PDF per session */
+  let pdfAttached    = false;   /* true when a PDF is stored in the session */
 
   /* ── Folio state (persisted to sessionStorage) ── */
   let folioItems = JSON.parse(sessionStorage.getItem('sb.folio') || '[]');
@@ -112,13 +119,12 @@
     });
   });
 
-  /* ── Attach button ── */
+  /* ── Attach button → triggers PDF file picker ── */
   attachBtn.addEventListener('click', () => {
     if (!inChat || !sessionId) {
-      /* No session yet — give a gentle nudge */
       chatInp.focus();
       const orig = chatInp.placeholder;
-      chatInp.placeholder = 'Ask a question first to start a session, then attach papers.';
+      chatInp.placeholder = 'Ask a question first to start a session, then attach a PDF.';
       setTimeout(() => { chatInp.placeholder = orig; }, 3000);
       return;
     }
@@ -129,20 +135,23 @@
   fileInput.addEventListener('change', () => {
     const file = fileInput.files[0];
     fileInput.value = '';   /* reset so same file can be re-selected */
-    if (file) uploadPaper(file);
+    if (file) uploadPdf(file);
   });
+
+  /* ── PDF pill clear button ── */
+  pipClear.addEventListener('click', clearPdf);
 
   /* ── New chat ── */
   newChatBtn.addEventListener('click', () => {
     thread.innerHTML = '';
     sessionId      = null;
-    attachedPapers = [];
+    pdfAttached    = false;
     uploading      = false;
     folioItems     = [];
     sessionStorage.removeItem('sb.session_id');
     sessionStorage.removeItem('medras.nav.returnHint');
     sessionStorage.removeItem('sb.folio');
-    updateAttachedUI();
+    updatePdfPill(null);
     _renderFolio();
     _updateFolioToggle();
     folioPanelEl.classList.remove('open');
@@ -218,24 +227,39 @@
   }
 
   /* ══════════════════════════════════════════════════════════════════
-     PAPER UPLOAD
+     PDF UPLOAD  (chunked — calls /api/study-builder/upload-pdf)
   ══════════════════════════════════════════════════════════════════ */
 
-  async function uploadPaper(file) {
+  async function uploadPdf(file) {
+    /* Client-side checks before even sending */
+    if (!file.name.toLowerCase().endsWith('.pdf')) {
+      appendPdfError('Only PDF files are supported. Please select a .pdf file.');
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      const mb = (file.size / 1_048_576).toFixed(1);
+      appendPdfError(
+        `This PDF is ${mb} MB, which exceeds the 10 MB limit. ` +
+        'Please use a smaller file or split the PDF into sections.'
+      );
+      return;
+    }
+
     uploading = true;
-    const progressEl = appendUploadProgress(file.name);
+    attachBtn.disabled = true;
+
+    /* Show extracting progress in thread */
+    const progressEl = appendPdfProgress(file.name);
 
     try {
       const form = new FormData();
       form.append('session_id', sessionId);
       form.append('file', file);
 
-      window.MedrasJobs?.start('helix-upload', 'Processing paper…');
-      const res = await fetch('/api/study-builder/upload-paper', {
+      const res = await fetch('/api/study-builder/upload-pdf', {
         method: 'POST',
         body:   form,
       });
-      window.MedrasJobs?.finish('helix-upload');
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -244,75 +268,80 @@
 
       const data = await res.json();
 
-      /* Replace spinner with success pill */
-      progressEl.remove();
-      appendPaperPill(data.filename, data.word_count, data.paper_index, data.preview);
+      /* Replace progress with a compact success message in thread */
+      progressEl.innerHTML =
+        `<svg class="pps-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">` +
+        `<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>` +
+        `<polyline points="14 2 14 8 20 8"/>` +
+        `</svg>` +
+        `<span class="pps-text"><strong>${esc(data.filename)}</strong> processed — ` +
+        `${data.page_count} page${data.page_count !== 1 ? 's' : ''}, ` +
+        `${data.chunk_count} retrievable sections. ` +
+        `Only the most relevant sections will be sent to the AI per question.</span>`;
+      progressEl.className = 'pdf-progress-success fade-in';
 
-      attachedPapers.push({
-        filename:   data.filename,
-        wordCount:  data.word_count,
-        paperIndex: data.paper_index,
-      });
-      updateAttachedUI();
+      /* Show the pill in the input bar */
+      updatePdfPill(data);
+      pdfAttached = true;
 
     } catch (e) {
-      window.MedrasJobs?.finish('helix-upload');
       progressEl.remove();
-      appendPaperError(e.message);
+      appendPdfError(e.message);
     } finally {
-      uploading = false;
+      uploading      = false;
+      attachBtn.disabled = false;
     }
   }
 
-  function appendUploadProgress(filename) {
-    const el = mk('div', 'upload-pill fade-in');
+  function appendPdfProgress(filename) {
+    const el = mk('div', 'pdf-progress fade-in');
     el.innerHTML =
       `<div class="up-spinner"></div>` +
-      `<div class="up-text">Extracting text from <strong>${esc(filename)}</strong>\u2026</div>`;
+      `<div class="up-text">Processing PDF\u2026 extracting text from ` +
+      `<strong>${esc(filename)}</strong></div>`;
     thread.appendChild(el);
     scrollEnd();
     return el;
   }
 
-  function appendPaperPill(filename, wordCount, idx, preview) {
-    const el = mk('div', 'paper-pill fade-in');
-    el.innerHTML =
-      `<div class="pp-icon">&#128196;</div>` +
-      `<div class="pp-body">` +
-        `<div class="pp-name">${esc(filename)}</div>` +
-        `<div class="pp-meta">${Number(wordCount).toLocaleString()} words extracted` +
-          (preview ? ` &middot; &ldquo;${esc(preview.substring(0, 90))}&hellip;&rdquo;` : '') +
-        `</div>` +
-      `</div>` +
-      `<div class="pp-badge">Paper ${idx} attached</div>`;
-    thread.appendChild(el);
-    scrollEnd();
-    return el;
-  }
-
-  function appendPaperError(msg) {
+  function appendPdfError(msg) {
     const el = mk('div', 'pp-error fade-in');
     el.innerHTML = `&#9888; ${esc(msg)}`;
     thread.appendChild(el);
     scrollEnd();
-    setTimeout(() => el.remove(), 6000);
+    setTimeout(() => el.remove(), 8000);
   }
 
-  function updateAttachedUI() {
-    const n = attachedPapers.length;
-    if (n === 0) {
-      attachedPapersBar.style.display = 'none';
+  /* Update the PDF pill in the input bar.
+     data == null → hide the pill. */
+  function updatePdfPill(data) {
+    if (!data) {
+      pdfInputPill.style.display = 'none';
       attachBtn.classList.remove('has-papers');
-    } else {
-      attachedPapersBar.style.display = '';
-      attachedPapersLabel.textContent = `${n} paper${n > 1 ? 's' : ''} attached`;
-      attachBtn.classList.add('has-papers');
-      attachBtn.title = `${n} paper${n > 1 ? 's' : ''} attached — click to add another`;
+      attachBtn.title = 'Attach a PDF (up to 10 MB)';
+      return;
     }
+    pipName.textContent  = data.filename;
+    pipPages.textContent = `${data.page_count} page${data.page_count !== 1 ? 's' : ''}`;
+    pdfInputPill.style.display = '';
+    attachBtn.classList.add('has-papers');
+    attachBtn.title = `${data.filename} attached — click to replace`;
+  }
+
+  /* Clear the PDF from the session (DELETE endpoint) */
+  async function clearPdf() {
+    if (!sessionId) { updatePdfPill(null); pdfAttached = false; return; }
+    try {
+      await fetch(`/api/study-builder/upload-pdf?session_id=${encodeURIComponent(sessionId)}`, {
+        method: 'DELETE',
+      });
+    } catch (_) { /* ignore network errors on clear */ }
+    pdfAttached = false;
+    updatePdfPill(null);
   }
 
   /* ══════════════════════════════════════════════════════════════════
-     ASK  (unchanged from Phase 2 except session_id is sent)
+     ASK
   ══════════════════════════════════════════════════════════════════ */
 
   async function ask(question) {
@@ -333,7 +362,7 @@
       const body = { question };
       if (sessionId) body.session_id = sessionId;
 
-      window.MedrasJobs?.start('helix-ask', 'Helix searching & synthesising…');
+      window.MedrasJobs?.start('helix-ask', 'Helix searching & synthesising\u2026');
       const res = await fetch('/api/study-builder/ask', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -411,7 +440,6 @@
       `<span class="ev-icon">${gm.icon}</span>` +
       `<span class="ev-label">${gm.label}</span>` +
       `<span class="ev-expl">${esc(d.evidence_grade_explanation || '')}</span>`;
-    /* If uploaded papers contributed, note it */
     if ((d.uploaded_count || 0) > 0) {
       const note = mk('span', 'ev-upload-note');
       note.textContent =
@@ -657,7 +685,8 @@
     label.textContent = `\u25b6 ${papers.length} sources`;
     const pills = mk('div', 'src-db-pills');
     searched.forEach((s) => {
-      const p = mk('span', `src-db-pill${s === 'uploaded' ? ' pill-uploaded' : ''}`);
+      const isPdf = (s === 'uploaded_pdf');
+      const p = mk('span', `src-db-pill${(s === 'uploaded' || isPdf) ? ' pill-uploaded' : ''}`);
       p.textContent = SRC_LABELS[s] || s;
       pills.appendChild(p);
     });
@@ -675,12 +704,29 @@
   }
 
   function buildSourceCard(p, num) {
-    const card = mk('div', `src-card${p.source === 'uploaded' ? ' src-card-uploaded' : ''}`);
+    const isPdf      = (p.evidence_type === 'uploaded_pdf');
+    const isUploaded = (p.source === 'uploaded');
+
+    const card = mk('div', `src-card${(isUploaded || isPdf) ? ' src-card-uploaded' : ''}`);
+    if (isPdf) card.classList.add('src-card-pdf');
     card.id = `ref-${num}`;
 
     const n = mk('div', 'sc-num'); n.textContent = `[${num}]`; card.appendChild(n);
 
-    if (p.url) {
+    /* PDF gets a document icon label instead of a link */
+    if (isPdf) {
+      const titleRow = mk('div', 'sc-pdf-title-row');
+      const icon = mk('span', 'sc-pdf-icon');
+      icon.innerHTML =
+        '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+        '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>' +
+        '<polyline points="14 2 14 8 20 8"/></svg>';
+      const s = mk('span', 'sc-title-plain');
+      s.textContent = p.title || p.filename || 'Uploaded PDF';
+      titleRow.appendChild(icon);
+      titleRow.appendChild(s);
+      card.appendChild(titleRow);
+    } else if (p.url) {
       const a = mk('a', 'sc-title');
       a.href = p.url; a.target = '_blank'; a.rel = 'noopener';
       a.textContent = p.title || 'Untitled';
@@ -691,17 +737,25 @@
     }
 
     const meta = mk('div', 'sc-meta');
-    const ev   = mk('span', `ev-tag ev-${p.evidence_type || 'observational'}`);
-    ev.textContent = EV_LABELS[p.evidence_type] || 'Observational';
+    const ev   = mk('span', `ev-tag ev-${isPdf ? 'uploaded_pdf' : (p.evidence_type || 'observational')}`);
+    ev.textContent = EV_LABELS[isPdf ? 'uploaded_pdf' : p.evidence_type] || 'Observational';
     meta.appendChild(ev);
+
+    /* Page ranges for PDF source */
+    if (isPdf && p.pages_used && p.pages_used.length) {
+      const pg = mk('span', 'sc-pages-tag');
+      pg.textContent = p.pages_used.join(', ');
+      meta.appendChild(pg);
+    }
+
     if (p.open_access) {
       const oa = mk('span', 'oa-tag'); oa.textContent = 'OA'; meta.appendChild(oa);
     }
-    if (p.journal && p.source !== 'uploaded') {
+    if (p.journal && !isUploaded && !isPdf) {
       const j = mk('span'); j.textContent = p.journal; meta.appendChild(j);
     }
     if (p.year) { const y = mk('span'); y.textContent = p.year; meta.appendChild(y); }
-    if (p.authors && p.authors.length && p.source !== 'uploaded') {
+    if (p.authors && p.authors.length && !isUploaded && !isPdf) {
       const au = mk('span');
       au.textContent = p.authors.slice(0, 2).join(', ') + (p.authors.length > 2 ? ' et al.' : '');
       meta.appendChild(au);
@@ -709,22 +763,28 @@
     if (p.citation_count > 0) {
       const c = mk('span'); c.textContent = `cited ${p.citation_count}\u00d7`; meta.appendChild(c);
     }
-    const src = mk('span', 'src-tag');
-    src.textContent = SRC_LABELS[p.source] || p.source || ''; meta.appendChild(src);
+
+    if (!isPdf) {
+      const src = mk('span', 'src-tag');
+      src.textContent = SRC_LABELS[p.source] || p.source || ''; meta.appendChild(src);
+    }
+
     card.appendChild(meta);
 
-    /* Bookmark / pin button */
-    const pinBtn = mk('button', `pin-btn${_isPinned(p) ? ' pinned' : ''}`);
-    pinBtn.title = _isPinned(p) ? 'Remove from Folio' : 'Save to Folio';
-    if (p.url) pinBtn.dataset.url = p.url.trim();
-    pinBtn.innerHTML =
-      '<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">' +
-      '<path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>';
-    pinBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      _togglePin(p, pinBtn);
-    });
-    card.appendChild(pinBtn);
+    /* Bookmark / pin button (not for PDF — it's a local file) */
+    if (!isPdf) {
+      const pinBtn = mk('button', `pin-btn${_isPinned(p) ? ' pinned' : ''}`);
+      pinBtn.title = _isPinned(p) ? 'Remove from Folio' : 'Save to Folio';
+      if (p.url) pinBtn.dataset.url = p.url.trim();
+      pinBtn.innerHTML =
+        '<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">' +
+        '<path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>';
+      pinBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        _togglePin(p, pinBtn);
+      });
+      card.appendChild(pinBtn);
+    }
 
     return card;
   }
@@ -802,9 +862,9 @@
   ══════════════════════════════════════════════════════════════════ */
 
   function buildExportRow(papers) {
-    /* Only include papers with a real title; skip uploaded-only papers for
-       BibTeX/RIS as they have no bibliographic metadata. */
-    const exportable = (papers || []).filter((p) => p.title && p.title.length > 3);
+    const exportable = (papers || []).filter(
+      (p) => p.title && p.title.length > 3 && p.evidence_type !== 'uploaded_pdf'
+    );
     if (exportable.length < 1) return null;
 
     const n    = exportable.length;
@@ -813,7 +873,6 @@
     lbl.textContent = `Export ${n} citation${n !== 1 ? 's' : ''} as:`;
     row.appendChild(lbl);
 
-    /* Format buttons */
     [
       { label:'BibTeX',     ext:'.bib', fn: _toBibtex    },
       { label:'RIS',        ext:'.ris', fn: _toRis       },
@@ -829,7 +888,6 @@
       row.appendChild(btn);
     });
 
-    /* Copy shortcuts */
     [
       { label: 'Copy Vancouver', fn: _toVancouver },
       { label: 'Copy APA',      fn: _toApa       },
@@ -930,12 +988,8 @@
     }).join('\n');
   }
 
-  /* APA 7th edition
-     Format: Last, F. M., & Last, F. M. (Year). Title in sentence case.
-             Journal Name. https://doi.org/xxxxx                          */
   function _fmtApaAuthors(authors) {
     if (!authors || !authors.length) return '';
-    /* Format each name as "Last, F. M." */
     const fmt = authors.slice(0, 20).map((a) => {
       const parts = a.trim().split(/\s+/);
       if (parts.length < 2) return a;
@@ -946,7 +1000,6 @@
         .join(' ');
       return `${last}, ${initials}`;
     });
-    /* APA 21+ authors: first 19 … last */
     if (authors.length > 20) {
       const lastAuthor = fmt[fmt.length - 1];
       return fmt.slice(0, 19).join(', ') + ', \u2026 ' + lastAuthor;
@@ -961,8 +1014,6 @@
       const auth  = _fmtApaAuthors(p.authors || []);
       const doi   = _extractDoi(p.url);
       const year  = p.year ? `(${p.year})` : '(n.d.)';
-      /* Sentence-case: capitalise first letter only; preserve rest to
-         avoid mangling abbreviations and proper nouns.               */
       const rawTitle = (p.title || 'Untitled').trim();
       const title = rawTitle.charAt(0).toUpperCase() + rawTitle.slice(1);
       let ref = auth ? `${auth} ${year}. ` : `${year}. `;
@@ -989,6 +1040,15 @@
     }).join('\n\n');
   }
 
+  function _dlText(filename, content) {
+    const a   = document.createElement('a');
+    const url = URL.createObjectURL(new Blob([content], { type: 'text/plain' }));
+    a.href     = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   /* ══════════════════════════════════════════════════════════════════
      STATISTICAL CONTEXT  (Phase 6 — contextual tool deep-links)
   ══════════════════════════════════════════════════════════════════ */
@@ -1007,10 +1067,8 @@
       detectedTests:    [],
     };
 
-    /* ── Sample size params ── */
     const toNum = (s) => s ? s.replace('%', '').trim() : null;
 
-    /* Explicit p1 / p2 */
     const p1m = combined.match(/\bp1\s*[=:≈]\s*(0\.\d+|\d{1,3}(?:\.\d+)?%?)/i);
     const p2m = combined.match(/\bp2\s*[=:≈]\s*(0\.\d+|\d{1,3}(?:\.\d+)?%?)/i);
     if (p1m) {
@@ -1024,7 +1082,6 @@
       hints.hasSampleSize = true;
     }
 
-    /* Power */
     const pwrm = combined.match(/\b(\d{2,3})\s*%\s*power\b/i)
       || combined.match(/\bpower\s+of\s+(?:0\.)(\d{1,2})\b/i);
     if (pwrm) {
@@ -1034,7 +1091,6 @@
       hints.hasSampleSize = true;
     }
 
-    /* Alpha / significance level */
     const alm = combined.match(/\balpha\s*[=:≈]\s*(0\.\d{2})\b/i)
       || combined.match(/significance\s+level\s+of\s+(0\.\d{2})\b/i)
       || combined.match(/\bp\s*[<>]\s*(0\.0[15])\b/i);
@@ -1044,21 +1100,18 @@
       hints.hasSampleSize = true;
     }
 
-    /* NNT — implies comparative RCT, useful for sample size context */
     const nntm = combined.match(/\bNNT\s*(?:=|of)?\s*(\d{1,4})\b/i);
     if (nntm) {
       hints.detectedParams.push(`NNT = ${nntm[1]}`);
       hints.hasSampleSize = true;
     }
 
-    /* OR / RR / HR as effect size proxies */
     const orm = combined.match(/\bOR\s+([\d.]+)\b/);
     if (orm && parseFloat(orm[1]) !== 1) {
       hints.detectedParams.push(`OR = ${orm[1]}`);
       hints.hasSampleSize = hints.hasSampleSize || true;
     }
 
-    /* n = X or sample size of X */
     const nm = combined.match(/\bn\s*=\s*(\d{2,5})\b/i)
       || combined.match(/\bsample\s+size\s+of\s+(\d{2,5})\b/i);
     if (nm) {
@@ -1067,7 +1120,6 @@
       hints.hasSampleSize = true;
     }
 
-    /* ── Statistical tests ── */
     _STAT_TESTS.forEach(({ re, name }) => {
       if (re.test(combined) && !hints.detectedTests.includes(name)) {
         hints.detectedTests.push(name);
@@ -1081,7 +1133,6 @@
   function _buildStatCallout(hints, question, answerText) {
     const box = mk('div', 'stat-callout');
 
-    /* Header */
     const head = mk('div', 'stc-head');
     head.innerHTML =
       '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
@@ -1090,7 +1141,6 @@
       '<span>Statistical tools for this question</span>';
     box.appendChild(head);
 
-    /* Detected chips */
     const all = [...hints.detectedParams, ...hints.detectedTests];
     if (all.length) {
       const row = mk('div', 'stc-chip-row');
@@ -1100,7 +1150,6 @@
       box.appendChild(row);
     }
 
-    /* Action links */
     const btnRow = mk('div', 'stc-btn-row');
 
     if (hints.hasSampleSize) {
@@ -1124,14 +1173,14 @@
     if (hints.hasStatTest) {
       const a = mk('a', 'stc-btn stc-btn-sigma');
       a.href = '/analysis.html';
-      a.innerHTML = '\u2248 Open analysis engine <span class="stc-arrow">\u2192</span>';
+      a.innerHTML = '\u03a3 Open Sigma analysis engine <span class="stc-arrow">\u2192</span>';
       a.addEventListener('click', () => {
         try {
           sessionStorage.setItem('medras.sigma.prefill', JSON.stringify({
-            studyDesc:     `Research question: ${question}\n\nSuggested analyses: ${hints.detectedTests.join(', ')}.`,
-            detectedTests: hints.detectedTests,
-            context:       (answerText || '').substring(0, 600),
-            ts:            Date.now(),
+            context:  answerText || '',
+            tests:    hints.detectedTests,
+            question: question,
+            ts:       Date.now(),
           }));
         } catch (_) {}
       });
@@ -1143,119 +1192,97 @@
   }
 
   /* ══════════════════════════════════════════════════════════════════
-     FOLIO  (Phase 5 — saved-papers sidebar)
+     FOLIO  (bookmarks / saved papers)
   ══════════════════════════════════════════════════════════════════ */
 
-  function _folioKey(p) {
-    return ((p.url || p.title || '').trim().toLowerCase()).substring(0, 120);
-  }
-
   function _isPinned(p) {
-    const k = _folioKey(p);
-    return folioItems.some((x) => _folioKey(x) === k);
+    if (!p.url) return false;
+    return folioItems.some((f) => f.url === p.url.trim());
   }
 
-  function _togglePin(paperData, triggerBtn) {
-    const k   = _folioKey(paperData);
-    const idx = folioItems.findIndex((x) => _folioKey(x) === k);
-    if (idx >= 0) {
-      folioItems.splice(idx, 1);
+  function _togglePin(p, btn) {
+    if (!p.url) return;
+    const url = p.url.trim();
+    if (_isPinned(p)) {
+      folioItems = folioItems.filter((f) => f.url !== url);
+      btn.classList.remove('pinned');
+      btn.title = 'Save to Folio';
     } else {
-      folioItems.push({ ...paperData, _pinnedAt: Date.now() });
-      /* Open panel briefly so the user sees the paper land */
-      folioPanelEl.classList.add('open');
+      folioItems.push({
+        url, title: p.title, journal: p.journal, year: p.year,
+        authors: p.authors || [], source: p.source,
+      });
+      btn.classList.add('pinned');
+      btn.title = 'Remove from Folio';
+      /* Pulse animation */
+      if (folioBadge) {
+        folioBadge.classList.remove('badge-pulse');
+        void folioBadge.offsetWidth;
+        folioBadge.classList.add('badge-pulse');
+      }
     }
-    sessionStorage.setItem('sb.folio', JSON.stringify(folioItems));
+    try { sessionStorage.setItem('sb.folio', JSON.stringify(folioItems)); } catch (_) {}
     _renderFolio();
     _updateFolioToggle();
-    /* Sync the button that was just clicked (covers papers with no URL) */
-    if (triggerBtn) {
-      const nowPinned = _isPinned(paperData);
-      triggerBtn.classList.toggle('pinned', nowPinned);
-      triggerBtn.title = nowPinned ? 'Remove from Folio' : 'Save to Folio';
-    }
-  }
-
-  function _updateFolioToggle() {
-    const n = folioItems.length;
-    if (n === 0) {
-      folioToggleBtn.style.display = 'none';
-    } else {
-      folioToggleBtn.style.display = '';
-      folioBadge.textContent = String(n);
-      folioBadge.classList.remove('badge-pulse');
-      void folioBadge.offsetWidth;   /* force reflow to restart animation */
-      folioBadge.classList.add('badge-pulse');
-    }
   }
 
   function _renderFolio() {
-    const n = folioItems.length;
-    folioCount.textContent = n > 0 ? `${n} saved` : '';
-
-    if (n === 0) {
-      folioEmpty.style.display = '';
+    if (!folioList || !folioEmpty) return;
+    if (!folioItems.length) {
       folioList.style.display  = 'none';
-      folioFoot.style.display  = 'none';
+      folioEmpty.style.display = '';
+      if (folioFoot) folioFoot.style.display = 'none';
+      if (folioCount) folioCount.textContent = '';
       return;
     }
-    folioEmpty.style.display = 'none';
     folioList.style.display  = '';
-    folioFoot.style.display  = '';
-
+    folioEmpty.style.display = 'none';
+    if (folioFoot) folioFoot.style.display = '';
+    if (folioCount) folioCount.textContent = `${folioItems.length} saved`;
     folioList.innerHTML = '';
-    folioItems.forEach((p) => folioList.appendChild(_buildFolioItem(p)));
+    folioItems.forEach((item, idx) => {
+      const el = mk('div', 'folio-item');
 
-    /* Sync pin-btn states across all source cards in the thread */
-    document.querySelectorAll('.pin-btn[data-url]').forEach((btn) => {
-      const pinned = folioItems.some((x) => (x.url || '').trim() === btn.dataset.url.trim());
-      btn.classList.toggle('pinned', pinned);
-      btn.title = pinned ? 'Remove from Folio' : 'Save to Folio';
+      const top = mk('div', 'fi-top');
+      if (item.url) {
+        const a = mk('a', 'fi-title');
+        a.href = item.url; a.target = '_blank'; a.rel = 'noopener';
+        a.textContent = item.title || 'Untitled';
+        top.appendChild(a);
+      } else {
+        const s = mk('span', 'fi-title');
+        s.textContent = item.title || 'Untitled';
+        top.appendChild(s);
+      }
+      const rem = mk('button', 'fi-remove');
+      rem.title = 'Remove';
+      rem.textContent = '\u00d7';
+      rem.addEventListener('click', () => {
+        folioItems.splice(idx, 1);
+        try { sessionStorage.setItem('sb.folio', JSON.stringify(folioItems)); } catch (_) {}
+        _renderFolio();
+        _updateFolioToggle();
+      });
+      top.appendChild(rem);
+      el.appendChild(top);
+
+      const metaRow = mk('div', 'fi-meta');
+      if (item.journal) { const j = mk('span', 'fi-j'); j.textContent = item.journal; metaRow.appendChild(j); }
+      if (item.year)    { const y = mk('span', 'fi-y'); y.textContent = item.year;    metaRow.appendChild(y); }
+      el.appendChild(metaRow);
+
+      folioList.appendChild(el);
     });
   }
 
-  function _buildFolioItem(p) {
-    const item = mk('div', 'folio-item');
-
-    /* Top row: title + remove button */
-    const top = mk('div', 'fi-top');
-    const titleEl = p.url ? mk('a', 'fi-title') : mk('span', 'fi-title');
-    if (p.url) { titleEl.href = p.url; titleEl.target = '_blank'; titleEl.rel = 'noopener'; }
-    titleEl.textContent = p.title || 'Untitled';
-    top.appendChild(titleEl);
-
-    const rmBtn = mk('button', 'fi-remove');
-    rmBtn.title     = 'Remove from Folio';
-    rmBtn.innerHTML = '\u00d7';
-    rmBtn.addEventListener('click', () => _togglePin(p, null));
-    top.appendChild(rmBtn);
-    item.appendChild(top);
-
-    /* Meta row: evidence type · journal · year */
-    const meta = mk('div', 'fi-meta');
-    const ev   = mk('span', `ev-tag ev-${p.evidence_type || 'observational'}`);
-    ev.textContent = EV_LABELS[p.evidence_type] || 'Paper';
-    meta.appendChild(ev);
-
-    if (p.journal && p.source !== 'uploaded') {
-      const j = mk('span', 'fi-j'); j.textContent = p.journal; meta.appendChild(j);
+  function _updateFolioToggle() {
+    if (!folioToggleBtn) return;
+    if (folioItems.length > 0) {
+      folioToggleBtn.style.display = '';
+      if (folioBadge) folioBadge.textContent = String(folioItems.length);
+    } else {
+      folioToggleBtn.style.display = 'none';
     }
-    if (p.year) { const y = mk('span', 'fi-y'); y.textContent = p.year; meta.appendChild(y); }
-    item.appendChild(meta);
-
-    return item;
-  }
-
-  function _dlText(filename, content) {
-    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
-    a.href     = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
   }
 
 })();
