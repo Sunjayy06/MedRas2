@@ -135,17 +135,26 @@ a:hover { text-decoration: underline; }
 .th-field > label { display: block; font-size: 12.5px; font-weight: 600;
   color: var(--th-text-soft); margin-bottom: 6px;
   text-transform: uppercase; letter-spacing: 0.04em; }
+/* Standalone label class (used outside .th-field parent) */
+.th-label {
+  display: block; font-size: 12.5px; font-weight: 600;
+  color: var(--th-text-soft); margin-bottom: 6px;
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
 .th-input, .th-select, .th-textarea {
   width: 100%; padding: 10px 12px;
   border: 1px solid var(--th-line); border-radius: 8px;
   font-size: 14px; font-family: inherit;
   background: #fff; color: var(--th-text);
+  transition: border-color .15s, box-shadow .15s;
 }
+textarea.th-input { resize: vertical; line-height: 1.55; min-height: 68px; }
 .th-textarea { min-height: 100px; resize: vertical; line-height: 1.55; }
 .th-input:focus, .th-select:focus, .th-textarea:focus {
   outline: 2px solid var(--th-emerald); outline-offset: -1px;
-  border-color: transparent;
+  border-color: transparent; box-shadow: 0 0 0 4px rgba(16,185,129,0.1);
 }
+.th-input::placeholder, textarea.th-input::placeholder { color: #a8b5ae; }
 
 /* --- Pills / status --- */
 .th-pill { display: inline-block; padding: 3px 10px; border-radius: 999px;

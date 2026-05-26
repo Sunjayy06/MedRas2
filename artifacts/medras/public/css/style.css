@@ -257,6 +257,11 @@ ul {
   box-shadow: none;
 }
 
+.btn:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow: none;
+}
+
 .btn-secondary {
   background: rgba(255, 255, 255, 0.06);
   color: rgba(255, 255, 255, 0.88);
@@ -268,6 +273,63 @@ ul {
   border-color: rgba(255, 255, 255, 0.28);
   transform: translateY(-1px);
   color: #fff;
+}
+
+/* Ghost — light surface outlined button */
+.btn-ghost {
+  background: transparent;
+  color: var(--color-accent-dark);
+  border-color: var(--color-accent);
+}
+.btn-ghost:hover:not(:disabled) {
+  background: rgba(59, 130, 246, 0.06);
+  border-color: var(--color-accent-dark);
+  transform: translateY(-1px);
+}
+
+/* Ghost muted — for light-background secondary actions */
+.btn-ghost-muted {
+  background: var(--color-bg-muted);
+  color: var(--color-text);
+  border-color: var(--color-border);
+}
+.btn-ghost-muted:hover:not(:disabled) {
+  background: #e8edf8;
+  border-color: #c0cbdf;
+  transform: translateY(-1px);
+}
+
+/* Danger */
+.btn-danger {
+  background: var(--color-danger);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(179, 38, 30, 0.25);
+}
+.btn-danger:hover:not(:disabled) {
+  background: #9c190f;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(179, 38, 30, 0.35);
+}
+.btn-danger:disabled, .btn-danger[disabled] {
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* Small */
+.btn-sm {
+  min-height: 34px;
+  padding: 0 14px;
+  font-size: 13px;
+  border-radius: 8px;
+}
+
+/* Large */
+.btn-lg {
+  min-height: 52px;
+  padding: 0 30px;
+  font-size: 16.5px;
+  border-radius: 12px;
 }
 
 /* =========================================================================

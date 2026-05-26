@@ -157,6 +157,50 @@
     </div>
   </section>
 
+  <!-- Journal metadata — article mode only ─────────────────────────────── -->
+  <section id="th-journal-meta-section" class="th-card" style="display:none">
+    <h3 class="th-h3">Journal metadata</h3>
+    <p class="th-sub" style="margin-top:0">
+      Required for submission to Q1 journals. These sections are appended to the
+      exported DOCX and PDF before the References.
+    </p>
+
+    <div class="th-block">
+      <label class="th-label" for="th-meta-credit">Author contributions (CRediT taxonomy)</label>
+      <p style="font-size:11.5px;color:var(--th-text-soft);margin:2px 0 6px">
+        e.g. "A.K.: Conceptualisation, Methodology, Writing – original draft.
+        R.S.: Data curation, Formal analysis. P.M.: Supervision, Writing – review &amp; editing."
+      </p>
+      <textarea id="th-meta-credit" class="th-input" rows="3"
+        placeholder="Describe each author's contributions using CRediT roles…"></textarea>
+    </div>
+
+    <div class="th-block" style="margin-top:14px">
+      <label class="th-label" for="th-meta-data-av">Data availability statement</label>
+      <div style="display:flex; gap:8px; margin-bottom:8px; flex-wrap:wrap">
+        <select id="th-meta-data-av-type" class="th-input" style="width:auto;flex:0 0 auto">
+          <option value="available">Data available in a public repository</option>
+          <option value="request">Data available on request</option>
+          <option value="na">Not applicable</option>
+        </select>
+        <input id="th-meta-data-av-url" class="th-input" style="flex:1;min-width:200px"
+          placeholder="Repository URL (optional)" />
+      </div>
+    </div>
+
+    <div class="th-block" style="margin-top:14px">
+      <label class="th-label" for="th-meta-competing">Competing interests <span style="color:var(--th-danger)">*</span></label>
+      <textarea id="th-meta-competing" class="th-input" rows="2"
+        placeholder="e.g. 'The authors declare no competing interests.' or describe any conflicts."></textarea>
+    </div>
+
+    <div class="th-block" style="margin-top:14px">
+      <label class="th-label" for="th-meta-funding">Funding (optional)</label>
+      <textarea id="th-meta-funding" class="th-input" rows="2"
+        placeholder="e.g. 'This study was supported by the Indian Council of Medical Research (grant no. …).  The funder had no role in study design, data collection, or analysis.'"></textarea>
+    </div>
+  </section>
+
   <section class="th-card">
     <h3 class="th-h3">Informed-consent forms</h3>
     <p class="th-sub" style="margin-top:0">
@@ -359,7 +403,54 @@
       title_meta: s.title_meta || {},
       consent: s.consent || { languages: [{code:'en',label:'English'}], delivery: 'attached' },
       assets: s.assets || {},
+      metadata: s.journal_meta || {},
     };
+  }
+
+  function bindJournalMeta() {
+    var s = ThesisState.get();
+    var mode = (s.setup && s.setup.mode) || 'thesis';
+    var sec = document.getElementById('th-journal-meta-section');
+    if (mode !== 'article') { sec.style.display = 'none'; return; }
+    sec.style.display = '';
+
+    var jm = s.journal_meta || {};
+    var creditEl   = document.getElementById('th-meta-credit');
+    var avTypeEl   = document.getElementById('th-meta-data-av-type');
+    var avUrlEl    = document.getElementById('th-meta-data-av-url');
+    var compEl     = document.getElementById('th-meta-competing');
+    var fundEl     = document.getElementById('th-meta-funding');
+
+    if (creditEl)  creditEl.value  = jm.credit              || '';
+    if (avTypeEl)  avTypeEl.value  = jm.data_av_type        || 'available';
+    if (avUrlEl)   avUrlEl.value   = jm.data_av_url         || '';
+    if (compEl)    compEl.value    = jm.competing_interests  || '';
+    if (fundEl)    fundEl.value    = jm.funding              || '';
+
+    function save() {
+      var avType = avTypeEl ? avTypeEl.value : 'available';
+      var avUrl  = (avUrlEl  ? avUrlEl.value  : '').trim();
+      var avStmt = avType === 'available'
+        ? 'The data that support the findings of this study are available in a public repository.' + (avUrl ? ' URL: ' + avUrl : '')
+        : avType === 'request'
+        ? 'The data that support the findings of this study are available from the corresponding author upon reasonable request.'
+        : 'Not applicable.';
+      ThesisState.patch(function(st){
+        st.journal_meta = {
+          credit:               creditEl ? creditEl.value.trim() : '',
+          data_availability:    avStmt,
+          data_av_type:         avType,
+          data_av_url:          avUrl,
+          competing_interests:  compEl ? compEl.value.trim() : '',
+          funding:              fundEl ? fundEl.value.trim() : '',
+        };
+        return st;
+      });
+    }
+    [creditEl, avTypeEl, avUrlEl, compEl, fundEl].forEach(function(el){
+      if (el) el.addEventListener('input', save);
+      if (el) el.addEventListener('change', save);
+    });
   }
 
   function setStatus(kind, msg) {
@@ -512,6 +603,7 @@
 
     applyIndianVisibility(s);
     bindMetaInputs();
+    bindJournalMeta();
     renderLangGrid();
     renderSummary();
 

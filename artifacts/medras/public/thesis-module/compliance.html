@@ -15,8 +15,14 @@
   .th-comp-tile.pass .v { color:var(--th-emerald-d); }
   .th-comp-tile.warn .v { color:var(--th-amber); }
   .th-comp-tile.fail .v { color:var(--th-danger); }
-  .th-comp-item { display:grid; grid-template-columns: 36px 1fr auto; gap:12px; padding:12px 14px; border-bottom:1px solid var(--th-line); align-items:start; }
-  .th-comp-icon { width:30px; height:30px; border-radius:50%; display:grid; place-items:center; font-weight:700; color:#fff; font-size:15px; }
+  @keyframes th-item-in { from { opacity:0; transform:translateY(5px); } to { opacity:1; transform:none; } }
+  .th-comp-item { display:grid; grid-template-columns: 36px 1fr auto; gap:12px; padding:12px 14px; border-bottom:1px solid var(--th-line); align-items:start; animation:th-item-in .18s ease-out both; }
+  .th-comp-item:nth-child(2) { animation-delay:.04s; }
+  .th-comp-item:nth-child(3) { animation-delay:.08s; }
+  .th-comp-item:nth-child(4) { animation-delay:.12s; }
+  .th-comp-item:nth-child(5) { animation-delay:.16s; }
+  .th-comp-item:nth-child(n+6) { animation-delay:.20s; }
+  .th-comp-icon { width:30px; height:30px; border-radius:50%; display:grid; place-items:center; font-weight:700; color:#fff; font-size:15px; flex-shrink:0; }
   .th-comp-icon.pass { background: var(--th-emerald-d); }
   .th-comp-icon.warn { background: var(--th-amber); }
   .th-comp-icon.fail { background: var(--th-danger); }
@@ -72,6 +78,20 @@
   <div id="th-comp-empty" class="th-comp-empty" style="display:none">No checks run yet.</div>
 
   <div id="th-comp-gate" class="th-gate" style="display:none"></div>
+
+  <!-- Reporting checklist — article mode only -->
+  <div id="th-checklist-section" style="display:none; margin-top:28px">
+    <h2 class="th-h2" style="margin-bottom:4px">Reporting checklist</h2>
+    <p class="th-sub" style="margin-top:0 0 10px">
+      Journals require the relevant reporting guideline to be completed and submitted
+      alongside your manuscript. Tick each item when satisfied.
+    </p>
+    <div id="th-checklist-bar-wrap" style="margin:10px 0 14px; background:var(--th-line); border-radius:999px; height:8px; overflow:hidden">
+      <div id="th-checklist-bar" style="height:100%; background:var(--th-emerald-d); width:0%; transition:width .3s"></div>
+    </div>
+    <div id="th-checklist-pct" style="font-size:12px; color:var(--th-text-soft); margin-bottom:12px"></div>
+    <div id="th-checklist-list" class="th-card" style="padding:0"></div>
+  </div>
 </main>
 
 <script src="/thesis-module/js/thesis-state.js"></script>
@@ -178,6 +198,188 @@
     }
   }
 
+  // ── Reporting checklist (article mode) ──────────────────────────────────
+  var _CHECKLISTS = {
+    consort: {
+      label: 'CONSORT 2010 (Randomised Controlled Trials)',
+      items: [
+        'Title identified as randomised trial','Structured abstract with trial design, methods, results, conclusions',
+        'Scientific background and rationale','Specific objectives and hypotheses',
+        'Description of trial design including allocation ratio','Eligibility criteria for participants',
+        'Settings and locations of data collection','Interventions for each group with sufficient detail',
+        'Pre-specified primary and secondary outcome measures','How sample size was determined',
+        'Method of sequence generation','Type of randomisation and allocation concealment',
+        'Blinding mechanism described','Statistical methods for primary and secondary outcomes',
+        'Flow of participants (diagram recommended)','Dates defining recruitment periods',
+        'Numbers randomised to each group','Baseline demographic and clinical characteristics',
+        'Numbers analysed in each group','For each outcome, results for each group and estimated effect size',
+        'All important harms or unintended effects','Limitations and sources of bias',
+        'Generalisability (external validity)','Interpretation consistent with results',
+        'Registration number and name of trial registry',
+      ],
+    },
+    strobe: {
+      label: 'STROBE (Observational Studies)',
+      items: [
+        'Study design indicated in title or abstract','Structured abstract (background, objectives, methods, results, conclusions)',
+        'Scientific background, rationale, and objectives','Study design presented early in main body',
+        'Setting, locations, and dates of data collection','Eligibility criteria and sources / methods of selection',
+        'Variables: outcomes, exposures, predictors, confounders clearly defined',
+        'Data sources and measurement methods for each variable',
+        'Any efforts to address potential sources of bias',
+        'Sample size explanation','Methods used to address missing data',
+        'Statistical methods including control of confounders',
+        'Numbers at each stage of study (flow diagram if possible)',
+        'Characteristics of study participants and follow-up time',
+        'Number of outcome events or summary measures',
+        'Main results with confidence intervals','Other analyses (subgroup, sensitivity)',
+        'Key results and how they relate to objectives','Limitations and potential biases',
+        'Cautious interpretation and generalisability','Funding and role of funders',
+        'Conflicts of interest',
+      ],
+    },
+    prisma: {
+      label: 'PRISMA 2020 (Systematic Reviews & Meta-analyses)',
+      items: [
+        'Title identifies as systematic review','Structured abstract with background, objectives, data sources, eligibility, synthesis, limitations, conclusions',
+        'Rationale in context of existing knowledge','Explicit research question with PICO or equivalent',
+        'Eligibility criteria specified a priori','Information sources (databases, registers, other) with dates',
+        'Full search strategy for at least one database','Study selection process',
+        'Data extraction process and any automation tools','List of all outcomes sought',
+        'Risk-of-bias assessment for each study','Methods for data synthesis',
+        'Methods for exploring heterogeneity','Any deviations from registered protocol explained',
+        'Results of search (PRISMA flow diagram)','Characteristics of included studies',
+        'Risk-of-bias in individual studies','Results of all outcomes sought',
+        'Results of any syntheses','Certainty of evidence assessed',
+        'Limitations of evidence base','Interpretation of results',
+        'Registration and protocol information','Funding and conflicts of interest',
+        'Availability of data, code, and other materials',
+        'Declaration of interests for review team','Sources of funding',
+        'Role of funders',
+      ],
+    },
+    care: {
+      label: 'CARE (Case Reports)',
+      items: [
+        'Title: the words "case report" in title','Abstract: structured with key elements',
+        'Keywords: 2–5 terms','Introduction: unique features and clinical relevance',
+        'Patient information: demographics, main complaint, history','Clinical findings at presentation',
+        'Timeline: key dates and times','Diagnostic assessment including methods, challenges, differential',
+        'Therapeutic interventions: types, administration, changes','Follow-up and outcomes',
+        'Discussion: strengths and limitations, clinical teaching point','Patient perspective',
+        'Informed consent obtained',
+      ],
+    },
+  };
+
+  // Mirror the resolveChecklist logic from writing-modes.js
+  var _DESIGN_TO_CHECKLIST = {
+    rct: 'consort',
+    cohort_prospective:   'strobe', cohort_retrospective: 'strobe',
+    case_control:         'strobe', cross_sectional: 'strobe',
+    quasi_experimental:   'strobe',
+    qualitative:          null,  // COREQ — not embedded; show prisma as closest
+    mixed_methods: null, diagnostic_accuracy: null, economic_evaluation: null,
+  };
+  var _ARTICLE_TYPE_TO_CHECKLIST = {
+    case_report:       'care',
+    case_series:       'strobe',  // STROBE case-series adaptation
+    systematic_review: 'prisma',
+    meta_analysis:     'prisma',  // MOOSE+PRISMA; PRISMA covers the key items
+    narrative_review:  null,      // no formal checklist
+    original_research: null,      // resolved from design below
+    monograph:         null,
+  };
+
+  function _resolveChecklist(s) {
+    var setup = s.setup || {};
+    var artType = setup.article_type || 'original_research';
+    if (artType === 'original_research') {
+      var d = setup.design || '';
+      return _DESIGN_TO_CHECKLIST[d] || 'consort';  // default CONSORT
+    }
+    return _ARTICLE_TYPE_TO_CHECKLIST[artType] || null;
+  }
+
+  function initChecklist() {
+    var s = ThesisState.get();
+    var mode = (s.setup && s.setup.mode) || 'thesis';
+    if (mode !== 'article') return;
+
+    var sec = document.getElementById('th-checklist-section');
+    var ck = _resolveChecklist(s);
+
+    if (!ck) {
+      // No formal checklist for this article type (narrative review, monograph, etc.)
+      sec.style.display = '';
+      sec.querySelector('#th-checklist-list').innerHTML =
+        '<p style="padding:16px;color:var(--th-text-soft);font-size:13px">No formal reporting checklist is required for this article type. ' +
+        'Refer to your target journal\'s author guidelines for any manuscript preparation checklists.</p>';
+      sec.querySelector('#th-checklist-bar-wrap').style.display = 'none';
+      sec.querySelector('#th-checklist-pct').style.display = 'none';
+      return;
+    }
+
+    sec.style.display = '';
+
+    // Allow switching guideline
+    var switcher = document.createElement('div');
+    switcher.style.cssText = 'display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; align-items:center;';
+    switcher.innerHTML = '<span style="font-size:12px;color:var(--th-text-soft)">Guideline:</span>' +
+      Object.entries(_CHECKLISTS).map(([k,v]) =>
+        `<button class="th-btn th-btn-sm ${k===ck?'th-btn-primary':'th-btn-light'}" data-ck="${esc(k)}">${esc(k.toUpperCase())}</button>`
+      ).join('');
+    sec.insertBefore(switcher, document.getElementById('th-checklist-bar-wrap'));
+    switcher.querySelectorAll('[data-ck]').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        switcher.querySelectorAll('[data-ck]').forEach(function(b){ b.classList.remove('th-btn-primary'); b.classList.add('th-btn-light'); });
+        btn.classList.add('th-btn-primary'); btn.classList.remove('th-btn-light');
+        renderChecklist(btn.dataset.ck);
+      });
+    });
+
+    renderChecklist(ck);
+  }
+
+  function renderChecklist(ck) {
+    var s = ThesisState.get();
+    var saved = (s.checklist || {})[ck] || {};
+    var data = _CHECKLISTS[ck];
+    if (!data) return;
+    document.querySelector('#th-checklist-section h2').textContent = data.label;
+    var list = document.getElementById('th-checklist-list');
+    list.innerHTML = data.items.map(function(item, i){
+      var key = ck + '_' + i;
+      var checked = saved[key] || false;
+      return '<label class="th-comp-item" style="cursor:pointer;align-items:center">' +
+        '<input type="checkbox" data-ck="'+esc(ck)+'" data-idx="'+i+'" style="width:16px;height:16px" '+(checked?'checked':'')+' />' +
+        '<span style="font-size:13px">'+esc(item)+'</span>' +
+        '</label>';
+    }).join('');
+    list.querySelectorAll('input[data-ck]').forEach(function(cb){
+      cb.addEventListener('change', function(){
+        ThesisState.patch(function(st){
+          st.checklist = st.checklist || {};
+          st.checklist[ck] = st.checklist[ck] || {};
+          st.checklist[ck][ck+'_'+cb.dataset.idx] = cb.checked;
+          return st;
+        });
+        updateBar(ck);
+      });
+    });
+    updateBar(ck);
+  }
+
+  function updateBar(ck) {
+    var s = ThesisState.get();
+    var saved = (s.checklist || {})[ck] || {};
+    var total = (_CHECKLISTS[ck] || {items:[]}).items.length;
+    var done  = Object.values(saved).filter(Boolean).length;
+    var pct   = total ? Math.round(done/total*100) : 0;
+    document.getElementById('th-checklist-bar').style.width = pct + '%';
+    document.getElementById('th-checklist-pct').textContent = done + ' / ' + total + ' items checked (' + pct + '%)';
+  }
+
   document.getElementById('th-run').addEventListener('click', run);
   // Auto-run on load if (a) there's any chapter content yet, or
   // (b) the user explicitly arrived with export-intent (in which case
@@ -185,6 +387,7 @@
   var s = ThesisState.get();
   var hasContent = Object.values(s.chapters || {}).some(function (c) { return (c.text||'').trim(); });
   if (hasContent || exportIntent) run();
+  initChecklist();
 })();
 </script>
 <script src="/js/medras-nav.js" defer></script>

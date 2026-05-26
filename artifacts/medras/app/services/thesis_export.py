@@ -479,7 +479,8 @@ def build_article_docx(payload: Dict[str, Any]) -> bytes:
     credit   = (metadata.get("credit")              or "").strip()
     data_av  = (metadata.get("data_availability")   or "").strip()
     comp_int = (metadata.get("competing_interests")  or "").strip()
-    if credit or data_av or comp_int:
+    funding  = (metadata.get("funding")              or "").strip()
+    if credit or data_av or comp_int or funding:
         doc.add_page_break()
         if credit:
             PE._add_heading(doc, "Author Contributions (CRediT)", level=2)
@@ -492,6 +493,10 @@ def build_article_docx(payload: Dict[str, Any]) -> bytes:
         if comp_int:
             PE._add_heading(doc, "Competing Interests", level=2)
             PE._add_para(doc, comp_int, size=11,
+                         align=WD_ALIGN_PARAGRAPH.LEFT, line_spacing=1.5)
+        if funding:
+            PE._add_heading(doc, "Funding", level=2)
+            PE._add_para(doc, funding, size=11,
                          align=WD_ALIGN_PARAGRAPH.LEFT, line_spacing=1.5)
 
     entries = PE._bibliography_entries(references)
@@ -552,6 +557,7 @@ def build_article_pdf(payload: Dict[str, Any]) -> bytes:
     credit   = (metadata.get("credit")              or "").strip()
     data_av  = (metadata.get("data_availability")   or "").strip()
     comp_int = (metadata.get("competing_interests")  or "").strip()
+    funding  = (metadata.get("funding")              or "").strip()
     meta_h2  = ParagraphStyle("art_h2", parent=styles["h1"], fontSize=13, leading=18)
     if credit:
         story.append(Paragraph("Author Contributions (CRediT)", meta_h2))
@@ -562,6 +568,9 @@ def build_article_pdf(payload: Dict[str, Any]) -> bytes:
     if comp_int:
         story.append(Paragraph("Competing Interests", meta_h2))
         story.append(Paragraph(PE._pdf_safe(comp_int), styles["body"]))
+    if funding:
+        story.append(Paragraph("Funding", meta_h2))
+        story.append(Paragraph(PE._pdf_safe(funding), styles["body"]))
 
     entries = PE._bibliography_entries(references)
     if entries:

@@ -246,6 +246,11 @@ async function resumeFromSavedSession(saved) {
       await loadQualityReport();
     } else if (resolved === "3") {
       showScreen("3");
+      if (state.classifications && state.classifications.length > 0) {
+        renderClassify();
+      } else {
+        await loadVariablesData();
+      }
     } else if (resolved === "setup") {
       // Restore the setup screen — rehydrate AI study plan from saved state,
       // or re-call /setup-study with the stored description if state is stale.
@@ -4374,6 +4379,17 @@ function renderSetupScreen(plan) {
       </tr>`).join("");
   }
   if (noPairs) noPairs.classList.toggle("is-hidden", pairs.length > 0);
+
+  // Pre-fill description and hide redundant proposal-upload row when
+  // study context was already captured on Screen 1.
+  const descEl2 = document.getElementById("setup-study-description");
+  if (descEl2 && !descEl2.value.trim() && (state.studyDesc || "").trim()) {
+    descEl2.value = state.studyDesc;
+  }
+  const uploadRow = document.querySelector('[data-testid="setup-upload-row"]');
+  if (uploadRow) {
+    uploadRow.style.display = (state.studyDesc || "").trim() ? "none" : "";
+  }
 }
 
 function bindScreenSetup() {
@@ -4389,12 +4405,13 @@ function bindScreenSetup() {
   screen.querySelector('[data-action="setup-back"]')?.addEventListener("click", () => showScreen("preview"));
 
   // ── Proceed ───────────────────────────────────────────────────────────────
-  screen.querySelector('[data-action="setup-proceed"]')?.addEventListener("click", () => {
+  screen.querySelector('[data-action="setup-proceed"]')?.addEventListener("click", async () => {
     if (state.aiStudy) {
       state.studyType  = state.aiStudy.study_type  || state.studyType  || "comparison";
       state.outcomeCol = state.aiStudy.outcome_col || state.outcomeCol || null;
     }
     showScreen("3");
+    await loadVariablesData();
   });
 
   // ── Re-analyse (free-text path) ───────────────────────────────────────────
