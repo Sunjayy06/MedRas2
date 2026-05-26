@@ -1078,9 +1078,31 @@
                   sessionStorage.getItem('folio.import.from_sigma');
       if (!raw) return null;
       const d = JSON.parse(raw);
-      if (d && (d.results || d.text)) return d;
+      if (d && (d.results || d.text || d.tables)) return d;
       return null;
     } catch (_) { return null; }
+  }
+  // _navigateToNextChapter: after loading results, offer routing to next chapter (e.g. Discussion)
+  function _navigateToNextChapter() {
+    const spineOrder = spine || [];
+    const idx = spineOrder.findIndex(function(c) { return c.id === chapterId; });
+    const next = idx >= 0 && idx + 1 < spineOrder.length ? spineOrder[idx + 1] : null;
+    if (!next) return;
+    const label = next.label || next.id;
+    // Simple inline confirm banner (non-blocking)
+    const banner = document.createElement('div');
+    banner.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#064e3b;color:#fff;' +
+      'padding:12px 20px;border-radius:10px;display:flex;gap:14px;align-items:center;z-index:9999;font-size:13.5px;' +
+      'box-shadow:0 4px 20px rgba(0,0,0,.25)';
+    banner.innerHTML = '<span>Results loaded. Ready to write ' + esc(label) + '?</span>' +
+      '<button style="background:#10b981;border:none;color:#fff;padding:5px 14px;border-radius:6px;cursor:pointer;font-size:13px">Continue →</button>' +
+      '<button style="background:none;border:1px solid rgba(255,255,255,.4);color:#fff;padding:5px 10px;border-radius:6px;cursor:pointer;font-size:12px">Stay here</button>';
+    document.body.appendChild(banner);
+    banner.querySelectorAll('button')[0].addEventListener('click', function() {
+      window.location.href = '/thesis-module/editor.html?ch=' + next.id;
+    });
+    banner.querySelectorAll('button')[1].addEventListener('click', function() { banner.remove(); });
+    setTimeout(function() { if (banner.parentNode) banner.remove(); }, 10000);
   }
 
   function openImportModal(preloadSigma) {
@@ -1137,28 +1159,57 @@
     }).sort(function(a, b) { return b.score - a.score; });
   }
 
-  // Convert kept tables to markdown for the chapter canvas
-  function _tablesToMarkdown(tables) {
+  // Convert kept tables to HTML <table> elements for the chapter canvas
+  function _tablesToHtml(tables) {
     return tables.map(function(t) {
       if (!t.rows || !t.rows.length) return '';
       const rows = t.rows;
-      const cols = Math.max.apply(null, rows.map(function(r) { return r.length; }));
-      const norm = rows.map(function(r) {
-        const out = r.slice();
-        while (out.length < cols) out.push('');
-        return out;
-      });
-      const widths = Array.from({ length: cols }, function(_, ci) {
-        return Math.max.apply(null, norm.map(function(r) { return (r[ci] || '').length; }).concat([3]));
-      });
-      const sep = '|' + widths.map(function(w) { return '-'.repeat(w + 2); }).join('|') + '|';
-      const lines = norm.map(function(r, ri) {
-        const line = '|' + r.map(function(c, ci) { return ' ' + (c || '').padEnd(widths[ci]) + ' '; }).join('|') + '|';
-        return ri === 0 ? line + '\n' + sep : line;
-      });
-      const caption = t.caption ? '\n\n' + t.caption : '';
-      return lines.join('\n') + caption;
-    }).filter(Boolean).join('\n\n---\n\n');
+      const caption = t.caption ? '<caption style="caption-side:top;font-size:12.5px;font-weight:600;text-align:left;padding:4px 0;color:var(--th-ink-900)">' + esc(t.caption) + '</caption>' : '';
+      const html = '<table class="th-tbl-imported" style="border-collapse:collapse;width:100%;margin:12px 0;font-size:12.5px">' +
+        caption +
+        rows.map(function(r, ri) {
+          return '<tr>' + r.map(function(c) {
+            const cellStyle = 'border:1px solid var(--th-line);padding:4px 8px;text-align:left;' +
+              (ri === 0 ? 'background:var(--th-paper-2);font-weight:600;' : '');
+            const tag = ri === 0 ? 'th' : 'td';
+            return '<' + tag + ' style="' + cellStyle + '">' + esc(c || '') + '</' + tag + '>';
+          }).join('') + '</tr>';
+        }).join('') +
+        '</table>';
+      return html;
+    }).filter(Boolean).join('\n');
+  }
+
+  // Build HTML for the chapter canvas: prose paragraphs + formatted tables
+  function _buildImportHtml() {
+    if (!_importData) return { html: '', text: '' };
+    const prose = (_importData.prose || '').trim();
+    const keptTables = _importTableChoices
+      .filter(function(ch) { return ch.kept; })
+      .map(function(ch) { return Object.assign({}, ch.tableRef, { caption: ch.caption || ch.tableRef.caption || '' }); });
+    const tableHtml = _tablesToHtml(keptTables);
+    const proseHtml = prose
+      ? prose.split(/\n{2,}/).map(function(p) { return '<p>' + esc(p.trim()) + '</p>'; }).join('\n')
+      : '';
+    const html = [proseHtml, tableHtml].filter(Boolean).join('\n');
+    // Plain-text version for improve-section API calls (tables as readable text)
+    const tableTxt = keptTables.map(function(t) {
+      const cap = t.caption ? t.caption + '\n' : '';
+      const rows = (t.rows || []).map(function(r) { return r.join('\t'); }).join('\n');
+      return cap + rows;
+    }).join('\n\n');
+    const text = [prose, tableTxt].filter(Boolean).join('\n\n');
+    return { html: html, text: text };
+  }
+
+  // Directly load content into the canvas (HTML preserved, write mode)
+  function _loadIntoCanvas(html, text) {
+    const canvas = document.getElementById('th-editor-canvas');
+    canvas.innerHTML = html || esc(text);
+    ThesisState.setChapter(chapterId, { text: canvas.innerText });
+    pendingDraft = null; pendingDraftMeta = null; suggestions = [];
+    mode = 'write';
+    renderEditor(); renderSideChapters(); renderSuggestList(); renderChapterRefPanel();
   }
 
   async function doImportFromSigma() {
@@ -1168,7 +1219,9 @@
       return;
     }
     const prose = (sigmaData.results || sigmaData.text || '').slice(0, 12000);
-    _importData = { prose: prose, tables: [] };
+    // Parse structured tables if present (set by analysis.js "Take to Scriptorium")
+    const tables = Array.isArray(sigmaData.tables) ? sigmaData.tables : [];
+    _importData = { prose: prose, tables: tables };
     showImportStage(2);
     renderImportPreview();
   }
@@ -1213,9 +1266,36 @@
     if (!_importData) return;
     const prose = _importData.prose || '';
     const tables = _importData.tables || [];
+    const isResults = _isResultsChapter();
+    const isArticle = _isArticleMode();
+    const setup = ThesisState.get().setup || {};
+
     // Prose preview
     const proseEl = document.getElementById('th-import-prose-preview');
     if (proseEl) proseEl.textContent = prose.slice(0, 500) + (prose.length > 500 ? '…' : '');
+
+    // Show the correct action panel
+    const generic = document.getElementById('th-import-actions-generic');
+    const thesisR = document.getElementById('th-import-actions-thesis-results');
+    const articleR = document.getElementById('th-import-actions-article-results');
+    const skipBanner = document.getElementById('th-import-skip-review');
+    if (isResults && !isArticle) {
+      if (generic)   generic.style.display = 'none';
+      if (articleR)  articleR.style.display = 'none';
+      if (thesisR)   thesisR.style.display = '';
+      if (skipBanner) skipBanner.style.display = tables.length ? 'flex' : 'none';
+    } else if (isResults && isArticle) {
+      if (generic)   generic.style.display = 'none';
+      if (thesisR)   thesisR.style.display = 'none';
+      if (articleR)  articleR.style.display = '';
+      if (skipBanner) skipBanner.style.display = 'none';
+    } else {
+      if (thesisR)   thesisR.style.display = 'none';
+      if (articleR)  articleR.style.display = 'none';
+      if (generic)   generic.style.display = '';
+      if (skipBanner) skipBanner.style.display = 'none';
+    }
+
     // Tables
     const tablesSection = document.getElementById('th-import-tables-section');
     const tablesList = document.getElementById('th-import-tables-list');
@@ -1225,16 +1305,13 @@
       _importTableChoices = [];
       return;
     }
-    const isResults = _isResultsChapter();
-    const isArticle = _isArticleMode();
-    const setup = ThesisState.get().setup || {};
     let displayTables = tables;
     if (isResults && isArticle) {
       const aimText = (setup.aim || '') + ' ' + (setup.primary_objective || '') + ' ' + (setup.title || '');
       displayTables = _scoreTables(tables, aimText);
-      if (tablesLabel) tablesLabel.textContent = 'Tables found (' + tables.length + ') — auto-ranked by relevance to your study aim. Include up to 5 key tables:';
+      if (tablesLabel) tablesLabel.textContent = 'Tables found (' + tables.length + ') — auto-ranked by relevance to your study aim. Select up to 5 key tables:';
     } else if (isResults) {
-      if (tablesLabel) tablesLabel.textContent = 'Tables found (' + tables.length + ') — choose which to include:';
+      if (tablesLabel) tablesLabel.textContent = 'Tables found (' + tables.length + ') — choose which to include (or use "Import all" above):';
     } else {
       if (tablesLabel) tablesLabel.textContent = 'Tables found (' + tables.length + ') — all will be included:';
     }
@@ -1287,49 +1364,83 @@
     });
   }
 
-  function _buildImportText() {
-    if (!_importData) return '';
-    const prose = _importData.prose || '';
-    const keptTables = _importTableChoices
-      .filter(function(ch) { return ch.kept; })
-      .map(function(ch) { return Object.assign({}, ch.tableRef, { caption: ch.caption || ch.tableRef.caption || '' }); });
-    const tableMd = _tablesToMarkdown(keptTables);
-    return tableMd ? (prose + (prose ? '\n\n' : '') + tableMd) : prose;
-  }
-
   async function finishImport(action) {
-    const text = _buildImportText();
-    if (!text.trim()) { ThesisState.toast('Nothing to import — add a file or paste text.'); return; }
-    closeImportModal();
-    if (action === 'use_as_is') {
-      pendingDraft = text;
-      pendingDraftMeta = { sources_count: 0, import: true };
-      suggestions = [];
-      mode = 'review';
-      renderEditor(); renderSuggestList();
-      ThesisState.toast('Content staged — click ✓ to accept it into your chapter, or ✗ to discard.');
-      return;
+    const built = _buildImportHtml();
+    if (!built.text.trim() && !built.html.trim()) {
+      ThesisState.toast('Nothing to import — add a file or paste text.'); return;
     }
-    // Polish and improve path
+    closeImportModal();
+    const isResults = _isResultsChapter();
+    const isArticle = _isArticleMode();
     const st = ThesisState.get();
     const setup = st.setup || {};
     const status = document.getElementById('th-suggest-status');
-    if (!setup.title) {
-      // No thesis title yet — fall back to use-as-is
-      ThesisState.toast('Tip: add your thesis title in Setup for smarter polishing. Loading content for manual editing.', 4000);
-      pendingDraft = text;
-      pendingDraftMeta = { sources_count: 0, import: true };
-      suggestions = []; mode = 'review';
-      renderEditor(); renderSuggestList();
+
+    if (action === 'use_as_is') {
+      _loadIntoCanvas(built.html, built.text);
+      ThesisState.toast('Content loaded into your chapter — you can edit it or request improvements from the HELPERS panel.');
+      if (isResults && !isArticle) {
+        // Thesis: after loading results, offer routing to next chapter (Discussion)
+        setTimeout(_navigateToNextChapter, 800);
+      }
       return;
     }
-    if (status) status.innerHTML = '<span class="th-loading"></span> Polishing imported content against your reference library…';
+
+    if (action === 'article_transition') {
+      // Article results: load tables, then have AI add brief transitional prose between them
+      // First load the content as-is
+      _loadIntoCanvas(built.html, built.text);
+      if (!setup.title) {
+        ThesisState.toast('Content loaded. Add your thesis title in Setup for AI-assisted transitions.', 4000);
+        return;
+      }
+      const keptTables = _importTableChoices.filter(function(ch) { return ch.kept; });
+      if (keptTables.length < 2) {
+        ThesisState.toast('Content loaded. Only one table selected — no transitions needed.', 3000);
+        return;
+      }
+      if (status) status.innerHTML = '<span class="th-loading"></span> AI is adding brief transitions between your tables (no data generated)…';
+      const cite = setup.citation_style || 'vancouver';
+      const styleParams = getStyleParams();
+      try {
+        const res = await ThesisState.api('/improve-section', {
+          chapter_id: chapterId,
+          current_text: built.text,
+          topic: setup.title || chapter.label,
+          citation_style: cite,
+          locked_numbers: st.locked_numbers || {},
+          domain_hint: setup.domain || undefined,
+          ref_library: (function() { const v = (st.references || []).filter(function(r) { return r.verified; }); return v.length >= 3 ? v : undefined; })(),
+          polish_instruction: 'This text contains researcher-provided results tables. Add ONLY brief 1–2 sentence transitional sentences between each table (to orient the reader), without generating any new data, statistics, or numbers. Every number must remain exactly as written. Do not alter any table content.',
+          ...styleParams,
+        });
+        suggestions = res.suggestions || [];
+        if (!suggestions.length) {
+          if (status) status.textContent = 'Results loaded — content reads clearly without additional transitions.';
+        } else {
+          mode = 'review'; renderEditor(); renderSuggestList();
+          if (status) status.textContent = suggestions.length + ' transition suggestions — review each and click ✓ or ✗.';
+        }
+      } catch (e) {
+        if (status) status.textContent = '';
+        ThesisState.toast('Transition generation failed (' + e.message + ') — results loaded for manual editing.');
+      }
+      return;
+    }
+
+    // Polish and improve path
+    if (!setup.title) {
+      ThesisState.toast('Tip: add your thesis title in Setup for smarter polishing. Loading content for manual editing.', 4000);
+      _loadIntoCanvas(built.html, built.text);
+      return;
+    }
+    showImportStage(3);
     const cite = setup.citation_style || 'vancouver';
     const styleParams = getStyleParams();
     try {
       const res = await ThesisState.api('/improve-section', {
         chapter_id: chapterId,
-        current_text: text,
+        current_text: built.text,
         topic: setup.title || chapter.label,
         citation_style: cite,
         locked_numbers: st.locked_numbers || {},
@@ -1338,23 +1449,24 @@
         polish_instruction: 'Polish this imported text to match the academic register of this thesis. Improve sentence structure, ensure tense consistency, and add citations from the provided references where appropriate. NEVER alter any numeric value, measurement, or statistical result.',
         ...styleParams,
       });
+      closeImportModal();
       suggestions = res.suggestions || [];
+      // Load HTML content into canvas first, then show suggestions as track-changes
+      _loadIntoCanvas(built.html, built.text);
       if (!suggestions.length) {
-        pendingDraft = text;
-        pendingDraftMeta = { sources_count: 0, import: true };
-        mode = 'review'; renderEditor(); renderSuggestList();
-        if (status) status.textContent = 'Content looks polished already. Click ✓ to accept.';
+        if (status) status.textContent = 'Content looks polished already — loaded for manual editing.';
       } else {
-        ThesisState.setChapter(chapterId, { text });
+        suggestions = res.suggestions;
         mode = 'review'; renderEditor(); renderSuggestList();
         if (status) status.textContent = suggestions.length + ' polishing suggestions — review each and click ✓ or ✗.';
       }
+      if (isResults && !isArticle) {
+        setTimeout(_navigateToNextChapter, 800);
+      }
     } catch (e) {
+      closeImportModal();
       if (status) status.textContent = '';
-      pendingDraft = text;
-      pendingDraftMeta = { sources_count: 0, import: true };
-      suggestions = []; mode = 'review';
-      renderEditor(); renderSuggestList();
+      _loadIntoCanvas(built.html, built.text);
       ThesisState.toast('Polishing failed (' + e.message + ') — content loaded for manual editing.');
     }
   }
@@ -1376,7 +1488,6 @@
     dropZone.addEventListener('drop', function(e) {
       e.preventDefault(); dropZone.classList.remove('drag-over');
       if (e.dataTransfer.files[0]) {
-        // Can't programmatically assign DataTransfer to input — use DataTransfer workaround
         const dt = new DataTransfer();
         dt.items.add(e.dataTransfer.files[0]);
         fileInput.files = dt.files;
@@ -1390,10 +1501,24 @@
     });
     // Extract button
     document.getElementById('th-import-extract').addEventListener('click', doImportExtract);
-    // Stage 2 buttons
+    // Stage 2 — generic action buttons
     document.getElementById('th-import-back2').addEventListener('click', function() { showImportStage(1); });
     document.getElementById('th-import-use-asis').addEventListener('click', function() { finishImport('use_as_is'); });
     document.getElementById('th-import-polish').addEventListener('click', function() { finishImport('polish'); });
+    // Stage 2 — thesis results action buttons
+    document.getElementById('th-import-back2-r').addEventListener('click', function() { showImportStage(1); });
+    document.getElementById('th-import-results-load').addEventListener('click', function() { finishImport('use_as_is'); });
+    document.getElementById('th-import-results-narrative').addEventListener('click', function() { finishImport('polish'); });
+    // Stage 2 — "import all without review" banner button (thesis results)
+    document.getElementById('th-import-all-proceed').addEventListener('click', function() {
+      // Select all tables, then import
+      _importTableChoices.forEach(function(ch) { ch.kept = true; });
+      finishImport('use_as_is');
+    });
+    // Stage 2 — article results action buttons
+    document.getElementById('th-import-back2-a').addEventListener('click', function() { showImportStage(1); });
+    document.getElementById('th-import-article-asis').addEventListener('click', function() { finishImport('use_as_is'); });
+    document.getElementById('th-import-article-transition').addEventListener('click', function() { finishImport('article_transition'); });
   }
 
   init();
@@ -1440,6 +1565,18 @@
 
   <!-- Stage 2: Preview + table review + choice -->
   <div id="th-import-s2" class="th-import-stage">
+    <!-- Thesis results: quick "import all without review" option -->
+    <div id="th-import-skip-review" style="display:none;margin-bottom:14px;padding:10px 14px;
+      background:#fffbeb;border:1.5px solid #fde68a;border-radius:8px;
+      justify-content:space-between;align-items:center;gap:12px">
+      <div style="font-size:12.5px;color:#92400e">
+        Importing all tables — or review &amp; select which to include below.
+      </div>
+      <button id="th-import-all-proceed" class="th-btn th-btn-primary th-btn-sm" style="white-space:nowrap">
+        Import all &amp; proceed →
+      </button>
+    </div>
+
     <div style="font-weight:600;margin-bottom:8px;font-size:13.5px">Extracted content</div>
     <div id="th-import-prose-preview"
       style="background:var(--th-paper-2);border-radius:6px;padding:12px;font-size:12.5px;
@@ -1453,8 +1590,8 @@
         style="max-height:300px;overflow-y:auto;border:1px solid var(--th-line);border-radius:6px;padding:0 10px"></div>
     </div>
 
-    <!-- Choice buttons -->
-    <div style="border-top:1px solid var(--th-line);margin-top:16px;padding-top:14px">
+    <!-- Choice buttons: generic -->
+    <div id="th-import-actions-generic" style="border-top:1px solid var(--th-line);margin-top:16px;padding-top:14px">
       <div style="font-size:12.5px;color:var(--th-text-soft);margin-bottom:10px">
         How would you like to import this content?
       </div>
@@ -1468,6 +1605,46 @@
           <button id="th-import-polish" class="th-btn th-btn-primary"
             title="AI polishes writing quality and adds citations from your reference library — numbers and data are never changed">
             Polish &amp; improve →
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Choice buttons: thesis results -->
+    <div id="th-import-actions-thesis-results" style="display:none;border-top:1px solid var(--th-line);margin-top:16px;padding-top:14px">
+      <div style="font-size:12.5px;color:var(--th-text-soft);margin-bottom:10px">
+        Load selected tables into your Results chapter, then:
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:space-between;align-items:center">
+        <button id="th-import-back2-r" class="th-btn th-btn-light th-btn-sm">← Back</button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button id="th-import-results-load" class="th-btn th-btn-light"
+            title="Load tables into Results — proceed to Discussion when ready">
+            Load into Results ✓
+          </button>
+          <button id="th-import-results-narrative" class="th-btn th-btn-primary"
+            title="Load tables, then AI adds interpretive narrative context (all numbers remain locked)">
+            Load &amp; add narrative →
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Choice buttons: article results -->
+    <div id="th-import-actions-article-results" style="display:none;border-top:1px solid var(--th-line);margin-top:16px;padding-top:14px">
+      <div style="font-size:12.5px;color:var(--th-text-soft);margin-bottom:10px">
+        Include selected tables in your Results section:
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:space-between;align-items:center">
+        <button id="th-import-back2-a" class="th-btn th-btn-light th-btn-sm">← Back</button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button id="th-import-article-asis" class="th-btn th-btn-light"
+            title="Load selected tables as-is — you can add narrative manually">
+            Tables only ✓
+          </button>
+          <button id="th-import-article-transition" class="th-btn th-btn-primary"
+            title="AI adds brief 1–2 sentence transitions between tables — no new data is generated">
+            Add transitions between tables →
           </button>
         </div>
       </div>

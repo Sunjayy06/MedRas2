@@ -3761,7 +3761,37 @@ function bindResults() {
         }
       } catch (_) { /* ignore */ }
 
+      // Extract structured table data from the results pane DOM
       try {
+        const tables = [];
+        const paneEl = document.getElementById("results-pane");
+        if (paneEl) {
+          paneEl.querySelectorAll("table").forEach(function(tbl) {
+            const rows = [];
+            tbl.querySelectorAll("tr").forEach(function(tr) {
+              const cells = [];
+              tr.querySelectorAll("th, td").forEach(function(td) {
+                cells.push((td.innerText || td.textContent || "").trim());
+              });
+              if (cells.some(function(c) { return c.length > 0; })) rows.push(cells);
+            });
+            if (rows.length) {
+              // Caption: look for <caption> element or a preceding heading/strong element
+              let caption = "";
+              const cap = tbl.querySelector("caption");
+              if (cap) {
+                caption = (cap.innerText || cap.textContent || "").trim();
+              } else {
+                const prev = tbl.previousElementSibling;
+                if (prev && /^(H[1-6]|STRONG|B|P)$/.test(prev.tagName)) {
+                  caption = (prev.innerText || prev.textContent || "").trim().slice(0, 120);
+                }
+              }
+              tables.push({ rows: rows, caption: caption });
+            }
+          });
+        }
+        sigmaResults.tables = tables;
         sessionStorage.setItem("medras.sigma.results", JSON.stringify(sigmaResults));
       } catch (_) { /* quota — fail silently; editor falls back to folio key */ }
 
