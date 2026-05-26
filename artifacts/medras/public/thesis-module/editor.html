@@ -735,7 +735,7 @@
             ev.preventDefault();
             if (btn.dataset.pendingAct === 'accept') {
               const next = baseText ? baseText + '\n\n' + pendingDraft : pendingDraft;
-              ThesisState.setChapter(chapterId, { text: next });
+              ThesisState.setChapter(chapterId, { text: next, html: null });
               ThesisState.toast('Draft accepted into your chapter.');
             } else {
               ThesisState.toast('Draft discarded — your text was not changed.');
@@ -747,7 +747,7 @@
         });
       } else {
         TrackChanges.render(canvas, baseText, suggestions, (newText, remaining, info) => {
-          ThesisState.setChapter(chapterId, { text: newText });
+          ThesisState.setChapter(chapterId, { text: newText, html: null });
           suggestions = remaining;
           renderEditor();
           renderSuggestList();
@@ -882,7 +882,7 @@
           }
           text = TrackChanges.acceptAt(text, off.start, off.end, sug.suggested);
         }
-        ThesisState.setChapter(chapterId, { text });
+        ThesisState.setChapter(chapterId, { text, html: null });
         suggestions = suggestions.filter((_, j) => j !== i);
         renderEditor();
         renderSuggestList();
@@ -1209,6 +1209,27 @@
     return { html: html, text: text };
   }
 
+  // Extract distinct numeric tokens from imported text and return them as locked_numbers
+  // entries so the improve-section prompt treats every number as inviolable.
+  // Researcher's existing locks (from Data & Stats) always override imported ones.
+  function _extractImportedLocks(text, existingLocks) {
+    const locked = {};
+    // Match integers, decimals, ranges, percentages, p-values, common units
+    const pattern = /\b\d+(?:[.,]\d+)?(?:\s*[-–]\s*\d+(?:[.,]\d+)?)?\s*(?:%|mm|cm|kg|mg|μg|mmol|SD|SE|CI|IU|mEq|mL|L|g|U\/L)?\b/g;
+    const seen = new Set();
+    let count = 0;
+    for (const m of (text.match(pattern) || [])) {
+      const n = m.trim();
+      if (n && !seen.has(n)) {
+        seen.add(n);
+        locked[n] = n;
+        if (++count >= 25) break;
+      }
+    }
+    // Researcher's existing locks take priority
+    return Object.assign(locked, existingLocks || {});
+  }
+
   // Directly load content into the canvas (HTML preserved, write mode)
   function _loadIntoCanvas(html, text) {
     const canvas = document.getElementById('th-editor-canvas');
@@ -1413,13 +1434,15 @@
       if (status) status.innerHTML = '<span class="th-loading"></span> AI is adding brief transitions between your tables (no data generated)…';
       const cite = setup.citation_style || 'vancouver';
       const styleParams = getStyleParams();
+      // Lock all numbers from the imported text so the AI cannot alter them
+      const importedLocks = _extractImportedLocks(built.text, st.locked_numbers);
       try {
         const res = await ThesisState.api('/improve-section', {
           chapter_id: chapterId,
           current_text: built.text,
           topic: setup.title || chapter.label,
           citation_style: cite,
-          locked_numbers: st.locked_numbers || {},
+          locked_numbers: importedLocks,
           domain_hint: setup.domain || undefined,
           ref_library: (function() { const v = (st.references || []).filter(function(r) { return r.verified; }); return v.length >= 3 ? v : undefined; })(),
           polish_instruction: 'This text contains researcher-provided results tables. Add ONLY brief 1–2 sentence transitional sentences between each table (to orient the reader), without generating any new data, statistics, or numbers. Every number must remain exactly as written. Do not alter any table content.',
@@ -1450,13 +1473,15 @@
     showImportStage(3);
     const cite = setup.citation_style || 'vancouver';
     const styleParams = getStyleParams();
+    // Lock all numbers from the imported text so the AI cannot alter them
+    const importedLocks = _extractImportedLocks(built.text, st.locked_numbers);
     try {
       const res = await ThesisState.api('/improve-section', {
         chapter_id: chapterId,
         current_text: built.text,
         topic: setup.title || chapter.label,
         citation_style: cite,
-        locked_numbers: st.locked_numbers || {},
+        locked_numbers: importedLocks,
         domain_hint: setup.domain || undefined,
         ref_library: (function() { const v = (st.references || []).filter(function(r) { return r.verified; }); return v.length >= 3 ? v : undefined; })(),
         polish_instruction: 'Polish this imported text to match the academic register of this thesis. Improve sentence structure, ensure tense consistency, and add citations from the provided references where appropriate. NEVER alter any numeric value, measurement, or statistical result.',
@@ -1482,54 +1507,62 @@
     }
   }
 
+  // Null-safe event binding — silently skips missing elements (modal HTML lives
+  // after the </script> tag so may not be in the DOM at the synchronous parse phase).
+  function _on(id, evt, fn) {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener(evt, fn);
+  }
+
   function initImportModal() {
-    document.getElementById('th-import-close').addEventListener('click', closeImportModal);
-    document.getElementById('th-import-overlay').addEventListener('click', closeImportModal);
-    document.getElementById('th-import-cancel1').addEventListener('click', closeImportModal);
+    _on('th-import-close',   'click', closeImportModal);
+    _on('th-import-overlay', 'click', closeImportModal);
+    _on('th-import-cancel1', 'click', closeImportModal);
     // Sigma import button
-    document.getElementById('th-import-sigma-go').addEventListener('click', doImportFromSigma);
+    _on('th-import-sigma-go', 'click', doImportFromSigma);
     // File drop zone
     const dropZone = document.getElementById('th-drop-zone');
     const fileInput = document.getElementById('th-import-file');
-    dropZone.addEventListener('click', function(e) {
-      if (!e.target.matches('button')) fileInput.click();
-    });
-    dropZone.addEventListener('dragover', function(e) { e.preventDefault(); dropZone.classList.add('drag-over'); });
-    dropZone.addEventListener('dragleave', function() { dropZone.classList.remove('drag-over'); });
-    dropZone.addEventListener('drop', function(e) {
-      e.preventDefault(); dropZone.classList.remove('drag-over');
-      if (e.dataTransfer.files[0]) {
-        const dt = new DataTransfer();
-        dt.items.add(e.dataTransfer.files[0]);
-        fileInput.files = dt.files;
+    if (dropZone && fileInput) {
+      dropZone.addEventListener('click', function(e) {
+        if (!e.target.matches('button')) fileInput.click();
+      });
+      dropZone.addEventListener('dragover', function(e) { e.preventDefault(); dropZone.classList.add('drag-over'); });
+      dropZone.addEventListener('dragleave', function() { dropZone.classList.remove('drag-over'); });
+      dropZone.addEventListener('drop', function(e) {
+        e.preventDefault(); dropZone.classList.remove('drag-over');
+        if (e.dataTransfer.files[0]) {
+          const dt = new DataTransfer();
+          dt.items.add(e.dataTransfer.files[0]);
+          fileInput.files = dt.files;
+          const lbl = document.getElementById('th-import-file-label');
+          if (lbl) lbl.textContent = e.dataTransfer.files[0].name;
+        }
+      });
+      fileInput.addEventListener('change', function() {
         const lbl = document.getElementById('th-import-file-label');
-        if (lbl) lbl.textContent = e.dataTransfer.files[0].name;
-      }
-    });
-    fileInput.addEventListener('change', function() {
-      const lbl = document.getElementById('th-import-file-label');
-      if (lbl && fileInput.files[0]) lbl.textContent = fileInput.files[0].name;
-    });
+        if (lbl && fileInput.files[0]) lbl.textContent = fileInput.files[0].name;
+      });
+    }
     // Extract button
-    document.getElementById('th-import-extract').addEventListener('click', doImportExtract);
+    _on('th-import-extract', 'click', doImportExtract);
     // Stage 2 — generic action buttons
-    document.getElementById('th-import-back2').addEventListener('click', function() { showImportStage(1); });
-    document.getElementById('th-import-use-asis').addEventListener('click', function() { finishImport('use_as_is'); });
-    document.getElementById('th-import-polish').addEventListener('click', function() { finishImport('polish'); });
+    _on('th-import-back2',     'click', function() { showImportStage(1); });
+    _on('th-import-use-asis',  'click', function() { finishImport('use_as_is'); });
+    _on('th-import-polish',    'click', function() { finishImport('polish'); });
     // Stage 2 — thesis results action buttons
-    document.getElementById('th-import-back2-r').addEventListener('click', function() { showImportStage(1); });
-    document.getElementById('th-import-results-load').addEventListener('click', function() { finishImport('use_as_is'); });
-    document.getElementById('th-import-results-narrative').addEventListener('click', function() { finishImport('polish'); });
+    _on('th-import-back2-r',          'click', function() { showImportStage(1); });
+    _on('th-import-results-load',     'click', function() { finishImport('use_as_is'); });
+    _on('th-import-results-narrative','click', function() { finishImport('polish'); });
     // Stage 2 — "import all without review" banner button (thesis results)
-    document.getElementById('th-import-all-proceed').addEventListener('click', function() {
-      // Select all tables, then import
+    _on('th-import-all-proceed', 'click', function() {
       _importTableChoices.forEach(function(ch) { ch.kept = true; });
       finishImport('use_as_is');
     });
     // Stage 2 — article results action buttons
-    document.getElementById('th-import-back2-a').addEventListener('click', function() { showImportStage(1); });
-    document.getElementById('th-import-article-asis').addEventListener('click', function() { finishImport('use_as_is'); });
-    document.getElementById('th-import-article-transition').addEventListener('click', function() { finishImport('article_transition'); });
+    _on('th-import-back2-a',          'click', function() { showImportStage(1); });
+    _on('th-import-article-asis',     'click', function() { finishImport('use_as_is'); });
+    _on('th-import-article-transition','click', function() { finishImport('article_transition'); });
   }
 
   init();
