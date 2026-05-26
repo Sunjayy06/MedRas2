@@ -354,15 +354,22 @@ async def import_section(request: Request, file: UploadFile = File(...)) -> Dict
                         rows: List[List[str]] = []
                         for tr in child.iter(qn("w:tr")):
                             cells: List[str] = []
-                            prev: str | None = None
                             for tc in tr.iter(qn("w:tc")):
+                                # Skip vertically-merged continuation cells
+                                # (vMerge with no "val" attr = continuation; has val = start)
+                                v_merge = tc.find(
+                                    ".//" + qn("w:vMerge")
+                                )
+                                if v_merge is not None and v_merge.get(
+                                    qn("w:val")
+                                ) is None:
+                                    # continuation cell — insert empty placeholder
+                                    cells.append("")
+                                    continue
                                 cell_text = "".join(
                                     t.text or "" for t in tc.iter(qn("w:t"))
                                 ).strip()
-                                # Skip adjacent duplicate text from merged cells
-                                if cell_text != prev:
-                                    cells.append(cell_text)
-                                prev = cell_text
+                                cells.append(cell_text)
                             if cells:
                                 rows.append(cells)
                         if rows:
