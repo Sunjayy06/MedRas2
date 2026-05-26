@@ -686,6 +686,7 @@ async def draft_section(
     mode: str = "thesis",
     style_choice: str = "indian_formal",
     style_sample: Optional[str] = None,
+    ref_library: Optional[List[Dict[str, Any]]] = None,
     limit_per_db: int = DEFAULT_LIMIT_PER_DB,
     total_limit: int = DEFAULT_TOTAL_LIMIT,
 ) -> Dict[str, Any]:
@@ -714,16 +715,39 @@ async def draft_section(
         # paste shouldn't lose a draft attempt over a soft cap.
         extra_context = extra_context[:EXTRA_CONTEXT_MAX_CHARS] + "\n[…truncated]"
 
-    # 1) RAG retrieval (distilled via the library's quality filter)
-    search = await thesis_reference_library.search(
-        topic, domain_hint=domain_hint,
-        limit=total_limit, limit_per_db=limit_per_db,
-    )
-    records: List[Dict[str, Any]] = search["records"]
-    if len(records) < 3:
-        raise GeneratorError(
-            "Found fewer than 3 high-quality references for this topic. "
-            "Add references manually or broaden your topic.")
+    # 1) Evidence: session library (if provided) or RAG retrieval
+    ev_domain: str
+    ev_databases: List[str]
+    if ref_library and len(ref_library) >= 3:
+        records = thesis_reference_library.score_and_select(
+            ref_library, topic, total_limit
+        )
+        ev_domain = domain_hint or "session_library"
+        ev_databases = ["session_library"]
+        if len(records) < 3:
+            raise GeneratorError(
+                "Your reference library doesn't have enough entries relevant "
+                "to this chapter topic. Add more references or broaden your topic."
+            )
+    else:
+        _rag = await thesis_reference_library.search(
+            topic, domain_hint=domain_hint,
+            limit=total_limit, limit_per_db=limit_per_db,
+        )
+        records = _rag["records"]
+        if ref_library:
+            # Prepend any session library records not already in RAG results (dedup by DOI)
+            rag_dois = {(r.get("doi") or "").lower() for r in records if r.get("doi")}
+            extra = [r for r in ref_library
+                     if (r.get("doi") or "").lower() not in rag_dois]
+            records = extra[:5] + records
+            records = records[:total_limit]
+        if len(records) < 3:
+            raise GeneratorError(
+                "Found fewer than 3 high-quality references for this topic. "
+                "Add references manually or broaden your topic.")
+        ev_domain = _rag["domain"]
+        ev_databases = _rag["databases"]
 
     # 2) Build prompt
     context_block = _format_records_for_prompt(records)
@@ -788,8 +812,8 @@ async def draft_section(
     return {
         "text": drafted,
         "sources": records,
-        "domain": search["domain"],
-        "databases": search["databases"],
+        "domain": ev_domain,
+        "databases": ev_databases,
         "locked_numbers": locked_numbers or {},
         "citation_style": citation_style,
         "suggestions": [{
@@ -861,6 +885,7 @@ async def improve_section(
     mode: str = "thesis",
     style_choice: str = "indian_formal",
     style_sample: Optional[str] = None,
+    ref_library: Optional[List[Dict[str, Any]]] = None,
     limit_per_db: int = DEFAULT_LIMIT_PER_DB,
     total_limit: int = 12,
 ) -> Dict[str, Any]:
@@ -881,12 +906,29 @@ async def improve_section(
         # anyway so truncation is acceptable.
         current_text = current_text[:60_000]
 
-    # Retrieve evidence so the model can suggest citations
-    search = await thesis_reference_library.search(
-        topic or chapter_id, domain_hint=domain_hint,
-        limit=total_limit, limit_per_db=limit_per_db,
-    )
-    records: List[Dict[str, Any]] = search["records"]
+    # Evidence: session library (if provided) or RAG retrieval
+    _impr_domain: str
+    _impr_databases: List[str]
+    if ref_library and len(ref_library) >= 3:
+        records = thesis_reference_library.score_and_select(
+            ref_library, topic or chapter_id, total_limit
+        )
+        _impr_domain = domain_hint or "session_library"
+        _impr_databases = ["session_library"]
+    else:
+        _rag2 = await thesis_reference_library.search(
+            topic or chapter_id, domain_hint=domain_hint,
+            limit=total_limit, limit_per_db=limit_per_db,
+        )
+        records = _rag2["records"]
+        if ref_library:
+            rag_dois2 = {(r.get("doi") or "").lower() for r in records if r.get("doi")}
+            extra2 = [r for r in ref_library
+                      if (r.get("doi") or "").lower() not in rag_dois2]
+            records = extra2[:5] + records
+            records = records[:total_limit]
+        _impr_domain = _rag2["domain"]
+        _impr_databases = _rag2["databases"]
     n_records = len(records)
     context_block = _format_records_for_prompt(records) if records else "(no evidence available)"
 
@@ -950,8 +992,8 @@ async def improve_section(
     return {
         "suggestions": suggestions_out,
         "sources":     records,
-        "domain":      search["domain"],
-        "databases":   search["databases"],
+        "domain":      _impr_domain,
+        "databases":   _impr_databases,
     }
 
 

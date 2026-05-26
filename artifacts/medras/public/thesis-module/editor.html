@@ -7,6 +7,18 @@
 
 <link rel="stylesheet" href="/thesis-module/css/style.css" />
 <link rel="stylesheet" href="/css/medras-nav.css" />
+<style>
+.th-refpanel-card{display:flex;align-items:flex-start;gap:6px;padding:6px 0;border-bottom:1px solid var(--th-line)}
+.th-refpanel-num{font-weight:700;color:var(--th-emerald-d);font-size:11px;white-space:nowrap;padding-top:2px;min-width:28px}
+.th-refpanel-title{font-size:11.5px;font-weight:600;color:var(--th-ink-900);line-height:1.3}
+.th-refpanel-meta{font-size:11px;color:var(--th-text-soft)}
+.th-refpanel-body{flex:1;min-width:0}
+.th-refpanel-remove{background:none;border:none;color:var(--th-text-soft);cursor:pointer;font-size:11px;padding:2px 4px;margin-left:auto;flex-shrink:0;border-radius:4px}
+.th-refpanel-remove:hover{color:#c0392b;background:var(--th-paper-2)}
+#th-cite-picker{display:none;position:fixed;top:72px;left:50%;transform:translateX(-50%);width:480px;max-width:96vw;background:#fff;border:1.5px solid var(--th-emerald-d);border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,.15);z-index:1001}
+#th-cite-overlay{display:none;position:fixed;inset:0;z-index:1000}
+.th-cite-option:hover{background:var(--th-paper-2)}
+</style>
 </head>
 <body data-medras-module="scriptorium" data-medras-module="scriptorium">
 <header class="th-header">
@@ -71,12 +83,29 @@
     <h4>Helpers</h4>
     <div id="th-helper-strip"></div>
 
+    <h4 style="margin-top:16px">Cited in this chapter</h4>
+    <div id="th-refpanel-count" style="font-size:11px; color:var(--th-text-soft); margin-bottom:4px"></div>
+    <div id="th-refpanel-list"></div>
+    <button id="th-ref-insert" class="th-btn th-btn-light th-btn-sm"
+      style="margin-top:6px; width:100%; font-size:12px">+ Insert citation (or type [@)</button>
+
     <h4 style="margin-top:16px">AI suggestions</h4>
     <div id="th-suggest-status" style="font-size:12.5px; color:var(--th-text-soft); margin-bottom:8px">
       Click "AI: Suggest improvements" or "AI: Draft this section" — every change still needs your ✓.
     </div>
     <div id="th-suggest-list"></div>
   </aside>
+</div>
+
+<!-- Cite picker popup (must be in DOM before the inline script below runs) -->
+<div id="th-cite-overlay"></div>
+<div id="th-cite-picker" role="dialog" aria-label="Insert citation">
+  <div style="padding:10px 12px;border-bottom:1px solid var(--th-line);display:flex;gap:8px;align-items:center">
+    <input id="th-cite-search" class="th-input" placeholder="Search by author or title…"
+      style="flex:1;font-size:13px" autocomplete="off" />
+    <button id="th-cite-close" style="background:none;border:none;cursor:pointer;font-size:18px;color:var(--th-text-soft);line-height:1">×</button>
+  </div>
+  <div id="th-cite-results" style="max-height:280px;overflow-y:auto"></div>
 </div>
 
 <script src="/thesis-module/js/thesis-state.js"></script>
@@ -108,6 +137,7 @@
     renderSideRefs();
     renderHelpers();
     renderEditor();
+    renderChapterRefPanel();
     document.getElementById('th-cur-label').textContent = chapter.label;
   }
 
@@ -201,8 +231,157 @@
         <div style="font-size:11px; color:var(--th-text-soft)">[CITE_${i+1}]</div>
         <div style="font-weight:600">${esc((r.title || '').slice(0,90))}${(r.title||'').length>90?'…':''}</div>
         <div style="color:var(--th-text-soft)">${esc((r.authors||[])[0] || '')} (${esc(r.year || 'n.d.')})</div>
-      </div>`).join('') + (refs.length > 30 ? `<div style="padding-top:6px; color:var(--th-text-soft); font-style:italic">+ ${refs.length-30} more</div>` : '');
+      </div>`).join('') +
+      (refs.length > 30 ? `<div style="padding-top:6px; color:var(--th-text-soft); font-style:italic">+ ${refs.length-30} more</div>` : '') +
+      `<a href="/thesis-module/references.html" class="th-btn th-btn-light th-btn-sm" style="display:block;text-align:center;margin-top:8px">Manage references →</a>`;
   }
+
+  // ---------- chapter reference panel (right pane) ----------
+
+  function renderChapterRefPanel() {
+    const s = ThesisState.get();
+    const refs = s.references || [];
+    const text = ThesisState.getChapter(chapterId).text || '';
+    const cited = new Set();
+    const citeRe = /\[CITE_(\d+)\]/g;
+    let m;
+    while ((m = citeRe.exec(text)) !== null) { cited.add(parseInt(m[1], 10)); }
+    const countEl = document.getElementById('th-refpanel-count');
+    const listEl = document.getElementById('th-refpanel-list');
+    if (!listEl) return;
+    const citedArr = refs.map((r, i) => ({ r, idx: i, num: i + 1 })).filter(({ num }) => cited.has(num));
+    if (countEl) countEl.textContent = `${citedArr.length} of ${refs.length} total cited here`;
+    if (!citedArr.length) {
+      listEl.innerHTML = '<div style="padding:6px 0;font-size:11.5px;color:var(--th-text-soft);font-style:italic">None cited yet — type [@ to insert.</div>';
+      return;
+    }
+    listEl.innerHTML = citedArr.map(({ r, idx, num }) => {
+      const auth = (r.authors || []).slice(0, 2).join(', ') + ((r.authors || []).length > 2 ? ' et al.' : '');
+      return `<div class="th-refpanel-card" data-idx="${idx}">
+        <span class="th-refpanel-num">[${num}]</span>
+        <div class="th-refpanel-body">
+          <div class="th-refpanel-title">${esc((r.title || '').slice(0, 65))}${(r.title || '').length > 65 ? '…' : ''}</div>
+          <div class="th-refpanel-meta">${esc(auth)} · ${esc(String(r.year || 'n.d.'))}</div>
+        </div>
+        <button class="th-refpanel-remove" title="Remove from library and renumber all chapters" data-remove="${idx}">✕</button>
+      </div>`;
+    }).join('');
+    listEl.querySelectorAll('button[data-remove]').forEach((btn) => {
+      btn.addEventListener('click', () => removeReference(parseInt(btn.dataset.remove, 10)));
+    });
+  }
+
+  function removeReference(idx) {
+    if (!window.confirm('Remove this reference from your library? [CITE_n] tags will be renumbered throughout every chapter.')) return;
+    ThesisState.patch((s) => {
+      const refs = s.references || [];
+      const removedNum = idx + 1;
+      s.references = refs.filter((_, i) => i !== idx);
+      Object.keys(s.chapters || {}).forEach((chId) => {
+        const ch = s.chapters[chId] || {};
+        if (!ch.text) return;
+        let t = ch.text.replace(new RegExp('\\[CITE_' + removedNum + '\\]', 'g'), '');
+        for (let n = removedNum + 1; n <= refs.length; n++) {
+          t = t.replace(new RegExp('\\[CITE_' + n + '\\]', 'g'), '[CITE_' + (n - 1) + ']');
+        }
+        s.chapters[chId] = Object.assign({}, ch, { text: t });
+      });
+      return s;
+    });
+    renderEditor();
+    renderSideRefs();
+    renderChapterRefPanel();
+    ThesisState.toast('Reference removed and all [CITE_n] tags renumbered.');
+  }
+
+  // ---------- inline cite picker ----------
+
+  let _pickerOpen = false;
+
+  function openCitePicker() {
+    if (_pickerOpen) return;
+    _pickerOpen = true;
+    document.getElementById('th-cite-picker').style.display = 'block';
+    document.getElementById('th-cite-overlay').style.display = 'block';
+    const inp = document.getElementById('th-cite-search');
+    if (inp) { inp.value = ''; inp.focus(); renderPickerResults(''); }
+  }
+
+  function closeCitePicker() {
+    _pickerOpen = false;
+    document.getElementById('th-cite-picker').style.display = 'none';
+    document.getElementById('th-cite-overlay').style.display = 'none';
+  }
+
+  function renderPickerResults(query) {
+    const s = ThesisState.get();
+    const refs = s.references || [];
+    const q = (query || '').toLowerCase().trim();
+    const filtered = refs.map((r, i) => ({ r, idx: i, num: i + 1 })).filter(({ r }) => {
+      if (!q) return true;
+      const hay = ((r.title || '') + ' ' + (r.authors || []).join(' ')).toLowerCase();
+      return q.split(/\s+/).every((w) => hay.includes(w));
+    });
+    const list = document.getElementById('th-cite-results');
+    if (!list) return;
+    if (!refs.length) {
+      list.innerHTML = '<div style="padding:12px;color:var(--th-text-soft);font-size:12.5px">No references in library yet. Add on the <a href="/thesis-module/references.html">References page</a>.</div>';
+      return;
+    }
+    if (!filtered.length) {
+      list.innerHTML = '<div style="padding:12px;color:var(--th-text-soft);font-size:12.5px">No match. Try different terms.</div>';
+      return;
+    }
+    list.innerHTML = filtered.slice(0, 10).map(({ r, num }) => {
+      const auth = (r.authors || []).slice(0, 2).join(', ') + ((r.authors || []).length > 2 ? ' et al.' : '');
+      return `<div class="th-cite-option" data-num="${num}"
+        style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--th-line);font-size:12px;display:flex;gap:8px;align-items:flex-start">
+        <span style="font-weight:700;white-space:nowrap;color:var(--th-emerald-d)">[${num}]</span>
+        <div>
+          <div style="font-weight:600">${esc((r.title || '').slice(0, 80))}${(r.title || '').length > 80 ? '…' : ''}</div>
+          <div style="color:var(--th-text-soft)">${esc(auth)} · ${esc(String(r.year || 'n.d.'))}</div>
+        </div>
+      </div>`;
+    }).join('');
+    list.querySelectorAll('.th-cite-option').forEach((opt) => {
+      opt.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        insertCitation(parseInt(opt.dataset.num, 10));
+      });
+    });
+  }
+
+  function insertCitation(num) {
+    closeCitePicker();
+    if (mode !== 'write') return;
+    const canvas = document.getElementById('th-editor-canvas');
+    let text = canvas.innerText;
+    const replaced = text.replace(/\[@[^\]]*$/, '[CITE_' + num + ']');
+    if (replaced !== text) {
+      canvas.innerText = replaced;
+      ThesisState.setChapter(chapterId, { text: replaced });
+      renderChapterRefPanel();
+      const range = document.createRange();
+      const sel = window.getSelection();
+      range.selectNodeContents(canvas);
+      range.collapse(false);
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+  }
+
+  document.getElementById('th-cite-search').addEventListener('input', (e) => {
+    renderPickerResults(e.target.value);
+  });
+
+  document.getElementById('th-cite-close').addEventListener('click', closeCitePicker);
+  document.getElementById('th-cite-overlay').addEventListener('click', closeCitePicker);
+
+  document.getElementById('th-ref-insert').addEventListener('click', () => {
+    if (mode !== 'write') { ThesisState.toast('Switch to Write mode to insert a citation.'); return; }
+    openCitePicker();
+    renderPickerResults('');
+  });
 
   function renderHelpers() {
     const helpers = chapter.helpers || [];
@@ -319,12 +498,20 @@
     el.style.fontWeight = (w >= mn && w <= mx) ? '400' : '600';
   }
 
-  // Save while typing (write mode)
+  // Save while typing (write mode) + [@  cite trigger
   document.getElementById('th-editor-canvas').addEventListener('input', () => {
     if (mode !== 'write') return;
     const text = document.getElementById('th-editor-canvas').innerText;
     ThesisState.setChapter(chapterId, { text });
     updateWC();
+    renderChapterRefPanel();
+    const m = text.match(/\[@([^\]]*)$/);
+    if (m) {
+      openCitePicker();
+      renderPickerResults(m[1] || '');
+    } else if (_pickerOpen) {
+      closeCitePicker();
+    }
   });
 
   document.getElementById('th-save').addEventListener('click', () => {
@@ -503,6 +690,7 @@
           locked_numbers: s.locked_numbers || {},
           domain_hint: setup.domain || undefined,
           extra_context: extraContext,
+          ref_library: (s.references && s.references.length >= 3) ? s.references : undefined,
           ...styleParams,
         });
         // Researcher-in-control: NEVER auto-insert. Stage the draft and
@@ -541,6 +729,7 @@
           citation_style: cite,
           locked_numbers: s.locked_numbers || {},
           domain_hint: setup.domain || undefined,
+          ref_library: (s.references && s.references.length >= 3) ? s.references : undefined,
           ...styleParams,
         });
         suggestions = res.suggestions || [];

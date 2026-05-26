@@ -63,6 +63,35 @@
         <span id="th-search-status" style="font-size:13px; color:var(--th-text-soft); align-self:center"></span>
       </div>
     </div>
+
+    <!-- Import reference list (file upload) -->
+    <div class="th-card">
+      <h3 class="th-h3">Import a reference list</h3>
+      <p style="font-size:13px; color:var(--th-text-soft); margin:0 0 8px">
+        Upload a DOCX, PDF, or plain-text file containing numbered or bulleted
+        Vancouver references. DOIs are auto-verified via Crossref.
+      </p>
+      <label class="th-btn th-btn-light" style="cursor:pointer; display:inline-block">
+        Choose file
+        <input id="th-import-file" type="file" accept=".docx,.pdf,.txt,.text" style="display:none" />
+      </label>
+      <span id="th-import-file-name" style="font-size:13px; color:var(--th-text-soft); margin-left:8px">No file chosen</span>
+      <div style="margin-top:10px">
+        <button id="th-import-go" class="th-btn th-btn-primary" disabled>Import references</button>
+        <span id="th-import-status" style="font-size:13px; color:var(--th-text-soft); margin-left:10px; align-self:center"></span>
+      </div>
+    </div>
+
+    <!-- Import from Helix (Study Builder) -->
+    <div class="th-card">
+      <h3 class="th-h3">Import from Study Builder</h3>
+      <p style="font-size:13px; color:var(--th-text-soft); margin:0 0 8px">
+        Pull references that Helix found when generating your research plan.
+        Duplicates (by DOI) are silently skipped.
+      </p>
+      <button id="th-helix-import" class="th-btn th-btn-primary">Import from Helix</button>
+      <span id="th-helix-status" style="font-size:13px; color:var(--th-text-soft); margin-left:10px"></span>
+    </div>
   </div>
 
   <div class="th-card">
@@ -226,6 +255,68 @@
         ThesisState.toast(`Added ${picked.length} references.`);
       });
     } catch (e) { status.textContent = 'Search failed: ' + e.message; }
+  });
+
+  // ---------- Import reference list (file upload) ----------
+  const importFileEl = document.getElementById('th-import-file');
+  const importGoEl   = document.getElementById('th-import-go');
+  const importNameEl = document.getElementById('th-import-file-name');
+  const importStat   = document.getElementById('th-import-status');
+
+  importFileEl.addEventListener('change', () => {
+    const f = importFileEl.files[0];
+    importNameEl.textContent = f ? f.name : 'No file chosen';
+    importGoEl.disabled = !f;
+    importStat.textContent = '';
+  });
+
+  importGoEl.addEventListener('click', async () => {
+    const f = importFileEl.files[0];
+    if (!f) return;
+    importGoEl.disabled = true;
+    importStat.innerHTML = '<span class="th-loading"></span> Parsing…';
+    try {
+      const fd = new FormData();
+      fd.append('file', f);
+      const data = await ThesisState.apiUpload('/references/import-list', fd);
+      const entries = data.entries || [];
+      const existing = new Set((ThesisState.get().references || []).map((r) => (r.doi || '').toLowerCase()));
+      const fresh = entries.filter((e) => !(e.doi && existing.has(e.doi.toLowerCase())));
+      ThesisState.addReferences(fresh);
+      ThesisState.libSaveMany(fresh.filter((e) => e.verified));
+      importStat.textContent = `Imported ${fresh.length} (${data.verified} Crossref-verified, ${entries.length - data.verified} heuristic).`;
+      importFileEl.value = '';
+      importNameEl.textContent = 'No file chosen';
+      renderLib();
+    } catch (e) {
+      importStat.textContent = 'Import failed: ' + e.message;
+    } finally {
+      importGoEl.disabled = false;
+    }
+  });
+
+  // ---------- Import from Helix (Study Builder) ----------
+  document.getElementById('th-helix-import').addEventListener('click', () => {
+    const helixStat = document.getElementById('th-helix-status');
+    let raw = null;
+    try { raw = sessionStorage.getItem('medras.helix.references'); } catch (_) {}
+    if (!raw) {
+      helixStat.textContent = 'No Study Builder references found. Run Helix first to generate a research plan.';
+      return;
+    }
+    let helixRefs = [];
+    try { helixRefs = JSON.parse(raw); } catch (_) { helixStat.textContent = 'Could not parse Helix data.'; return; }
+    if (!Array.isArray(helixRefs) || !helixRefs.length) {
+      helixStat.textContent = 'Helix reference list is empty.';
+      return;
+    }
+    const existing = new Set((ThesisState.get().references || []).map((r) => (r.doi || '').toLowerCase()));
+    const fresh = helixRefs.filter((r) => !(r.doi && existing.has((r.doi || '').toLowerCase())));
+    if (!fresh.length) { helixStat.textContent = 'All Helix references already in your library.'; return; }
+    ThesisState.addReferences(fresh);
+    ThesisState.libSaveMany(fresh.filter((r) => r.verified));
+    helixStat.textContent = `Imported ${fresh.length} references from Helix.`;
+    renderLib();
   });
 
   // ---------- Import from saved library ----------

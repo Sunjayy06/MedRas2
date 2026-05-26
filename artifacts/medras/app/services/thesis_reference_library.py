@@ -281,3 +281,119 @@ async def verify_dois(dois: List[str], *, max_concurrent: int = 6) -> List[Dict[
     if not tasks:
         return []
     return await asyncio.gather(*tasks)
+
+
+# ---------------------------------------------------------------------------
+# Reference list parser
+# ---------------------------------------------------------------------------
+
+_REF_SPLIT = re.compile(
+    r"(?m)(?:^|\n)\s*(?:\d{1,3}[.)]\s+|\[\d{1,3}\]\s+|[-•*]\s+)"
+)
+_YEAR_4 = re.compile(r"\b((?:19|20)\d{2})\b")
+
+
+def _parse_block_heuristic(block: str, doi: str = "") -> Dict[str, Any]:
+    """Best-effort heuristic parse of a Vancouver/APA-style reference block."""
+    block = re.sub(r"\s+", " ", block.strip())
+    year_m = _YEAR_4.findall(block)
+    year = int(year_m[0]) if year_m else None
+    # Vancouver pattern: Authors. Title. Journal. Year;Vol:Pages.
+    parts = re.split(r"\.\s+", block, maxsplit=4)
+    authors_raw = parts[0] if parts else block
+    title = (parts[1] if len(parts) > 1 else "").strip().rstrip(".")
+    journal_raw = (parts[2] if len(parts) > 2 else "").strip()
+    # Strip year/volume suffix from journal ("2020;45:123" → "")
+    journal = re.split(r"\d{4}", journal_raw)[0].strip().rstrip(";,.")
+    authors = [a.strip() for a in re.split(r",\s*", authors_raw) if a.strip()][:8]
+    if len(title) < 8:
+        title = block[:200]
+    return {
+        "doi": doi,
+        "title": title[:300],
+        "authors": authors,
+        "year": year,
+        "journal": journal[:100],
+        "abstract": "",
+        "source": "imported",
+        "verified": False,
+        "score": 0.3,
+    }
+
+
+async def parse_reference_list(
+    text: str, *, max_refs: int = 200, max_concurrent: int = 6
+) -> List[Dict[str, Any]]:
+    """Parse a plain-text reference list into structured reference entries.
+
+    Handles:
+    - Numbered Vancouver: ``1. Smith J, Jones A. Title. Journal. 2020;45:123.``
+    - Bulleted: ``• Smith J et al. Title. Journal. 2020.``
+    - DOI-only lines: ``10.1056/NEJMoa...`` (one per line)
+    - Mixed lists (DOIs extracted and verified; others heuristically parsed)
+
+    Entries with resolvable DOIs are Crossref-verified; others are marked
+    ``verified: False`` so the frontend can prompt the researcher to confirm.
+    """
+    text = (text or "").strip()
+    if not text:
+        return []
+
+    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+    # DOI-only input: every non-empty line matches the DOI regex
+    doi_only = lines and all(_DOI_RE.match(ln) for ln in lines)
+    if doi_only:
+        dois = [ln.rstrip(".,;)") for ln in lines][:max_refs]
+        return await verify_dois(dois, max_concurrent=max_concurrent)
+
+    # Split into reference blocks on numbered/bulleted boundaries
+    chunks = _REF_SPLIT.split("\n" + text)
+    blocks = [c.strip() for c in chunks if c.strip()][:max_refs]
+    if not blocks:
+        blocks = [b.strip() for b in text.split("\n\n") if b.strip()][:max_refs]
+    if not blocks:
+        blocks = [text]
+
+    sem = asyncio.Semaphore(max_concurrent)
+
+    async def _process(block: str) -> Optional[Dict[str, Any]]:
+        async with sem:
+            doi_m = _DOI_RE.search(block)
+            doi = doi_m.group(0).rstrip(".,;)") if doi_m else ""
+            if doi:
+                verified = await verify_doi(doi)
+                if verified:
+                    return verified
+            return _parse_block_heuristic(block, doi)
+
+    results = await asyncio.gather(*[_process(b) for b in blocks],
+                                   return_exceptions=True)
+    return [r for r in results if isinstance(r, dict) and r]
+
+
+# ---------------------------------------------------------------------------
+# Topic-scored selection from a session library
+# ---------------------------------------------------------------------------
+
+def score_and_select(
+    records: List[Dict[str, Any]],
+    topic: str,
+    limit: int = 18,
+    recency_window: int = 15,
+) -> List[Dict[str, Any]]:
+    """Score ``records`` against ``topic`` and return the top ``limit`` entries.
+
+    Used by the section writer when the researcher has a pre-loaded reference
+    library — we pick the most relevant papers for the current chapter rather
+    than sending all refs to the LLM.
+    """
+    if not records:
+        return []
+    terms = _topic_terms(topic)
+    scored: List[Dict[str, Any]] = []
+    for r in records:
+        r2 = dict(r)
+        r2["score"] = _score(r2, terms, recency_window)
+        scored.append(r2)
+    scored.sort(key=lambda r: r.get("score", 0.0), reverse=True)
+    return scored[:limit]

@@ -156,6 +156,78 @@ async def references_search(request: Request, payload: Dict[str, Any]) -> Dict[s
     return res
 
 
+@router.post("/references/import-list")
+@limiter.limit("10/minute")
+async def import_reference_list(
+    request: Request, file: UploadFile = File(...)
+) -> Dict[str, Any]:
+    """Upload a DOCX / PDF / TXT file containing a reference list.
+
+    Parses numbered or bulleted Vancouver-style references, DOI-only lines,
+    or mixed text. Entries with resolvable DOIs are Crossref-verified;
+    others are heuristically parsed and marked ``verified: false``.
+
+    Returns ``{entries: [...], parsed: N, verified: N}``.
+    """
+    data = await file.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="Empty file.")
+    if len(data) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="File too large (>30 MB).")
+
+    fname = (file.filename or "").lower()
+
+    def _extract_text() -> str:
+        if fname.endswith(".docx"):
+            try:
+                from docx import Document  # type: ignore
+                import io
+                doc = Document(io.BytesIO(data))
+                return "\n".join(p.text.strip() for p in doc.paragraphs if p.text.strip())
+            except Exception as exc:
+                raise ValueError(f"Could not read DOCX: {exc}") from exc
+        elif fname.endswith(".pdf"):
+            try:
+                from PyPDF2 import PdfReader  # type: ignore
+                import io
+                reader = PdfReader(io.BytesIO(data))
+                pages = [(page.extract_text() or "").strip() for page in reader.pages]
+                return "\n\n".join(p for p in pages if p)
+            except Exception as exc:
+                raise ValueError(f"Could not read PDF: {exc}") from exc
+        else:
+            return data.decode("utf-8", errors="replace")
+
+    try:
+        text = await asyncio.to_thread(_extract_text)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    if not text.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Could not extract any text from the file.",
+        )
+
+    try:
+        entries = await thesis_reference_library.parse_reference_list(text[:200_000])
+    except Exception as exc:  # noqa: BLE001
+        log.exception("import_reference_list: parse failed")
+        raise HTTPException(status_code=500, detail=f"Parsing failed: {exc}")
+
+    # Attach distilled summaries to verified entries
+    for e in entries:
+        if e.get("verified"):
+            e["summary"] = thesis_reference_library.summarise(e)
+
+    verified_count = sum(1 for e in entries if e.get("verified"))
+    return {
+        "entries": entries,
+        "parsed": len(entries),
+        "verified": verified_count,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Section writer
 # ---------------------------------------------------------------------------
@@ -164,7 +236,10 @@ async def references_search(request: Request, payload: Dict[str, Any]) -> Dict[s
 @limiter.limit("8/minute")
 async def draft_section(request: Request, payload: Dict[str, Any]) -> Dict[str, Any]:
     """Body: ``{chapter_id, topic, citation_style?, locked_numbers?,
-    extra_context?, domain_hint?, mode?, style_choice?, style_sample?}``."""
+    extra_context?, domain_hint?, mode?, style_choice?, style_sample?,
+    ref_library?}``."""
+    ref_lib_raw = payload.get("ref_library")
+    ref_library = ref_lib_raw[:200] if isinstance(ref_lib_raw, list) else None
     try:
         result = await thesis_section_writer.draft_section(
             chapter_id=payload.get("chapter_id") or "",
@@ -176,6 +251,7 @@ async def draft_section(request: Request, payload: Dict[str, Any]) -> Dict[str, 
             mode=payload.get("mode") or "thesis",
             style_choice=payload.get("style_choice") or "indian_formal",
             style_sample=payload.get("style_sample"),
+            ref_library=ref_library,
         )
     except GeneratorError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
@@ -186,7 +262,10 @@ async def draft_section(request: Request, payload: Dict[str, Any]) -> Dict[str, 
 @limiter.limit("12/minute")
 async def improve_section(request: Request, payload: Dict[str, Any]) -> Dict[str, Any]:
     """Body: ``{chapter_id, topic, current_text, citation_style?,
-    locked_numbers?, domain_hint?, mode?, style_choice?, style_sample?}``."""
+    locked_numbers?, domain_hint?, mode?, style_choice?, style_sample?,
+    ref_library?}``."""
+    ref_lib_raw = payload.get("ref_library")
+    ref_library = ref_lib_raw[:200] if isinstance(ref_lib_raw, list) else None
     try:
         result = await thesis_section_writer.improve_section(
             chapter_id=payload.get("chapter_id") or "",
@@ -198,6 +277,7 @@ async def improve_section(request: Request, payload: Dict[str, Any]) -> Dict[str
             mode=payload.get("mode") or "thesis",
             style_choice=payload.get("style_choice") or "indian_formal",
             style_sample=payload.get("style_sample"),
+            ref_library=ref_library,
         )
     except GeneratorError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
