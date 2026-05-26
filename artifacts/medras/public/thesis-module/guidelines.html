@@ -55,6 +55,25 @@
     </div>
   </div>
 
+  <!-- Writing style sample — thesis mode only, shown by JS -->
+  <div id="th-style-card" class="th-card" style="display:none; margin-top:18px">
+    <h3 class="th-h3">Match your writing style <span style="font-size:12px; font-weight:400; color:var(--th-text-soft)">(optional)</span></h3>
+    <p style="font-size:13.5px; color:var(--th-text-soft); margin:0 0 12px">
+      Upload a chapter from your own previously written thesis or a published paper you admire.
+      The AI will calibrate sentence rhythm, hedging vocabulary and paragraph structure to match
+      your register — without copying any sentence verbatim.
+    </p>
+    <input type="file" id="th-style-file" accept=".pdf,.docx,.txt" class="th-input" />
+    <div style="margin-top:10px; display:flex; gap:10px; align-items:center; flex-wrap:wrap">
+      <button id="th-style-parse" class="th-btn th-btn-ghost">Upload style sample</button>
+      <span id="th-style-status" style="font-size:13px; color:var(--th-text-soft)"></span>
+    </div>
+    <div id="th-style-preview" style="display:none; margin-top:10px; font-size:12.5px;
+         color:var(--th-text-soft); background:var(--th-paper-2); border-radius:6px;
+         padding:10px 12px; max-height:120px; overflow:auto; white-space:pre-wrap; line-height:1.5">
+    </div>
+  </div>
+
   <div id="th-gd-rules" class="th-card" style="display:none">
     <h3 class="th-h3">Rules in effect</h3>
     <div id="th-gd-rules-body" class="th-grid cols-3" style="font-size:13.5px"></div>
@@ -94,6 +113,26 @@
     return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   }
 
+  // Show style-sample card only for thesis mode
+  (function () {
+    const setup = ThesisState.get().setup || {};
+    const mode = (setup.mode || 'thesis').toLowerCase();
+    if (mode === 'thesis') {
+      document.getElementById('th-style-card').style.display = '';
+    }
+    // If a sample is already saved, show its preview
+    try {
+      const saved = sessionStorage.getItem('medras.thesis.style_sample');
+      if (saved && saved.length > 50) {
+        const st = document.getElementById('th-style-status');
+        const pv = document.getElementById('th-style-preview');
+        st.textContent = 'Style sample loaded — AI will match this register.';
+        pv.style.display = '';
+        pv.textContent = saved.slice(0, 400) + (saved.length > 400 ? '…' : '');
+      }
+    } catch (_) {}
+  })();
+
   // If rules already set, show them
   const existing = ThesisState.get().rules || {};
   if (Object.keys(existing).length) renderRules(existing);
@@ -105,6 +144,29 @@
       renderRules(res.rules);
       ThesisState.toast('Using NBEMS defaults.');
     } catch (e) { ThesisState.toast('Failed: ' + e.message); }
+  });
+
+  document.getElementById('th-style-parse').addEventListener('click', async () => {
+    const fi = document.getElementById('th-style-file');
+    const f = fi.files && fi.files[0];
+    if (!f) { ThesisState.toast('Pick a file first.'); return; }
+    const st = document.getElementById('th-style-status');
+    st.innerHTML = '<span class="th-loading"></span> Extracting writing sample…';
+    try {
+      const fd = new FormData();
+      fd.append('file', f);
+      const res = await ThesisState.apiUpload('/extract-style-sample', fd);
+      const text = res.text || '';
+      if (!text.trim()) { st.textContent = 'Could not extract prose — try a DOCX or TXT file.'; return; }
+      sessionStorage.setItem('medras.thesis.style_sample', text);
+      sessionStorage.setItem('medras.thesis.style_choice', 'uploaded');
+      st.textContent = 'Style sample saved — AI will match this register in the Editor.';
+      const pv = document.getElementById('th-style-preview');
+      pv.style.display = '';
+      pv.textContent = text.slice(0, 400) + (text.length > 400 ? '…' : '');
+    } catch (e) {
+      st.textContent = 'Upload failed: ' + e.message;
+    }
   });
 
   document.getElementById('th-gd-parse').addEventListener('click', async () => {

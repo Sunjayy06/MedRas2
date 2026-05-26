@@ -8,6 +8,8 @@ Endpoints
 * ``POST /api/thesis/references/search``     — distilled RAG search
 * ``POST /api/thesis/draft-section``         — RAG-grounded fresh section draft
 * ``POST /api/thesis/improve-section``       — sentence-level inline-diff suggestions
+* ``POST /api/thesis/draft-abstract``        — structured abstract from researcher's own data
+* ``POST /api/thesis/extract-style-sample``  — extract body prose from uploaded sample for style matching
 * ``POST /api/thesis/compliance-check``      — pre-flight checks on full state
 * ``POST /api/thesis/extract-text``          — extract text from uploaded stats / data file
 """
@@ -162,7 +164,7 @@ async def references_search(request: Request, payload: Dict[str, Any]) -> Dict[s
 @limiter.limit("8/minute")
 async def draft_section(request: Request, payload: Dict[str, Any]) -> Dict[str, Any]:
     """Body: ``{chapter_id, topic, citation_style?, locked_numbers?,
-    extra_context?, domain_hint?}``."""
+    extra_context?, domain_hint?, mode?, style_choice?, style_sample?}``."""
     try:
         result = await thesis_section_writer.draft_section(
             chapter_id=payload.get("chapter_id") or "",
@@ -171,6 +173,9 @@ async def draft_section(request: Request, payload: Dict[str, Any]) -> Dict[str, 
             locked_numbers=payload.get("locked_numbers") or {},
             extra_context=payload.get("extra_context"),
             domain_hint=payload.get("domain_hint"),
+            mode=payload.get("mode") or "thesis",
+            style_choice=payload.get("style_choice") or "indian_formal",
+            style_sample=payload.get("style_sample"),
         )
     except GeneratorError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
@@ -181,7 +186,7 @@ async def draft_section(request: Request, payload: Dict[str, Any]) -> Dict[str, 
 @limiter.limit("12/minute")
 async def improve_section(request: Request, payload: Dict[str, Any]) -> Dict[str, Any]:
     """Body: ``{chapter_id, topic, current_text, citation_style?,
-    locked_numbers?, domain_hint?}``."""
+    locked_numbers?, domain_hint?, mode?, style_choice?, style_sample?}``."""
     try:
         result = await thesis_section_writer.improve_section(
             chapter_id=payload.get("chapter_id") or "",
@@ -190,10 +195,115 @@ async def improve_section(request: Request, payload: Dict[str, Any]) -> Dict[str
             citation_style=(payload.get("citation_style") or "vancouver"),
             locked_numbers=payload.get("locked_numbers") or {},
             domain_hint=payload.get("domain_hint"),
+            mode=payload.get("mode") or "thesis",
+            style_choice=payload.get("style_choice") or "indian_formal",
+            style_sample=payload.get("style_sample"),
         )
     except GeneratorError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     return result
+
+
+@router.post("/draft-abstract")
+@limiter.limit("8/minute")
+async def draft_abstract_endpoint(request: Request, payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Draft a structured abstract from the researcher's own chapter content.
+
+    Body: ``{topic, extra_context?, locked_numbers?, word_limit?,
+    mode?, style_choice?, style_sample?}``.
+    """
+    try:
+        result = await thesis_section_writer.draft_abstract(
+            topic=payload.get("topic") or "",
+            extra_context=payload.get("extra_context"),
+            locked_numbers=payload.get("locked_numbers") or {},
+            word_limit=int(payload.get("word_limit") or 280),
+            mode=payload.get("mode") or "thesis",
+            style_choice=payload.get("style_choice") or "indian_formal",
+            style_sample=payload.get("style_sample"),
+            domain_hint=payload.get("domain_hint"),
+        )
+    except GeneratorError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return result
+
+
+@router.post("/extract-style-sample")
+@limiter.limit("10/minute")
+async def extract_style_sample(
+    request: Request, file: UploadFile = File(...)
+) -> Dict[str, Any]:
+    """Upload a DOCX / PDF / TXT sample of the researcher's own writing.
+
+    Returns ``{text}`` — up to ~2000 words of body prose with front matter
+    (title, authors) and back matter (references) stripped. The client stores
+    this in sessionStorage and passes it to draft-section as ``style_sample``
+    when ``style_choice == "uploaded"``.
+    """
+    data = await file.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="Empty file.")
+    if len(data) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="File too large (>30 MB).")
+
+    fname = (file.filename or "").lower()
+
+    def _extract() -> str:
+        raw = ""
+        if fname.endswith(".docx"):
+            try:
+                from docx import Document  # type: ignore
+                import io
+                doc = Document(io.BytesIO(data))
+                paragraphs = [p.text.strip() for p in doc.paragraphs if p.text.strip()]
+                raw = "\n\n".join(paragraphs)
+            except Exception as exc:
+                raise ValueError(f"Could not read DOCX: {exc}") from exc
+        elif fname.endswith(".pdf"):
+            try:
+                from PyPDF2 import PdfReader  # type: ignore
+                import io
+                reader = PdfReader(io.BytesIO(data))
+                pages = [
+                    (page.extract_text() or "").strip()
+                    for page in reader.pages
+                    if (page.extract_text() or "").strip()
+                ]
+                raw = "\n\n".join(pages)
+            except Exception as exc:
+                raise ValueError(f"Could not read PDF: {exc}") from exc
+        else:
+            raw = data.decode("utf-8", errors="replace")
+
+        # Strip front matter (first 300 chars likely title/authors/affiliations)
+        if len(raw) > 300:
+            raw = raw[300:]
+
+        # Strip back matter — everything after REFERENCES / BIBLIOGRAPHY heading
+        import re
+        ref_match = re.search(
+            r"\b(REFERENCES|BIBLIOGRAPHY|WORKS CITED)\b",
+            raw, flags=re.IGNORECASE,
+        )
+        if ref_match:
+            raw = raw[:ref_match.start()]
+
+        # Return up to 6000 characters (~2000 words) of body prose
+        return raw.strip()[:6000]
+
+    try:
+        text = await asyncio.to_thread(_extract)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    if len(text.strip()) < 100:
+        raise HTTPException(
+            status_code=400,
+            detail="Could not extract enough prose from the file. "
+                   "Try a DOCX or TXT version of the document.",
+        )
+
+    return {"text": text}
 
 
 # ---------------------------------------------------------------------------

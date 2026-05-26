@@ -34,13 +34,14 @@ from typing import Any, Dict, List, Optional, TypedDict
 
 
 class Chapter(TypedDict, total=False):
-    id: str            # stable slug for keying state
-    label: str         # display name
-    group: str         # "front" | "body" | "back"
-    target_words: int  # default word target; overridden by uni rules / tier
-    share: float       # fraction of body word budget (article spines only)
-    helpers: List[str] # which Helper-Strip buttons to show in the editor
-    description: str   # one-line guidance for the dashboard tooltip
+    id: str              # stable slug for keying state
+    label: str           # display name
+    group: str           # "front" | "body" | "back"
+    target_words: int    # default word target; overridden by uni rules / tier
+    word_budget: List[int]  # [min, max] word range for the editor word-count badge
+    share: float         # fraction of body word budget (article spines only)
+    helpers: List[str]   # which Helper-Strip buttons to show in the editor
+    description: str     # one-line guidance for the dashboard tooltip
 
 
 # ===========================================================================
@@ -57,31 +58,40 @@ CHAPTER_SPINE: List[Chapter] = [
      "target_words": 120, "helpers": ["scan_text"],
      "description": "Auto-extract from your text — review and add."},
     {"id": "abstract", "label": "Abstract", "group": "front",
-     "target_words": 280, "helpers": ["ai_draft", "rag_cite"],
+     "target_words": 280, "word_budget": [250, 300],
+     "helpers": ["ai_draft", "rag_cite"],
      "description": "Background · Methods · Results · Conclusion · Keywords (250-300 w)."},
     {"id": "introduction", "label": "Chapter I — Introduction", "group": "body",
-     "target_words": 1800, "helpers": ["ai_draft", "rag_cite", "plagiarism"],
+     "target_words": 1800, "word_budget": [1500, 2200],
+     "helpers": ["ai_draft", "rag_cite", "plagiarism"],
      "description": "Set the clinical / scientific stage; problem burden; gaps; rationale."},
     {"id": "aims", "label": "Chapter II — Aims & Objectives", "group": "body",
-     "target_words": 200, "helpers": ["study_builder"],
+     "target_words": 200, "word_budget": [150, 300],
+     "helpers": ["study_builder"],
      "description": "Single aim + 2-4 specific measurable objectives."},
     {"id": "literature_review", "label": "Chapter III — Review of Literature", "group": "body",
-     "target_words": 6500, "helpers": ["ai_draft", "rag_cite", "summarise_refs", "plagiarism"],
+     "target_words": 6500, "word_budget": [5500, 7500],
+     "helpers": ["ai_draft", "rag_cite", "summarise_refs", "plagiarism"],
      "description": "Synthesise prior work — agreements, disagreements, gaps."},
     {"id": "methods", "label": "Chapter IV — Materials & Methods", "group": "body",
-     "target_words": 2200, "helpers": ["sample_size", "study_builder", "ai_draft", "rag_cite"],
+     "target_words": 2200, "word_budget": [1800, 2400],
+     "helpers": ["sample_size", "study_builder", "ai_draft", "rag_cite"],
      "description": "Design · setting · participants · sampling · variables · stats plan."},
     {"id": "results", "label": "Chapter V — Observations & Results", "group": "body",
-     "target_words": 2500, "helpers": ["stats_engine", "import_stats", "ai_draft"],
+     "target_words": 2500, "word_budget": [2000, 3000],
+     "helpers": ["stats_engine", "import_stats", "ai_draft"],
      "description": "Tables, graphs and prose — locked numbers from your data."},
     {"id": "discussion", "label": "Chapter VI — Discussion", "group": "body",
-     "target_words": 2800, "helpers": ["ai_draft", "rag_cite", "compare_lit", "plagiarism"],
+     "target_words": 2800, "word_budget": [2400, 3200],
+     "helpers": ["ai_draft", "rag_cite", "compare_lit", "plagiarism"],
      "description": "Interpret your findings in the light of prior literature."},
     {"id": "summary", "label": "Chapter VII — Summary", "group": "body",
-     "target_words": 600, "helpers": ["ai_draft"],
+     "target_words": 600, "word_budget": [500, 700],
+     "helpers": ["ai_draft"],
      "description": "Crisp recap of the entire thesis (≤1 page)."},
     {"id": "conclusion", "label": "Chapter VIII — Conclusion", "group": "body",
-     "target_words": 400, "helpers": ["ai_draft"],
+     "target_words": 400, "word_budget": [300, 500],
+     "helpers": ["ai_draft"],
      "description": "Take-home message + actionable recommendations + future directions."},
     {"id": "proforma", "label": "Proforma / Case record form", "group": "back",
      "target_words": 0, "helpers": [],

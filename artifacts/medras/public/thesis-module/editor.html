@@ -49,7 +49,9 @@
   <section class="th-pane th-pane-center">
     <div class="th-editor-toolbar">
       <span class="th-current" id="th-cur-label">…</span>
-      <span id="th-wc" style="font-size:12.5px; color:var(--th-text-soft)"></span>
+      <span id="th-wc" style="font-size:12.5px"></span>
+      <select id="th-style-pick" class="th-btn th-btn-light th-btn-sm"
+              style="font-size:12px; cursor:pointer; padding:0 8px" title="Writing style"></select>
       <button id="th-toggle-mode" class="th-btn th-btn-light th-btn-sm">Mode: Write</button>
       <button id="th-save" class="th-btn th-btn-primary th-btn-sm">Save</button>
     </div>
@@ -100,12 +102,67 @@
     // Wire the per-chapter "Attach figure" deep-link with the right ?chapter=
     var fig = document.getElementById('th-attach-fig');
     if (fig) fig.href = '/thesis-module/assets.html?chapter=' + encodeURIComponent(chapterId);
+    initStylePicker();
     renderSideChapters();
     renderSideLocks();
     renderSideRefs();
     renderHelpers();
     renderEditor();
     document.getElementById('th-cur-label').textContent = chapter.label;
+  }
+
+  function initStylePicker() {
+    const setup = ThesisState.get().setup || {};
+    const mode = (setup.mode || 'thesis').toLowerCase();
+    const pick = document.getElementById('th-style-pick');
+    const hasSample = !!(
+      (function() { try { return sessionStorage.getItem('medras.thesis.style_sample'); } catch(_){ return ''; } })()
+    );
+
+    const THESIS_OPTS = [
+      { value: 'indian_formal', label: 'Style: Indian formal' },
+      { value: 'british',       label: 'Style: British academic' },
+    ];
+    if (hasSample) {
+      THESIS_OPTS.push({ value: 'uploaded', label: 'Style: Match my sample ✓' });
+    }
+    const ARTICLE_OPTS = [
+      { value: 'plos',      label: 'Style: PLoS' },
+      { value: 'bmc',       label: 'Style: BMC' },
+      { value: 'bmj',       label: 'Style: BMJ' },
+      { value: 'frontiers', label: 'Style: Frontiers' },
+    ];
+
+    const opts = mode === 'article' ? ARTICLE_OPTS : THESIS_OPTS;
+    pick.innerHTML = opts.map((o) =>
+      `<option value="${esc(o.value)}">${esc(o.label)}</option>`
+    ).join('');
+
+    // Restore saved choice
+    const saved = (function() {
+      try { return sessionStorage.getItem('medras.thesis.style_choice') || ''; } catch(_){ return ''; }
+    })();
+    if (saved && opts.some((o) => o.value === saved)) pick.value = saved;
+    else pick.value = opts[0].value;
+
+    pick.addEventListener('change', () => {
+      try { sessionStorage.setItem('medras.thesis.style_choice', pick.value); } catch(_){}
+    });
+  }
+
+  function getStyleParams() {
+    const pick = document.getElementById('th-style-pick');
+    const choice = pick ? pick.value : 'indian_formal';
+    let sample = null;
+    if (choice === 'uploaded') {
+      try { sample = sessionStorage.getItem('medras.thesis.style_sample') || null; } catch(_){}
+    }
+    const setup = ThesisState.get().setup || {};
+    return {
+      style_choice: choice,
+      style_sample: sample,
+      mode: (setup.mode || 'thesis').toLowerCase(),
+    };
   }
 
   function renderSideChapters() {
@@ -238,9 +295,28 @@
   function updateWC() {
     const c = ThesisState.getChapter(chapterId);
     const w = (String(c.text||'').match(/\b\w+\b/g) || []).length;
-    const t = chapter.target_words || 0;
-    document.getElementById('th-wc').textContent =
-      `${w} words${t ? ' / target ' + t : ''}`;
+    const budget = chapter.word_budget;  // [min, max] or undefined
+    const el = document.getElementById('th-wc');
+
+    if (!budget) {
+      const t = chapter.target_words || 0;
+      el.textContent = `${w} words${t ? ' / target ' + t : ''}`;
+      el.style.color = 'var(--th-text-soft)';
+      return;
+    }
+    const [mn, mx] = budget;
+    let color = 'var(--th-emerald-d)';   // within range — green
+    let badge = '';
+    if (w < mn) {
+      color = w < mn * 0.60 ? '#c0392b' : '#d68910';  // red if very short, amber if approaching
+      badge = ` ↑ ${mn - w} more needed`;
+    } else if (w > mx) {
+      color = w > mx * 1.25 ? '#c0392b' : '#d68910';
+      badge = ` ↓ ${w - mx} over`;
+    }
+    el.textContent = `${w} words · ${mn}–${mx}${badge}`;
+    el.style.color = color;
+    el.style.fontWeight = (w >= mn && w <= mx) ? '400' : '600';
   }
 
   // Save while typing (write mode)
@@ -383,6 +459,42 @@
       }
       const extraContext = ctxParts.length ? ctxParts.join('\n\n') : undefined;
       const status = document.getElementById('th-suggest-status');
+      const styleParams = getStyleParams();
+
+      // Abstract chapter uses a dedicated endpoint (no RAG; uses researcher's own data)
+      if (chapterId === 'abstract') {
+        status.innerHTML = '<span class="th-loading"></span> Drafting structured abstract from your chapter summaries…';
+        // Build abstract context from already-written chapters
+        const chapSummaries = spine
+          .filter((ch) => ch.id !== 'abstract')
+          .map((ch) => {
+            const txt = ThesisState.getChapter(ch.id).text || '';
+            return txt ? `[${ch.label}]\n${txt.slice(0, 800)}` : '';
+          })
+          .filter(Boolean)
+          .join('\n\n');
+        try {
+          const res = await ThesisState.api('/draft-abstract', {
+            topic,
+            extra_context: chapSummaries || extraContext,
+            locked_numbers: s.locked_numbers || {},
+            word_limit: 280,
+            domain_hint: setup.domain || undefined,
+            ...styleParams,
+          });
+          pendingDraft = res.text;
+          pendingDraftMeta = { sources_count: 0 };
+          suggestions = [];
+          mode = 'review';
+          renderEditor(); renderSuggestList();
+          status.textContent = 'Abstract ready — review and click ✓ to accept, or ✗ to discard.';
+        } catch (e) {
+          status.textContent = '';
+          ThesisState.toast('Abstract draft failed: ' + e.message);
+        }
+        return;
+      }
+
       status.innerHTML = '<span class="th-loading"></span> Drafting from RAG-grounded evidence…';
       try {
         const res = await ThesisState.api('/draft-section', {
@@ -391,6 +503,7 @@
           locked_numbers: s.locked_numbers || {},
           domain_hint: setup.domain || undefined,
           extra_context: extraContext,
+          ...styleParams,
         });
         // Researcher-in-control: NEVER auto-insert. Stage the draft and
         // require an explicit ✓ in Review mode.
@@ -420,6 +533,7 @@
       const text = ThesisState.getChapter(chapterId).text || '';
       if (!text.trim()) { ThesisState.toast('Write some text first, or click "AI: Draft this section".'); return; }
       const status = document.getElementById('th-suggest-status');
+      const styleParams = getStyleParams();
       status.innerHTML = '<span class="th-loading"></span> Reading your draft + retrieving evidence…';
       try {
         const res = await ThesisState.api('/improve-section', {
@@ -427,6 +541,7 @@
           citation_style: cite,
           locked_numbers: s.locked_numbers || {},
           domain_hint: setup.domain || undefined,
+          ...styleParams,
         });
         suggestions = res.suggestions || [];
         if (!suggestions.length) {
