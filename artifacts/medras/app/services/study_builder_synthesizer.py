@@ -359,12 +359,78 @@ def _call_openai_sync(system: str, user: str) -> dict | None:
         return None
 
 
+# ── Locked-context block builder ─────────────────────────────────────────────
+
+def _build_locked_block(ctx: dict) -> str:
+    """Build the LOCKED researcher-results block prepended to the system prompt.
+
+    The block tells the AI what numbers come from the researcher's own study so
+    it (a) never alters those numbers, and (b) can relate published literature
+    explicitly to the researcher's actual findings.
+    """
+    lines: list[str] = [
+        "=== RESEARCHER'S OWN STUDY RESULTS (LOCKED — DO NOT ALTER THESE NUMBERS) ===",
+        "The researcher has already run their own statistical analysis in Sigma (MedRAS).",
+        "The numbers below are their actual results. You MUST reference them as 'your study' or 'your analysis'.",
+        "NEVER fabricate alternative values. NEVER change or contradict these numbers.",
+        "",
+    ]
+
+    if ctx.get("study_type"):
+        lines.append(f"Study type: {ctx['study_type']}")
+    if ctx.get("outcome"):
+        lines.append(f"Outcome variable: {ctx['outcome']}")
+    if ctx.get("n"):
+        lines.append(f"Sample size: {ctx['n']}")
+
+    tests: list[dict] = ctx.get("tests") or []
+    if tests:
+        lines.append("")
+        lines.append("Statistical results (locked):")
+        for t in tests:
+            parts: list[str] = []
+            var = t.get("variable") or t.get("predictor") or ""
+            test_name = t.get("test_name") or ""
+            label = f"{var} ({test_name})" if (var and test_name) else (var or test_name or "Test")
+            parts.append(f"  • {label}:")
+            stat = t.get("statistic")
+            if stat is not None:
+                parts.append(f"statistic = {stat}")
+            pv = t.get("p_value")
+            if pv is not None:
+                try:
+                    pv_f = float(pv)
+                    parts.append("p < 0.001" if pv_f < 0.001 else f"p = {pv_f:.3f}")
+                except (TypeError, ValueError):
+                    parts.append(f"p = {pv}")
+            es = t.get("effect_size")
+            if es is not None:
+                parts.append(f"effect size = {es}")
+            sig = t.get("significant")
+            if sig is not None:
+                parts.append("★ statistically significant (p<0.05)" if sig else "not significant")
+            interp = t.get("interpretation") or ""
+            if interp:
+                parts.append(f"— {interp}")
+            lines.append(" ".join(parts))
+
+    narrative = (ctx.get("narrative") or "")[:600]
+    if narrative:
+        lines.append("")
+        lines.append(f"Results narrative: {narrative}")
+
+    lines.append("")
+    lines.append("=== END OF RESEARCHER'S OWN RESULTS — Relate published literature to these findings ===")
+    return "\n".join(lines)
+
+
 # ── Public entry point ───────────────────────────────────────────────────────
 
 async def synthesize(
     question: str,
     papers: list[dict],
     history: list[dict],
+    locked_context: dict | None = None,
 ) -> dict:
     """Full distillation → grading → synthesis pipeline.
 
@@ -410,6 +476,12 @@ async def synthesize(
         evidence=evidence_block,
         history=history_text,
     )
+
+    # If the caller supplies the researcher's own results (e.g. from Sigma),
+    # prepend the LOCKED block so the AI grounds its answer in those numbers
+    # and never fabricates alternative statistics.
+    if locked_context:
+        synth_system = _build_locked_block(locked_context) + "\n\n" + synth_system
 
     # Step 4 — structured AI synthesis
     # Gemini 2.5 Flash PRIMARY: excels at academic evidence synthesis with

@@ -63,8 +63,16 @@ _PDF_TOP_CHUNKS    = 5                  # chunks retrieved per question
 # ── Request / Response models ────────────────────────────────────────────────
 
 class AskRequest(BaseModel):
-    question:   str            = Field(..., min_length=3, max_length=1500)
-    session_id: Optional[str]  = Field(None, description="Omit to start a new session")
+    question:      str             = Field(..., min_length=3, max_length=1500)
+    session_id:    Optional[str]   = Field(None, description="Omit to start a new session")
+    locked_context: Optional[dict] = Field(
+        None,
+        description=(
+            "Researcher's own analysis results (from Sigma). When provided the synthesiser "
+            "prepends a LOCKED block so the AI can relate published literature to the "
+            "researcher's actual numbers without altering them."
+        ),
+    )
 
 
 class KeyFinding(BaseModel):
@@ -618,7 +626,12 @@ async def ask(body: AskRequest) -> AskResponse:
             )
 
     # 5. Distillation + grading + structured synthesis
-    synth = await synthesize(question, search_result["papers"], history)
+    synth = await synthesize(
+        question,
+        search_result["papers"],
+        history,
+        locked_context=body.locked_context,
+    )
 
     # 6. Persist this turn
     answer_summary = (synth["answer"] or "")[:200].replace("\n", " ")

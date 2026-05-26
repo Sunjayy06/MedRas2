@@ -929,6 +929,9 @@
         <div class="se-actions">
           <button type="button" class="btn btn-secondary" data-action="back-to-plan" data-testid="button-results-back">&larr; Back to Plan</button>
           <button type="button" class="btn btn-secondary" id="btn-take-to-folio" title="Send Results and Methods to Folio document manager">📄 Take to Folio</button>
+          <button type="button" class="btn-ra-open" id="btn-ra-open-results" title="Open the Knowledge Assistant grounded in your results">
+            📚 Ask Research Assistant
+          </button>
           <button type="button" class="btn btn-primary" data-action="continue-to-export" data-testid="button-results-continue">Continue to Export &rarr;</button>
         </div>
 
@@ -1274,6 +1277,9 @@
 
         <div class="se-actions" style="margin-top:2rem">
           <button type="button" class="btn btn-secondary" data-action="back-to-ai-confirm">&larr; Back to Setup</button>
+          <button type="button" class="btn-ra-open" id="btn-ra-open-corr" title="Open the Knowledge Assistant grounded in your results">
+            📚 Ask Research Assistant
+          </button>
           <button type="button" class="btn btn-primary" id="btn-export-corr-chapter" data-action="export-corr-chapter">
             Download Results Chapter (.docx)
           </button>
@@ -1342,8 +1348,9 @@
       </div>
     </footer>
 
-    <script src="/js/analysis.js?v=2026052305" defer></script>
+    <script src="/js/analysis.js?v=2026052601" defer></script>
     <script src="/js/medras-nav.js" defer></script>
+    <script src="/study-builder/js/ra-drawer.js" defer></script>
 
     <!-- MedRAS Study Builder prefill (Phase 6) -->
     <script>

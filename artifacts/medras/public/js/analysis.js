@@ -3705,6 +3705,12 @@ function bindResults() {
   const cont = screen.querySelector('[data-action="continue-to-export"]');
   if (cont) cont.addEventListener("click", () => showScreen("export"));
 
+  /* ── Research Assistant trigger ── */
+  const raBtn = document.getElementById("btn-ra-open-results");
+  if (raBtn) {
+    raBtn.addEventListener("click", () => openRADrawer());
+  }
+
   /* ── Take to Folio ─────────────────────────────────────────────── */
   const folioBtn = document.getElementById("btn-take-to-folio");
   if (folioBtn) {
@@ -5204,11 +5210,134 @@ function bindSettingsPanel() {
 
 /* ─────────────────────────────────────────────────────────────────────── */
 
+/* ------------------------------------------------------------------ */
+/*  Knowledge Assistant — serialise Sigma results for locked_context  */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Build a locked_context object from the current analysis state.
+ * Works for both the correlation path (state.corrResults) and the
+ * classic results path (state.results).
+ */
+function serializeAnalysisContext() {
+  const ctx = {};
+
+  /* Study type + outcome from AI study metadata */
+  const ai = state.aiStudy || {};
+  if (ai.study_type) ctx.study_type = ai.study_type;
+  if (ai.outcome_col) ctx.outcome = ai.outcome_col;
+
+  /* ── Correlation / association / comparison path ── */
+  const corr = state.corrResults;
+  if (corr) {
+    if (!ctx.outcome && corr.outcome_col) ctx.outcome = corr.outcome_col;
+
+    const pairs = (corr.pairs || []).filter((p) => !p.test_result?.error);
+    ctx.tests = pairs.map((pair) => {
+      const tr = pair.test_result || {};
+      const pv = tr.p !== undefined ? tr.p : tr.p_value;
+      const statRow = (tr.rows || []).find((r) =>
+        /statistic|chi|pearson|spearman|U stat|t stat|z stat|W stat/i.test(r.label || "")
+      );
+      const esRow = (tr.rows || []).find((r) =>
+        /effect|cramer|phi|odds|risk|r\s*=/i.test(r.label || "")
+      );
+      return {
+        variable:    pair.predictor || "",
+        test_name:   tr.test_name  || "",
+        statistic:   statRow ? statRow.value : null,
+        p_value:     pv !== undefined ? pv : null,
+        effect_size: esRow  ? esRow.value  : null,
+        significant: pv !== undefined && pv !== null ? pv < 0.05 : null,
+        interpretation: pair.interpretation || "",
+      };
+    });
+
+    /* Outcome n (from summary or first pair) */
+    const firstPair = pairs[0];
+    if (firstPair && firstPair.test_result && firstPair.test_result.n) {
+      ctx.n = firstPair.test_result.n;
+    }
+  }
+
+  /* ── Classic results path ── */
+  const res = state.results;
+  if (res && !corr) {
+    ctx.tests = (res.tests || []).map((t) => {
+      const pRow = (t.rows || []).find((r) => /p.value|p =/i.test(r.label || ""));
+      const sRow = (t.rows || []).find((r) => /statistic/i.test(r.label || ""));
+      const eRow = (t.rows || []).find((r) => /effect|cohen|eta|r\s*=/i.test(r.label || ""));
+      const pv   = pRow ? parseFloat(pRow.value) : null;
+      return {
+        variable:    t.title    || t.id || "",
+        test_name:   t.test_name|| "",
+        statistic:   sRow ? sRow.value : null,
+        p_value:     isFinite(pv) ? pv : null,
+        effect_size: eRow ? eRow.value : null,
+        significant: isFinite(pv) ? pv < 0.05 : null,
+        interpretation: t.narrative || "",
+      };
+    });
+    if (res.results_md) ctx.narrative = res.results_md.slice(0, 600);
+  }
+
+  return ctx;
+}
+
+/**
+ * Compose a human-readable prefill question from the analysis context,
+ * then open the RA drawer.
+ */
+function openRADrawer() {
+  if (typeof window.RADrawer === "undefined") return;
+
+  const ctx = serializeAnalysisContext();
+
+  /* Build a pre-filled question from the most significant result */
+  let prefillQ = "";
+  const sigTests = (ctx.tests || []).filter((t) => t.significant);
+  const outcome  = ctx.outcome || "the outcome";
+
+  if (sigTests.length > 0) {
+    const t = sigTests[0];
+    const pLabel = t.p_value !== null
+      ? (t.p_value < 0.001 ? "p < 0.001" : `p = ${t.p_value.toFixed(3)}`)
+      : "";
+    prefillQ =
+      `My ${ctx.study_type || "analysis"} found that ${t.variable} was significantly ` +
+      `associated with ${outcome}` +
+      (t.test_name ? ` (${t.test_name}` : "") +
+      (pLabel ? `, ${pLabel}` : "") +
+      (t.test_name ? ")" : "") +
+      `. What does the published literature say about this association, ` +
+      `and is my result clinically meaningful?`;
+  } else if ((ctx.tests || []).length > 0) {
+    const varNames = ctx.tests.slice(0, 3).map((t) => t.variable).filter(Boolean).join(", ");
+    prefillQ =
+      `My ${ctx.study_type || "analysis"} examined the association between ` +
+      `${varNames || "these variables"} and ${outcome}. ` +
+      `None were statistically significant. What does the literature show, ` +
+      `and could my sample size be the limiting factor?`;
+  }
+
+  window.RADrawer.open(ctx, prefillQ || null);
+}
+
+/* ------------------------------------------------------------------ */
+/*  Screen CORR-RESULTS — button binding                               */
+/* ------------------------------------------------------------------ */
+
 function bindCorrResults() {
   const screen = document.getElementById("screen-corr-results");
   if (!screen) return;
 
   bindSettingsPanel();
+
+  /* ── Research Assistant trigger ── */
+  const raBtn = document.getElementById("btn-ra-open-corr");
+  if (raBtn) {
+    raBtn.addEventListener("click", () => openRADrawer());
+  }
 
   const backBtn = screen.querySelector('[data-action="back-to-ai-confirm"]');
   if (backBtn) backBtn.addEventListener("click", () => showScreen("ai-confirm"));

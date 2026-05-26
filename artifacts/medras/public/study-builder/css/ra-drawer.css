@@ -1,0 +1,348 @@
+/* ── Research Assistant Drawer — ra-drawer.css ────────────────────────────
+   Slides in from the right over any page. Navy theme mirrors analysis.html.
+   Z-index 1200 sits above the MedRAS nav bar (z 200) and modals (z 600).
+   ─────────────────────────────────────────────────────────────────────── */
+
+/* Overlay */
+.ra-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 1199;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.24s ease;
+}
+.ra-overlay.is-open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Drawer panel */
+.ra-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(520px, 96vw);
+  background: #0c1d3e;
+  border-left: 1px solid rgba(255, 255, 255, 0.09);
+  z-index: 1200;
+  display: flex;
+  flex-direction: column;
+  transform: translateX(100%);
+  transition: transform 0.26s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: -8px 0 32px rgba(0, 0, 0, 0.45);
+}
+.ra-drawer.is-open {
+  transform: translateX(0);
+}
+
+/* ── Header ──────────────────────────────────────────────────────────── */
+.ra-drawer-header {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.85rem 1.1rem 0.85rem 1.25rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
+}
+.ra-drawer-icon {
+  width: 28px;
+  height: 28px;
+  background: linear-gradient(135deg, #0891b2 0%, #0e7490 100%);
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: #fff;
+  flex-shrink: 0;
+  letter-spacing: 0.01em;
+}
+.ra-drawer-title {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: #e2e8f0;
+  flex: 1;
+  min-width: 0;
+}
+.ra-drawer-subtitle {
+  font-size: 0.72rem;
+  color: rgba(226, 232, 240, 0.48);
+  margin-top: 0.05rem;
+}
+.ra-drawer-close {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: rgba(226, 232, 240, 0.52);
+  cursor: pointer;
+  font-size: 1.25rem;
+  line-height: 1;
+  padding: 0.15rem 0.35rem;
+  border-radius: 4px;
+  transition: color 0.14s, background 0.14s;
+  flex-shrink: 0;
+}
+.ra-drawer-close:hover {
+  color: #e2e8f0;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+/* ── Locked-context pill ─────────────────────────────────────────────── */
+.ra-drawer-ctx-pill {
+  margin: 0.6rem 1.25rem;
+  padding: 0.5rem 0.75rem;
+  background: rgba(8, 145, 178, 0.12);
+  border: 1px solid rgba(8, 145, 178, 0.28);
+  border-radius: 8px;
+  font-size: 0.75rem;
+  color: #22d3ee;
+  line-height: 1.4;
+  flex-shrink: 0;
+}
+.ra-drawer-ctx-pill strong {
+  font-weight: 700;
+  color: #67e8f9;
+  display: block;
+  margin-bottom: 0.2rem;
+}
+
+/* ── Thread ──────────────────────────────────────────────────────────── */
+.ra-drawer-thread {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.75rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.ra-drawer-thread::-webkit-scrollbar { width: 4px; }
+.ra-drawer-thread::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+}
+
+/* Empty state */
+.ra-drawer-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 0.5rem;
+  color: rgba(226, 232, 240, 0.36);
+  font-size: 0.83rem;
+  text-align: center;
+  padding: 1.5rem;
+}
+
+/* Individual message pairs */
+.ra-msg-q {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #94a3b8;
+  padding: 0.4rem 0.6rem;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 6px;
+  border-left: 2px solid rgba(255, 255, 255, 0.12);
+}
+.ra-msg-a {
+  font-size: 0.83rem;
+  color: #cbd5e1;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.ra-msg-a strong, .ra-msg-a b { color: #e2e8f0; }
+
+/* Typing indicator */
+.ra-typing {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  padding: 0.4rem 0;
+}
+.ra-typing-dot {
+  width: 6px;
+  height: 6px;
+  background: rgba(34, 211, 238, 0.55);
+  border-radius: 50%;
+  animation: ra-bounce 1.1s infinite ease-in-out;
+}
+.ra-typing-dot:nth-child(2) { animation-delay: 0.18s; }
+.ra-typing-dot:nth-child(3) { animation-delay: 0.36s; }
+@keyframes ra-bounce {
+  0%, 80%, 100% { transform: translateY(0); }
+  40% { transform: translateY(-5px); }
+}
+
+/* Key findings */
+.ra-findings {
+  margin: 0.4rem 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.ra-findings li {
+  font-size: 0.8rem;
+  color: #94a3b8;
+  padding-left: 1rem;
+  position: relative;
+}
+.ra-findings li::before {
+  content: "•";
+  position: absolute;
+  left: 0.2rem;
+  color: #0891b2;
+}
+
+/* Evidence grade badge */
+.ra-grade {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.18rem 0.5rem;
+  border-radius: 20px;
+  margin-top: 0.4rem;
+  letter-spacing: 0.04em;
+}
+.ra-grade-HIGH    { background: rgba(5, 150, 105, 0.18); color: #34d399; border: 1px solid rgba(5,150,105,.3); }
+.ra-grade-MODERATE{ background: rgba(245,158,11,0.18); color: #fbbf24; border: 1px solid rgba(245,158,11,.3); }
+.ra-grade-LOW     { background: rgba(239,68,68,0.14); color: #f87171; border: 1px solid rgba(239,68,68,.25); }
+.ra-grade-default { background: rgba(148,163,184,0.1); color: #94a3b8; border: 1px solid rgba(148,163,184,.2); }
+
+/* Suggested questions */
+.ra-suggestions {
+  margin: 0.55rem 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.ra-suggestion-chip {
+  background: rgba(8, 145, 178, 0.1);
+  border: 1px solid rgba(8, 145, 178, 0.25);
+  border-radius: 20px;
+  color: #22d3ee;
+  font-size: 0.72rem;
+  padding: 0.25rem 0.65rem;
+  cursor: pointer;
+  transition: background 0.14s, border-color 0.14s;
+  text-align: left;
+  line-height: 1.35;
+}
+.ra-suggestion-chip:hover {
+  background: rgba(8, 145, 178, 0.2);
+  border-color: rgba(8, 145, 178, 0.45);
+}
+
+/* "Take to Proposal Writer" button */
+.ra-proposal-btn {
+  margin-top: 0.55rem;
+  background: none;
+  border: 1px solid rgba(139, 92, 246, 0.35);
+  border-radius: 6px;
+  color: #c4b5fd;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.28rem 0.7rem;
+  cursor: pointer;
+  transition: background 0.14s, border-color 0.14s;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.ra-proposal-btn:hover {
+  background: rgba(139, 92, 246, 0.12);
+  border-color: rgba(139, 92, 246, 0.55);
+}
+
+/* Divider between turns */
+.ra-turn-divider {
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  margin: 0;
+}
+
+/* ── Input area ──────────────────────────────────────────────────────── */
+.ra-drawer-input-area {
+  padding: 0.8rem 1.25rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
+  background: rgba(3, 11, 28, 0.6);
+}
+.ra-drawer-input-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-end;
+}
+.ra-drawer-input {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  color: #e2e8f0;
+  font-size: 0.83rem;
+  font-family: inherit;
+  padding: 0.55rem 0.8rem;
+  resize: none;
+  min-height: 38px;
+  max-height: 120px;
+  transition: border-color 0.14s;
+  line-height: 1.45;
+}
+.ra-drawer-input::placeholder { color: rgba(226, 232, 240, 0.28); }
+.ra-drawer-input:focus {
+  outline: none;
+  border-color: rgba(8, 145, 178, 0.6);
+}
+.ra-drawer-send {
+  background: #0891b2;
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 0.55rem 1rem;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.14s;
+  flex-shrink: 0;
+  height: 38px;
+  display: flex;
+  align-items: center;
+}
+.ra-drawer-send:hover:not(:disabled) { background: #0e7490; }
+.ra-drawer-send:disabled { opacity: 0.45; cursor: not-allowed; }
+.ra-drawer-hint {
+  font-size: 0.69rem;
+  color: rgba(226, 232, 240, 0.32);
+  margin-top: 0.35rem;
+}
+
+/* ── Trigger button (placed by the consuming page) ───────────────────── */
+.btn-ra-open {
+  background: rgba(8, 145, 178, 0.12);
+  border: 1px solid rgba(8, 145, 178, 0.35);
+  border-radius: 8px;
+  color: #22d3ee;
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 0.45rem 0.9rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  transition: background 0.14s, border-color 0.14s;
+  white-space: nowrap;
+}
+.btn-ra-open:hover {
+  background: rgba(8, 145, 178, 0.22);
+  border-color: rgba(8, 145, 178, 0.55);
+}
