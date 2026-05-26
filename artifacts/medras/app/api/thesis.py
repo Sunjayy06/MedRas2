@@ -635,6 +635,8 @@ async def convert_to_article(request: Request, payload: Dict[str, Any]) -> Dict[
     article_type   = (payload.get("article_type")   or "original_research").strip().lower()
     chapters       = payload.get("chapters") or {}
     locked_numbers = payload.get("locked_numbers") or {}
+    ref_lib_raw    = payload.get("ref_library")
+    ref_library    = ref_lib_raw[:200] if isinstance(ref_lib_raw, list) else None
 
     def _ch(cid: str) -> str:
         val = chapters.get(cid) or {}
@@ -674,6 +676,7 @@ async def convert_to_article(request: Request, payload: Dict[str, Any]) -> Dict[
             results_text=results_blob,
             discussion_text=disc_blob,
             locked_numbers=locked_numbers,
+            ref_library=ref_library,
         )
     except GeneratorError as exc:
         raise HTTPException(status_code=400, detail=str(exc))

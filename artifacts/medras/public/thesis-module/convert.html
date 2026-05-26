@@ -506,11 +506,12 @@
         method:'POST',
         headers:{'Content-Type':'application/json'},
         body: JSON.stringify({
-          topic: topic,
+          topic:          topic,
           journal_family: cv.journal_family||'plos',
           article_type:   cv.article_type||'original_research',
-          chapters: chs,
+          chapters:       chs,
           locked_numbers: s.locked_numbers||{},
+          ref_library:    s.references||[],
         }),
       });
       var data = await r.json();
@@ -845,25 +846,20 @@
     if(bodyTotal > limit){
       var warnDiv = document.createElement('div');
       warnDiv.id = 'cv-over-warn';
-      warnDiv.style.cssText = 'margin-top:12px; padding:12px 14px; background:#fff8e1; border:1px solid var(--th-gold); border-radius:8px; font-size:13px; color:#7a5d00;';
+      warnDiv.style.cssText = 'margin-top:12px; padding:12px 14px; background:#fdecec; border:1px solid #f5b3b3; border-radius:8px; font-size:13px; color:#a02;';
       warnDiv.innerHTML =
-        '<strong>⚠ Body word count exceeds target</strong><br>' +
+        '<strong>✗ Body word count exceeds the hard limit</strong><br>' +
         'Your article body ('+bodyTotal.toLocaleString()+' words) exceeds the '+limit.toLocaleString()+
         '-word limit for '+ esc(at ? at.label : 'this article type') + '. ' +
-        'Return to the Review step and reject more paragraphs, or acknowledge below to download anyway.<br><br>' +
-        '<label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-weight:400;">' +
-        '<input type="checkbox" id="cv-over-ack" style="width:16px; height:16px;" />' +
-        ' I acknowledge my article exceeds the target word count and wish to download anyway' +
-        '</label>';
+        'You must return to the Review step and reject more paragraphs before downloading. ' +
+        'Rejected paragraphs restore your original thesis text and reduce the body count.<br><br>' +
+        '<a href="javascript:void(0)" id="cv-back-from-warn" style="font-weight:600; color:#a02; text-decoration:underline;">← Return to Review step</a>';
       q('cv-wc-summary').closest('section').appendChild(warnDiv);
       q('cv-dl-docx').disabled = true;
       q('cv-dl-pdf').disabled  = true;
       setTimeout(function(){
-        var ack = document.getElementById('cv-over-ack');
-        if(ack){ ack.addEventListener('change', function(){
-          q('cv-dl-docx').disabled = !this.checked;
-          q('cv-dl-pdf').disabled  = !this.checked;
-        }); }
+        var lnk = document.getElementById('cv-back-from-warn');
+        if(lnk){ lnk.addEventListener('click', function(){ goStep(3); }); }
       }, 0);
     }
 
