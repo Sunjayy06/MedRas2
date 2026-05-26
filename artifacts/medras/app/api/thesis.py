@@ -595,3 +595,139 @@ async def export_plaintext(request: Request, payload: Dict[str, Any]) -> Dict[st
     except Exception as exc:                                      # noqa: BLE001
         log.exception("thesis plaintext export failed")
         raise HTTPException(status_code=500, detail=f"Plaintext export failed: {exc}")
+
+
+# ---------------------------------------------------------------------------
+# Thesis → Article conversion
+# ---------------------------------------------------------------------------
+
+@router.post("/convert-to-article")
+@limiter.limit("4/minute")
+async def convert_to_article(request: Request, payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Condense thesis chapters to IMRaD journal-article format.
+
+    Body::
+
+        {
+          "topic":          str,
+          "journal_family": "plos"|"bmc"|"bmj"|"frontiers"|"tier1"|"regional",
+          "article_type":   "original_research"|"brief_report"|"short_communication",
+          "chapters": {
+              "introduction":    {"text": str},
+              "literature_review": {"text": str},
+              "aims":            {"text": str},
+              "methods":         {"text": str},
+              "results":         {"text": str},
+              "discussion":      {"text": str},
+              "conclusion":      {"text": str},
+          },
+          "locked_numbers": {label: value, …},
+        }
+
+    Returns the same shape as ``thesis_section_writer.condense_for_article``
+    plus ``journal_family``, ``article_type``, and ``topic``.
+    """
+    topic = (payload.get("topic") or "").strip()
+    if not topic:
+        raise HTTPException(status_code=400, detail="`topic` is required.")
+
+    journal_family = (payload.get("journal_family") or "plos").strip().lower()
+    article_type   = (payload.get("article_type")   or "original_research").strip().lower()
+    chapters       = payload.get("chapters") or {}
+    locked_numbers = payload.get("locked_numbers") or {}
+
+    def _ch(cid: str) -> str:
+        val = chapters.get(cid) or {}
+        if isinstance(val, dict):
+            return (val.get("text") or "").strip()
+        return str(val).strip()
+
+    intro_blob = "\n\n".join(filter(None, [
+        _ch("introduction"), _ch("literature_review"), _ch("aims"),
+    ]))
+    methods_blob = _ch("methods")
+    results_blob = _ch("results")
+    disc_blob    = "\n\n".join(filter(None, [_ch("discussion"), _ch("conclusion")]))
+
+    missing = []
+    if not intro_blob:   missing.append("Introduction")
+    if not methods_blob: missing.append("Methods")
+    if not results_blob: missing.append("Results")
+    if not disc_blob:    missing.append("Discussion")
+
+    if missing:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Missing content in required chapters: {', '.join(missing)}. "
+                "Write these chapters in the Editor first, then convert to article."
+            ),
+        )
+
+    try:
+        result = await thesis_section_writer.condense_for_article(
+            topic=topic,
+            journal_family=journal_family,
+            article_type=article_type,
+            introduction_text=intro_blob,
+            methods_text=methods_blob,
+            results_text=results_blob,
+            discussion_text=disc_blob,
+            locked_numbers=locked_numbers,
+        )
+    except GeneratorError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    return {
+        **result,
+        "journal_family": journal_family,
+        "article_type":   article_type,
+        "topic":          topic,
+    }
+
+
+@router.post("/export/article-docx")
+@limiter.limit("12/minute")
+async def export_article_docx(request: Request, payload: Dict[str, Any]) -> Response:
+    """Export a condensed article as DOCX.
+
+    Body: ``{title, authors?, sections: {abstract, introduction, methods,
+    results, discussion}, references?, metadata: {credit?,
+    data_availability?, competing_interests?}}``.
+    """
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail="Payload must be a JSON object.")
+    try:
+        data = await asyncio.to_thread(thesis_export.build_article_docx, payload)
+    except Exception as exc:                                      # noqa: BLE001
+        log.exception("article docx export failed")
+        raise HTTPException(status_code=500, detail=f"Word export failed: {exc}")
+    import re as _re
+    name = _re.sub(r"[^A-Za-z0-9._-]+", "_",
+                   (payload.get("title") or "article").strip())[:60] or "article"
+    return Response(
+        content=data,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={"Content-Disposition": f'attachment; filename="{name}.docx"'},
+    )
+
+
+@router.post("/export/article-pdf")
+@limiter.limit("12/minute")
+async def export_article_pdf(request: Request, payload: Dict[str, Any]) -> Response:
+    """Export a condensed article as PDF."""
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail="Payload must be a JSON object.")
+    try:
+        data = await asyncio.to_thread(thesis_export.build_article_pdf, payload)
+    except Exception as exc:                                      # noqa: BLE001
+        log.exception("article pdf export failed")
+        raise HTTPException(status_code=500, detail=f"PDF export failed: {exc}")
+    import re as _re
+    name = _re.sub(r"[^A-Za-z0-9._-]+", "_",
+                   (payload.get("title") or "article").strip())[:60] or "article"
+    return Response(
+        content=data,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{name}.pdf"'},
+    )

@@ -1,0 +1,913 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Convert to Article · Scriptorium · MedRAS</title>
+<link rel="stylesheet" href="/css/tokens.css" />
+<link rel="stylesheet" href="/thesis-module/css/style.css" />
+<link rel="stylesheet" href="/css/medras-nav.css" />
+<style>
+.cv-step { display:none; }
+.cv-step.is-active { display:block; }
+
+.cv-wizard-bar { display:flex; margin-bottom:24px; border-radius:10px; overflow:hidden; border:1px solid var(--th-line); }
+.cv-wstep { flex:1; padding:10px 6px; text-align:center; font-size:11.5px; color:var(--th-text-soft); background:#fff; border-right:1px solid var(--th-line); transition:all .2s; }
+.cv-wstep:last-child { border-right:none; }
+.cv-wstep.is-active { background:var(--th-emerald); color:#fff; font-weight:600; }
+.cv-wstep.is-done { background:#ecf6ed; color:var(--th-emerald-d); }
+
+.cv-journal-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(200px,1fr)); gap:10px; margin-top:10px; }
+.cv-card { padding:14px 16px; border-radius:10px; border:2px solid var(--th-line); cursor:pointer; background:#fff; transition:all .15s; }
+.cv-card:hover { border-color:var(--th-emerald); }
+.cv-card.is-selected { border-color:var(--th-emerald); background:#ecf6ed; }
+.cv-card-label { font-size:13.5px; font-weight:600; color:var(--th-ink-900); }
+.cv-card-hint { font-size:11.5px; color:var(--th-text-soft); margin-top:3px; }
+
+.cv-type-row { display:flex; flex-direction:column; gap:8px; margin-top:10px; }
+.cv-type-card { display:flex; align-items:flex-start; gap:10px; padding:12px 14px; border-radius:9px; border:2px solid var(--th-line); cursor:pointer; background:#fff; transition:all .15s; }
+.cv-type-card:hover { border-color:var(--th-emerald); }
+.cv-type-card.is-selected { border-color:var(--th-emerald); background:#ecf6ed; }
+.cv-type-card input { margin-top:2px; }
+
+.cv-targets-table { width:100%; border-collapse:collapse; font-size:13px; margin-top:10px; }
+.cv-targets-table th { text-align:left; padding:6px 8px; font-weight:600; color:var(--th-text-soft); border-bottom:1px solid var(--th-line); }
+.cv-targets-table td { padding:6px 8px; }
+.cv-targets-table tr:nth-child(even) td { background:var(--th-bg); }
+
+.cv-readiness-row { display:flex; align-items:center; gap:8px; font-size:13px; padding:6px 0; }
+.cv-readiness-check { font-size:16px; width:20px; }
+
+.cv-proc-list { margin:20px 0; }
+.cv-proc-item { display:flex; align-items:center; gap:12px; padding:12px 0; border-bottom:1px solid var(--th-line); font-size:14px; color:var(--th-ink-900); }
+.cv-proc-item:last-child { border-bottom:none; }
+.cv-proc-icon { width:24px; text-align:center; flex-shrink:0; }
+.cv-spinner { display:inline-block; width:16px; height:16px; border:2px solid rgba(0,0,0,.12); border-top-color:var(--th-emerald); border-radius:50%; animation:cv-spin .8s linear infinite; vertical-align:middle; }
+@keyframes cv-spin { to { transform:rotate(360deg); } }
+
+.cv-wc-wrap { background:var(--th-bg); border-radius:8px; overflow:hidden; height:12px; margin:6px 0; }
+.cv-wc-fill { height:100%; background:var(--th-emerald); transition:width .4s; border-radius:8px; }
+.cv-wc-fill.over { background:#e04; }
+
+.cv-tab-bar { display:flex; gap:6px; margin-bottom:16px; flex-wrap:wrap; }
+.cv-tab { padding:7px 18px; border-radius:8px; border:1px solid var(--th-line); background:#fff; cursor:pointer; font-size:13px; color:var(--th-text-soft); transition:all .15s; }
+.cv-tab:hover { border-color:var(--th-emerald); color:var(--th-emerald-d); }
+.cv-tab.is-active { background:var(--th-emerald); color:#fff; border-color:var(--th-emerald); }
+
+.cv-panel { display:none; }
+.cv-panel.is-active { display:block; }
+
+.cv-suggestion { display:flex; gap:10px; padding:12px 14px; border-radius:8px; border:1px solid var(--th-line); background:#fff; margin-bottom:8px; align-items:flex-start; transition:all .15s; }
+.cv-suggestion.is-accepted { border-color:var(--th-emerald); background:#f4faf5; }
+.cv-suggestion.is-rejected { opacity:.45; }
+.cv-suggestion.is-rejected .cv-para-text { text-decoration:line-through; color:var(--th-text-soft); }
+.cv-toggle-btn { flex-shrink:0; width:30px; height:30px; border-radius:50%; border:2px solid var(--th-emerald); cursor:pointer; font-size:14px; background:#ecf6ed; color:var(--th-emerald-d); display:flex; align-items:center; justify-content:center; transition:all .15s; }
+.cv-toggle-btn.is-rejected { border-color:#ccc; background:#f5f5f5; color:#aaa; }
+.cv-para-text { font-size:13.5px; line-height:1.75; color:var(--th-ink-900); flex:1; }
+
+.cv-results-box { background:var(--th-bg); border-radius:10px; border:1px solid var(--th-line); padding:16px; }
+.cv-retained-badge { display:inline-block; background:var(--th-gold); color:#fff; font-size:11px; font-weight:700; padding:2px 8px; border-radius:4px; margin-right:8px; }
+
+.cv-src-toggle { font-size:12px; color:var(--th-text-soft); cursor:pointer; text-decoration:underline; display:inline-block; margin-bottom:8px; }
+.cv-src-panel { background:#fffbf0; border:1px solid var(--th-line); border-radius:8px; padding:12px 14px; font-size:12px; line-height:1.65; color:var(--th-ink-900); max-height:280px; overflow-y:auto; white-space:pre-wrap; margin-bottom:10px; display:none; }
+.cv-src-panel.is-open { display:block; }
+
+.cv-status { padding:10px 14px; border-radius:8px; font-size:13px; }
+.cv-status.ok  { background:#ecf6ed; color:var(--th-emerald-d); border:1px solid var(--th-emerald); }
+.cv-status.err { background:#fdecec; color:#a02; border:1px solid #f5b3b3; }
+.cv-status.info { background:#fff8e1; color:#7a5d00; border:1px solid var(--th-gold); display:flex; align-items:center; gap:8px; }
+
+.cv-wc-summary { display:grid; grid-template-columns:repeat(auto-fill, minmax(120px,1fr)); gap:10px; }
+.cv-wc-cell { background:var(--th-bg); border-radius:8px; padding:10px 12px; }
+.cv-wc-cell-label { font-size:10.5px; text-transform:uppercase; letter-spacing:.05em; color:var(--th-text-soft); }
+.cv-wc-cell-val { font-size:17px; font-weight:700; color:var(--th-ink-900); margin-top:2px; }
+
+.cv-meta-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+@media (max-width:600px) { .cv-meta-grid { grid-template-columns:1fr; } }
+.cv-input { width:100%; padding:8px 10px; border-radius:7px; border:1px solid var(--th-line); font-family:inherit; font-size:13.5px; box-sizing:border-box; }
+.cv-textarea { width:100%; padding:8px 10px; border-radius:7px; border:1px solid var(--th-line); font-family:inherit; font-size:13px; line-height:1.65; resize:vertical; box-sizing:border-box; }
+.cv-label { font-size:12px; font-weight:600; color:var(--th-text-soft); display:block; margin-bottom:4px; }
+</style>
+</head>
+
+<body data-medras-module="scriptorium">
+<header class="th-header">
+  <a class="th-brand" href="/thesis-module/"><span class="th-brand-mark">S</span><span>MedRAS — Scriptorium</span></a>
+  <nav class="th-nav">
+    <a href="/thesis-module/dashboard.html">Dashboard</a>
+    <a href="/thesis-module/export.html">Export</a>
+  </nav>
+</header>
+
+<main class="th-shell th-wide">
+
+  <!-- Wizard step bar -->
+  <div class="cv-wizard-bar" id="cv-wiz-bar">
+    <div class="cv-wstep is-active" data-step="1">1 · Target</div>
+    <div class="cv-wstep" data-step="2">2 · Convert</div>
+    <div class="cv-wstep" data-step="3">3 · Review</div>
+    <div class="cv-wstep" data-step="4">4 · Abstract</div>
+    <div class="cv-wstep" data-step="5">5 · Download</div>
+  </div>
+
+  <!-- ================================================================ -->
+  <!-- STEP 1 — Target selection                                         -->
+  <!-- ================================================================ -->
+  <div class="cv-step is-active" id="cv-step-1">
+    <span class="th-eyebrow">Thesis → Article · Step 1 of 5</span>
+    <h1 class="th-h1">Convert your thesis to a journal article</h1>
+    <p class="th-sub">
+      Your Results section is preserved exactly as you wrote it — AI only condenses
+      Introduction, Methods and Discussion to article length.
+      Every condensed sentence is shown as a suggestion you must explicitly accept.
+    </p>
+
+    <section class="th-card">
+      <h3 class="th-h3">Target journal family</h3>
+      <div class="cv-journal-grid" id="cv-journal-grid"></div>
+    </section>
+
+    <section class="th-card">
+      <h3 class="th-h3">Article type</h3>
+      <div class="cv-type-row" id="cv-type-row"></div>
+      <div id="cv-targets-wrap" style="margin-top:12px;"></div>
+    </section>
+
+    <section class="th-card">
+      <h3 class="th-h3">Chapter readiness</h3>
+      <p style="font-size:12px; color:var(--th-text-soft); margin:0 0 10px;">
+        All four chapters below must have content before you can convert.
+      </p>
+      <div id="cv-readiness"></div>
+    </section>
+
+    <div style="margin-top:16px; display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+      <button id="cv-btn-start" class="th-btn th-btn-primary" disabled>Start conversion →</button>
+      <a href="/thesis-module/dashboard.html" class="th-btn th-btn-light">← Back to dashboard</a>
+    </div>
+  </div>
+
+  <!-- ================================================================ -->
+  <!-- STEP 2 — Processing                                               -->
+  <!-- ================================================================ -->
+  <div class="cv-step" id="cv-step-2">
+    <span class="th-eyebrow">Thesis → Article · Step 2 of 5</span>
+    <h1 class="th-h1">Converting your thesis…</h1>
+    <p class="th-sub">Condensing three sections to article length. This takes 30–90 seconds.</p>
+    <div class="cv-proc-list" id="cv-proc-list"></div>
+    <div id="cv-proc-status" style="margin-top:14px;"></div>
+  </div>
+
+  <!-- ================================================================ -->
+  <!-- STEP 3 — Track-change review                                      -->
+  <!-- ================================================================ -->
+  <div class="cv-step" id="cv-step-3">
+    <span class="th-eyebrow">Thesis → Article · Step 3 of 5</span>
+    <h1 class="th-h1">Review your condensed article</h1>
+    <p class="th-sub">
+      Accept or reject each paragraph with the ✓/✗ button. Your Results are shown as-is.
+      Toggle the source panel below each section to compare with the original thesis chapter.
+    </p>
+
+    <!-- Total word count bar -->
+    <div class="th-card" style="padding:12px 16px; margin-bottom:0;">
+      <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:4px;">
+        <span style="font-size:13px; font-weight:600; color:var(--th-ink-900);">Total article word count</span>
+        <span id="cv-wc-label" style="font-size:13px; color:var(--th-text-soft);"></span>
+      </div>
+      <div class="cv-wc-wrap"><div class="cv-wc-fill" id="cv-wc-fill" style="width:0%;"></div></div>
+    </div>
+
+    <!-- Section tabs -->
+    <div class="cv-tab-bar" id="cv-tab-bar" style="margin-top:14px;">
+      <button class="cv-tab is-active" data-sec="introduction">Introduction</button>
+      <button class="cv-tab" data-sec="methods">Methods</button>
+      <button class="cv-tab" data-sec="results">Results</button>
+      <button class="cv-tab" data-sec="discussion">Discussion</button>
+    </div>
+
+    <div id="cv-panel-introduction" class="cv-panel is-active"></div>
+    <div id="cv-panel-methods"       class="cv-panel"></div>
+    <div id="cv-panel-results"       class="cv-panel"></div>
+    <div id="cv-panel-discussion"    class="cv-panel"></div>
+
+    <div style="margin-top:16px; display:flex; gap:10px; flex-wrap:wrap;">
+      <button id="cv-btn-to-abstract" class="th-btn th-btn-primary">Next: Generate abstract →</button>
+      <button id="cv-btn-back-to-1"   class="th-btn th-btn-light">← Change target</button>
+    </div>
+  </div>
+
+  <!-- ================================================================ -->
+  <!-- STEP 4 — Abstract                                                 -->
+  <!-- ================================================================ -->
+  <div class="cv-step" id="cv-step-4">
+    <span class="th-eyebrow">Thesis → Article · Step 4 of 5</span>
+    <h1 class="th-h1">Structured abstract</h1>
+    <p class="th-sub">
+      Generate a journal-format abstract (250–350 words, Background / Methods / Results / Conclusions)
+      from your accepted article text. Edit it freely before downloading.
+    </p>
+
+    <section class="th-card">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:8px;">
+        <h3 class="th-h3" style="margin:0;">Abstract</h3>
+        <button id="cv-btn-gen-abstract" class="th-btn th-btn-light">
+          <span class="cv-spinner" id="cv-abs-spin" style="display:none;"></span>
+          Generate abstract
+        </button>
+      </div>
+      <div id="cv-abstract-status" style="margin-bottom:8px; display:none;"></div>
+      <textarea id="cv-abstract-ta" class="cv-textarea" rows="9"
+        placeholder="Click 'Generate abstract' or type your abstract here…"></textarea>
+      <div id="cv-abstract-wc" style="font-size:12px; color:var(--th-text-soft); margin-top:4px;"></div>
+    </section>
+
+    <div style="margin-top:16px; display:flex; gap:10px; flex-wrap:wrap;">
+      <button id="cv-btn-to-export"   class="th-btn th-btn-primary">Next: Download →</button>
+      <button id="cv-btn-back-to-3"   class="th-btn th-btn-light">← Back to review</button>
+    </div>
+  </div>
+
+  <!-- ================================================================ -->
+  <!-- STEP 5 — Metadata + download                                      -->
+  <!-- ================================================================ -->
+  <div class="cv-step" id="cv-step-5">
+    <span class="th-eyebrow">Thesis → Article · Step 5 of 5</span>
+    <h1 class="th-h1">Download your article</h1>
+
+    <section class="th-card">
+      <h3 class="th-h3">Article details</h3>
+      <div class="cv-meta-grid">
+        <div>
+          <label class="cv-label" for="cv-title">Study title</label>
+          <input id="cv-title" class="cv-input" placeholder="Article title" />
+        </div>
+        <div>
+          <label class="cv-label" for="cv-authors">Authors</label>
+          <input id="cv-authors" class="cv-input" placeholder="Last FM, Last FM, …" />
+        </div>
+      </div>
+    </section>
+
+    <section class="th-card">
+      <h3 class="th-h3">Author contributions (CRediT)</h3>
+      <textarea id="cv-credit" class="cv-textarea" rows="3"
+        placeholder="e.g. XY: Conceptualisation, Methodology, Writing—original draft. AB: Supervision, Writing—review &amp; editing."></textarea>
+    </section>
+
+    <section class="th-card">
+      <h3 class="th-h3">Data availability statement</h3>
+      <div style="display:flex; flex-direction:column; gap:10px;">
+        <label style="display:flex; gap:9px; align-items:flex-start; cursor:pointer; font-size:13px; line-height:1.5;">
+          <input type="radio" name="cv-data-av" value="request" style="margin-top:3px;" checked />
+          The data that support the findings of this study are available from the corresponding author upon reasonable request.
+        </label>
+        <label style="display:flex; gap:9px; align-items:flex-start; cursor:pointer; font-size:13px; line-height:1.5;">
+          <input type="radio" name="cv-data-av" value="public" style="margin-top:3px;" />
+          <span>All data are publicly available at:
+            <input id="cv-data-url" class="cv-input" style="display:inline; width:260px; margin-left:6px; padding:3px 8px;"
+              placeholder="https://…" />
+          </span>
+        </label>
+        <label style="display:flex; gap:9px; align-items:flex-start; cursor:pointer; font-size:13px; line-height:1.5;">
+          <input type="radio" name="cv-data-av" value="none" style="margin-top:3px;" />
+          No data were generated or analysed in support of this research.
+        </label>
+      </div>
+    </section>
+
+    <section class="th-card">
+      <h3 class="th-h3">Competing interests</h3>
+      <textarea id="cv-competing" class="cv-textarea" rows="2">None declared.</textarea>
+    </section>
+
+    <section class="th-card">
+      <h3 class="th-h3">Word count summary</h3>
+      <div class="cv-wc-summary" id="cv-wc-summary"></div>
+    </section>
+
+    <section class="th-card">
+      <h3 class="th-h3">Download</h3>
+      <div style="display:flex; flex-wrap:wrap; gap:10px;">
+        <button id="cv-dl-docx" class="th-btn th-btn-primary">⬇ Download Word (.docx)</button>
+        <button id="cv-dl-pdf"  class="th-btn th-btn-primary">⬇ Download PDF</button>
+      </div>
+      <div id="cv-dl-status" style="margin-top:10px; display:none;" class="cv-status"></div>
+    </section>
+
+    <div style="margin-top:16px;">
+      <button id="cv-btn-back-to-4" class="th-btn th-btn-light">← Back to abstract</button>
+    </div>
+  </div>
+
+</main>
+
+<script src="/thesis-module/js/thesis-state.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  // ---- Constants -------------------------------------------------------
+  var CV_KEY = 'medras.thesis.convert';
+
+  var JOURNAL_FAMILIES = [
+    { id:'plos',      label:'PLoS Medicine / PLoS ONE',       hint:'Open access · active voice · global health' },
+    { id:'bmc',       label:'BMC Medicine / BMC series',      hint:'BioMed Central · structured · accessible' },
+    { id:'bmj',       label:'BMJ Open',                       hint:'UK English · clinical evidence focus' },
+    { id:'frontiers', label:'Frontiers in Medicine',          hint:'Specialty-focused · interactive OA' },
+    { id:'tier1',     label:'High-impact (NEJM / Lancet)',    hint:'Extremely concise · clinical impact first' },
+    { id:'regional',  label:'Regional / ICMR-aligned',        hint:'Indian society journals · Vancouver style' },
+  ];
+
+  var ARTICLE_TYPES = [
+    {
+      id:'original_research',
+      label:'Original Research Article',
+      limit:'≤ 5,000 words',
+      totalLimit:5000,
+      targets:{ introduction:[400,600], methods:[500,700], discussion:[600,900] },
+    },
+    {
+      id:'brief_report',
+      label:'Brief Report',
+      limit:'≤ 2,500 words',
+      totalLimit:2500,
+      targets:{ introduction:[200,350], methods:[300,400], discussion:[350,500] },
+    },
+    {
+      id:'short_communication',
+      label:'Short Communication',
+      limit:'≤ 1,500 words',
+      totalLimit:1500,
+      targets:{ introduction:[150,250], methods:[200,300], discussion:[250,400] },
+    },
+  ];
+
+  // ---- Utility ----------------------------------------------------------
+  function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function wc(t){ return (String(t||'').match(/\b\w+\b/g)||[]).length; }
+  function q(id){ return document.getElementById(id); }
+
+  function cvGet(){ try{ return JSON.parse(sessionStorage.getItem(CV_KEY)||'null')||{}; } catch(_){ return {}; } }
+  function cvSet(d){ try{ sessionStorage.setItem(CV_KEY,JSON.stringify(d)); } catch(_){} }
+  function cvPatch(fn){ cvSet(fn(cvGet())); }
+
+  // ---- Step navigation -------------------------------------------------
+  var _currentStep = 1;
+  function goStep(n){
+    _currentStep = n;
+    document.querySelectorAll('.cv-step').forEach(function(el,i){ el.classList.toggle('is-active', i===n-1); });
+    document.querySelectorAll('.cv-wstep').forEach(function(el){
+      var s = parseInt(el.dataset.step,10);
+      el.classList.toggle('is-active', s===n);
+      el.classList.toggle('is-done', s<n);
+    });
+    window.scrollTo(0,0);
+  }
+
+  // ---- Step 1 —— Target selection --------------------------------------
+  var _selJournal = 'plos';
+  var _selType    = 'original_research';
+
+  function renderJournalGrid(){
+    var grid = q('cv-journal-grid');
+    grid.innerHTML = JOURNAL_FAMILIES.map(function(jf){
+      var sel = jf.id === _selJournal;
+      return '<div class="cv-card'+(sel?' is-selected':'')+'" data-jf="'+jf.id+'">' +
+        '<div class="cv-card-label">'+esc(jf.label)+'</div>' +
+        '<div class="cv-card-hint">'+esc(jf.hint)+'</div>' +
+        '</div>';
+    }).join('');
+    grid.querySelectorAll('.cv-card').forEach(function(card){
+      card.addEventListener('click', function(){
+        _selJournal = card.dataset.jf;
+        grid.querySelectorAll('.cv-card').forEach(function(c){ c.classList.toggle('is-selected', c.dataset.jf===_selJournal); });
+      });
+    });
+  }
+
+  function renderTypeRow(){
+    var row = q('cv-type-row');
+    row.innerHTML = ARTICLE_TYPES.map(function(at){
+      var sel = at.id === _selType;
+      return '<div class="cv-type-card'+(sel?' is-selected':'')+'" data-at="'+at.id+'">' +
+        '<div style="display:flex; flex-direction:column;">' +
+        '<span style="font-size:13.5px; font-weight:600; color:var(--th-ink-900);">'+esc(at.label)+'</span>' +
+        '<span style="font-size:12px; color:var(--th-text-soft);">Word limit: '+esc(at.limit)+'</span>' +
+        '</div></div>';
+    }).join('');
+    row.querySelectorAll('.cv-type-card').forEach(function(card){
+      card.addEventListener('click', function(){
+        _selType = card.dataset.at;
+        row.querySelectorAll('.cv-type-card').forEach(function(c){ c.classList.toggle('is-selected', c.dataset.at===_selType); });
+        renderTargets();
+      });
+    });
+    renderTargets();
+  }
+
+  function renderTargets(){
+    var at = ARTICLE_TYPES.find(function(x){ return x.id===_selType; });
+    if(!at) return;
+    q('cv-targets-wrap').innerHTML =
+      '<table class="cv-targets-table"><thead><tr><th>Section</th><th style="text-align:right;">Target words</th></tr></thead><tbody>' +
+      '<tr><td>Introduction</td><td style="text-align:right;">'+at.targets.introduction[0]+'–'+at.targets.introduction[1]+'</td></tr>' +
+      '<tr><td>Methods</td><td style="text-align:right;">'+at.targets.methods[0]+'–'+at.targets.methods[1]+'</td></tr>' +
+      '<tr><td>Results</td><td style="text-align:right; color:var(--th-text-soft);">Preserved as-is</td></tr>' +
+      '<tr><td>Discussion</td><td style="text-align:right;">'+at.targets.discussion[0]+'–'+at.targets.discussion[1]+'</td></tr>' +
+      '</tbody></table>';
+  }
+
+  function renderReadiness(){
+    var s = ThesisState.get();
+    var chs = s.chapters || {};
+    var CORE = [
+      { id:'introduction', label:'Introduction' },
+      { id:'methods',      label:'Methods' },
+      { id:'results',      label:'Results' },
+      { id:'discussion',   label:'Discussion' },
+    ];
+    var allReady = CORE.every(function(c){ return wc((chs[c.id]||{}).text) > 50; });
+    q('cv-readiness').innerHTML = CORE.map(function(c){
+      var ready = wc((chs[c.id]||{}).text) > 50;
+      var words = wc((chs[c.id]||{}).text);
+      return '<div class="cv-readiness-row">' +
+        '<span class="cv-readiness-check" style="color:'+(ready?'var(--th-emerald-d)':'#c0392b')+'">'+(ready?'✓':'✗')+'</span>' +
+        '<span>'+esc(c.label)+' — '+(ready ? words.toLocaleString()+' words' : '<em style="color:#c0392b;">Not written yet</em>')+'</span>' +
+        (!ready ? '<a href="/thesis-module/editor.html?ch='+encodeURIComponent(c.id)+'" class="th-btn th-btn-light" style="margin-left:auto; padding:4px 12px; font-size:12px;">Write now →</a>' : '') +
+        '</div>';
+    }).join('');
+    q('cv-btn-start').disabled = !allReady;
+  }
+
+  function initStep1(){
+    renderJournalGrid();
+    renderTypeRow();
+    renderReadiness();
+
+    q('cv-btn-start').addEventListener('click', function(){
+      cvPatch(function(cv){ cv.journal_family=_selJournal; cv.article_type=_selType; return cv; });
+      startConversion();
+    });
+  }
+
+  // ---- Step 2 —— Conversion --------------------------------------------
+  function getSourceText(secId, chs){
+    if(secId==='introduction'){
+      return [(chs.introduction||{}).text||'',(chs.literature_review||{}).text||'',(chs.aims||{}).text||'']
+        .filter(Boolean).join('\n\n');
+    }
+    if(secId==='methods')    return (chs.methods||{}).text||'';
+    if(secId==='discussion') return [(chs.discussion||{}).text||'',(chs.conclusion||{}).text||'']
+      .filter(Boolean).join('\n\n');
+    return '';
+  }
+
+  async function startConversion(){
+    goStep(2);
+    var s   = ThesisState.get();
+    var cv  = cvGet();
+    var chs = s.chapters || {};
+
+    var PROC = [
+      { id:'intro',      label:'Introduction + Literature Review → condensing…' },
+      { id:'methods',    label:'Methods → condensing…' },
+      { id:'results',    label:'Results → preserving as-is…' },
+      { id:'discussion', label:'Discussion + Conclusion → condensing…' },
+    ];
+
+    q('cv-proc-list').innerHTML = PROC.map(function(p){
+      return '<div class="cv-proc-item" id="cv-proc-'+p.id+'">'+
+        '<div class="cv-proc-icon"><span class="cv-spinner"></span></div>'+
+        '<div class="cv-proc-label">'+esc(p.label)+'</div></div>';
+    }).join('');
+
+    var statusEl = q('cv-proc-status');
+
+    var topic = (s.setup&&s.setup.title) || '';
+
+    try {
+      var r = await fetch('/api/thesis/convert-to-article', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({
+          topic: topic,
+          journal_family: cv.journal_family||'plos',
+          article_type:   cv.article_type||'original_research',
+          chapters: chs,
+          locked_numbers: s.locked_numbers||{},
+        }),
+      });
+      var data = await r.json();
+      if(!r.ok) throw new Error(data.detail||('HTTP '+r.status));
+
+      // Mark processing complete
+      PROC.forEach(function(p){
+        var el = q('cv-proc-'+p.id);
+        el.querySelector('.cv-proc-icon').innerHTML = '<span style="color:var(--th-emerald-d);">✓</span>';
+        el.querySelector('.cv-proc-label').style.color = 'var(--th-emerald-d)';
+      });
+      q('cv-proc-'+PROC[0].id).querySelector('.cv-proc-label').textContent = 'Introduction — condensed';
+      q('cv-proc-'+PROC[1].id).querySelector('.cv-proc-label').textContent = 'Methods — condensed';
+      q('cv-proc-'+PROC[2].id).querySelector('.cv-proc-label').textContent = 'Results — preserved';
+      q('cv-proc-'+PROC[3].id).querySelector('.cv-proc-label').textContent = 'Discussion — condensed';
+
+      // Store sections
+      var sections = {};
+      ['introduction','methods','discussion'].forEach(function(k){
+        var sec = data[k]||{};
+        var paras = sec.paragraphs||[];
+        sections[k] = {
+          paragraphs: paras,
+          accepted:   paras.map(function(){ return true; }),
+          word_count: sec.word_count||0,
+          target:     sec.target||{},
+          source_text: getSourceText(k,chs),
+        };
+      });
+      var res = data.results||{};
+      sections.results = { text: res.text||'', word_count: res.word_count||0, ai_touched:false };
+
+      cvPatch(function(cv){
+        cv.sections   = sections;
+        cv.references = s.references||[];
+        cv.topic      = topic;
+        return cv;
+      });
+
+      setTimeout(function(){ goStep(3); initReview(); }, 350);
+
+    } catch(e){
+      PROC.forEach(function(p){
+        var el = q('cv-proc-'+p.id);
+        el.querySelector('.cv-proc-icon').innerHTML = '<span style="color:#c0392b;">✗</span>';
+      });
+      statusEl.className = 'cv-status err';
+      statusEl.textContent = 'Conversion failed: ' + e.message;
+      statusEl.style.display = '';
+    }
+  }
+
+  // ---- Step 3 —— Track-change review -----------------------------------
+  function computeTotalWc(){
+    var cv   = cvGet();
+    var secs = cv.sections||{};
+    var at   = ARTICLE_TYPES.find(function(x){ return x.id===(cv.article_type||'original_research'); });
+    var limit = at ? at.totalLimit : 5000;
+    var total = 0;
+    ['introduction','methods','discussion'].forEach(function(k){
+      var sec  = secs[k]||{};
+      var paras= sec.paragraphs||[];
+      var acc  = sec.accepted||[];
+      paras.forEach(function(p,i){ if(acc[i]!==false) total+=wc(p); });
+    });
+    total += ((secs.results||{}).word_count)||0;
+    return { total:total, limit:limit };
+  }
+
+  function updateWcBar(){
+    var res   = computeTotalWc();
+    var pct   = Math.min(100, Math.round(res.total/res.limit*100));
+    var fill  = q('cv-wc-fill');
+    fill.style.width = pct+'%';
+    fill.classList.toggle('over', res.total > res.limit);
+    q('cv-wc-label').textContent = res.total.toLocaleString()+' / '+res.limit.toLocaleString()+' words ('+pct+'%)';
+  }
+
+  function renderSectionPanel(secId){
+    var cv   = cvGet();
+    var secs = cv.sections||{};
+    var panel= q('cv-panel-'+secId);
+    if(!panel) return;
+
+    if(secId==='results'){
+      var res = secs.results||{};
+      panel.innerHTML =
+        '<div class="cv-results-box">'+
+        '<div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">'+
+        '<span class="cv-retained-badge">RETAINED AS-IS</span>'+
+        '<span style="font-size:12px; color:var(--th-text-soft);">AI did not modify your Results. '+(res.word_count||0).toLocaleString()+' words.</span>'+
+        '</div>'+
+        '<div style="white-space:pre-wrap; font-size:13.5px; line-height:1.75; max-height:480px; overflow-y:auto;">'+esc(res.text)+'</div>'+
+        '</div>';
+      return;
+    }
+
+    var sec  = secs[secId]||{};
+    var paras= sec.paragraphs||[];
+    var acc  = sec.accepted||[];
+    var tgt  = sec.target||{};
+    var src  = sec.source_text||'';
+
+    var acceptedWc = 0;
+    paras.forEach(function(p,i){ if(acc[i]!==false) acceptedWc+=wc(p); });
+    var inRange = tgt.min && tgt.max && acceptedWc>=tgt.min && acceptedWc<=tgt.max;
+    var wcColor = !tgt.min ? 'var(--th-ink-900)' : (inRange ? 'var(--th-emerald-d)' : 'var(--th-amber)');
+
+    var html = '<div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-bottom:10px;">';
+    if(tgt.min){
+      html += '<span style="font-size:13px; font-weight:600; color:'+wcColor+';">'+acceptedWc.toLocaleString()+' accepted / '+tgt.min+'–'+tgt.max+' target words</span>';
+    }
+    html += '<div style="display:flex; gap:10px; align-items:center;">';
+    html += '<button class="cv-src-toggle" id="cv-src-tog-'+secId+'">Show original ↓</button>';
+    html += '<button style="font-size:12px; background:none; border:none; cursor:pointer; color:var(--th-emerald-d);" id="cv-acc-all-'+secId+'">✓ Accept all</button>';
+    html += '<button style="font-size:12px; background:none; border:none; cursor:pointer; color:var(--th-text-soft);" id="cv-rej-all-'+secId+'">✗ Reject all</button>';
+    html += '</div></div>';
+
+    html += '<div class="cv-src-panel" id="cv-src-panel-'+secId+'">'+esc(src)+'</div>';
+
+    paras.forEach(function(para,i){
+      var isAcc = acc[i]!==false;
+      html += '<div class="cv-suggestion '+(isAcc?'is-accepted':'is-rejected')+'" id="cv-sug-'+secId+'-'+i+'">'+
+        '<button class="cv-toggle-btn '+(isAcc?'':'is-rejected')+'" data-sec="'+secId+'" data-idx="'+i+'">'+(isAcc?'✓':'✗')+'</button>'+
+        '<div class="cv-para-text">'+esc(para)+'</div>'+
+        '</div>';
+    });
+
+    if(!paras.length){
+      html += '<p style="color:var(--th-text-soft); font-size:13px;">No paragraphs were returned for this section.</p>';
+    }
+
+    panel.innerHTML = html;
+
+    // Bind toggle buttons
+    panel.querySelectorAll('.cv-toggle-btn').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var sid = btn.dataset.sec;
+        var idx = parseInt(btn.dataset.idx,10);
+        cvPatch(function(cv){
+          var s2 = cv.sections[sid]||{};
+          if(!s2.accepted) s2.accepted = (s2.paragraphs||[]).map(function(){ return true; });
+          s2.accepted[idx] = !s2.accepted[idx];
+          return cv;
+        });
+        renderSectionPanel(sid);
+        updateWcBar();
+      });
+    });
+
+    // Source toggle
+    var srcTog = q('cv-src-tog-'+secId);
+    if(srcTog){ srcTog.addEventListener('click', function(){
+      var sp = q('cv-src-panel-'+secId);
+      sp.classList.toggle('is-open');
+      srcTog.textContent = sp.classList.contains('is-open') ? 'Hide original ↑' : 'Show original ↓';
+    }); }
+
+    // Accept / reject all
+    var aAll = q('cv-acc-all-'+secId);
+    if(aAll){ aAll.addEventListener('click', function(){
+      cvPatch(function(cv){
+        var s2=cv.sections[secId]||{};
+        s2.accepted=(s2.paragraphs||[]).map(function(){return true;});
+        return cv;
+      });
+      renderSectionPanel(secId); updateWcBar();
+    }); }
+
+    var rAll = q('cv-rej-all-'+secId);
+    if(rAll){ rAll.addEventListener('click', function(){
+      cvPatch(function(cv){
+        var s2=cv.sections[secId]||{};
+        s2.accepted=(s2.paragraphs||[]).map(function(){return false;});
+        return cv;
+      });
+      renderSectionPanel(secId); updateWcBar();
+    }); }
+  }
+
+  var _activeTab = 'introduction';
+  function initReview(){
+    updateWcBar();
+    ['introduction','methods','results','discussion'].forEach(renderSectionPanel);
+
+    q('cv-tab-bar').querySelectorAll('.cv-tab').forEach(function(tab){
+      tab.addEventListener('click', function(){
+        _activeTab = tab.dataset.sec;
+        q('cv-tab-bar').querySelectorAll('.cv-tab').forEach(function(t){ t.classList.toggle('is-active', t.dataset.sec===_activeTab); });
+        ['introduction','methods','results','discussion'].forEach(function(k){
+          q('cv-panel-'+k).classList.toggle('is-active', k===_activeTab);
+        });
+      });
+    });
+
+    q('cv-btn-to-abstract').addEventListener('click', function(){ goStep(4); initAbstract(); });
+    q('cv-btn-back-to-1').addEventListener('click', function(){ goStep(1); });
+  }
+
+  // ---- Step 4 —— Abstract ----------------------------------------------
+  function buildAcceptedText(secId){
+    var cv   = cvGet();
+    var sec  = (cv.sections||{})[secId]||{};
+    if(secId==='results') return sec.text||'';
+    var paras= sec.paragraphs||[];
+    var acc  = sec.accepted||[];
+    return paras.filter(function(_,i){ return acc[i]!==false; }).join('\n\n');
+  }
+
+  function updateAbstractWc(){
+    var n = wc(q('cv-abstract-ta').value);
+    var color = (n>=250&&n<=350) ? 'var(--th-emerald-d)' : 'var(--th-amber)';
+    q('cv-abstract-wc').innerHTML = '<span style="color:'+color+';">'+n+' words</span> · Target: 250–350 words';
+  }
+
+  var _abstractBound = false;
+  function initAbstract(){
+    var ta = q('cv-abstract-ta');
+    var cv = cvGet();
+    if(cv.abstract){ ta.value = cv.abstract; updateAbstractWc(); }
+
+    if(!_abstractBound){
+      _abstractBound = true;
+      ta.addEventListener('input', function(){
+        updateAbstractWc();
+        cvPatch(function(c){ c.abstract = ta.value; return c; });
+      });
+      q('cv-btn-gen-abstract').addEventListener('click', generateAbstract);
+      q('cv-btn-to-export').addEventListener('click', function(){
+        cvPatch(function(c){ c.abstract = ta.value; return c; });
+        goStep(5); initExport();
+      });
+      q('cv-btn-back-to-3').addEventListener('click', function(){ goStep(3); });
+    }
+    updateAbstractWc();
+  }
+
+  var _styleMap = { plos:'plos', bmc:'plos', bmj:'bmj', frontiers:'plos', tier1:'plos', regional:'indian_formal' };
+
+  async function generateAbstract(){
+    var s   = ThesisState.get();
+    var cv  = cvGet();
+    var btn = q('cv-btn-gen-abstract');
+    var spin= q('cv-abs-spin');
+    var st  = q('cv-abstract-status');
+
+    btn.disabled = true; spin.style.display='';
+    st.className='cv-status info'; st.style.display='';
+    st.innerHTML='<span class="cv-spinner"></span> Generating abstract…';
+
+    var extraCtx = [
+      'Introduction:\n'+buildAcceptedText('introduction'),
+      'Methods:\n'+buildAcceptedText('methods'),
+      'Results:\n'+buildAcceptedText('results'),
+      'Discussion:\n'+buildAcceptedText('discussion'),
+    ].join('\n\n').slice(0,8000);
+
+    try {
+      var r = await fetch('/api/thesis/draft-abstract',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({
+          topic:         cv.topic||(s.setup&&s.setup.title)||'',
+          extra_context: extraCtx,
+          locked_numbers:s.locked_numbers||{},
+          word_limit:    300,
+          mode:          'article',
+          style_choice:  _styleMap[cv.journal_family]||'plos',
+        }),
+      });
+      var data = await r.json();
+      if(!r.ok) throw new Error(data.detail||('HTTP '+r.status));
+      q('cv-abstract-ta').value = data.text||'';
+      updateAbstractWc();
+      cvPatch(function(c){ c.abstract=data.text||''; return c; });
+      st.className='cv-status ok';
+      st.textContent='Abstract generated. Review and edit before downloading.';
+    } catch(e){
+      st.className='cv-status err';
+      st.textContent='Failed to generate abstract: '+e.message;
+    } finally {
+      btn.disabled=false; spin.style.display='none';
+    }
+  }
+
+  // ---- Step 5 —— Export ------------------------------------------------
+  var _exportBound = false;
+  function initExport(){
+    var s  = ThesisState.get();
+    var cv = cvGet();
+
+    q('cv-title').value   = (s.setup&&s.setup.title)||'';
+    q('cv-authors').value = (s.setup&&s.setup.researcher)||'';
+
+    // Word count summary
+    var at    = ARTICLE_TYPES.find(function(x){ return x.id===(cv.article_type||'original_research'); });
+    var limit = at ? at.totalLimit : 5000;
+    var secWcs = {
+      abstract:     wc(cv.abstract||''),
+      introduction: wc(buildAcceptedText('introduction')),
+      methods:      wc(buildAcceptedText('methods')),
+      results:      ((cv.sections||{}).results||{}).word_count||0,
+      discussion:   wc(buildAcceptedText('discussion')),
+    };
+    var bodyTotal = secWcs.introduction + secWcs.methods + secWcs.results + secWcs.discussion;
+    var totalColor = bodyTotal > limit ? '#c0392b' : 'var(--th-emerald-d)';
+
+    q('cv-wc-summary').innerHTML =
+      [['Abstract',secWcs.abstract],['Introduction',secWcs.introduction],
+       ['Methods',secWcs.methods],['Results',secWcs.results],['Discussion',secWcs.discussion]]
+      .map(function(pair){
+        return '<div class="cv-wc-cell"><div class="cv-wc-cell-label">'+esc(pair[0])+'</div>'+
+          '<div class="cv-wc-cell-val">'+pair[1].toLocaleString()+' w</div></div>';
+      }).join('') +
+      '<div class="cv-wc-cell"><div class="cv-wc-cell-label">Body total</div>'+
+      '<div class="cv-wc-cell-val" style="color:'+totalColor+';">'+bodyTotal.toLocaleString()+' / '+limit.toLocaleString()+'</div></div>';
+
+    if(!_exportBound){
+      _exportBound = true;
+      q('cv-dl-docx').addEventListener('click', function(){ doDownload('docx'); });
+      q('cv-dl-pdf').addEventListener('click',  function(){ doDownload('pdf');  });
+      q('cv-btn-back-to-4').addEventListener('click', function(){ goStep(4); });
+    }
+  }
+
+  function buildDownloadPayload(){
+    var cv  = cvGet();
+    var s   = ThesisState.get();
+    var avOpts = document.querySelectorAll('input[name="cv-data-av"]');
+    var avVal  = 'request';
+    avOpts.forEach(function(r){ if(r.checked) avVal=r.value; });
+    var dataAvText;
+    if(avVal==='request'){
+      dataAvText='The data that support the findings of this study are available from the corresponding author upon reasonable request.';
+    } else if(avVal==='public'){
+      var url=(q('cv-data-url').value||'').trim();
+      dataAvText='All data are publicly available at: '+(url||'[URL]');
+    } else {
+      dataAvText='No data were generated or analysed in support of this research.';
+    }
+    return {
+      title:    (q('cv-title').value||'').trim()||(s.setup&&s.setup.title)||'Article',
+      authors:  (q('cv-authors').value||'').trim(),
+      sections: {
+        abstract:     cv.abstract||'',
+        introduction: buildAcceptedText('introduction'),
+        methods:      buildAcceptedText('methods'),
+        results:      buildAcceptedText('results'),
+        discussion:   buildAcceptedText('discussion'),
+      },
+      references: cv.references||s.references||[],
+      metadata: {
+        credit:               (q('cv-credit').value||'').trim(),
+        data_availability:    dataAvText,
+        competing_interests:  (q('cv-competing').value||'').trim(),
+      },
+    };
+  }
+
+  async function doDownload(fmt){
+    var statusEl = q('cv-dl-status');
+    statusEl.className = 'cv-status info';
+    statusEl.innerHTML = '<span class="cv-spinner"></span> Building '+fmt.toUpperCase()+'…';
+    statusEl.style.display = '';
+    try {
+      var payload = buildDownloadPayload();
+      var r = await fetch('/api/thesis/export/article-'+fmt,{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(payload),
+      });
+      if(!r.ok){ var t=await r.text(); throw new Error(t||('HTTP '+r.status)); }
+      var blob = await r.blob();
+      var disp = r.headers.get('Content-Disposition')||'';
+      var m = /filename="?([^"]+)"?/.exec(disp);
+      var fname = (m&&m[1])||('article.'+fmt);
+      var url   = URL.createObjectURL(blob);
+      var a     = document.createElement('a');
+      a.href=url; a.download=fname;
+      document.body.appendChild(a); a.click();
+      setTimeout(function(){ URL.revokeObjectURL(url); a.remove(); }, 1200);
+      statusEl.className='cv-status ok';
+      statusEl.textContent='Downloaded '+fname;
+    } catch(e){
+      statusEl.className='cv-status err';
+      statusEl.textContent='Download failed: '+e.message;
+    }
+  }
+
+  // ---- Init ------------------------------------------------------------
+  document.addEventListener('DOMContentLoaded', function(){
+    // Restore previous journal/type selection if returning to wizard
+    var cv = cvGet();
+    if(cv.journal_family) _selJournal = cv.journal_family;
+    if(cv.article_type)   _selType    = cv.article_type;
+
+    initStep1();
+
+    // If we have a completed conversion, offer to jump to review
+    if(cv.sections && Object.keys(cv.sections).length >= 4){
+      var hint = document.createElement('div');
+      hint.className = 'cv-status info';
+      hint.style.cssText = 'margin-top:12px;';
+      hint.innerHTML = 'You have a previous conversion saved. <button id="cv-resume-btn" class="th-btn th-btn-light" style="margin-left:8px; padding:4px 12px; font-size:12px;">Resume review →</button>';
+      q('cv-btn-start').parentNode.insertBefore(hint, q('cv-btn-start').nextSibling);
+      q('cv-resume-btn').addEventListener('click', function(){
+        goStep(3); initReview();
+      });
+    }
+  });
+})();
+</script>
+<script src="/js/medras-nav.js" defer></script>
+</body>
+</html>

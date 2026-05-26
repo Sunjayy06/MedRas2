@@ -408,3 +408,167 @@ def build_plaintext(payload: Dict[str, Any]) -> str:
     if entries:
         parts.append("=== References ===\n\n" + "\n".join(entries))
     return "\n\n".join(parts)
+
+
+# ---------------------------------------------------------------------------
+# Article export (DOCX + PDF) — for thesis-to-article conversion
+# ---------------------------------------------------------------------------
+
+_ARTICLE_SECTION_ORDER = [
+    ("abstract",      "Abstract"),
+    ("introduction",  "Introduction"),
+    ("methods",       "Methods"),
+    ("results",       "Results"),
+    ("discussion",    "Discussion"),
+]
+
+
+def build_article_docx(payload: Dict[str, Any]) -> bytes:
+    """Render a condensed journal article as DOCX.
+
+    Payload shape::
+
+        {
+          "title":      str,
+          "authors":    str,
+          "sections":   {"abstract": str, "introduction": str,
+                         "methods": str, "results": str, "discussion": str},
+          "references": [...],
+          "metadata":   {"credit": str, "data_availability": str,
+                         "competing_interests": str},
+        }
+    """
+    title     = (payload.get("title")   or "Article").strip()
+    authors   = (payload.get("authors") or "").strip()
+    sections  = payload.get("sections")  or {}
+    references = payload.get("references") or []
+    metadata  = payload.get("metadata")  or {}
+
+    doc = Document()
+    for sec in doc.sections:
+        sec.top_margin = sec.bottom_margin = Inches(1)
+        sec.left_margin = sec.right_margin = Inches(1)
+        PE._add_page_number_footer(sec)
+
+    normal = doc.styles["Normal"]
+    normal.font.name = "Times New Roman"
+    normal.font.size = Pt(12)
+
+    PE._add_heading(doc, title, level=1)
+    if authors:
+        p = doc.add_paragraph()
+        run = p.add_run(authors)
+        run.italic = True
+        PE._set_run_font(run, size=11)
+        p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+        p.paragraph_format.space_after = Pt(6)
+
+    first_body = True
+    for sec_id, sec_label in _ARTICLE_SECTION_ORDER:
+        body = (sections.get(sec_id) or "").strip()
+        if not body:
+            continue
+        if first_body and sec_id == "abstract":
+            doc.add_paragraph()
+        elif not first_body or sec_id != "abstract":
+            doc.add_page_break()
+        first_body = False
+        PE._add_heading(doc, sec_label, level=1)
+        PE._render_section_text(doc, body)
+
+    credit   = (metadata.get("credit")              or "").strip()
+    data_av  = (metadata.get("data_availability")   or "").strip()
+    comp_int = (metadata.get("competing_interests")  or "").strip()
+    if credit or data_av or comp_int:
+        doc.add_page_break()
+        if credit:
+            PE._add_heading(doc, "Author Contributions (CRediT)", level=2)
+            PE._add_para(doc, credit, size=11,
+                         align=WD_ALIGN_PARAGRAPH.LEFT, line_spacing=1.5)
+        if data_av:
+            PE._add_heading(doc, "Data Availability Statement", level=2)
+            PE._add_para(doc, data_av, size=11,
+                         align=WD_ALIGN_PARAGRAPH.LEFT, line_spacing=1.5)
+        if comp_int:
+            PE._add_heading(doc, "Competing Interests", level=2)
+            PE._add_para(doc, comp_int, size=11,
+                         align=WD_ALIGN_PARAGRAPH.LEFT, line_spacing=1.5)
+
+    entries = PE._bibliography_entries(references)
+    if entries:
+        doc.add_page_break()
+        PE._add_heading(doc, "References", level=1)
+        for entry in entries:
+            p = doc.add_paragraph()
+            p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+            pf = p.paragraph_format
+            pf.line_spacing_rule = WD_LINE_SPACING.MULTIPLE
+            pf.line_spacing = 1.5
+            pf.space_after = Pt(4)
+            run = p.add_run(entry)
+            PE._set_run_font(run, size=12)
+
+    buf = io.BytesIO()
+    doc.save(buf)
+    return buf.getvalue()
+
+
+def build_article_pdf(payload: Dict[str, Any]) -> bytes:
+    """Render a condensed journal article as PDF."""
+    title     = (payload.get("title")   or "Article").strip()
+    authors   = (payload.get("authors") or "").strip()
+    sections  = payload.get("sections")  or {}
+    references = payload.get("references") or []
+    metadata  = payload.get("metadata")  or {}
+
+    buf = io.BytesIO()
+    doc = PE._PropPdfDoc(
+        buf, pagesize=LETTER,
+        leftMargin=inch, rightMargin=inch, topMargin=inch, bottomMargin=inch,
+        title=title,
+    )
+    styles = PE._pdf_styles()
+    story: List[Any] = []
+
+    story.append(Paragraph(PE._pdf_safe(title), styles["h1"]))
+    if authors:
+        auth_style = ParagraphStyle(
+            "art_auth", parent=styles["body"],
+            fontName="Times-Italic", fontSize=11, leading=16,
+        )
+        story.append(Paragraph(PE._pdf_safe(authors), auth_style))
+
+    story.append(Spacer(1, 0.2 * inch))
+
+    for sec_id, sec_label in _ARTICLE_SECTION_ORDER:
+        body = (sections.get(sec_id) or "").strip()
+        if not body:
+            continue
+        story.append(Paragraph(PE._pdf_safe(sec_label), styles["h1"]))
+        for chunk in PE._pdf_paragraph_chunks(body):
+            story.append(Paragraph(PE._pdf_safe(chunk), styles["body"]))
+        story.append(Spacer(1, 0.15 * inch))
+
+    credit   = (metadata.get("credit")              or "").strip()
+    data_av  = (metadata.get("data_availability")   or "").strip()
+    comp_int = (metadata.get("competing_interests")  or "").strip()
+    meta_h2  = ParagraphStyle("art_h2", parent=styles["h1"], fontSize=13, leading=18)
+    if credit:
+        story.append(Paragraph("Author Contributions (CRediT)", meta_h2))
+        story.append(Paragraph(PE._pdf_safe(credit), styles["body"]))
+    if data_av:
+        story.append(Paragraph("Data Availability Statement", meta_h2))
+        story.append(Paragraph(PE._pdf_safe(data_av), styles["body"]))
+    if comp_int:
+        story.append(Paragraph("Competing Interests", meta_h2))
+        story.append(Paragraph(PE._pdf_safe(comp_int), styles["body"]))
+
+    entries = PE._bibliography_entries(references)
+    if entries:
+        story.append(PageBreak())
+        story.append(Paragraph("References", styles["h1"]))
+        for entry in entries:
+            story.append(Paragraph(PE._pdf_safe(entry), styles["pre"]))
+
+    doc.multiBuild(story, onFirstPage=PE._pdf_footer, onLaterPages=PE._pdf_footer)
+    return buf.getvalue()
