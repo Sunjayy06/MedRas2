@@ -15,7 +15,8 @@
 .th-refpanel-body{flex:1;min-width:0}
 .th-refpanel-remove{background:none;border:none;color:var(--th-text-soft);cursor:pointer;font-size:11px;padding:2px 4px;margin-left:auto;flex-shrink:0;border-radius:4px}
 .th-refpanel-remove:hover{color:#c0392b;background:var(--th-paper-2)}
-.th-refpanel-reorder{display:flex;flex-direction:column;gap:1px;flex-shrink:0}
+.th-refpanel-drag{cursor:grab;color:var(--th-text-soft);font-size:14px;padding:0 4px 0 0;flex-shrink:0;user-select:none}
+.th-refpanel-drag:active{cursor:grabbing}
 .th-refpanel-mv{background:none;border:none;color:var(--th-text-soft);cursor:pointer;font-size:10px;padding:1px 3px;border-radius:3px;line-height:1.2}
 .th-refpanel-mv:hover:not(:disabled){color:var(--th-emerald-d);background:var(--th-paper-2)}
 .th-refpanel-mv:disabled{opacity:.3;cursor:default}
@@ -278,9 +279,25 @@
     if (pendingDraft && draftCited.size > 0) {
       const draftBanner = document.createElement('div');
       draftBanner.style.cssText = 'font-size:10.5px;background:#f0fdf4;border:1px solid #86efac;border-radius:4px;padding:4px 8px;margin-bottom:6px;color:#166534';
-      draftBanner.textContent = '📋 AI draft pending — green-bordered refs are cited in it. Click ✓ to accept.';
+      draftBanner.textContent = '📋 AI draft pending — green refs are cited in it. Click ✓ to accept.';
       listEl.appendChild(draftBanner);
+      // Per-paragraph breakdown (Scenario 3)
+      const parasRaw = pendingDraft.split(/\n{2,}/).map((p, i) => {
+        const nums = new Set();
+        const pRe = /\[CITE_(\d+)\]/g;
+        let pm;
+        while ((pm = pRe.exec(p)) !== null) { nums.add(parseInt(pm[1], 10)); }
+        return { i, nums };
+      }).filter((b) => b.nums.size > 0);
+      if (parasRaw.length > 0) {
+        const paraEl = document.createElement('div');
+        paraEl.style.cssText = 'font-size:10.5px;color:var(--th-text-soft);margin-bottom:6px';
+        paraEl.innerHTML = '<strong style="color:var(--th-ink-900)">By paragraph:</strong> ' +
+          parasRaw.map((b) => `¶${b.i + 1}: ${[...b.nums].map((n) => '[' + n + ']').join(' ')}`).join(' · ');
+        listEl.appendChild(paraEl);
+      }
     }
+    let _dragFrom = null;
     citedArr.forEach(({ r, idx, num }) => {
       const auth = (r.authors || []).slice(0, 2).join(', ') + ((r.authors || []).length > 2 ? ' et al.' : '');
       const inDraftOnly = draftCited.has(num) && !cited.has(num);
@@ -288,13 +305,11 @@
       const card = document.createElement('div');
       card.className = 'th-refpanel-card';
       card.dataset.idx = idx;
+      card.draggable = true;
       if (inDraftOnly) card.style.cssText = 'border-left:3px solid #22c55e;padding-left:4px;opacity:0.85';
       else if (inBoth) card.style.cssText = 'border-left:3px solid #22c55e;padding-left:4px';
       card.innerHTML = `
-        <div class="th-refpanel-reorder">
-          <button class="th-refpanel-mv" data-mv="${idx}" data-dir="-1" title="Move up (renumbers)" ${idx === 0 ? 'disabled' : ''}>↑</button>
-          <button class="th-refpanel-mv" data-mv="${idx}" data-dir="1" title="Move down (renumbers)" ${idx === total - 1 ? 'disabled' : ''}>↓</button>
-        </div>
+        <span class="th-refpanel-drag" title="Drag to reorder (renumbers all citations)">⠿</span>
         <span class="th-refpanel-num">[${num}]</span>
         <div class="th-refpanel-body">
           <div class="th-refpanel-title">${esc((r.title || '').slice(0, 65))}${(r.title || '').length > 65 ? '…' : ''}</div>
@@ -306,10 +321,17 @@
           <button class="th-refpanel-remove" title="Remove (orphaned [CITE_?] tags remain for review)" data-remove="${idx}">✕</button>
         </div>`;
       card.querySelector('button[data-remove]').addEventListener('click', () => removeReference(parseInt(idx, 10)));
-      card.querySelectorAll('button[data-mv][data-dir]').forEach((b) => {
-        b.addEventListener('click', () => moveReference(parseInt(b.dataset.mv, 10), parseInt(b.dataset.dir, 10)));
-      });
       card.querySelector('button[data-replace]').addEventListener('click', () => toggleReplacePanel(parseInt(idx, 10)));
+      // HTML5 drag-and-drop reorder
+      card.addEventListener('dragstart', () => { _dragFrom = idx; card.style.opacity = '0.5'; });
+      card.addEventListener('dragend', () => { card.style.opacity = ''; _dragFrom = null; });
+      card.addEventListener('dragover', (e) => { e.preventDefault(); card.style.outline = '2px solid var(--th-emerald-d)'; });
+      card.addEventListener('dragleave', () => { card.style.outline = ''; });
+      card.addEventListener('drop', (e) => {
+        e.preventDefault();
+        card.style.outline = '';
+        if (_dragFrom !== null && _dragFrom !== idx) { reorderReference(_dragFrom, idx); }
+      });
       listEl.appendChild(card);
     });
   }
@@ -343,24 +365,33 @@
   }
 
   function moveReference(idx, dir) {
+    reorderReference(idx, idx + dir);
+  }
+
+  function reorderReference(fromIdx, toIdx) {
     const s = ThesisState.get();
     const refs = s.references || [];
-    const swapIdx = idx + dir;
-    if (swapIdx < 0 || swapIdx >= refs.length) return;
-    const numA = idx + 1;
-    const numB = swapIdx + 1;
-    // Swap refs, then renumber in-chapter tags: A↔B using a temp sentinel
+    if (toIdx < 0 || toIdx >= refs.length || fromIdx === toIdx) return;
+    // Build old→new number mapping
+    const newRefs = refs.slice();
+    const [moved] = newRefs.splice(fromIdx, 1);
+    newRefs.splice(toIdx, 0, moved);
+    const oldToNew = {};
+    refs.forEach((r, i) => { oldToNew[i + 1] = newRefs.indexOf(r) + 1; });
     ThesisState.patch((ss) => {
-      const r = ss.references || [];
-      [r[idx], r[swapIdx]] = [r[swapIdx], r[idx]];
-      ss.references = r;
+      ss.references = newRefs;
       Object.keys(ss.chapters || {}).forEach((chId) => {
         const ch = ss.chapters[chId] || {};
         if (!ch.text) return;
-        let t = ch.text
-          .replace(new RegExp('\\[CITE_' + numA + '\\]', 'g'), '[CITE___TMP__]')
-          .replace(new RegExp('\\[CITE_' + numB + '\\]', 'g'), '[CITE_' + numA + ']')
-          .replace(/\[CITE___TMP__\]/g, '[CITE_' + numB + ']');
+        let t = ch.text;
+        // Pass 1: old numbers → temp sentinels
+        for (const [old] of Object.entries(oldToNew)) {
+          t = t.replace(new RegExp('\\[CITE_' + old + '\\]', 'g'), '[CITE___' + old + '__]');
+        }
+        // Pass 2: sentinels → new numbers
+        for (const [old, nw] of Object.entries(oldToNew)) {
+          t = t.replace(new RegExp('\\[CITE___' + old + '__\\]', 'g'), '[CITE_' + nw + ']');
+        }
         ss.chapters[chId] = Object.assign({}, ch, { text: t });
       });
       return ss;
@@ -408,7 +439,7 @@
         }).join('');
         res.querySelectorAll('button[data-use]').forEach((ub) => {
           ub.addEventListener('click', () => {
-            replaceReference(idx, recs[parseInt(ub.dataset.use, 10)]);
+            replaceReference(idx, Object.assign({}, recs[parseInt(ub.dataset.use, 10)], { verified: true }));
           });
         });
       } catch (_) { res.textContent = 'Search failed.'; }
@@ -498,7 +529,7 @@
           resDiv.querySelectorAll('button[data-add]').forEach((ab) => {
             ab.addEventListener('mousedown', (ev) => {
               ev.preventDefault();
-              const r = results[parseInt(ab.dataset.add, 10)];
+              const r = Object.assign({}, results[parseInt(ab.dataset.add, 10)], { verified: true });
               const s = ThesisState.get();
               const existing = new Set((s.references || []).map((x) => (x.doi || '').toLowerCase()));
               let num;

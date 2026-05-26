@@ -193,13 +193,20 @@
   function unsetLock(label) {
     return patch((s) => { delete s.locked_numbers[label]; return s; });
   }
+  function _stableId(r) {
+    // Deterministic stable ID so no-DOI entries can be deduped and removed correctly
+    if (r._id) return r._id;
+    const seed = ((r.doi || '') + '|' + (r.title || '') + '|' + (r.year || '')).toLowerCase().replace(/\s+/g, '');
+    let h = 0;
+    for (let i = 0; i < seed.length; i++) { h = Math.imul(31, h) + seed.charCodeAt(i) | 0; }
+    return (h >>> 0).toString(36);
+  }
   function addReferences(records) {
     return patch((s) => {
-      const seen = new Set((s.references || []).map((r) => (r.doi || '').toLowerCase()));
+      const seen = new Set((s.references || []).map((r) => r._id || _stableId(r)));
       (records || []).forEach((r) => {
-        const k = (r.doi || '').toLowerCase();
-        if (k && !seen.has(k)) { s.references.push(r); seen.add(k); }
-        else if (!k) { s.references.push(r); }
+        if (!r._id) r._id = _stableId(r);
+        if (!seen.has(r._id)) { s.references.push(r); seen.add(r._id); }
       });
       return s;
     });

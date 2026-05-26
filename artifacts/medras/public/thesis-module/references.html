@@ -280,11 +280,14 @@
       fd.append('file', f);
       const data = await ThesisState.apiUpload('/references/import-list', fd);
       const entries = data.entries || [];
-      const existing = new Set((ThesisState.get().references || []).map((r) => (r.doi || '').toLowerCase()));
-      const fresh = entries.filter((e) => !(e.doi && existing.has(e.doi.toLowerCase())));
-      ThesisState.addReferences(fresh);
-      ThesisState.libSaveMany(fresh.filter((e) => e.verified));
-      importStat.textContent = `Imported ${fresh.length} (${data.verified} Crossref-verified, ${entries.length - data.verified} heuristic).`;
+      // Only add Crossref-verified entries to enforce zero-hallucination contract
+      const verifiedEntries = entries.filter((e) => e.verified);
+      const unverifiedCount = entries.length - verifiedEntries.length;
+      ThesisState.addReferences(verifiedEntries);
+      ThesisState.libSaveMany(verifiedEntries);
+      const added = (ThesisState.get().references || []).length;
+      importStat.textContent = `Added ${verifiedEntries.length} Crossref-verified references.` +
+        (unverifiedCount > 0 ? ` ${unverifiedCount} entry(ies) could not be verified and were skipped.` : '');
       importFileEl.value = '';
       importNameEl.textContent = 'No file chosen';
       renderLib();
