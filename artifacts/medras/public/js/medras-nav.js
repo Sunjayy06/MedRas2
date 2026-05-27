@@ -360,7 +360,7 @@
         .catch(function () {
           subBtn.textContent = 'Send feedback';
           subBtn.disabled = false;
-          alert('Could not send feedback. Please try again.');
+          window.medrasAlert('Could not send feedback. Please try again.', 'error');
         });
     });
   }
@@ -461,4 +461,54 @@
   } else {
     buildNav();
   }
+
+  /* ── Global non-blocking alert utility ──────────────────────────── *
+   * Replaces browser alert() across all MedRAS pages.               *
+   * Usage: window.medrasAlert(msg, 'error'|'warn'|'info'|'success') */
+  var _MA_COLORS = {
+    error:   { bg:'#fee2e2', border:'#fca5a5', text:'#991b1b', icon:'⚠' },
+    warn:    { bg:'#fff7ed', border:'#fed7aa', text:'#9a3412', icon:'!' },
+    info:    { bg:'#eff6ff', border:'#93c5fd', text:'#1e40af', icon:'ℹ' },
+    success: { bg:'#f0fdf4', border:'#86efac', text:'#166534', icon:'✓' },
+  };
+  window.medrasAlert = function (msg, kind) {
+    kind = kind || 'error';
+    var c = _MA_COLORS[kind] || _MA_COLORS.error;
+    var ID = '__medras-toast';
+    var el = document.getElementById(ID);
+    if (!el) {
+      el = document.createElement('div');
+      el.id = ID;
+      el.style.cssText = [
+        'position:fixed', 'bottom:28px', 'left:50%',
+        'transform:translateX(-50%) translateY(0)',
+        'z-index:99999', 'max-width:500px', 'width:calc(100% - 40px)',
+        'padding:12px 40px 12px 16px',
+        'border-radius:10px', 'border:1px solid',
+        'font-family:Inter,system-ui,sans-serif',
+        'font-size:13.5px', 'line-height:1.5',
+        'box-shadow:0 6px 24px rgba(0,0,0,.14)',
+        'transition:opacity .22s,transform .22s',
+        'cursor:pointer',
+      ].join(';');
+      el.title = 'Dismiss';
+      el.addEventListener('click', function () {
+        el.style.opacity = '0';
+        el.style.transform = 'translateX(-50%) translateY(8px)';
+      });
+      document.body.appendChild(el);
+    }
+    clearTimeout(el.__timer);
+    el.style.background = c.bg;
+    el.style.borderColor = c.border;
+    el.style.color = c.text;
+    el.style.opacity = '1';
+    el.style.transform = 'translateX(-50%) translateY(0)';
+    el.textContent = c.icon + '\u2002' + msg;
+    var delay = (kind === 'error') ? 6000 : 3800;
+    el.__timer = setTimeout(function () {
+      el.style.opacity = '0';
+      el.style.transform = 'translateX(-50%) translateY(8px)';
+    }, delay);
+  };
 }());

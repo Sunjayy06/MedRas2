@@ -1150,7 +1150,7 @@ async function customWizardNext(from) {
   } else if (from === 2) {
     const n = Number($("#cw-q2-n").value);
     if (!Number.isFinite(n) || n < 20 || n > 500) {
-      alert("Pick a number between 20 and 500.");
+      window.medrasAlert("Pick a number between 20 and 500.", 'warn');
       return;
     }
     state.customWizard.n = n;
@@ -2548,7 +2548,7 @@ function renderClassifyTable() {
       } catch (err) {
         btn.disabled = false;
         btn.textContent = "Undo";
-        alert(`Couldn't undo: ${err.message}`);
+        window.medrasAlert(`Couldn't undo: ${err.message}`, 'error');
       }
     });
   });

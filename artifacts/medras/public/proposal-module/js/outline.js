@@ -435,14 +435,14 @@
         modalTextarea.disabled = false;
         if (!res.ok) {
           modalMeta.textContent = origMeta;
-          window.alert("Could not extract that file:\n\n" +
-            ((res.body && res.body.detail) ? res.body.detail : ("Request failed (" + res.status + ").")));
+          window.medrasAlert("Could not extract that file: " +
+            ((res.body && res.body.detail) ? res.body.detail : ("Request failed (" + res.status + ").")), 'error');
           return;
         }
         var incoming = (res.body && res.body.text) || "";
         if (!incoming.trim()) {
           modalMeta.textContent = origMeta;
-          window.alert("That file didn't contain any readable text.");
+          window.medrasAlert("That file didn't contain any readable text.", 'warn');
           return;
         }
         var merged = prevValue.trim() ? (prevValue.trim() + "\n\n" + incoming) : incoming;
@@ -453,7 +453,7 @@
       .catch(function (err) {
         modalTextarea.disabled = false;
         modalMeta.textContent = origMeta;
-        window.alert("Network error uploading file: " + (err && err.message ? err.message : err));
+        window.medrasAlert("Network error uploading file: " + (err && err.message ? err.message : err), 'error');
       });
   }
 
@@ -655,12 +655,12 @@
         btnEl.textContent = origLabel;
         if (!res.ok) {
           var msg = (res.body && res.body.detail) ? res.body.detail : ("Request failed (" + res.status + ").");
-          window.alert("Could not generate that section:\n\n" + msg);
+          window.medrasAlert("Could not generate that section: " + msg, 'error');
           return;
         }
         var draft = (res.body && res.body.text) || "";
         if (!draft.trim()) {
-          window.alert("The model returned an empty draft. Try filling in a few more sections first so it has more to work from.");
+          window.medrasAlert("The model returned an empty draft. Try filling in a few more sections first so it has more to work from.", 'warn');
           return;
         }
         sectionContent[name] = draft;
@@ -673,7 +673,7 @@
       .catch(function (err) {
         btnEl.disabled = false;
         btnEl.textContent = origLabel;
-        window.alert("Network error: " + (err && err.message ? err.message : err));
+        window.medrasAlert("Network error: " + (err && err.message ? err.message : err), 'error');
       });
   }
 

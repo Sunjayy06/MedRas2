@@ -77,7 +77,7 @@
       const ext = (f.name.split(".").pop() || "").toLowerCase();
       const allowed = accept.map((a) => a.replace(".", "").toLowerCase());
       if (!allowed.includes(ext)) {
-        alert(`Unsupported file type ".${ext}". Allowed: ${accept.join(", ")}`);
+        window.medrasAlert(`Unsupported file type ".${ext}". Allowed: ${accept.join(", ")}`, 'warn');
         return;
       }
       setFile(f);

@@ -385,7 +385,7 @@
       .then(function (resp) { return resp.json().then(function (j) { return { ok: resp.ok, body: j }; }); })
       .then(function (res) {
         btnEl.disabled = false; btnEl.textContent = orig;
-        if (!res.ok) { window.alert("DOI check failed: " + (res.body.detail || "unknown")); return; }
+        if (!res.ok) { window.medrasAlert("DOI check failed: " + (res.body.detail || "unknown"), 'error'); return; }
         r.validation = res.body.status;
         if (res.body.metadata) {
           if (!r.title)   r.title = res.body.metadata.title || r.title;
@@ -396,7 +396,7 @@
       })
       .catch(function (err) {
         btnEl.disabled = false; btnEl.textContent = orig;
-        window.alert("Network error: " + (err && err.message || err));
+        window.medrasAlert("Network error: " + (err && err.message || err), 'error');
       });
   }
 
@@ -454,7 +454,7 @@
   // ===================== Generate ====================
   function doGenerate() {
     var topic = (genTopic.value || "").trim();
-    if (!topic) { window.alert("Please describe your research topic."); return; }
+    if (!topic) { window.medrasAlert("Please describe your research topic.", 'warn'); return; }
     if (window.MedrasProposalState) window.MedrasProposalState.setBusy(true);
     var count = parseInt(genCount.value, 10) || 15;
     var recency = parseInt(genRecency.value, 10) || 7;

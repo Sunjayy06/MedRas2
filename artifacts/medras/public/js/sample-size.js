@@ -1192,20 +1192,20 @@
         WIZ.answers.objective = document.getElementById("wiz-objective").value.trim();
       } else if (WIZ.q === 2) {
         var c = document.querySelector('input[name="wiz-compare"]:checked');
-        if (!c) return alert("Please pick one.");
+        if (!c) { window.medrasAlert("Please pick one.", 'warn'); return; }
         WIZ.answers.compare = c.value;
       } else if (WIZ.q === 3) {
         var g = document.querySelector('input[name="wiz-groups"]:checked');
-        if (!g) return alert("Please pick one.");
+        if (!g) { window.medrasAlert("Please pick one.", 'warn'); return; }
         WIZ.answers.groups = parseInt(g.value, 10);
       } else if (WIZ.q === 4) {
         var h = document.querySelector('input[name="wiz-haven"]:checked');
-        if (!h) return alert("Please pick one.");
+        if (!h) { window.medrasAlert("Please pick one.", 'warn'); return; }
         WIZ.answers.haven = h.value;
       } else if (WIZ.q === 5) {
         if (WIZ.answers.haven === "yes") {
           var nv = parseInt(document.getElementById("wiz-n").value, 10);
-          if (!nv || nv < 2) return alert("Enter a sample size ≥ 2.");
+          if (!nv || nv < 2) { window.medrasAlert("Enter a sample size ≥ 2.", 'warn'); return; }
           WIZ.answers.n = nv;
         } else {
           WIZ.answers.alpha = parseFloat(document.getElementById("wiz-alpha").value);
@@ -1393,7 +1393,7 @@
   function onAnalyze() {
     var objective = document.getElementById("objective").value.trim();
     if (objective.length < 10) {
-      alert("Please write at least one full sentence describing your objective.");
+      window.medrasAlert("Please write at least one full sentence describing your objective.", 'warn');
       return;
     }
     state.objective = objective;
@@ -1427,7 +1427,7 @@
         renderAnalysis(data);
       })
       .catch(function (err) {
-        alert(err.message || "Could not analyse the objective.");
+        window.medrasAlert(err.message || "Could not analyse the objective.", 'error');
       })
       .finally(function () {
         btn.disabled = false;

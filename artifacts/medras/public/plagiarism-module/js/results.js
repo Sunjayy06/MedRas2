@@ -197,7 +197,7 @@
         document.body.removeChild(a);
         setTimeout(() => URL.revokeObjectURL(url), 1500);
       } catch (err) {
-        alert("Download failed: " + (err && err.message ? err.message : err));
+        window.medrasAlert("Download failed: " + (err && err.message ? err.message : err), 'error');
       } finally {
         dlBtn.disabled = false;
         dlBtn.innerHTML = orig;

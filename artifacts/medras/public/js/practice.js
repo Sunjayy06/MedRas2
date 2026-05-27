@@ -83,8 +83,8 @@
   function validateStep1() {
     state.objective = $("#pw-objective").value.trim();
     state.outcome   = $("#pw-outcome").value.trim();
-    if (!state.objective) { alert("Please enter the study objective."); return false; }
-    if (!state.outcome)   { alert("Please enter the primary outcome variable."); return false; }
+    if (!state.objective) { window.medrasAlert("Please enter the study objective.", 'warn'); return false; }
+    if (!state.outcome)   { window.medrasAlert("Please enter the primary outcome variable.", 'warn'); return false; }
     return true;
   }
 
@@ -94,7 +94,7 @@
 
   async function detectTypes() {
     const text = $("#pw-vars").value || "";
-    if (!text.trim()) { alert("Enter at least one variable."); return; }
+    if (!text.trim()) { window.medrasAlert("Enter at least one variable.", 'warn'); return; }
     let detected;
     try {
       detected = await api("/practice/detect-types", {
@@ -102,7 +102,7 @@
         body: JSON.stringify({ text }),
       });
     } catch (err) {
-      alert(`Could not detect types: ${err.message}`);
+      window.medrasAlert(`Could not detect types: ${err.message}`, 'error');
       return;
     }
     state.variables = detected.variables.map((v) => ({
@@ -152,7 +152,7 @@
 
   function validateStep2() {
     if (!state.variables.length) {
-      alert("Click 'Detect types' to extract variables first.");
+      window.medrasAlert("Click 'Detect types' to extract variables first.", 'warn');
       return false;
     }
     return true;

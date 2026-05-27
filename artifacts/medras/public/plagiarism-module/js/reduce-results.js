@@ -509,7 +509,7 @@
       schedulePoll();
     } catch (err) {
       pollingTerminated = true;
-      alert("Retry failed: " + (err && err.message ? err.message : err));
+      window.medrasAlert("Retry failed: " + (err && err.message ? err.message : err), 'error');
     }
   }
 
@@ -786,7 +786,7 @@
         skip_reason: s.skip_reason || null,
       }));
     if (!sections.length) {
-      alert("Nothing to download yet — all sections are either failed or pending.");
+      window.medrasAlert("Nothing to download yet — all sections are either failed or pending.", 'warn');
       return;
     }
     const payload = {
@@ -822,7 +822,7 @@
       document.body.appendChild(a); a.click(); document.body.removeChild(a);
       setTimeout(() => URL.revokeObjectURL(url), 1500);
     } catch (err) {
-      alert("Download failed: " + (err && err.message ? err.message : err));
+      window.medrasAlert("Download failed: " + (err && err.message ? err.message : err), 'error');
     } finally {
       btn.disabled = false;
       btn.innerHTML = orig;

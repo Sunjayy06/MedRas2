@@ -76,10 +76,10 @@
 
   function validateStep1() {
     if (!state.question || state.question.length < 10) {
-      alert('Please enter a research question (at least 10 characters).'); return false;
+      window.medrasAlert('Please enter a research question (at least 10 characters).', 'warn'); return false;
     }
     if (!state.pico.P && !state.pico.O) {
-      alert('Please fill in at least Population (P) and Outcome (O) in the PICO framework.'); return false;
+      window.medrasAlert('Please fill in at least Population (P) and Outcome (O) in the PICO framework.', 'warn'); return false;
     }
     return true;
   }
@@ -176,7 +176,7 @@
   }
 
   function validateStep2() {
-    if (!state.selectedDesignId) { alert('Please select a study design.'); return false; }
+    if (!state.selectedDesignId) { window.medrasAlert('Please select a study design.', 'warn'); return false; }
     return true;
   }
 
@@ -538,7 +538,7 @@
     if (state.step === 2 && !validateStep2()) return;
     if (state.step === 3) saveMeth();
     if (state.step === 4) saveStats();
-    if (state.step === TOTAL_STEPS) { alert('Your study design is complete! Use the export options above.'); return; }
+    if (state.step === TOTAL_STEPS) { window.medrasAlert('Your study design is complete! Use the export options above.', 'success'); return; }
     btnNext.classList.add('loading'); btnNext.disabled = true;
     await navigateTo(state.step + 1);
     btnNext.classList.remove('loading'); btnNext.disabled = false;
