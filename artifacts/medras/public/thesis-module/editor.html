@@ -2521,6 +2521,12 @@
   let _sectionPlan     = null;   // [{id,title,description,word_target}] from API
   let _sectionStatuses = {};     // {id: 'pending'|'drafting'|'drafted'}
   let _plannerVisible  = false;
+  // Draft-All batch state
+  let _draftAllInProgress = false;
+  let _draftAllCancelled  = false;
+  let _draftAllCurrent    = '';   // title of subsection being drafted
+  let _draftAllDone       = 0;
+  let _draftAllTotal      = 0;
 
   function toggleSectionPlanner() {
     const panel = document.getElementById('th-section-planner');
@@ -2571,18 +2577,56 @@
     const body = document.getElementById('th-planner-body');
     if (!body || !_sectionPlan) return;
     const draftedCount = _sectionPlan.filter((s) => _sectionStatuses[s.id] === 'drafted').length;
-    const progress = `<div style="font-size:11px;color:var(--th-text-soft);margin-bottom:8px">${draftedCount} of ${_sectionPlan.length} subsections drafted</div>`;
+    const pendingCount = _sectionPlan.length - draftedCount;
+
+    // Progress bar row
+    let headerHtml;
+    if (_draftAllInProgress) {
+      const pct = _draftAllTotal > 0 ? Math.round((_draftAllDone / _draftAllTotal) * 100) : 0;
+      headerHtml = `
+        <div style="margin-bottom:10px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+            <span style="font-size:11.5px;font-weight:600;color:var(--th-emerald-d)">
+              <span class="th-loading" style="width:10px;height:10px;display:inline-block;margin-right:4px"></span>
+              Drafting ${_draftAllDone + 1} of ${_draftAllTotal}…
+            </span>
+            <button id="th-draft-all-stop" class="th-btn th-btn-light th-btn-sm"
+              style="font-size:11px;border-color:#f5b3b3;color:#a02;padding:2px 8px">⏹ Stop</button>
+          </div>
+          <div style="font-size:11px;color:var(--th-text-soft);margin-bottom:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+            ${esc(_draftAllCurrent)}
+          </div>
+          <div style="background:var(--th-line);border-radius:4px;height:6px;overflow:hidden">
+            <div style="background:var(--th-emerald-d);height:100%;width:${pct}%;transition:width 0.4s ease;border-radius:4px"></div>
+          </div>
+          <div style="font-size:10px;color:var(--th-text-soft);margin-top:3px">${draftedCount} of ${_sectionPlan.length} subsections complete</div>
+        </div>`;
+    } else {
+      const draftAllBtn = pendingCount > 0
+        ? `<button id="th-draft-all-btn" class="th-btn th-btn-primary th-btn-sm"
+             style="font-size:11px;padding:3px 10px;white-space:nowrap">
+             ⚡ Draft All (${pendingCount} remaining)
+           </button>`
+        : `<span style="font-size:11px;color:var(--th-emerald-d);font-weight:600">✓ All subsections drafted</span>`;
+      headerHtml = `
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <span style="font-size:11px;color:var(--th-text-soft)">${draftedCount} of ${_sectionPlan.length} drafted</span>
+          ${draftAllBtn}
+        </div>`;
+    }
+
     const cards = _sectionPlan.map((sec) => {
       const status   = _sectionStatuses[sec.id] || 'pending';
       const drafting = status === 'drafting';
       const drafted  = status === 'drafted';
       const dot      = drafted ? '🟢' : drafting ? '🟡' : '⚪';
+      const btnDisabled = drafting || _draftAllInProgress;
       const btnLabel = drafting
         ? '<span class="th-loading" style="width:10px;height:10px"></span>'
         : drafted ? '↻ Re-draft' : 'Draft →';
       return `<div style="padding:8px 10px;border-radius:7px;margin-bottom:6px;
-          border:1.5px solid ${drafted ? 'var(--th-emerald-d)' : 'var(--th-line)'};
-          background:${drafted ? '#f0fdf4' : 'var(--th-paper-2)'}">
+          border:1.5px solid ${drafted ? 'var(--th-emerald-d)' : drafting ? 'var(--th-gold)' : 'var(--th-line)'};
+          background:${drafted ? '#f0fdf4' : drafting ? '#fefce8' : 'var(--th-paper-2)'}">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px">
           <div style="flex:1;min-width:0">
             <div style="font-weight:600;font-size:12px">${dot} ${esc(sec.title)}</div>
@@ -2592,17 +2636,26 @@
           <button class="th-btn th-btn-primary th-btn-sm"
             data-plan-sec="${esc(sec.id)}"
             style="white-space:nowrap;font-size:11px;padding:3px 8px;flex-shrink:0"
-            ${drafting ? 'disabled' : ''}>${btnLabel}</button>
+            ${btnDisabled ? 'disabled' : ''}>${btnLabel}</button>
         </div>
       </div>`;
     }).join('');
-    body.innerHTML = progress + cards;
+
+    body.innerHTML = headerHtml + cards;
+
+    // Wire individual draft buttons
     body.querySelectorAll('button[data-plan-sec]').forEach((btn) => {
       btn.addEventListener('click', () => {
         const sec = _sectionPlan.find((s) => s.id === btn.dataset.planSec);
         if (sec) _handleSubsectionDraft(sec);
       });
     });
+    // Wire Draft All button
+    const daBtn = document.getElementById('th-draft-all-btn');
+    if (daBtn) daBtn.addEventListener('click', _handleDraftAll);
+    // Wire Stop button
+    const stopBtn = document.getElementById('th-draft-all-stop');
+    if (stopBtn) stopBtn.addEventListener('click', () => { _draftAllCancelled = true; });
   }
 
   async function _handleSubsectionDraft(section) {
@@ -2658,6 +2711,116 @@
     } finally {
       _aiInFlight = false;
     }
+  }
+
+  // ===== Draft All — sequential auto-accept orchestrator =====
+  async function _handleDraftAll() {
+    if (_draftAllInProgress) return;
+    const pending = (_sectionPlan || []).filter((s) => _sectionStatuses[s.id] !== 'drafted');
+    if (!pending.length) {
+      ThesisState.toast('All subsections are already drafted!', 3000);
+      return;
+    }
+    const setup = (ThesisState.get().setup || {});
+    if (!setup.title) {
+      ThesisState.toast('Add your thesis title in Setup first.', 4000);
+      return;
+    }
+
+    _draftAllInProgress = true;
+    _draftAllCancelled  = false;
+    _draftAllTotal      = pending.length;
+    _draftAllDone       = 0;
+    _draftAllCurrent    = '';
+    _renderPlannerCards();
+
+    let consecutiveErrors = 0;
+
+    for (const sec of pending) {
+      if (_draftAllCancelled) break;
+
+      _sectionStatuses[sec.id] = 'drafting';
+      _draftAllCurrent = sec.title;
+      _renderPlannerCards();
+
+      try {
+        await _draftAllOneSubsection(sec);
+        consecutiveErrors = 0;
+        _draftAllDone++;
+      } catch (e) {
+        consecutiveErrors++;
+        _sectionStatuses[sec.id] = 'pending';
+        ThesisState.toast(`⚠ Skipped "${sec.title}": ${e.message}`, 4000);
+        if (consecutiveErrors >= 2) {
+          ThesisState.toast('Stopping after 2 consecutive failures. You can retry individual subsections.', 5000);
+          break;
+        }
+      }
+      _renderPlannerCards();
+    }
+
+    _draftAllInProgress = false;
+    _draftAllCancelled  = false;
+
+    const finalDrafted = (_sectionPlan || []).filter((s) => _sectionStatuses[s.id] === 'drafted').length;
+    const total = (_sectionPlan || []).length;
+    const refCount = (ThesisState.get().references || []).length;
+    const wc = (function() {
+      const t = (ThesisState.getChapter(chapterId).text || '');
+      return (t.match(/\b\w+\b/g) || []).length;
+    })();
+    ThesisState.toast(
+      `Done — ${finalDrafted}/${total} subsections drafted · ~${wc.toLocaleString()} words · ${refCount} refs in library`,
+      6000
+    );
+    _renderPlannerCards();
+    renderEditor();
+    renderSideChapters();
+    renderChapterRefPanel();
+  }
+
+  async function _draftAllOneSubsection(section) {
+    const s = ThesisState.get();
+    const setup = s.setup || {};
+    const cite = setup.citation_style || 'vancouver';
+    const ctxParts = [];
+    if (setup.aim)               ctxParts.push('AIM: ' + setup.aim);
+    if (setup.primary_objective) ctxParts.push('OBJECTIVES:\n' + setup.primary_objective);
+    if (setup.study_type)        ctxParts.push('STUDY TYPE: ' + setup.study_type);
+    const extraContext = ctxParts.length ? ctxParts.join('\n\n') : undefined;
+    const allRefs  = (s.references || []).filter((r) => !r.retracted);
+    const styleParams = getStyleParams();
+
+    const res = await ThesisState.api('/draft-section', {
+      chapter_id: chapterId,
+      topic: setup.title,
+      citation_style: cite,
+      locked_numbers: s.locked_numbers || {},
+      domain_hint: setup.domain || undefined,
+      extra_context: extraContext,
+      ref_library: allRefs.length >= 1 ? allRefs : undefined,
+      word_limit: section.word_target,
+      subsection_hint: section,
+      ...styleParams,
+    });
+
+    // Auto-accept: resolve [CITE_n] → real library numbers, append to chapter
+    const draftText = res.text || '';
+    const sources   = res.sources || [];
+    const resolved  = _resolveDraftCitations(draftText, sources);
+    if (!resolved.trim()) throw new Error('Empty draft returned');
+
+    const existing = ThesisState.getChapter(chapterId);
+    const baseText = existing.text || '';
+    const baseHtml = existing.html || (baseText ? mdToHtml(baseText) : '');
+    const newHtml  = mdToHtml(resolved);
+    ThesisState.setChapter(chapterId, {
+      text: baseText ? baseText + '\n\n' + resolved : resolved,
+      html: baseText ? (baseHtml + (newHtml ? '\n' + newHtml : '')) : newHtml,
+    });
+
+    _sectionStatuses[section.id] = 'drafted';
+    ThesisState.setChapter(chapterId, { _subsection_statuses: { ..._sectionStatuses } });
   }
 
   // Wire refresh button (deferred to DOMContentLoaded so the panel HTML is in the DOM)
