@@ -1875,10 +1875,7 @@ async def apply_corrections(
     if actions is None:
         raise HTTPException(
             status_code=503,
-            detail=(
-                "Correction parsing unavailable — check that OPENAI_API_KEY is set "
-                "and the service is reachable."
-            ),
+            detail="Could not parse the correction instructions. Please rephrase and try again.",
         )
     applied, skipped = doc_correction.apply_correction_actions(entry, actions)
     version_num = doc_correction.record_correction_version(

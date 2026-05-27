@@ -560,12 +560,12 @@ async def plan_study_setup(
             "study_type": "descriptive",
             "outcome_col": None,
             "predictors": [],
-            "objective":  "Describe the dataset variables.",
+            "objective":  "",
             "sample_size": n_rows or None,
             "test_pairs": [],
-            "reasoning":  "AI service unavailable. Configure the analysis manually.",
+            "reasoning":  "",
             "confidence": 0,
-            "source":     "fallback",
+            "source":     "rule_based",
         }
 
     clean = raw.strip()
@@ -590,10 +590,10 @@ async def plan_study_setup(
             "study_type":  "descriptive",
             "outcome_col": None,
             "predictors":  [],
-            "objective":   "Could not parse AI response.",
+            "objective":   "",
             "sample_size": None,
             "test_pairs":  [],
-            "reasoning":   clean[:400] if clean else "",
+            "reasoning":   "",
             "confidence":  0,
-            "source":      "parse_error",
+            "source":      "rule_based",
         }

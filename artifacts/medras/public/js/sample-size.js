@@ -1533,7 +1533,7 @@
 
   function sourceLabel(source) {
     if (source === "llm") return "AI assistant";
-    if (source === "llm+heuristic_fallback") return "Rule-based (AI unavailable)";
+    if (source === "llm+heuristic_fallback") return "Rule-based estimate";
     return "Rule-based";
   }
 
