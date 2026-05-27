@@ -1,0 +1,237 @@
+Review of Literature Module Instructions
+
+The Review of Literature module must not generate short, generic content. It should generate a complete, elaborate, thesis-level Review of Literature suitable for an Indian MD/MS dissertation.
+
+The researcher is happy with the current progress, so no unnecessary changes should be made to the existing module flow. The main requirement is to make the Review of Literature section more elaborate, better planned, and structurally stronger.
+
+The Review of Literature should ideally be around 35–50 pages long, comprising approximately 15,000–17,000 words, depending on the study topic and institutional requirements. Therefore, the module must first carefully plan the structure of the Review of Literature before generating the chapter.
+
+1. Mandatory Style Selection Before Writing
+
+Before generating the Review of Literature, the module must first ask the researcher to choose the preferred writing style.
+
+The system should ask:
+
+How would you like the Review of Literature to be written?
+
+Option 1: Author et al. format
+
+Example:
+
+“Sharma et al. reported that…”
+
+In this format, each study or evidence point should mention the author name directly. This style is useful when the researcher wants a traditional thesis-style literature review with visible author-wise comparisons.
+
+Option 2: Statement-based format
+
+Example:
+
+“Previous studies have reported that…”
+
+In this format, the writing should be concept-focused and should not begin every paragraph with author names. This style is useful when the researcher wants smoother academic flow with fewer repeated author names.
+
+The module should not begin writing the Review of Literature until this preference is selected.
+
+2. Review of Literature Planning Requirement
+
+Before writing the full chapter, the module must first generate a detailed Review of Literature structure.
+
+The structure should include all possible relevant sections and sub-sections based on the:
+
+Study title
+Aim
+Primary objective
+Secondary objectives
+Methodology
+Intervention or exposure
+Comparison groups
+Outcome variables
+Study population
+Clinical relevance
+Diagnostic tools, treatment methods, scoring systems, or procedures involved
+
+The module should not write random or generic headings. The heading plan should be directly aligned with the study topic and should build from broader background to specific evidence related to the present study.
+
+3. Expected Length and Depth
+
+The Review of Literature should be elaborate and dissertation-level.
+
+Target length:
+
+15,000–17,000 words
+
+Expected page length:
+
+35–50 pages
+
+The module should ensure that the chapter includes all major conceptual, clinical, methodological, and evidence-based points required for a complete Review of Literature.
+
+It should not produce a brief 3–5 page literature review unless the researcher specifically asks for a shorter version.
+
+4. Review of Literature Content Flow
+
+The Review of Literature should move in a logical academic sequence.
+
+Suggested flow:
+
+Broad introduction to the topic
+Definition and basic concepts
+Epidemiology or clinical burden, if relevant
+Anatomy, physiology, pathology, or pathophysiology, if relevant
+Clinical features or presentation, if relevant
+Diagnostic methods, scoring systems, or assessment tools
+Treatment/intervention/procedure-related background
+Role of comparison groups or treatment arms
+Mechanism of action or rationale behind intervention
+Review of previous national and international evidence
+Gaps in existing literature
+Justification for the present study
+Earlier Studies section
+
+The content should be formal, academic, and suitable for Indian MD/MS thesis submission.
+
+5. Alignment With Study Objectives
+
+The Review of Literature must be directly linked to the study’s aim and objectives.
+
+The module should ensure that the literature review covers evidence related to:
+
+Primary objective
+Secondary objectives
+Main outcome measures
+Comparison groups
+Intervention or exposure
+Study population
+Clinical setting
+Relevance to current practice
+
+For example, if the study compares two interventions, the literature review must discuss both interventions separately and then compare them using previous evidence.
+
+6. Writing Tone and Language
+
+The tone should be:
+
+Formal
+Academic
+Medical thesis-appropriate
+Examiner-friendly
+Clear and structured
+Evidence-based
+Written in British English
+
+The module should avoid casual wording, generic AI-style sentences, repetition, and unsupported claims.
+
+Use British English spellings such as:
+
+Anaesthesia
+Haemodynamic
+Randomised
+Paediatric
+Oedema
+Tumour
+Behaviour
+7. Citation and Reference Rules
+
+The module must follow strict citation consistency.
+
+Each study should be assigned only one unique reference number.
+
+If the same study is cited again anywhere in the Review of Literature or Earlier Studies section, the same reference number must be reused.
+
+The reference list must be arranged in the order of first appearance in the text.
+
+The same study should not be duplicated under different reference numbers.
+
+The module must not create mismatched citations, fake references, or repeated bibliography entries.
+
+Earlier Studies Section Instructions
+
+At the end of the Review of Literature, the module must generate a separate section titled:
+
+Earlier Studies
+
+This section should include approximately 15 recent and relevant studies.
+
+These studies should be selected based on their direct relevance to:
+
+Study aim
+Primary objective
+Secondary objectives
+Outcome variables
+Study design
+Intervention or comparison groups
+Clinical population
+Methodology of the present study
+
+The earlier studies should not be random references. They must directly support the research question and help justify the present study.
+
+8. Earlier Studies Format Order
+
+The Earlier Studies section must be generated in the following order:
+
+First: Earlier Studies in Paragraph Format
+
+The module should first provide the earlier studies as individual paragraphs, with one separate paragraph for each study.
+
+Each paragraph should focus on one study only.
+
+Each paragraph should include:
+
+Author name and year
+Study design
+Sample size or study population, if available
+Intervention/comparison or main variables studied
+Key findings with important metrics, if available
+Relevance to the present study
+
+Suggested paragraph format:
+
+Author et al. conducted a [study design] on [study population/sample size] to evaluate [main objective/intervention/comparison]. The study found that [key findings with metrics/p-values where available]. These findings are relevant to the present study because [connection with present aim/objective/outcome].
+
+The paragraph should be concise, academic, and thesis-appropriate. It should not be too lengthy or overly descriptive.
+
+Second: Earlier Studies in Table Format
+
+After the paragraph format, the module should generate the same studies in a structured table.
+
+Suggested table format:
+
+S. No.	Author and Year	Study Design / Population	Intervention / Comparison	Key Findings	Relevance to Present Study
+
+The table should summarize the same 15 studies clearly and should include important metrics wherever available, such as:
+
+Percentages
+Mean values
+Standard deviations
+p-values
+Odds ratios
+Risk ratios
+Sensitivity/specificity
+Correlation values
+Confidence intervals
+
+The table should be concise but informative.
+
+9. Earlier Studies Citation Rule
+
+The same 15 studies used in the Earlier Studies paragraphs should be used in the Earlier Studies table.
+
+The module should not introduce a different set of studies in the table.
+
+Each study should retain the same reference number in both the paragraph and table formats.
+
+One study should have one reference number only.
+
+Final Instruction for Code Builder
+
+Build the Review of Literature module as a template-controlled, thesis-level academic writing engine, not as a general AI writing tool.
+
+Before writing, the module must ask the researcher whether they want the Review of Literature in Author et al. format or statement-based format.
+
+After the researcher selects the style, the module must first plan a detailed chapter structure, then generate an elaborate Review of Literature of approximately 15,000–17,000 words, suitable for 35–50 pages of an Indian MD/MS thesis.
+
+The content must be directly aligned with the study title, aim, objectives, methodology, comparison groups, intervention/exposure, population, and outcomes.
+
+At the end of the Review of Literature, the module must generate an Earlier Studies section containing approximately 15 recent and relevant studies. This section must first present the studies as one paragraph per study, followed by a structured comparison table using the same studies.
+
+The module must maintain strict citation and reference consistency, where one study receives one reference number throughout the chapter, and the final reference list follows the order of first citation.
