@@ -538,3 +538,125 @@ textarea.th-input { resize: vertical; line-height: 1.55; min-height: 68px; }
 }
 .th-source-callout strong { color:var(--th-emerald-d); font-size:11px;
   text-transform:uppercase; letter-spacing:.05em; }
+
+/* ─── Citation picker option rows ───────────────────────────────────────── */
+.th-cite-option {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 10px 14px; cursor: pointer;
+  border-bottom: 1px solid var(--th-line);
+  font-size: 13px; transition: background .1s;
+}
+.th-cite-option:last-child { border-bottom: 0; }
+.th-cite-option:hover { background: var(--th-paper-2); }
+.th-cite-option .th-cite-opt-title { font-weight: 600; color: var(--th-ink-900); line-height: 1.35; }
+.th-cite-option .th-cite-opt-meta  { font-size: 11.5px; color: var(--th-text-soft); }
+
+/* ─── Pending draft diff wrappers ───────────────────────────────────────── */
+.th-diff-block { display: block; margin-top: 6px; }
+.th-existing   { color: var(--th-text); }
+
+/* ─── Chapter audit panel ───────────────────────────────────────────────── */
+.th-chapter-audit {
+  background: var(--th-paper); border: 1px solid var(--th-line);
+  border-radius: 10px; padding: 12px 14px; margin-top: 12px;
+  font-size: 12px;
+}
+.th-chapter-audit h5 {
+  margin: 0 0 8px; font-size: 11px;
+  text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--th-text-soft); font-weight: 700;
+}
+
+/* ─── Section-by-section planner ────────────────────────────────────────── */
+.th-section-planner {
+  background: var(--th-paper); border: 1px solid var(--th-line);
+  border-radius: 10px; padding: 14px 16px; margin-top: 12px;
+}
+.th-section-planner h5 {
+  margin: 0 0 10px; font-size: 12px; font-weight: 700;
+  color: var(--th-ink-900); text-transform: uppercase; letter-spacing: 0.04em;
+}
+
+/* ─── Table import review ────────────────────────────────────────────────── */
+.th-tbl-caption {
+  width: 100%; padding: 4px 7px; border: 1px solid var(--th-line);
+  border-radius: 5px; font-size: 11.5px; font-family: inherit;
+  background: #fff; color: var(--th-text); transition: border-color .12s;
+}
+.th-tbl-caption:focus { outline: 2px solid var(--th-emerald); outline-offset: -1px; border-color: transparent; }
+.th-tbl-keep    { width: 16px; height: 16px; accent-color: var(--th-emerald-d); cursor: pointer; }
+.th-tbl-imported { font-size: 11px; color: var(--th-emerald-d); font-style: italic; }
+
+/* ─── Reference replace panel ───────────────────────────────────────────── */
+.th-replace-q {
+  flex: 1; padding: 5px 8px;
+  border: 1px solid var(--th-line); border-radius: 6px;
+  font-size: 12px; font-family: inherit; background: #fff; color: var(--th-text);
+}
+.th-replace-q:focus { outline: 2px solid var(--th-emerald); outline-offset: -1px; border-color: transparent; }
+.th-replace-go {
+  flex-shrink: 0; padding: 5px 11px;
+  border: 1px solid var(--th-line); border-radius: 6px;
+  background: var(--th-paper-2); font-size: 11.5px; cursor: pointer;
+  font-family: inherit; color: var(--th-ink-900); white-space: nowrap;
+  transition: background .12s, border-color .12s;
+}
+.th-replace-go:hover { background: #e5e3db; border-color: #b8b5a6; }
+.th-replace-results { margin-top: 8px; font-size: 12px; }
+
+/* ─── Cite-repair banner ────────────────────────────────────────────────── */
+#th-cite-repair-banner {
+  align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 9px 14px; border-radius: 8px;
+  background: #fef9e7; border: 1px solid var(--th-gold);
+  font-size: 12.5px; margin-bottom: 10px;
+}
+
+/* ─── Compliance checklist progress bar (article mode) ──────────────────── */
+#th-checklist-bar-wrap {
+  background: var(--th-line); border-radius: 999px; height: 8px;
+  overflow: hidden; margin: 10px 0 6px;
+}
+#th-checklist-bar {
+  height: 100%; background: var(--th-emerald-d);
+  border-radius: 999px; transition: width .3s ease-out;
+}
+
+/* ─── Export page — checklist gate warning ──────────────────────────────── */
+#th-checklist-gate-warn {
+  background: #fff8e1; border: 1px solid var(--th-gold);
+  border-radius: 8px; padding: 10px 14px;
+  margin-bottom: 14px; font-size: 13px;
+  gap: 12px; align-items: flex-start;
+}
+
+/* ─── Autosave label fade ────────────────────────────────────────────────── */
+#th-autosave-label {
+  font-size: 11px; color: var(--th-emerald-d);
+  opacity: 0; transition: opacity .4s; white-space: nowrap;
+}
+
+/* ─── Citation gap / section-coverage badge colours ─────────────────────── */
+.th-gap-ok   { color: var(--th-emerald-d); font-weight: 600; }
+.th-gap-warn { color: var(--th-amber); font-weight: 600; }
+.th-gap-fail { color: var(--th-danger); font-weight: 600; }
+
+/* ─── Responsive helper strip (narrow screens) ──────────────────────────── */
+@media (max-width: 820px) {
+  .th-editor { grid-template-columns: 1fr; height: auto; gap: 12px; }
+  .th-pane   { max-height: 320px; }
+  .th-pane.th-pane-center { max-height: none; }
+  .th-editor-toolbar { gap: 6px; }
+}
+
+/* ─── Compliance gate button spacing ────────────────────────────────────── */
+.th-gate { gap: 12px; }
+.th-gate.is-clear .th-btn-primary { min-width: 140px; }
+
+/* ─── Import-modal: sigma pre-fill notice ───────────────────────────────── */
+#th-sigma-notice {
+  background: rgba(16,185,129,.07); border: 1px solid rgba(16,185,129,.25);
+  border-radius: 7px; padding: 8px 12px; font-size: 12.5px;
+  color: var(--th-emerald-d); margin-bottom: 12px; display: none;
+}
+#th-sigma-notice.is-active { display: block; }

@@ -1,0 +1,1472 @@
+
+
+
+Comparative Evaluation Of Maintaining Hemodynamic
+Stability In Classical Subarachnoid Block And Unilateral
+Subarachnoid Block Using 0.75% Hyperbaric Ropivacine In Patients Undergoing Lower Limb Surgeries -
+A Prospective, Randomised, Double Blinded, Parallel Group, Interventional Study
+
+
+LIST OF ABBREVIATIONS
+Abbreviation
+Full Form
+ASA
+American Society of Anesthesiologists
+BP
+Blood Pressure
+bpm
+Beats Per Minute
+CSF
+Cerebrospinal Fluid
+CSAB
+Classical Subarachnoid Block
+CRF
+Case Record Form
+DBP
+Diastolic Blood Pressure
+ECG
+Electrocardiogram
+G
+Gauge
+HR
+Heart Rate
+HS
+Highly Significant
+IEC
+Institutional Ethics Committee
+IV
+Intravenous
+mg
+Milligram
+min
+Minutes
+mmHg
+Millimeters of Mercury
+NIBP
+Non-Invasive Blood Pressure
+NPO
+Nil Per Oral
+NS
+Not Significant
+OR
+Operating Room
+p-value
+Probability Value
+SBP
+Systolic Blood Pressure
+SD
+Standard Deviation
+SpO₂
+Peripheral Capillary Oxygen Saturation
+SPSS
+Statistical Package for the Social Sciences
+S
+Significant
+T
+Thoracic Dermatome Level
+USAB
+Unilateral Subarachnoid Block
+
+
+
+
+
+ABSTRACT
+Background: Spinal anesthesia is widely used for lower limb surgeries due to its rapid onset, reliability, and simplicity. However, classical bilateral subarachnoid block is frequently associated with hypotension and bradycardia due to extensive sympathetic blockade. Unilateral subarachnoid block has been proposed as a selective technique to limit sympathetic spread and improve hemodynamic stability. Hyperbaric ropivacaine, with its favorable cardiovascular safety profile, may further enhance stability.
+Aim: To compare hemodynamic stability between classical subarachnoid block and unilateral subarachnoid block using 0.75% hyperbaric ropivacaine in patients undergoing unilateral lower limb surgeries.
+Methods: This prospective, randomized, double-blinded, parallel-group interventional study was conducted in 60 patients (ASA I and II, aged 18–60 years) undergoing unilateral lower limb surgeries. Patients were randomly allocated into two groups: Group C (classical subarachnoid block, n=30) and Group U (unilateral subarachnoid block, n=30). Hemodynamic parameters, incidence of hypotension and bradycardia, vasopressor requirement, onset, quality, and duration of sensory and motor blockade were assessed and statistically analyzed.
+Results: The incidence of hypotension was significantly higher in Group C (46.7%) compared to Group U (16.7%) (p=0.01). Bradycardia occurred in 26.7% of Group C and 6.7% of Group U (p=0.04). Vasopressor requirement was significantly greater in Group C (46.7%) compared to Group U (16.7%) (p=0.01), with higher mean ephedrine dose (9.6 ± 4.8 mg vs 3.2 ± 2.6 mg; p=0.001). Onset of sensory (3.8 ± 0.9 vs 4.6 ± 1.1 min; p=0.003) and motor block (4.5 ± 1.0 vs 5.4 ± 1.2 min; p=0.004) was faster in Group C. However, unilateral block showed restricted sensory spread, shorter sensory duration (165.8 ± 19.6 vs 182.5 ± 21.4 min; p=0.002), and shorter motor duration (138.4 ± 16.7 vs 160.6 ± 18.9 min; p=0.001).
+Conclusion: Unilateral subarachnoid block using 0.75% hyperbaric ropivacaine provides superior hemodynamic stability with significantly lower incidence of hypotension, bradycardia, and vasopressor requirement compared to classical subarachnoid block. It maintains adequate anesthetic quality while allowing earlier motor recovery, making it a safer and more physiologically favorable technique for unilateral lower limb surgeries.
+CHAPTER I
+INTRODUCTION
+Subarachnoid block (SAB), commonly known as spinal anaesthesia, has remained one of the most widely practised neuraxial anaesthetic techniques in the world since its inception in 1899, when August Bier administered the first deliberate spinal anaesthesia using cocaine.(1) Over more than a century of clinical evolution, spinal anaesthesia has earned a paramount position in the anaesthetist's armamentarium, particularly for surgeries of the lower abdomen, perineum, and lower extremities. Its enduring appeal is attributed to its rapid onset, technical simplicity, reliability, cost-effectiveness, and the capacity to provide dense surgical anaesthesia without exposing patients to the systemic risks inherent to general anaesthesia. Despite its simplicity, the technique is not without limitations, and intraoperative haemodynamic disturbances – chiefly hypotension and bradycardia – remain its most clinically significant complications, capable of escalating into serious morbidity if not promptly identified and managed.
+The haemodynamic perturbations associated with conventional bilateral subarachnoid block arise primarily from the widespread sympathetic blockade that accompanies it. Spinal anaesthesia-induced hypotension (SAIH) is reported to occur in 15% to 33% of patients receiving standard bilateral spinal anaesthesia.(2) The underlying mechanism involves blockade of preganglionic sympathetic nerve fibres, resulting in arteriolar vasodilatation and a consequent reduction in systemic vascular resistance, compounded by venous pooling in the lower extremities and splanchnic circulation that diminishes venous return and cardiac output.(3) When the sympathetic block reaches the level of T6 or above, up to 20% of circulating blood volume may sequester in the splanchnic vasculature, significantly compromising haemodynamic reserve. In patients with pre-existing cardiovascular compromise, autonomic dysfunction, or significant comorbidities, even transient hypotension may precipitate myocardial ischaemia, organ hypoperfusion, and delayed recovery – underscoring the critical importance of techniques that limit the extent of sympathetic disruption.
+In response to these concerns, the concept of unilateral subarachnoid block (USAB) – alternatively referred to as spinal hemi-block or hemispinal anaesthesia – emerged as a refinement of standard spinal technique for procedures limited to one lower limb. First described by Tanasichuk et al. in 1961 and subsequently elaborated upon by numerous investigators, this technique endeavours to restrict the distribution of intrathecally injected local anaesthetic predominantly to the nerve roots of the operative side.(4) This lateralisation is achieved by combining three key technical factors: the use of small volumes of hyperbaric local anaesthetic solution, a slow rate of intrathecal injection, and maintenance of the lateral decubitus position (with the operative side dependent) for a minimum of 20 minutes following drug administration. Since the distance between the left and right lumbar spinal nerve roots is only 10 to 15 millimetres, achieving true unilaterality is dependent upon gravity-driven distribution of hyperbaric solution and the minimisation of turbulent drug spread. Clinical studies have demonstrated that when these conditions are rigorously maintained, a predominantly unilateral sympathetic block is achievable, thereby confining haemodynamic consequences to the contralateral unblocked sympathetic chain while preserving compensatory vasoconstrictor responses on the non-operative side.
+The clinical advantages of USAB over conventional bilateral subarachnoid block have been extensively documented. Studies have confirmed that unilateral spinal anaesthesia, when performed using a low-dose, low-volume, low-flow injection technique, provides adequate surgical block while delivering significantly more stable haemodynamic parameters than the bilateral approach.(5) A systematic review and meta-analysis examining hypotension after unilateral versus bilateral spinal anaesthesia confirmed that USAB has the potential to reduce the incidence of hypotension to 5% or less in favourable conditions, compared with rates of 15–33% seen with bilateral block.(6) Beyond haemodynamic stability, USAB offers ancillary benefits including avoidance of unnecessary motor paralysis of the non-operative limb, improved early mobilisation, faster return of bladder function, and greater patient satisfaction – all of which contribute meaningfully to perioperative quality of care. Patients undergoing unilateral lower limb surgeries – including fracture fixations, knee arthroscopies, foot and ankle procedures, and tendon repairs – represent a high-volume surgical population in whom these advantages are clinically significant and directly applicable.
+Concurrent with advances in neuraxial technique, the pharmacology of intrathecal local anaesthetics has also evolved considerably. Bupivacaine has historically been the drug of choice for spinal anaesthesia due to its potency and duration, but its racemic preparation carries well-documented risks of cardiotoxicity, particularly in the event of accidental intravascular injection or high systemic absorption, where it may cause life-threatening ventricular arrhythmias and cardiac arrest that are notoriously resistant to resuscitation.(7) This prompted the development of ropivacaine – a long-acting, pure S(–)-enantiomer amide local anaesthetic – specifically designed to provide an improved safety profile. Ropivacaine's lower lipid solubility compared with bupivacaine confers reduced penetration into myelinated motor fibres, resulting in greater sensory-to-motor differential blockade, which facilitates earlier patient mobilisation. Critically, ropivacaine demonstrates substantially less cardiovascular and central nervous system toxicity than bupivacaine at equivalent doses, making it pharmacologically attractive for neuraxial use, particularly in patients with heightened cardiovascular risk.(8)
+Ropivacaine is commercially available only as an isobaric preparation; hyperbaric formulations are produced by the addition of dextrose to achieve a specific gravity exceeding that of cerebrospinal fluid (CSF). Hyperbaric local anaesthetic solutions are of particular clinical relevance in spinal anaesthesia because their density, relative to CSF, allows gravity-dependent positioning to predictably direct drug distribution – a property that is foundational to the successful execution of unilateral subarachnoid block. Studies comparing hyperbaric and isobaric ropivacaine for spinal anaesthesia have demonstrated that the hyperbaric formulation produces more reliable, faster-onset sensory and motor blockade with a higher success rate than its isobaric counterpart.(9) Kallio et al. demonstrated that hyperbaric ropivacaine 15 mg achieved T10 dermatome analgesia in all patients, compared with only 64% of patients in an isobaric group, highlighting the clinical superiority of the hyperbaric formulation for reliable anaesthesia.(10)
+When compared directly with hyperbaric bupivacaine for spinal anaesthesia, 0.75% hyperbaric ropivacaine has demonstrated comparable onset times, similar block heights, and equivalent haemodynamic stability, while offering the advantage of significantly shorter motor block duration, earlier recovery of bladder function, and faster readiness for discharge – features of substantial value in a day-care or rapid-turnover surgical setting.(11) Studies specifically evaluating hyperbaric ropivacaine in the context of lower limb and hip surgeries have similarly reported that it provides effective surgical anaesthesia with a favourable haemodynamic profile, though with a somewhat shorter duration of sensory block than bupivacaine. This characteristic, rather than being a limitation, may be considered an advantage in procedures of less than 90 minutes duration – precisely the patient population that constitutes the study cohort of the present trial. Importantly, the use of 0.75% hyperbaric ropivacaine for intrathecal administration in the context of unilateral subarachnoid block remains comparatively under-studied, creating a meaningful evidence gap that the present study seeks to address.
+Lower limb orthopaedic and trauma surgeries constitute a significant proportion of the elective and semi-elective surgical caseload in tertiary care centres across India, including the Employees' State Insurance Corporation (ESIC) hospitals that cater predominantly to an insured working-class population. This demographic includes patients across a wide age range and ASA physical status categories, many of whom may carry comorbidities that amplify the haemodynamic risks of bilateral spinal anaesthesia. For these patients, a technique that provides reliable, lateralised surgical anaesthesia with minimal cardiovascular disruption would represent a tangible improvement in peri-operative safety and outcomes. The unilateral subarachnoid block using hyperbaric ropivacaine, by virtue of its restricted sympathetic block and favourable pharmacological safety profile, presents a compelling candidate for this role.
+Despite the growing body of evidence supporting unilateral spinal anaesthesia, most published literature has evaluated this technique using hyperbaric bupivacaine, with few studies directly comparing USAB and classical bilateral SAB using 0.75% hyperbaric ropivacaine as the intrathecal agent.(5,6) Furthermore, studies examining haemodynamic outcomes as the primary endpoint of this specific comparison in patients undergoing short-duration unilateral lower limb surgeries remain sparse. The haemodynamic consequences of bilateral versus unilateral sympathetic blockade are expected to be clinically distinct, and a rigorous, prospective, randomised, double-blinded design is necessary to objectively characterise these differences. Additionally, examining secondary outcomes such as the onset, quality, and duration of sensory and motor blockade will provide a comprehensive characterisation of 0.75% hyperbaric ropivacaine in this specific clinical context.
+The present study is therefore designed as a prospective, randomised, double-blinded, parallel-group, interventional trial to comparatively evaluate the haemodynamic stability, and the onset and duration of sensory and motor blockade, achieved by classical bilateral subarachnoid block versus unilateral subarachnoid block – both administered using 0.75% hyperbaric ropivacaine – in patients undergoing unilateral lower limb surgeries of less than 90 minutes duration. By generating robust evidence from a well-defined, homogeneous patient cohort at ESIC Medical College and Hospital, Chennai, this study aims to contribute meaningful data to guide clinical decision-making in anaesthesia practice, and to support the adoption of the safest and most effective neuraxial technique for this common surgical indication. The findings, if supportive, could influence anaesthetic protocols not only within ESIC institutions but also across the broader spectrum of public health surgical practice in India.
+
+
+
+
+
+CHAPTER II
+AIM & OBJECTIVES
+
+AIM:
+To assess hemodynamic stability in classical subarachnoid block versus unilateral subarachnoid block.
+PRIMARY OBJECTIVE :
+To assess Hemodynamic stability in classical subarachnoid block vs unilateral
+subarachnoid block.
+SECONDARY OBJECTIVE :
+Onset, Quality and duration of motor and sensory blockade
+
+CHAPTER III
+REVIEW OF LITERATURE
+Spinal anesthesia, also termed subarachnoid block, is a central neuraxial technique in which a local anesthetic is injected into the cerebrospinal fluid to produce a reversible interruption of nerve conduction in the spinal roots. The resulting blockade typically follows a differential pattern, with sympathetic fibers being affected first, followed by sensory and then motor fibers. Because of its rapid onset, dense sensory anesthesia, reliable muscle relaxation, and reduced requirement for systemic anesthetic drugs, spinal anesthesia remains a preferred technique for many infra-umbilical procedures performed in contemporary operating rooms. Its widespread use has also been supported by improved understanding of intrathecal drug behavior and the availability of modern monitoring and safety protocols. [11]
+Spinal anesthetic spread and block characteristics depend on multiple interacting factors, including drug dose, concentration, volume, baricity, injection technique, patient posture, and patient-specific anatomical and physiological determinants. Pharmacokinetic–pharmacodynamic evaluations of intrathecal local anesthetics highlight that dose and patient covariates such as age and body habitus influence the level and time course of sensory blockade, which in turn affects the magnitude of sympathetic block and cardiovascular response. These mechanistic insights are important because they link the technical choices made during spinal anesthesia to clinically meaningful outcomes such as hypotension, bradycardia, vasopressor requirements, and recovery of motor function. [12]
+Brief Overview of Spinal Anesthesia
+From a practical perspective, spinal anesthesia is valued for its efficiency and predictability: a small volume of intrathecal local anesthetic can produce a profound block suitable for surgery of the lower abdomen, pelvis, perineum, and lower limbs. When compared across commonly used intrathecal agents and formulations, differences in onset and duration have been consistently attributed to physicochemical properties such as baricity. Evidence synthesizing comparisons between hyperbaric and isobaric preparations shows that baricity affects block kinetics and regression profiles, reinforcing why anesthesiologists pay close attention to formulation when tailoring spinal anesthesia to the planned procedure and desired recovery trajectory. [13]
+In modern practice, spinal anesthesia is also increasingly selected to facilitate recovery pathways, including early mobilization after orthopedic surgery. Randomized trials in lower limb arthroplasty populations illustrate that the choice of intrathecal local anesthetic can influence time to ambulation and discharge readiness, supporting the broader view that spinal anesthesia is not a single, fixed technique but rather a modifiable intervention that can be optimized to match perioperative goals. Such evidence has heightened interest in strategies that preserve anesthetic adequacy while minimizing unwanted physiological effects and delays in functional recovery. [14]
+Importance in Lower Limb Surgeries
+Lower limb surgeries represent a large proportion of elective and trauma-related operative workload, and spinal anesthesia is frequently utilized because it provides dense analgesia, reduces intraoperative opioid requirements, and avoids airway instrumentation. In older adults undergoing lower limb surgery, neuraxial techniques have been associated with clinically relevant postoperative advantages compared with general anesthesia in some cohorts, including reduced complication rates and shorter hospitalization, which is particularly meaningful in high-volume orthopedic services. These benefits help explain why spinal anesthesia remains entrenched in lower limb surgical care pathways and why refinements that improve safety and stability may translate into substantial population-level benefit. [15]
+Orthopedic lower limb procedures also place specific demands on the anesthetic technique. They often require a stable field with adequate muscle relaxation, and they are frequently performed in patients with limited physiological reserve, including older individuals and those with diabetes, hypertension, ischemic heart disease, or autonomic dysfunction. In such contexts, the hemodynamic perturbations of spinal anesthesia can become a key determinant of intraoperative management complexity and postoperative outcomes. Comparative work in high-risk lower limb populations has demonstrated that hemodynamic instability is not merely theoretical; rather, it can be measurable and clinically significant, influencing vasopressor use and recovery parameters. [16]
+Significance of Hemodynamic Stability
+The principal hemodynamic consequence of spinal anesthesia is sympathetic blockade leading to arterial and venous vasodilation, reduced venous return, and decreased cardiac output. The resulting hypotension can range from mild and transient to severe and sustained, depending on block height, baseline vascular tone, intravascular volume, and patient comorbidities. Preventing and treating hypotension is therefore a routine component of spinal anesthesia care, particularly in populations susceptible to organ hypoperfusion. Studies examining hemodynamic effects after spinal anesthesia across different clinical settings reinforce that the cardiovascular response is a core safety outcome and a major reason why technique modifications continue to be explored. [17]
+Because hypotension after spinal anesthesia is common, numerous non-pharmacologic and pharmacologic preventive strategies have been investigated. Mechanical methods that augment venous return, such as leg elevation immediately after spinal injection, have demonstrated reductions in post-spinal hypotension and vasopressor requirements in randomized settings, illustrating that even simple interventions can meaningfully affect the physiologic trajectory following neuraxial sympathetic block. However, these strategies are supportive rather than curative because they do not directly limit the extent of sympathetic blockade; they primarily compensate for its circulatory consequences. [18]
+At the same time, the anesthetic drug choice may influence the hemodynamic profile, particularly through its potency, degree of motor block, and regression kinetics. Trials comparing ropivacaine with bupivacaine in spinal anesthesia have reported differences in block duration and recovery characteristics, and some investigations suggest favorable hemodynamic trends with ropivacaine in certain settings. These observations contribute to the rationale for selecting ropivacaine when the clinical aim includes quicker recovery and potentially reduced cardiovascular perturbation, while still achieving adequate surgical anesthesia. [19]
+Introduction to Unilateral Spinal Anesthesia
+Unilateral spinal anesthesia is an adaptation of the classical technique intended to confine the block predominantly to the operative side. By using hyperbaric solutions, relatively low doses, controlled injection speeds, and maintenance of the lateral decubitus position for an adequate “fixation” period, the anesthetic spread can be biased toward the dependent side. Conceptually, if the contralateral sympathetic chain is less affected, systemic vascular tone should be better preserved, thereby reducing hypotension while providing sufficient sensory and motor blockade in the surgical limb. Technical recommendations and literature syntheses on unilateral spinal anesthesia emphasize that achieving consistent laterality depends on multiple controllable factors, including baricity, needle orientation, and duration of lateral positioning. [20]
+The potential advantages of unilateral spinal anesthesia align closely with contemporary priorities in lower limb surgery, including early mobilization and reduced perioperative morbidity. If unilateral block results in less hypotension and faster recovery of motor function, it may be particularly useful in ambulatory or short-stay orthopedic pathways. Evidence from lower limb arthroplasty trials also illustrates that when motor recovery is faster and more predictable, functional milestones such as ambulation and physical therapy participation may occur earlier, supporting discharge efficiency without compromising patient safety. These findings encourage further exploration of selective spinal approaches as part of broader enhanced recovery strategies. [14]
+Need for Comparative Evaluation
+Although unilateral spinal anesthesia is conceptually appealing, clinical practice requires comparative evidence that directly tests whether it meaningfully improves hemodynamic stability without sacrificing anesthetic quality. This is particularly important because classical bilateral spinal anesthesia is highly reliable, and any alternative must demonstrate that reductions in hypotension (primary objective) do not come at the cost of inadequate block, delayed onset, insufficient surgical anesthesia, or increased conversion to supplemental analgesia or general anesthesia. The need for rigorous evaluation is therefore strongest when a technique proposes to limit spread, because limiting spread could theoretically also reduce block adequacy if not performed correctly or if patient factors promote redistribution. [20]
+In this context, using 0.75% hyperbaric ropivacaine provides a focused and clinically relevant basis for comparison. Hyperbaric ropivacaine has been evaluated in randomized, double-blind work against hyperbaric bupivacaine for infra-umbilical surgery, demonstrating that it can provide effective anesthesia with recovery characteristics that may support earlier functional return. When the same agent and concentration are applied to two different spinal techniques classical versus unilateral the study design can isolate the impact of distribution strategy on hemodynamics and on secondary outcomes such as onset, quality, and duration of sensory and motor blockade. This provides the core justification for a prospective randomized comparison in unilateral lower limb surgery populations. [11]
+Spinal Anesthesia: Historical Background and Evolution
+Development of Subarachnoid Block
+Spinal anesthesia, also known as subarachnoid block, is one of the oldest and most established regional anesthetic techniques. It involves the injection of local anesthetic into the cerebrospinal fluid within the subarachnoid space, producing reversible blockade of sensory, motor, and sympathetic nerve fibers. Over time, it has become a fundamental technique for surgeries below the umbilicus due to its rapid onset, dense neural blockade, and avoidance of airway manipulation. Contemporary reviews emphasize that spinal anesthesia remains widely practiced globally and continues to evolve with refinements in pharmacology and technique. [21]
+The early development of spinal anesthesia was marked by challenges related to unpredictable spread, variable block height, and complications such as post–dural puncture headache (PDPH). Advances in needle design significantly improved the safety profile of the technique. Meta-analyses comparing cutting and pencil-point needles demonstrate that atraumatic (pencil-point) needles are associated with a lower incidence of PDPH and reduced need for epidural blood patch, supporting their adoption in modern practice. These findings were instrumental in standardizing safer spinal anesthesia techniques. [22]
+Further evidence has shown that needle gauge also influences PDPH risk. Network meta-analyses evaluating various needle types and sizes indicate that smaller gauge, atraumatic needles provide an optimal balance between procedural success and reduced complication rates. Such data contributed to the refinement of lumbar puncture techniques and improved patient outcomes, thereby increasing confidence in the broader use of spinal anesthesia across surgical populations. [23]
+In addition to equipment refinement, pharmacological advances played a crucial role in the development of subarachnoid block. The introduction of different local anesthetics with variable potency, lipid solubility, and duration of action allowed anesthesiologists to tailor spinal anesthesia according to surgical duration and patient characteristics. Reviews of intrathecal drug formulations highlight the importance of baricity, concentration, and volume in determining block characteristics, demonstrating how scientific understanding of cerebrospinal fluid dynamics shaped modern spinal practice. [24]
+Evolution from Bilateral to Selective Spinal Techniques
+Classical spinal anesthesia traditionally produces bilateral sensory and motor blockade. While reliable for surgical anesthesia, bilateral sympathetic blockade may lead to hypotension due to vasodilation and decreased systemic vascular resistance. As perioperative medicine advanced, attention shifted toward minimizing unnecessary physiological disturbance while maintaining adequate surgical conditions. Observational analyses of neuraxial procedures indicate that the incidence of PDPH and other complications varies with technique and patient characteristics, underscoring the importance of technical precision and individualized care. [25]
+The expansion of spinal anesthesia into ambulatory surgery further stimulated the need for selective and optimized approaches. Reviews focusing on spinal anesthesia in outpatient settings report that the use of short-acting local anesthetics and careful dosing strategies can reduce recovery time and facilitate early discharge. These findings reinforced the concept that spinal anesthesia should be customized rather than uniformly administered in a bilateral fashion for all patients. [26]
+Comparative studies evaluating spinal versus general anesthesia in orthopedic and spine surgeries have demonstrated benefits such as reduced operative time, lower postoperative pain scores, and decreased complication rates in selected populations. Such evidence encouraged anesthesiologists to refine neuraxial techniques to maximize hemodynamic stability and enhance recovery profiles. These developments laid the groundwork for exploring modifications in block distribution, including unilateral approaches. [27]
+Baricity manipulation became a central element in achieving selective spinal anesthesia. Systematic reviews comparing hyperbaric and isobaric bupivacaine formulations confirm that baricity significantly influences onset time, duration, and spread of block. By adjusting patient position and solution density, anesthesiologists gained greater control over anesthetic distribution, enabling more targeted blockade while limiting excessive cephalad or contralateral spread. [28]
+Emergence of Unilateral Spinal Anesthesia
+Unilateral spinal anesthesia emerged as a refinement aimed at restricting neural blockade predominantly to the operative side. The theoretical advantage lies in reducing contralateral sympathetic blockade, thereby minimizing hypotension and promoting greater hemodynamic stability. Literature reviews dedicated to unilateral spinal anesthesia describe the technique as cost-effective, technically feasible, and particularly beneficial in patients with cardiovascular risk factors. Success depends on low-dose hyperbaric solutions, slow injection, and maintenance of lateral positioning to favor gravitational distribution. [29]
+Clinical experience and evidence syntheses indicate that unilateral spinal anesthesia can result in lower incidence of hypotension, faster motor recovery, and reduced urinary retention compared with traditional bilateral blocks when appropriately performed. However, achieving consistent unilaterality requires strict adherence to technical parameters, including dose limitation and prolonged lateral positioning. These findings reflect the broader evolution of spinal anesthesia from a uniformly bilateral block to a more nuanced, patient-centered technique. [30]
+Further contemporary analyses of spinal anesthesia techniques highlight ongoing innovations in neuraxial practice, including the integration of spinal anesthesia within enhanced recovery pathways. Such approaches emphasize early mobilization, optimized analgesia, and reduced perioperative complications. Within this context, unilateral spinal anesthesia represents a logical progression in the evolution of subarachnoid block, aligning anesthetic distribution with the surgical requirement of unilateral lower limb procedures while prioritizing hemodynamic stability. [31]
+In summary, the historical development of spinal anesthesia reflects continuous refinement in equipment, pharmacology, and technique. The transition from classical bilateral blockade toward selective and unilateral strategies represents an evidence-driven response to the need for improved safety, hemodynamic stability, and faster recovery. This evolution provides the conceptual and scientific foundation for comparative evaluation of classical versus unilateral subarachnoid block in patients undergoing lower limb surgeries. [32]
+Physiology of spinal anesthesia
+Spinal anesthesia produces surgical anesthesia by depositing a small volume of local anesthetic into the cerebrospinal fluid, allowing the drug to bathe spinal nerve roots and the superficial spinal cord structures. The clinical effect is a reversible interruption of impulse transmission, creating a predictable sequence of autonomic, sensory, and motor changes that depend on the extent of neuraxial spread, local anesthetic potency, and patient-specific physiology. Understanding the physiological basis of these effects is essential because the same mechanisms that provide excellent operative conditions can also produce abrupt cardiovascular changes, particularly hypotension and bradycardia, which are central to the primary outcome of hemodynamic stability in the present study. [33]
+Mechanism of action at the nerve root level
+Local anesthetics act primarily by blocking voltage-gated sodium channels in neuronal membranes, preventing action potential propagation along afferent and efferent fibers. In spinal anesthesia, the drug reaches nerve roots and dorsal root ganglia directly through cerebrospinal fluid exposure, producing dense segmental anesthesia. The onset and extent of blockade are influenced by physicochemical properties of the drug (lipid solubility, pKa, protein binding), the concentration delivered to neural tissue, and the duration of exposure at a given spinal level. Clinical physiology is therefore strongly linked to how the intrathecal solution spreads and “fixes” within the neuraxial space, which is affected by baricity and patient position and is particularly relevant to techniques intended to limit spread such as unilateral spinal anesthesia. [35]
+Differential blockade and functional implications
+A key physiological feature of spinal anesthesia is differential blockade. Small, myelinated preganglionic sympathetic fibers (B fibers) are generally blocked earlier than larger sensory fibers, with motor fibers often requiring greater drug exposure to achieve dense block. This explains why hemodynamic changes can occur rapidly even before complete sensory anesthesia is established. Sympathetic blockade typically extends several dermatomes above the sensory block level, meaning that a patient may develop vasodilation and hypotension despite an apparently “modest” sensory level. The degree of sympathetic block is therefore a primary determinant of early cardiovascular instability, and limiting unnecessary sympathetic spread is a key rationale for selective and unilateral approaches. [33]
+Sympathetic blockade and the physiology of hypotension
+The most important hemodynamic consequence of spinal anesthesia is sympathectomy. Blockade of sympathetic vasoconstrictor outflow causes arterial and venous vasodilation. Venodilation increases capacitance and promotes peripheral pooling, reducing venous return and preload. Arteriolar dilation decreases systemic vascular resistance, lowering mean arterial pressure. The relative contribution of reduced preload versus reduced afterload varies by patient physiology and block height, but both mechanisms can coexist and amplify each other, particularly when the block is high or when baseline intravascular volume is low. This physiologic pattern is consistently highlighted in modern syntheses of spinal anesthesia–induced hypotension, which describe the syndrome as a predictable consequence of neuraxial sympathectomy rather than a sporadic complication. [33]
+The clinical expression of hypotension depends on compensatory reflexes and cardiovascular reserve. In healthy individuals, reductions in systemic vascular resistance and venous return are partly buffered by baroreflex-mediated sympathetic activation above the level of block and by tachycardia. However, spinal anesthesia can blunt these compensatory pathways by directly blocking sympathetic efferents to the heart (T1–T4) and by modifying afferent reflex signaling. In patients with limited autonomic responsiveness such as the elderly or those with diabetic autonomic neuropathy baroreflex compensation may be reduced, making hypotension more frequent and more severe. Consequently, hemodynamic stability under spinal anesthesia reflects an interaction between the imposed sympathectomy and the patient’s reflex capacity to counteract it. [36]
+Reflex control systems relevant to spinal anesthesia
+Blood pressure homeostasis is maintained through coordinated autonomic reflex mechanisms that adjust vascular tone, heart rate, and cardiac contractility. Sympathetic nervous system activity plays a central role in regulating systemic vascular resistance and cardiac output in response to physiological perturbations. Reviews of sympathetic cardiovascular control emphasize that sympathetic tone is a major determinant of baseline blood pressure and the capacity to respond to sudden vasodilation or volume shifts. When spinal anesthesia removes sympathetic vasoconstrictor tone in blocked segments, the remaining unblocked sympathetic pathways and reflex systems must compensate; if they cannot, hypotension ensues. This provides a mechanistic explanation for why the same anesthetic dose can produce minimal instability in one patient and profound hypotension in another. [38]
+The arterial baroreflex is particularly important because it modulates sympathetic vasomotor outflow and parasympathetic cardiac activity on a beat-to-beat basis. Contemporary physiological models describe baroreflex “resetting” as a dynamic process that adapts autonomic output to the prevailing state. Under spinal anesthesia, rapid reductions in venous return and blood pressure can challenge this system. If baroreflex gain is reduced or if competing reflexes promote vagal dominance, hypotension may be accompanied by bradycardia, representing a high-risk hemodynamic state. Understanding these reflex interactions is clinically important because bradycardia after spinal anesthesia may be a warning sign of significant circulatory compromise rather than a benign change in heart rate alone. [39]
+Bradycardia, cardioinhibitory reflexes, and the Bezold–Jarisch concept
+Bradycardia during spinal anesthesia can result from several physiological pathways: blockade of cardiac sympathetic fibers, decreased venous return with reduced stretch at the sinoatrial node, and activation of cardioinhibitory reflexes. The Bezold–Jarisch reflex is frequently discussed as a contributor when hypotension and bradycardia occur together, particularly in circumstances of reduced ventricular filling. Contemporary clinical reviews of spinal anesthesia–induced hypotension highlight “paradoxical” activation of cardioinhibitory receptors as part of the hemodynamic syndrome, emphasizing that severe bradycardia should prompt immediate attention to preload, vasodilation, and the adequacy of perfusion. [33]
+Evidence linking serotonin pathways to cardioinhibitory reflex physiology provides additional mechanistic context. Reviews integrating cardiovascular reflex biology and clinical data describe how serotonin-sensitive receptors and vagal afferent signaling can contribute to vasovagal-like patterns of hypotension and bradycardia, and they discuss clinical observations that serotonin reuptake transporter inhibition may reduce hypotension and bradycardia during spinal anesthesia in some settings. While this does not replace core management strategies, it supports the broader concept that spinal anesthesia hemodynamics are influenced not only by sympathectomy but also by reflex pathways that can shift autonomic balance toward vagal predominance. [40]
+Cardiac and vascular mechanoreceptors carried by vagal afferents also contribute to reflex control of circulation. Physiological reviews describing heterogeneity among cardiac, coronary, and pulmonary artery vagal mechanoreceptors explain how different receptor populations can elicit distinct reflex effects on heart rate and vascular tone. In the setting of spinal anesthesia, where venous return and ventricular filling may fall, mechanoreceptor-driven reflexes may interact with baroreflex pathways and with the direct effects of sympathetic blockade. This complexity helps explain why bradycardia and hypotension sometimes occur abruptly and why patient-specific factors (baseline vagal tone, hydration status, medication use) can meaningfully influence the hemodynamic trajectory after intrathecal injection. [41]
+Clinical significance of hypotension and organ perfusion
+The physiological importance of maintaining blood pressure under spinal anesthesia extends beyond numeric values; it is fundamentally about preserving organ perfusion. Cerebral perfusion can be particularly sensitive to abrupt drops in mean arterial pressure, especially if autoregulation is impaired or baseline blood pressure is high. Clinical work using near-infrared spectroscopy during spinal anesthesia demonstrates that decreases in arterial pressure can correlate with reductions in cerebral oxygenation-related measures, reinforcing the clinical rationale for prompt recognition and treatment of hypotension. In lower limb surgery patients often older and comorbid this physiology supports prioritizing techniques that reduce the incidence and severity of hypotension. [37]
+Determinants of hemodynamic response and implications for selective techniques
+Several modifiable and non-modifiable factors influence the hemodynamic response to spinal anesthesia. Non-modifiable factors include age-related reductions in autonomic responsiveness, reduced ventricular compliance, and comorbidity-related autonomic dysfunction. Modifiable factors include intrathecal dose, baricity, injection speed, patient position, fluid strategy, and vasopressor protocol. Reviews focusing on the “iatrogenic sympathectomy” of spinal anesthesia emphasize that combined approaches dose optimization, adequate fluid management, and timely vasopressor support are more effective than relying on any single preventive measure. These principles also justify investigating technique-based solutions (such as unilateral spinal anesthesia) that attempt to reduce the magnitude of sympathectomy by limiting spread rather than only treating hypotension after it occurs. [35]
+Vasopressor physiology further illustrates why limiting sympathetic blockade may be advantageous. Hypotension after spinal anesthesia is strongly linked to reduced systemic vascular resistance, which is effectively countered by alpha-adrenergic vasoconstriction. Comparative analyses of vasopressors used during spinal anesthesia describe how pure alpha agonists may restore pressure but can trigger reflex bradycardia and reduce cardiac output, whereas agents with mild beta activity may better preserve heart rate and cardiac output while still supporting vascular tone. This physiology reinforces the clinical value of preventing excessive sympathectomy in the first place, an aim aligned with unilateral spinal anesthesia so that pharmacologic rescue is needed less often and at lower doses. [34]
+The physiology of spinal anesthesia is defined by predictable neural blockade that provides excellent surgical conditions but can produce significant cardiovascular effects through sympathetic denervation, reduced venous return, decreased systemic vascular resistance, and altered reflex control of heart rate and vascular tone. Bradycardia, especially when accompanied by hypotension, reflects potentially serious hemodynamic compromise influenced by sympathetic blockade and cardioinhibitory reflex mechanisms. Patient reserve and autonomic responsiveness strongly shape clinical presentation. These physiological foundations directly support the rationale for comparing classical bilateral and unilateral spinal anesthesia: if unilateral block limits the extent of sympathectomy while maintaining adequate operative anesthesia, it should logically improve hemodynamic stability and reduce the need for rescue interventions. [33]
+Sympathetic blockade and cardiovascular physiology
+The defining physiological event after intrathecal injection is blockade of preganglionic sympathetic fibers, which produces a rapid reduction in vasomotor tone in the blocked segments. The clinical expression of this sympathectomy depends on the level and extent of the block and on the patient’s ability to compensate through unblocked sympathetic pathways, baroreflex mechanisms, and intrinsic cardiac reserve. When vasoconstrictor tone is withdrawn, venous capacitance increases and blood pools in dependent venous beds, reducing venous return to the heart. Simultaneously, arteriolar dilation reduces systemic vascular resistance, lowering mean arterial pressure. The relative importance of decreased preload versus decreased afterload varies across individuals, and this variability is important when interpreting why patients with apparently similar sensory levels can demonstrate different hemodynamic responses following spinal anesthesia. [33]
+Hemodynamic pattern after spinal anesthesia
+In many patients, the earliest measurable hemodynamic effect is a fall in arterial pressure within minutes of injection, often preceding the achievement of peak sensory level. This temporal sequence is consistent with differential blockade, where sympathetic fibers are affected earlier than sensory fibers. Clinically, the blood pressure decline may present as a mild, short-lived change requiring no intervention or as a severe episode necessitating vasopressors, fluid administration, and positional adjustments. Contemporary clinical syntheses emphasize that spinal anesthesia–induced hypotension is a frequent and predictable phenomenon, driven primarily by neuraxial sympathectomy and compounded by cardioinhibitory reflex responses in some circumstances. The practical implication is that prevention and early treatment are integral to safe spinal anesthesia practice rather than optional adjuncts. [33]
+Venous return, stroke volume, and cardiac output
+A central question in spinal anesthesia physiology is whether hypotension is driven primarily by reduced systemic vascular resistance or by reductions in cardiac output. In older adults, the contribution of reduced venous return and stroke volume may be particularly prominent because of age-related reductions in ventricular compliance, diminished ability to augment heart rate, and higher prevalence of autonomic dysfunction. Continuous noninvasive hemodynamic monitoring studies in elderly patients have demonstrated that hypotension and reduced cardiac output after spinal anesthesia can be strongly associated with reductions in stroke volume, with relatively little change in systemic vascular resistance in some cohorts. This pattern supports the clinical observation that “preload sensitivity” becomes more important with aging, and that interventions which preserve venous return (positioning, compression, judicious fluids) can meaningfully influence blood pressure stability. [42]
+Influence of dose and block height on hemodynamics
+Dose, concentration, and spread of the intrathecal local anesthetic determine the degree of sympathetic blockade and, therefore, the magnitude of hemodynamic change. In lower limb surgeries, traditional bilateral spinal anesthesia often employs doses designed to ensure high success and adequate duration. However, in elderly hip fracture populations, lower intrathecal doses have been associated with fewer hypotensive events without necessarily compromising intraoperative comfort in selected settings. Systematic evaluation of randomized trials in elderly hip repair patients suggests that “low-dose spinal” strategies can reduce the incidence of hypotension compared with higher-dose regimens, underscoring that dose selection is not only an efficacy decision but also a hemodynamic safety decision. These findings are directly relevant to the broader concept underpinning unilateral spinal anesthesia: minimizing unnecessary sympathetic spread may improve hemodynamic stability. [43]
+Block height is clinically important because sympathetic blockade extends above the sensory level, and higher blocks increase the proportion of the vascular bed that loses vasomotor tone. Moreover, involvement of cardiac accelerator fibers (T1–T4) can reduce heart rate and contractility, limiting compensatory tachycardia when blood pressure falls. In practical terms, patients with high thoracic sympathetic block may exhibit a pattern of combined hypotension and bradycardia, which carries greater risk of symptomatic hypoperfusion and may require more urgent treatment. Therefore, techniques designed to confine block distribution through baricity, position, and dose have a strong physiological rationale in hemodynamic protection.
+Bradycardia and reflex mechanisms during spinal anesthesia
+Bradycardia during spinal anesthesia may be multifactorial: reduced venous return decreases stretch at the sinoatrial node, blockade of sympathetic fibers reduces chronotropic drive, and cardioinhibitory reflex pathways may become dominant in circumstances of underfilled ventricles. The Bezold–Jarisch concept is commonly invoked to explain episodes where hypotension and bradycardia occur together, particularly after abrupt reductions in preload. While many patients demonstrate modest decreases in heart rate without clinical consequence, marked bradycardia should be interpreted as a potential marker of significant hemodynamic compromise rather than as an isolated rhythm change. Contemporary clinical reviews emphasize that bradycardia after spinal anesthesia warrants prompt attention to perfusion and circulatory stability, because it may indicate that compensatory autonomic responses are failing. [33]
+Patient positioning and mechanical strategies to preserve hemodynamics
+Positioning modifies the hemodynamic response by influencing venous return and distribution of intrathecal drug. In obstetric practice, left lateral tilt is used to reduce aortocaval compression and improve venous return, and prospective hemodynamic observation has demonstrated improvements in cardiac output and mean arterial pressure when full-term parturients are moved from supine to tilted positions after spinal block. Although the mechanism differs in non-obstetric lower limb surgery, the physiological principle is transferable: when venous return is threatened, positional measures that improve preload can help stabilize blood pressure. In unilateral spinal anesthesia, positioning also has a drug-distribution purpose, because maintaining lateral decubitus supports gravitational confinement of hyperbaric local anesthetic toward the dependent side; this may simultaneously limit sympathectomy and preserve systemic vascular tone. [46]
+Mechanical measures that reduce venous pooling can also attenuate hypotension. Trials comparing pharmacologic vasopressor prophylaxis with lower-extremity compression strategies illustrate that mechanical support can reduce blood pressure decline relative to no intervention, likely by limiting venodilation-related pooling and helping maintain stroke volume early after spinal injection. However, pharmacologic prophylaxis may be more effective in stabilizing systemic vascular resistance, highlighting that hypotension physiology often includes both capacitance (venous) and resistance (arteriolar) components. These findings support the contemporary view that optimal hemodynamic management often requires combined strategies rather than reliance on a single measure. [45]
+Vasopressor physiology and implications for “stability” outcomes
+Vasopressor therapy works by restoring vascular tone and, depending on agent selection, supporting heart rate and contractility. Alpha-agonists predominantly increase systemic vascular resistance and can correct hypotension effectively, but they may provoke reflex bradycardia and potentially reduce cardiac output in susceptible patients. Agents with mild beta-adrenergic activity can better preserve heart rate and cardiac output while still restoring vascular tone. Comparative evidence in spinal anesthesia settings has increasingly examined norepinephrine as an alternative to phenylephrine, based on its combined alpha and mild beta effects and potentially lower bradycardia incidence, while maintaining efficacy in blood pressure support. The physiological relevance to your study is that the “need for rescue vasopressors” can be viewed as an indirect marker of how much sympathectomy the spinal technique produced, and whether the technique inherently preserved vascular tone and venous return. [34]
+Hemodynamic consequences and postoperative risk in older adults
+In older surgical patients, intraoperative hypotension has broader implications because it can contribute to organ hypoperfusion and postoperative complications. Observational work in elderly noncardiac surgery cohorts demonstrates that vasopressor exposure and hypotension metrics can correlate with early postoperative acute kidney injury, reinforcing why maintaining stable perfusion pressures is a major clinical objective. In lower limb surgery populations often elderly this provides a strong justification for evaluating spinal anesthesia techniques not only for anesthetic adequacy but also for their capacity to reduce hypotension severity and minimize vasopressor requirements. It also supports the clinical relevance of your primary objective: hemodynamic stability is a meaningful endpoint linked to patient safety rather than merely an intraoperative convenience variable. [48]
+Selective neuraxial approaches and the physiology of “less sympathectomy”
+Selective strategies in neuraxial anesthesia are grounded in the principle that unilateral or lower-dose blocks can reduce the extent of sympathetic denervation while still providing adequate anesthesia for unilateral surgery. Evidence from elderly hip fracture surgery comparing hypobaric unilateral spinal anesthesia with general anesthesia showed fewer episodes of severe hypotension in the unilateral spinal group, supporting the premise that targeted neuraxial techniques can be hemodynamically advantageous in high-risk populations. While this comparison is not identical to classical bilateral versus unilateral subarachnoid block using hyperbaric ropivacaine, it adds physiological plausibility to the hypothesis that restricting block spread reduces clinically significant hypotension. [44]
+Hemodynamic changes after spinal anesthesia arise primarily from sympathetic blockade, producing venous pooling, reduced preload, decreased systemic vascular resistance, and when compensatory mechanisms are insufficient hypotension. In older adults, reductions in stroke volume and cardiac output may contribute prominently, and dose reduction strategies have been associated with fewer hypotensive events in elderly hip surgery populations. Positional and mechanical measures can support venous return, while vasopressors restore vascular tone but introduce their own physiological trade-offs. Selective approaches such as unilateral spinal anesthesia are physiologically appealing because they aim to reduce the magnitude of sympathectomy at its source by limiting spread, which should translate into improved hemodynamic stability and reduced rescue intervention core outcomes aligned with the present study’s primary objective. [42]
+Hemodynamic Instability in Classical Subarachnoid Block
+Incidence of Hypotension in Classical Spinal Anesthesia
+Classical bilateral subarachnoid block reliably produces dense sensory and motor anesthesia but is frequently associated with hypotension due to extensive sympathetic blockade. The reported incidence of spinal anesthesia–induced hypotension varies depending on patient population and definition criteria; however, it remains one of the most common intraoperative complications. Large clinical series in obstetric anesthesia report hypotension in more than half of patients receiving spinal anesthesia, highlighting the hemodynamic impact of bilateral sympathectomy. Although obstetric physiology differs from non-pregnant populations, these findings underscore the intrinsic cardiovascular effects of classical spinal block. [49]
+In non-obstetric populations, hypotension remains common, particularly in elderly patients undergoing orthopedic procedures. Studies evaluating spinal anesthesia in hip fracture surgery demonstrate that higher intrathecal doses are associated with increased incidence of hypotensive episodes. These findings suggest that classical bilateral dosing strategies may contribute to hemodynamic instability, especially in patients with limited physiological reserve. [52]
+Pathophysiological Basis of Hemodynamic Instability
+The mechanism underlying hypotension during classical spinal anesthesia is primarily related to bilateral sympathetic blockade. Loss of vasomotor tone results in arterial and venous dilation, reduced systemic vascular resistance, and decreased venous return. When block height extends above T6, the risk of hypotension increases significantly, as a larger portion of the vascular bed loses sympathetic control. Cross-sectional analyses have identified higher sensory block levels as independent predictors of post-spinal hypotension, reinforcing the importance of limiting unnecessary cephalad spread. [51]
+In addition to vasodilation, reduced preload contributes to decreased stroke volume and cardiac output. In elderly patients, spinal anesthesia–induced hypotension has been shown to be associated with significant reductions in stroke volume rather than isolated changes in systemic vascular resistance. This pattern reflects age-related changes in cardiac compliance and autonomic responsiveness, which limit compensatory mechanisms. Consequently, classical bilateral spinal anesthesia may produce more pronounced cardiovascular depression in older surgical populations. [42]
+Risk Factors for Hypotension and Bradycardia
+Multiple patient-related and procedural factors influence the likelihood and severity of hypotension during classical subarachnoid block. Baseline systolic blood pressure, higher sensory block levels, prolonged interval between intrathecal injection and incision, and operator-related variables have been associated with increased risk of hypotension. Prospective evaluations during cesarean delivery have demonstrated that patients with lower baseline systolic blood pressure and higher sensory block heights are more prone to significant blood pressure declines. Although derived from obstetric cohorts, these risk factors highlight the interaction between block extent and patient physiology. [50]
+Bradycardia may accompany hypotension when cardiac accelerator fibers are involved or when reduced venous return activates cardioinhibitory reflexes. Clinical reviews emphasize that bradycardia during spinal anesthesia should be interpreted as a potential warning sign of severe hemodynamic compromise rather than an isolated rhythm disturbance. Prompt recognition and treatment are essential to prevent progression to cardiovascular collapse. [33]
+Elderly individuals are particularly vulnerable to both hypotension and bradycardia due to diminished baroreceptor sensitivity and coexisting cardiovascular disease. Age-related autonomic dysfunction reduces compensatory tachycardia and vasoconstriction, increasing dependence on pharmacologic support during classical bilateral block. Observational studies in elderly noncardiac surgery populations have demonstrated associations between intraoperative hypotension, vasopressor use, and early postoperative organ dysfunction, further highlighting the clinical importance of maintaining stable hemodynamics. [53]
+Vasopressor Requirements and Hemodynamic Support
+Management of hypotension during classical spinal anesthesia frequently involves vasopressor administration. Phenylephrine and ephedrine have traditionally been used to restore blood pressure by increasing systemic vascular resistance and, in the case of ephedrine, supporting cardiac output. Comparative studies indicate that while alpha-adrenergic agonists effectively correct hypotension, they may induce reflex bradycardia or alter cardiac output. Norepinephrine has been investigated as an alternative with combined alpha and mild beta activity, potentially offering improved heart rate stability while maintaining arterial pressure. [54]
+Mechanical measures have also been evaluated as adjuncts to pharmacologic therapy. Lower extremity compression has been shown to attenuate early declines in systolic blood pressure compared with no intervention, likely by limiting venous pooling. However, mechanical strategies alone are generally less effective than vasopressor prophylaxis, indicating that arterial vasodilation remains a major contributor to hypotension during classical bilateral block. [55]
+The cumulative vasopressor requirement during surgery may serve as an indirect measure of the degree of sympathectomy produced by spinal anesthesia. Observational data suggest that higher intraoperative vasopressor doses are associated with adverse postoperative outcomes such as acute kidney injury in elderly patients. While these associations do not imply direct causation, they emphasize that hemodynamic instability and its management are clinically significant beyond the immediate intraoperative period. [53]
+Clinical Consequences of Hemodynamic Instability
+Repeated or prolonged hypotensive episodes during spinal anesthesia may impair perfusion to vital organs. In elderly orthopedic patients, intraoperative hypotension has been linked to increased risk of postoperative complications, delayed mobilization, and extended hospitalization. Given that lower limb surgeries often involve patients with multiple comorbidities, minimizing intraoperative circulatory disturbances is critical for improving recovery outcomes. Enhanced recovery protocols increasingly emphasize stable hemodynamics as a key component of perioperative optimization. [57]
+Meta-analytic evidence in elderly hip fracture populations indicates that lower intrathecal doses can reduce the incidence of hypotension without compromising surgical conditions, suggesting that limiting sympathetic spread may enhance safety. These findings provide indirect support for exploring alternative spinal techniques that reduce bilateral sympathetic blockade while maintaining adequate anesthesia. [52]
+Limitations of Classical Bilateral Block and Need for Alternative Approaches
+Although classical bilateral spinal anesthesia remains highly effective for achieving surgical anesthesia, its intrinsic association with extensive sympathetic blockade poses challenges in maintaining hemodynamic stability. The predictable occurrence of hypotension, frequent vasopressor use, and vulnerability of elderly patients highlight the need for refined techniques. Strategies that reduce block height or confine distribution may theoretically limit systemic vasodilation and reduce cardiovascular compromise.
+Evidence from selective neuraxial approaches, including unilateral spinal anesthesia in elderly hip fracture surgery, has demonstrated fewer severe hypotensive episodes compared with alternative anesthetic strategies. While not directly equivalent to classical versus unilateral hyperbaric ropivacaine comparisons, these findings support the concept that reducing the extent of sympathectomy may improve intraoperative stability. [44]
+In summary, classical subarachnoid block is associated with a substantial incidence of hypotension and bradycardia due to bilateral sympathetic blockade. Risk factors include higher block height, larger intrathecal doses, lower baseline blood pressure, and advanced age. Management often requires vasopressors and adjunctive measures, reflecting the magnitude of physiological disturbance. These considerations provide strong justification for comparative evaluation of classical and unilateral spinal anesthesia techniques in patients undergoing unilateral lower limb surgeries, where limiting sympathetic spread may enhance hemodynamic stability while preserving anesthetic efficacy.
+Concept and Technique of Unilateral Subarachnoid Block
+Definition and Theoretical Basis
+Unilateral spinal anesthesia is a modification of the conventional bilateral subarachnoid block in which the distribution of intrathecal local anesthetic is preferentially confined to one side of the spinal canal. The primary objective of this technique is to achieve adequate sensory and motor blockade in the operative limb while minimizing contralateral sympathetic involvement. By limiting the extent of sympathectomy, unilateral spinal anesthesia aims to reduce the incidence and severity of hypotension and bradycardia, thereby improving overall hemodynamic stability. This approach is particularly relevant in unilateral lower limb surgeries, where bilateral block may represent unnecessary physiological burden. [60]
+The theoretical foundation of unilateral spinal anesthesia rests on gravitational control of intrathecal drug spread. Hyperbaric solutions, being denser than cerebrospinal fluid, migrate toward the dependent side when the patient is maintained in the lateral decubitus position. If sufficient time is allowed for fixation of the anesthetic before repositioning, the block can remain predominantly unilateral. Reviews of unilateral spinal anesthesia emphasize that this selective technique is feasible, reproducible, and potentially advantageous in reducing cardiovascular disturbances when carefully performed. [29]
+Historical Development of Unilateral Technique
+The concept of selective spinal blockade emerged from attempts to reduce complications associated with extensive bilateral sympathetic block. Early clinical investigations demonstrated that reducing the intrathecal dose and maintaining lateral positioning could produce asymmetric sensory and motor blockade. Randomized trials comparing unilateral and bilateral spinal anesthesia for lower limb surgery showed that unilateral techniques were associated with lower incidence of hypotension and reduced vasopressor requirement, without compromising surgical anesthesia in most patients. These findings stimulated further research into dose optimization and positioning strategies. [61]
+Subsequent controlled studies confirmed that low-dose hyperbaric bupivacaine administered in the lateral position could reliably produce unilateral block in a high proportion of patients. Compared with conventional bilateral techniques, unilateral spinal anesthesia demonstrated faster motor recovery and shorter time to ambulation, which are important advantages in day-care and orthopedic settings. These benefits reinforced the clinical relevance of selective neuraxial blockade. [62]
+Technical Factors Influencing Unilateral Block
+Successful unilateral spinal anesthesia depends on meticulous attention to technical variables. The most critical determinants include baricity of the anesthetic solution, total dose administered, injection speed, needle orientation, and duration of maintained lateral positioning. Hyperbaric solutions facilitate gravitational control of distribution, whereas isobaric solutions may produce less predictable asymmetry. Systematic reviews comparing hyperbaric and isobaric intrathecal formulations confirm that baricity significantly influences block characteristics, supporting the preferential use of hyperbaric solutions for unilateral techniques. [28]
+Dose plays a pivotal role in maintaining selectivity. Lower intrathecal doses are associated with higher rates of unilateral block and reduced hypotension. Clinical trials have demonstrated that reducing bupivacaine dose while maintaining lateral positioning for 10–20 minutes increases the likelihood of successful unilateral anesthesia and decreases contralateral sympathetic involvement. These findings align with the physiological principle that smaller doses limit cephalad spread and extent of sympathetic blockade. [63]
+Injection speed and needle orientation also influence distribution. Slow injection allows laminar flow and may reduce turbulent mixing within cerebrospinal fluid, promoting more localized anesthetic spread. Additionally, directing the needle bevel toward the dependent side has been suggested to encourage preferential distribution of hyperbaric solution. Although the magnitude of this effect remains debated, experimental and clinical observations support the importance of technique consistency in achieving unilateral block. [64]
+The duration of lateral positioning after intrathecal injection is another key determinant. Studies have shown that maintaining the patient in the lateral decubitus position for at least 10–15 minutes improves fixation of the block on the dependent side and reduces conversion to bilateral distribution. Insufficient positioning time increases the risk of bilateralization once the patient is repositioned supine. Therefore, strict adherence to positioning protocol is essential for reproducibility of unilateral anesthesia. [65]
+Hemodynamic Advantages of Unilateral Spinal Anesthesia
+The principal clinical advantage proposed for unilateral spinal anesthesia is improved hemodynamic stability. Randomized controlled trials comparing unilateral and bilateral spinal anesthesia in lower limb surgeries have demonstrated significantly lower incidence of hypotension and reduced vasopressor requirements in the unilateral groups. These findings suggest that limiting contralateral sympathetic blockade effectively preserves systemic vascular resistance and venous return. [61]
+Meta-analytical evaluations of selective spinal techniques further indicate that unilateral anesthesia is associated with decreased frequency of cardiovascular adverse events and faster recovery of motor function. Reduced sympathetic spread appears to be the primary mechanism underlying improved stability. Importantly, most studies report comparable adequacy of surgical anesthesia between unilateral and classical bilateral approaches, provided that technical parameters are carefully controlled. [66]
+In elderly patients undergoing orthopedic procedures, unilateral spinal anesthesia has shown particular promise. Reduced hemodynamic fluctuations and earlier mobilization are especially valuable in this population, where hypotension may precipitate myocardial ischemia, renal dysfunction, or postoperative delirium. Evidence from randomized hip fracture studies supports the feasibility and safety of selective spinal approaches in high-risk elderly cohorts. [44]
+Limitations and Technical Challenges
+Despite its theoretical advantages, unilateral spinal anesthesia is technically sensitive and may not consistently achieve perfect lateralization. Conversion to bilateral block can occur if dose is excessive, positioning is inadequate, or anatomical factors favor redistribution. Some studies report variable success rates depending on operator experience and strict adherence to protocol. Therefore, standardization of technique is essential for reliable outcomes. [67]
+Additionally, there is a potential risk of inadequate anesthesia if the block remains too localized or fails to achieve sufficient dermatomal spread on the operative side. Careful titration of dose and thorough assessment of sensory and motor blockade before incision are necessary to avoid intraoperative discomfort or need for conversion to general anesthesia. Nonetheless, when performed correctly, unilateral spinal anesthesia has demonstrated high success rates comparable to bilateral techniques. [62]
+Relevance to Hyperbaric Ropivacaine
+Most early studies on unilateral spinal anesthesia employed hyperbaric bupivacaine. However, ropivacaine, due to its favorable cardiotoxicity profile and differential sensory-motor block characteristics, has emerged as an alternative intrathecal agent. Pharmacokinetic and pharmacodynamic analyses indicate predictable spread and duration when administered intrathecally. Hyperbaric formulations further enhance gravitational control, making ropivacaine suitable for unilateral techniques. Comparative studies of hyperbaric ropivacaine versus bupivacaine in spinal anesthesia demonstrate effective sensory block with potentially faster motor recovery, suggesting potential advantages in selective approaches. [12]
+Given the physiological rationale, technical feasibility, and emerging clinical evidence, unilateral spinal anesthesia represents a logical evolution of neuraxial practice for unilateral lower limb surgeries. By minimizing unnecessary sympathetic blockade while preserving adequate anesthesia, it offers a promising strategy to enhance hemodynamic stability. Nevertheless, direct comparative evaluation between classical and unilateral subarachnoid block using hyperbaric ropivacaine remains limited, underscoring the need for systematic investigation. [29]
+In summary, unilateral spinal anesthesia is a selective neuraxial technique designed to confine block to the operative side through controlled dosing, hyperbaric solutions, and maintained lateral positioning. Evidence suggests reduced hypotension, lower vasopressor requirement, and faster motor recovery compared with classical bilateral block, particularly in elderly and high-risk patients. These characteristics strongly justify comparative evaluation in the context of lower limb surgeries using hyperbaric ropivacaine as the intrathecal agent.
+Role of Baricity in Spinal Anesthesia
+Concept of Baricity and Intrathecal Drug Distribution
+Baricity refers to the density of a local anesthetic solution relative to cerebrospinal fluid (CSF). It is a critical determinant of the cephalocaudal and lateral spread of intrathecal drugs. Solutions may be classified as hyperbaric (denser than CSF), isobaric (similar density), or hypobaric (less dense than CSF). When injected into the subarachnoid space, the distribution of these solutions is influenced by gravity, patient position, spinal curvature, and CSF dynamics. Hyperbaric solutions tend to settle in dependent areas of the spinal canal, whereas hypobaric solutions rise toward non-dependent regions. This gravitational behavior forms the physiological basis for selective and unilateral spinal anesthesia techniques. [68]
+Experimental and clinical studies have demonstrated that minor differences in density can significantly alter block characteristics. Variations in CSF density among individuals, influenced by factors such as age, temperature, and protein concentration, may further modify drug spread. Investigations into CSF baricity interactions confirm that precise density adjustments are essential for predictable anesthetic distribution. Consequently, understanding baricity is fundamental when attempting to limit block spread and optimize hemodynamic stability. [69]
+Hyperbaric Solutions and Predictable Spread
+Hyperbaric spinal anesthetic solutions are typically prepared by adding dextrose to increase density. These solutions demonstrate more predictable gravitational spread compared with isobaric preparations. Systematic reviews comparing hyperbaric and isobaric bupivacaine for spinal anesthesia indicate that hyperbaric formulations produce faster onset and more consistent block levels, while isobaric solutions may result in less predictable cephalad distribution. This predictability makes hyperbaric solutions particularly useful in procedures requiring controlled block height, including unilateral spinal anesthesia. [28]
+Clinical trials in lower limb surgeries have shown that hyperbaric bupivacaine provides reliable surgical anesthesia with reproducible sensory levels when patient positioning is standardized. The ability to manipulate distribution by adjusting patient posture enhances the precision of anesthetic delivery. Such gravitational control is central to unilateral techniques, where maintaining lateral decubitus allows selective deposition of the anesthetic solution on the operative side. [70]
+In addition to onset characteristics, hyperbaric solutions have demonstrated consistent regression profiles. Predictable two-segment regression times and block duration are advantageous in surgeries where recovery timeline is important. Studies comparing hyperbaric ropivacaine with hyperbaric bupivacaine confirm that baricity-adjusted ropivacaine maintains adequate anesthetic depth with favorable recovery characteristics, supporting its applicability in targeted spinal techniques. [71]
+Isobaric and Hypobaric Solutions: Clinical Implications
+Isobaric solutions, having similar density to CSF, tend to distribute more diffusely and are less influenced by gravity. While this may reduce extreme cephalad spread in some settings, it also limits the ability to intentionally confine the block to one side. Meta-analytical comparisons suggest that isobaric bupivacaine may produce more variable block heights and slower onset than hyperbaric preparations. For procedures where strict lateralization is desired, this unpredictability may reduce the success rate of unilateral block. [28]
+Hypobaric solutions, though less commonly used in lower limb surgery, have been explored in selective spinal techniques. Reviews of hypobaric spinal anesthesia indicate that such solutions may be useful when surgery is performed in specific positions, such as prone or jackknife positions, where upward migration is advantageous. However, for standard lateral positioning in lower limb surgery, hyperbaric solutions remain more practical for achieving dependent-side selectivity. [21]
+Baricity and Hemodynamic Stability
+The relationship between baricity and hemodynamic stability is indirect but clinically important. By influencing block height and distribution, baricity determines the extent of sympathetic blockade. Higher cephalad spread correlates with greater vasodilation and hypotension. Therefore, controlling block distribution through hyperbaric solutions and positional strategies may reduce excessive sympathectomy. Randomized studies evaluating unilateral spinal anesthesia with hyperbaric solutions have demonstrated lower incidence of hypotension compared with bilateral techniques, supporting the role of gravitational control in preserving hemodynamic stability. [61]
+Dose–baricity interaction is equally significant. Even hyperbaric solutions can produce bilateral block if administered in excessive volume or if lateral positioning is not maintained adequately. Clinical investigations confirm that reduced doses combined with hyperbaric formulations increase the probability of unilateral block and decrease cardiovascular side effects. These findings emphasize that baricity must be considered alongside dose and technique to achieve desired hemodynamic outcomes. [63]
+Baricity and Ropivacaine
+Ropivacaine has been developed in both isobaric and hyperbaric formulations for intrathecal use. Hyperbaric ropivacaine, achieved by addition of dextrose, exhibits gravitational behavior similar to hyperbaric bupivacaine but with distinct pharmacodynamic properties. Comparative clinical trials demonstrate that hyperbaric ropivacaine provides effective sensory anesthesia with relatively shorter duration of motor block compared with bupivacaine, potentially facilitating earlier ambulation. These characteristics make hyperbaric ropivacaine particularly suitable for unilateral spinal anesthesia in lower limb surgeries where both hemodynamic stability and rapid postoperative recovery are priorities. [72]
+Pharmacodynamic modeling studies indicate that ropivacaine’s intrathecal spread and regression correlate with dose and patient characteristics, reinforcing the importance of individualized dosing when hyperbaric formulations are used. Controlled distribution through baricity allows clinicians to exploit these pharmacological properties effectively. Consequently, hyperbaric ropivacaine represents a logical agent for comparative evaluation between classical bilateral and unilateral subarachnoid block. [12]
+Clinical Significance in Lower Limb Surgery
+In unilateral lower limb procedures, gravitational manipulation of hyperbaric solutions aligns anesthetic distribution with surgical laterality. Maintaining lateral positioning during fixation reduces contralateral sympathetic involvement and may lower vasopressor requirement. Evidence from randomized comparisons confirms that hyperbaric unilateral spinal anesthesia can achieve adequate sensory and motor block on the operative side with reduced hypotension compared with traditional bilateral approaches. These findings highlight baricity as a pivotal variable in optimizing spinal anesthesia technique. [61]
+In summary, baricity is a fundamental determinant of intrathecal anesthetic distribution and block characteristics. Hyperbaric solutions provide predictable, gravity-dependent spread that can be manipulated through patient positioning to achieve selective blockade. By controlling block height and lateralization, baricity influences the extent of sympathetic blockade and thus hemodynamic stability. The use of 0.75% hyperbaric ropivacaine in unilateral spinal anesthesia leverages these principles to potentially reduce hypotension while maintaining effective surgical anesthesia in lower limb procedures.
+Ropivacaine in Spinal Anesthesia
+Pharmacological Profile of Ropivacaine
+Ropivacaine is a long-acting amide local anesthetic and the pure S-enantiomer of propivacaine, structurally related to bupivacaine but developed with the objective of reducing cardiotoxicity and central nervous system toxicity. Its lower lipid solubility compared with bupivacaine contributes to a more favorable safety profile while maintaining effective sensory blockade. Experimental and clinical pharmacology studies have demonstrated that ropivacaine produces less depression of myocardial contractility and reduced arrhythmogenic potential than racemic bupivacaine at equipotent doses. These properties are particularly relevant in spinal anesthesia, where systemic absorption, although limited, may influence cardiovascular stability in vulnerable patients. [73]
+The mechanism of action of ropivacaine is similar to other amide local anesthetics, involving reversible blockade of voltage-gated sodium channels in nerve membranes. However, ropivacaine exhibits a greater degree of sensory-motor differentiation, often producing proportionally less intense motor block compared with bupivacaine. This characteristic has practical implications in lower limb surgeries, especially within enhanced recovery frameworks that prioritize early mobilization and reduced postoperative immobility. [70]
+Intrathecal Use and Dose Considerations
+Ropivacaine has been evaluated in both isobaric and hyperbaric formulations for intrathecal administration. Dose-ranging studies indicate that intrathecal ropivacaine provides effective anesthesia for infra-umbilical surgeries, with onset and duration influenced by dose and baricity. Randomized trials comparing different doses of intrathecal ropivacaine show that lower doses may reduce motor block intensity while maintaining adequate sensory anesthesia for lower limb procedures. This balance is clinically valuable when minimizing prolonged motor impairment is desired. [74]
+Comparative dose-finding investigations have also demonstrated that ropivacaine produces slightly shorter duration of sensory and motor blockade than bupivacaine at equivalent milligram doses. While this may necessitate careful planning for longer procedures, it may simultaneously reduce recovery time and facilitate early ambulation in shorter lower limb surgeries. Thus, dose optimization is critical when selecting ropivacaine for spinal anesthesia, particularly in unilateral techniques where controlled distribution and duration are important. [75]
+Comparison with Bupivacaine
+Bupivacaine has historically been the most widely used local anesthetic for spinal anesthesia because of its long duration and dense motor blockade. However, concerns regarding cardiotoxicity and prolonged motor impairment have prompted interest in alternatives such as ropivacaine. Randomized clinical trials comparing intrathecal ropivacaine and bupivacaine in orthopedic and lower limb surgeries have shown comparable sensory block adequacy, with ropivacaine associated with shorter duration of motor blockade and potentially faster recovery. These findings suggest that ropivacaine may offer functional advantages without compromising anesthetic quality. [76]
+Meta-analytical assessments of ropivacaine versus bupivacaine for spinal anesthesia report similar surgical conditions and block success rates between the two agents. However, ropivacaine is consistently associated with reduced intensity and duration of motor block. While differences in hemodynamic parameters are generally modest, the overall cardiovascular profile of ropivacaine is considered favorable, particularly in patients with cardiovascular risk factors. These data provide a pharmacological rationale for evaluating ropivacaine in techniques designed to preserve hemodynamic stability. [77]
+Hyperbaric Ropivacaine and Controlled Distribution
+The addition of dextrose to ropivacaine creates a hyperbaric formulation that allows gravitational manipulation of intrathecal spread. Clinical investigations of hyperbaric ropivacaine demonstrate predictable onset and reliable sensory levels suitable for lower limb surgery. Comparative studies evaluating hyperbaric ropivacaine against hyperbaric bupivacaine report similar surgical anesthesia with shorter motor block duration in the ropivacaine groups. This controlled regression profile may enhance postoperative recovery timelines. [72]
+Furthermore, pharmacodynamic modeling studies indicate that intrathecal ropivacaine exhibits dose-dependent sensory spread with relatively stable hemodynamic parameters at clinically used doses. The ability to titrate dose and exploit hyperbaricity for selective distribution makes ropivacaine particularly suitable for unilateral spinal anesthesia. By combining gravitational control with a drug that has a favorable cardiovascular profile, anesthesiologists may potentially reduce hypotension and accelerate functional recovery. [12]
+Hemodynamic Effects of Intrathecal Ropivacaine
+Clinical trials comparing ropivacaine with bupivacaine in spinal anesthesia have generally reported similar incidences of hypotension between agents at standard doses, although some studies suggest a trend toward less severe blood pressure reduction with ropivacaine. The differential sensory-motor profile and slightly shorter duration of sympathetic blockade may contribute to improved cardiovascular tolerance in certain patient populations. Importantly, the incidence of significant bradycardia does not appear to be increased with ropivacaine compared with bupivacaine. [78]
+In elderly patients and those undergoing lower limb surgeries, ropivacaine has been shown to provide adequate anesthesia with stable hemodynamic profiles when administered in appropriate doses. Randomized studies in orthopedic populations demonstrate that ropivacaine achieves comparable block quality while enabling earlier motor recovery and mobilization. These characteristics align well with enhanced recovery protocols and underscore the suitability of ropivacaine for selective spinal techniques. [79]
+Rationale for 0.75% Hyperbaric Ropivacaine in the Present Study
+The choice of 0.75% hyperbaric ropivacaine for comparative evaluation is supported by pharmacological and clinical evidence. This concentration provides sufficient potency to achieve reliable sensory block for lower limb surgeries while maintaining manageable motor block duration. The hyperbaric formulation allows gravitational control, which is essential for achieving unilateral distribution. When combined with meticulous positioning and dose regulation, hyperbaric ropivacaine offers the theoretical advantage of reduced contralateral sympathetic blockade and improved hemodynamic stability. [72]
+Moreover, the favorable safety profile of ropivacaine, particularly regarding cardiotoxicity, is relevant when studying hemodynamic endpoints. In procedures where bilateral sympathetic blockade may be excessive, unilateral spinal anesthesia with hyperbaric ropivacaine represents a logical evolution of neuraxial technique. Comparative evaluation against classical bilateral subarachnoid block will clarify whether selective distribution using this agent translates into measurable improvements in blood pressure stability and reduced vasopressor requirement without compromising onset, quality, or duration of sensory and motor blockade. [77]
+In summary, ropivacaine is a long-acting amide local anesthetic with reduced cardiotoxic potential and favorable sensory-motor differentiation compared with bupivacaine. Intrathecal administration, particularly in hyperbaric form, provides effective anesthesia for lower limb surgeries with predictable distribution and regression. Evidence supports comparable block quality with shorter motor duration and potentially improved hemodynamic tolerance. These properties justify its selection for comparative assessment in classical versus unilateral subarachnoid block for maintaining hemodynamic stability in lower limb surgical patients.
+Onset, Quality, and Duration of Motor and Sensory Blockade
+Onset of Sensory Blockade
+The onset of sensory blockade following spinal anesthesia is determined by multiple factors including drug concentration, total dose, baricity, injection speed, and patient positioning. In lower limb surgeries, rapid establishment of an adequate sensory level is desirable to minimize surgical delay while ensuring patient comfort. Comparative studies of intrathecal local anesthetics have demonstrated that hyperbaric formulations generally produce faster onset of sensory block than isobaric solutions due to more predictable gravitational spread. Clinical investigations comparing hyperbaric ropivacaine with hyperbaric bupivacaine indicate comparable onset times to surgical anesthesia, supporting its suitability for lower limb procedures. [80]
+Dose plays a crucial role in onset kinetics. Higher intrathecal doses typically produce faster sensory onset but may increase block height and sympathetic involvement, thereby raising the risk of hypotension. Conversely, lower doses may prolong onset or result in incomplete block if not carefully titrated. Randomized dose-finding studies evaluating intrathecal ropivacaine demonstrate that moderate doses achieve adequate onset within clinically acceptable timeframes while maintaining favorable hemodynamic profiles. These findings are particularly relevant in unilateral spinal anesthesia, where dose reduction is often employed to preserve selectivity. [81]
+Baricity further influences onset characteristics. Hyperbaric solutions settle in dependent regions, allowing rapid establishment of block on the operative side when lateral positioning is maintained. Studies comparing unilateral and bilateral spinal anesthesia report that unilateral techniques may have slightly slower onset on the operative side when low doses are used; however, the difference is typically not clinically significant when adequate fixation time is allowed. Thus, onset must be evaluated not only in terms of time but also in relation to block adequacy and stability. [61]
+Quality of Sensory Blockade
+Quality of sensory blockade is assessed by the highest dermatomal level achieved, uniformity of block, absence of patchy anesthesia, and patient comfort during surgery. Classical bilateral spinal anesthesia reliably produces symmetrical sensory block, often extending several dermatomes above the surgical site. While this ensures surgical adequacy, it may also increase the extent of sympathetic blockade. In contrast, unilateral spinal anesthesia aims to provide dense sensory anesthesia confined primarily to the operative limb.
+Randomized comparisons of unilateral versus bilateral spinal anesthesia for knee arthroscopy and other lower limb procedures have demonstrated comparable surgical conditions between techniques. Patient satisfaction and intraoperative analgesia scores were similar, indicating that unilateral spinal anesthesia does not compromise sensory block quality when properly executed. These results reinforce the feasibility of selective neuraxial techniques in routine orthopedic practice. [60]
+Studies evaluating ropivacaine specifically report that intrathecal administration produces reliable sensory anesthesia adequate for lower limb surgeries. Comparative analyses between ropivacaine and bupivacaine show no significant difference in peak sensory levels achieved, although regression to lower dermatomes may occur earlier with ropivacaine. Importantly, the adequacy of block for surgical incision and manipulation remains comparable, supporting its use in both classical and unilateral approaches. [74]
+Assessment of sensory block regression is equally important. Faster two-segment regression may facilitate earlier recovery and mobilization. Clinical trials involving hyperbaric ropivacaine indicate predictable regression profiles with shorter overall duration of sensory blockade compared with hyperbaric bupivacaine. This controlled duration is advantageous in procedures of moderate length and aligns with enhanced recovery objectives. [79]
+Onset and Quality of Motor Blockade
+Motor blockade is typically evaluated using standardized grading systems such as the Bromage scale. In classical bilateral spinal anesthesia, dense motor block is expected and often desired for lower limb surgeries to provide optimal muscle relaxation. However, prolonged motor block may delay ambulation and discharge. Ropivacaine’s pharmacological profile demonstrates less intense motor blockade compared with bupivacaine at equivalent doses, reflecting its differential sensory-motor action. This property may provide adequate surgical relaxation while permitting earlier postoperative recovery of motor function. [75]
+Comparative studies of intrathecal ropivacaine and bupivacaine show that ropivacaine achieves satisfactory motor block for orthopedic surgery but with significantly shorter duration. In unilateral spinal anesthesia, motor blockade is typically confined to the operative limb, preserving contralateral motor function. This asymmetry enhances patient comfort and facilitates earlier mobilization once surgical anesthesia has regressed. Randomized trials confirm that unilateral spinal anesthesia produces adequate motor block on the dependent side with minimal contralateral impairment. [62]
+The onset of motor block generally parallels sensory onset but may occur slightly later due to differential fiber sensitivity. Studies comparing plain and hyperbaric ropivacaine demonstrate that hyperbaric solutions may provide more consistent motor block onset due to predictable distribution. Controlled gravitational spread ensures adequate drug concentration at targeted nerve roots, supporting both sensory and motor blockade in the operative limb. [79]
+Duration of Sensory and Motor Blockade
+Duration of blockade is influenced by drug properties, dose, and patient factors. Longer-acting agents such as bupivacaine provide extended anesthesia but may delay recovery. Ropivacaine offers a balance between sufficient duration for surgery and earlier regression. Clinical investigations have shown that sensory block duration with intrathecal ropivacaine is slightly shorter than with bupivacaine, while motor block regression occurs significantly earlier. This characteristic may reduce the risk of postoperative urinary retention and facilitate early mobilization in lower limb surgery patients. [76]
+In unilateral spinal anesthesia, duration of blockade on the operative side is typically comparable to classical techniques when equivalent doses are used. However, contralateral motor and sensory function recover more rapidly due to limited spread. This selective recovery pattern contributes to improved hemodynamic stability during the intraoperative period and enhanced postoperative mobility. Studies examining unilateral low-dose techniques demonstrate shorter total motor block duration and earlier ambulation compared with bilateral blocks. [63]
+The clinical relevance of duration extends beyond the operating room. Early regression of motor block is associated with improved participation in physiotherapy and reduced length of stay in orthopedic populations. Trials evaluating spinal anesthesia within enhanced recovery pathways indicate that shorter-acting intrathecal agents contribute to earlier discharge readiness without compromising analgesic efficacy. These findings support the use of ropivacaine, particularly in hyperbaric form, for procedures where balanced duration and stability are priorities. [57]
+Comparative Evidence in Lower Limb Surgery
+Direct comparisons between unilateral and classical bilateral spinal anesthesia for lower limb surgeries demonstrate that unilateral techniques achieve comparable onset and block quality with reduced incidence of hypotension. Importantly, no significant increase in block failure rates has been observed when protocols are carefully followed. These findings suggest that unilateral spinal anesthesia can maintain anesthetic adequacy while offering hemodynamic advantages. [61]
+When hyperbaric ropivacaine is used, its predictable spread and moderate duration further support its role in selective spinal anesthesia. Evidence from randomized trials indicates that hyperbaric ropivacaine provides reliable anesthesia for infra-umbilical surgeries with favorable motor recovery profiles. Combining hyperbaricity with controlled lateral positioning enhances the probability of successful unilateral block and balanced regression characteristics. [72]
+The onset, quality, and duration of sensory and motor blockade are critical parameters in evaluating spinal anesthesia techniques. Hyperbaric ropivacaine provides rapid and reliable sensory onset with adequate motor block for lower limb surgeries, while offering shorter motor duration compared with bupivacaine. Unilateral spinal anesthesia, when executed with appropriate dose and positioning, achieves comparable block quality to classical bilateral block with selective distribution and faster contralateral recovery. These characteristics directly address the secondary objectives of the present study, which aim to compare onset, quality, and duration of motor and sensory blockade between classical and unilateral subarachnoid block using 0.75% hyperbaric ropivacaine in lower limb surgeries.
+Factors Affecting Block Characteristics
+Patient-Related Factors
+Block characteristics in spinal anesthesia are influenced by multiple patient-related variables including age, height, weight, vertebral column anatomy, and cerebrospinal fluid (CSF) volume. Age is one of the most consistently identified determinants of block spread. Elderly patients often demonstrate greater cephalad spread of intrathecal local anesthetic for a given dose, likely due to reduced CSF volume, degenerative spinal changes, and altered neural sensitivity. Clinical investigations analyzing determinants of spinal block height have shown that advancing age correlates with higher maximum sensory levels and prolonged block duration. These findings are clinically important because exaggerated cephalad spread may increase sympathetic blockade and risk of hypotension. [82]
+Height and vertebral column length have also been evaluated as predictors of block distribution. Although early assumptions suggested that taller patients might require larger doses, evidence indicates that height alone is not a reliable predictor of block height when standard adult dosing is used. Instead, variations in lumbosacral CSF volume appear to exert a more significant influence on anesthetic spread. Imaging-based studies have demonstrated an inverse relationship between CSF volume and peak sensory block level, supporting the concept that smaller CSF volumes predispose to greater cephalad spread. [83]
+Body mass index (BMI) may also influence spinal block characteristics, particularly in obese patients. Increased intra-abdominal pressure can reduce lumbosacral CSF volume by engorging epidural veins, potentially enhancing cephalad spread of local anesthetic. Observational analyses in obstetric and non-obstetric populations have reported higher sensory block levels in patients with elevated BMI, although findings are not entirely uniform across studies. Nonetheless, BMI remains an important consideration when selecting dose and positioning strategy. [84]
+Anatomical variations such as scoliosis, kyphosis, or prior spinal surgery may alter distribution patterns. These structural differences can produce asymmetric or patchy blocks, potentially influencing the success of unilateral spinal anesthesia. Careful preoperative assessment and individualized technique adjustment are therefore necessary to ensure consistent block quality in such patients.
+Dose and Volume of Local Anesthetic
+Dose is one of the most significant modifiable determinants of block characteristics. Higher doses increase the likelihood of extensive sensory and motor blockade, but also elevate the risk of hypotension due to broader sympathetic involvement. Dose-finding studies in spinal anesthesia demonstrate a clear dose–response relationship between intrathecal local anesthetic amount and maximum sensory level achieved. Reducing dose has been shown to decrease hypotensive episodes without compromising surgical anesthesia in selected lower limb procedures. [58]
+Volume and concentration interact to determine the total mass of drug delivered intrathecally. While concentration influences intensity of neural blockade, total dose primarily determines spread and duration. Clinical comparisons between different concentrations of ropivacaine indicate that moderate doses can achieve effective surgical anesthesia with shorter motor block duration. Such titration is especially important in unilateral spinal anesthesia, where excessive dosing may convert a selective block into bilateral distribution. [75]
+Baricity and Patient Position
+Baricity remains a critical determinant of block distribution. Hyperbaric solutions allow gravitational manipulation of spread, particularly when patient positioning is carefully controlled. The duration of maintained lateral decubitus positioning after injection significantly affects the success of unilateral block. Studies examining fixation time have demonstrated that prolonged lateral positioning increases the likelihood of maintaining unilateral distribution and reduces contralateral block. Inadequate positioning time increases the probability of bilateralization once the patient is turned supine. [67]
+Patient position during and immediately after injection also influences cephalad spread. Flexion of the spine, table tilt, and rapid changes in posture may alter CSF dynamics and modify anesthetic distribution. Controlled positioning is therefore essential in studies comparing classical and unilateral techniques to ensure reproducibility and minimize confounding variables.
+Injection Technique and Speed
+Injection speed and needle orientation contribute to intrathecal distribution patterns. Experimental and clinical studies have shown that slower injection speeds may promote laminar flow and reduce turbulence, potentially allowing more predictable spread. Rapid injection, by contrast, may create turbulent mixing within CSF and produce wider distribution. Although the magnitude of this effect may be modest compared with dose and baricity, standardizing injection speed is recommended to maintain consistency in clinical trials. [64]
+Needle bevel orientation has also been proposed as a factor influencing lateralization. Directing the bevel toward the dependent side may encourage preferential drug flow; however, evidence regarding its independent impact is mixed. Nevertheless, maintaining a consistent technique across study groups is essential for reliable comparison of block characteristics.
+Physiological and Hemodynamic Interactions
+Physiological responses to spinal anesthesia can themselves influence block characteristics. Hypotension may reduce spinal cord perfusion and potentially modify block regression, although clinical significance remains uncertain. Moreover, sympathetic blockade-induced vasodilation may alter systemic absorption rates of local anesthetic, indirectly affecting duration. These interactions underscore the complexity of evaluating block characteristics independently from hemodynamic variables.
+Pharmacokinetic modeling studies of intrathecal ropivacaine indicate that distribution and regression are influenced not only by dose but also by patient-specific physiological factors such as age and body habitus. Such models reinforce the importance of individualized dosing strategies when evaluating unilateral versus classical spinal anesthesia. [12]
+Surgical and Procedural Factors
+Duration and type of surgery may influence the clinical perception of block adequacy. Longer procedures require sufficient sensory and motor duration to avoid supplementation. Tourniquet use in lower limb surgery may alter hemodynamic responses and affect patient comfort, although it does not directly change block spread. Standardizing surgical variables within comparative studies ensures that differences in onset or duration are attributable to anesthetic technique rather than procedural variability.
+In enhanced recovery orthopedic pathways, early mobilization is prioritized. Therefore, factors affecting motor block duration have practical importance beyond intraoperative anesthesia. Studies evaluating spinal anesthesia within fast-track protocols demonstrate that shorter motor block correlates with earlier ambulation and discharge readiness. Such findings emphasize the importance of balancing adequate intraoperative block with timely postoperative recovery. [57]
+Implications for Comparative Evaluation
+Understanding factors that influence block characteristics is essential when comparing classical bilateral and unilateral spinal anesthesia. Variations in age distribution, BMI, dosing strategy, positioning duration, and injection technique can significantly affect outcomes such as onset time, peak sensory level, motor block intensity, and hemodynamic stability. Therefore, strict standardization of technique and careful patient selection are necessary to ensure valid comparison between groups.
+In the context of 0.75% hyperbaric ropivacaine, controlling dose and positioning is particularly important to maintain unilateral selectivity. Excessive dose or premature repositioning may negate the benefits of unilateral technique by producing bilateral sympathetic blockade. Conversely, inadequate dosing may compromise block quality. Evidence from dose-reduction and selective spinal studies supports the feasibility of achieving adequate anesthesia with improved hemodynamic profiles when these variables are carefully optimized. [58]
+In summary, block characteristics in spinal anesthesia are determined by an interplay of patient factors, dose and volume of anesthetic, baricity, positioning, injection technique, and procedural variables. Careful control of these determinants is essential in comparative studies evaluating classical versus unilateral subarachnoid block. By standardizing these factors, differences observed in onset, quality, duration, and hemodynamic stability can be more confidently attributed to the technique itself rather than confounding influences.
+Gaps in Existing Literature
+Limited Direct Comparisons Between Classical and Unilateral Techniques Using Ropivacaine
+Although extensive research has evaluated spinal anesthesia in various clinical contexts, direct comparative evidence between classical bilateral and unilateral subarachnoid block using 0.75% hyperbaric ropivacaine remains limited. Most unilateral spinal anesthesia studies have historically utilized hyperbaric bupivacaine as the intrathecal agent. Randomized trials demonstrating reduced hypotension and faster motor recovery with unilateral techniques primarily involve bupivacaine-based regimens rather than ropivacaine. Consequently, extrapolating these findings to ropivacaine requires caution due to pharmacodynamic differences between agents. [60]
+Similarly, while intrathecal ropivacaine has been compared with bupivacaine in terms of onset, duration, and motor block intensity, these studies generally employed classical bilateral spinal techniques. Evidence confirms comparable sensory block quality and shorter motor duration with ropivacaine, yet these investigations did not evaluate selective unilateral distribution as a primary variable. Therefore, the interaction between ropivacaine’s pharmacological properties and unilateral technique remains incompletely characterized. [75]
+Inadequate Focus on Hemodynamic Stability as a Primary Endpoint
+Many clinical trials of spinal anesthesia have reported hypotension as a secondary or incidental outcome rather than as a primary study objective. Although meta-analyses in elderly hip fracture surgery populations demonstrate that lower intrathecal doses reduce hypotensive episodes, few studies are specifically powered to compare hemodynamic stability between classical and unilateral spinal anesthesia. Consequently, robust prospective randomized data focusing primarily on cardiovascular endpoints remain sparse. [52]
+Moreover, studies examining vasopressor use during spinal anesthesia often focus on pharmacologic comparisons (e.g., phenylephrine versus norepinephrine) rather than on technique-related determinants of hypotension. While such work is valuable for management strategies, it does not address whether modifying block distribution itself can prevent the need for vasopressors. A technique-centered approach to hemodynamic stability remains underexplored in lower limb surgical populations. [54]
+Limited Data in Non-Obstetric Lower Limb Surgical Populations
+A significant proportion of spinal anesthesia research originates from obstetric practice due to the high incidence of spinal anesthesia for cesarean section. While these data provide valuable insights into hypotension mechanisms, physiological conditions in obstetric patients differ substantially from non-pregnant individuals undergoing orthopedic lower limb surgery. For instance, aortocaval compression and pregnancy-related vascular changes alter hemodynamic responses. Therefore, extrapolation of obstetric findings to orthopedic populations may not be entirely appropriate. [49]
+In orthopedic settings, elderly patients with comorbidities constitute a large surgical cohort. Although selective spinal anesthesia has demonstrated feasibility and safety in elderly hip fracture surgery, most comparisons have involved unilateral hypobaric techniques or comparisons with general anesthesia rather than head-to-head evaluation against classical bilateral subarachnoid block using the same hyperbaric agent. Consequently, high-quality data specific to unilateral lower limb orthopedic procedures remain insufficient. [44]
+Variability in Technique Standardization
+Another limitation within existing literature is inconsistency in technical parameters across studies. Variations in dose, concentration, injection speed, needle orientation, fixation time, and patient positioning complicate comparison between studies. Even minor deviations in positioning duration can significantly affect unilateral block success rates. Some investigations maintain lateral positioning for 5 minutes, others for 15–20 minutes, resulting in heterogeneous outcomes. Such variability reduces the generalizability of findings and underscores the need for standardized protocols in comparative trials. [67]
+Additionally, block assessment methods differ across studies. Sensory block is variably assessed using pinprick, cold sensation, or touch discrimination, and motor block is measured using different grading systems. Without uniform criteria, cross-study comparisons of onset, quality, and duration become challenging. A rigorously designed trial employing standardized assessment tools would therefore address an important methodological gap.
+Insufficient Evaluation of Hyperbaric 0.75% Ropivacaine in Unilateral Technique
+While hyperbaric ropivacaine has been evaluated for spinal anesthesia in infra-umbilical surgeries, most studies compare it with hyperbaric bupivacaine under classical bilateral conditions. Data specifically examining its use in unilateral spinal anesthesia are limited. Given that baricity enables gravitational control of spread, hyperbaric ropivacaine is theoretically well suited for selective blockade; however, empirical evidence supporting its hemodynamic superiority in unilateral application remains sparse. [72]
+Pharmacokinetic and pharmacodynamic modeling studies highlight predictable dose-dependent spread of ropivacaine, but they do not specifically address lateralization or unilateral distribution outcomes. Therefore, the combined influence of hyperbaricity, controlled positioning, and ropivacaine’s sensory-motor differentiation warrants focused investigation. [12]
+Need for Prospective, Randomized, Double-Blinded Comparative Trials
+Many earlier investigations of unilateral spinal anesthesia were observational or involved small sample sizes. While randomized trials do exist, variations in design quality, blinding, and outcome measurement reduce the strength of conclusions. A prospective, randomized, double-blinded, parallel-group interventional design would minimize bias and allow more definitive evaluation of hemodynamic stability and block characteristics. Such methodological rigor is essential to generate clinically actionable evidence. [61]
+Furthermore, few studies simultaneously evaluate primary hemodynamic endpoints alongside secondary outcomes such as onset time, peak sensory level, motor block duration, and regression characteristics using the same local anesthetic agent. Comprehensive assessment within a single controlled study would provide more integrated understanding of technique performance.
+Clinical Implications of Identified Gaps
+The absence of robust comparative data leaves uncertainty regarding whether unilateral spinal anesthesia using 0.75% hyperbaric ropivacaine offers meaningful advantages over classical bilateral subarachnoid block in lower limb surgeries. Given the well-documented incidence of hypotension during classical spinal anesthesia and its association with adverse outcomes in elderly surgical patients, clarifying this question has significant clinical relevance. [53]
+Additionally, with increasing emphasis on enhanced recovery protocols and early mobilization, anesthetic techniques that balance adequate surgical anesthesia with hemodynamic stability and shorter motor duration are desirable. Although indirect evidence suggests that unilateral approaches may reduce hypotension and accelerate recovery, definitive head-to-head comparisons using ropivacaine remain lacking.
+Summary of Research Gap
+In summary, existing literature demonstrates:
+Proven efficacy of classical bilateral spinal anesthesia for lower limb surgery.
+
+
+Evidence supporting unilateral spinal anesthesia in reducing hypotension, primarily with bupivacaine.
+
+
+Favorable pharmacological profile of intrathecal ropivacaine compared with bupivacaine.
+
+
+Limited technique-focused trials evaluating hemodynamic stability as a primary outcome.
+
+
+Insufficient randomized comparative studies examining classical versus unilateral subarachnoid block using hyperbaric ropivacaine in unilateral lower limb surgeries.
+
+
+These gaps justify the need for a well-designed prospective, randomized, double-blinded, parallel-group interventional study to evaluate whether unilateral spinal anesthesia with 0.75% hyperbaric ropivacaine provides superior hemodynamic stability while maintaining comparable onset, quality, and duration of sensory and motor blockade.
+This investigation aims to address these deficiencies and contribute meaningful evidence to guide anesthetic practice in lower limb surgical populations.
+
+
+EARLIER STUDIES
+1. Carpenter et al. – Role of Cerebrospinal Fluid Volume in Determining Block Height and Hemodynamic Effects
+Carpenter et al. conducted a pivotal study evaluating the determinants of sensory block height and duration during spinal anesthesia, with specific focus on lumbosacral cerebrospinal fluid (CSF) volume. Using magnetic resonance imaging to quantify CSF volume, the authors demonstrated a strong inverse correlation between CSF volume and maximum sensory level achieved. Patients with lower CSF volumes experienced greater cephalad spread of local anesthetic and prolonged duration of sensory blockade. Importantly, higher sensory levels were associated with increased incidence of hypotension.
+This study provides a physiological explanation for the findings of the present research. In our study, classical subarachnoid block resulted in higher sensory levels (T6–T8) compared to unilateral block (predominantly T10), which corresponded with a significantly higher incidence of hypotension (46.7% vs 16.7%). Carpenter et al.’s findings support the principle that limiting intrathecal spread reduces sympathetic blockade and improves hemodynamic stability, which is the fundamental rationale behind unilateral spinal anesthesia.
+2. Tarkkila and Isola – Predictive Factors for Spinal Anesthesia–Induced Hypotension
+Tarkkila and Isola developed a regression model to identify predictors of hypotension following spinal anesthesia. Their study analyzed multiple variables including baseline systolic blood pressure, sensory block height, and patient characteristics. The authors concluded that higher block height was a major determinant of hypotension, and patients with lower baseline systolic pressures were particularly vulnerable.
+The relevance of this study to the present work is direct. In our study, both groups had comparable baseline systolic blood pressure, eliminating baseline hemodynamic status as a confounder. However, the classical group achieved higher block levels and subsequently demonstrated a significantly greater incidence of hypotension. Tarkkila and Isola’s work reinforces the concept that sympathetic blockade extent, rather than patient demographics alone, is the principal factor governing hemodynamic instability.
+3. Hartmann et al. – Incidence and Risk Factors for Hypotension After Spinal Anesthesia
+Hartmann et al. conducted a prospective observational study to determine the incidence and independent risk factors for hypotension following spinal anesthesia. Their analysis revealed that maximum sensory block height was the strongest predictor of hypotension. Patients with higher thoracic dermatomal levels were more likely to experience clinically significant blood pressure reductions.
+In the present study, classical spinal anesthesia resulted in higher sensory spread compared to unilateral block, and this was accompanied by a significantly higher incidence of hypotension and vasopressor requirement. The findings of Hartmann et al. provide strong literature support for the observed relationship between block height and hemodynamic compromise. This further validates the strategy of restricting sensory spread through unilateral spinal anesthesia to enhance cardiovascular stability.
+4. Messina et al. – Meta-Analysis of Hypotensive Events in Spinal Anesthesia for Orthopedic Surgery
+Messina et al. performed a meta-analysis examining the incidence and determinants of hypotension during spinal anesthesia in orthopedic surgical populations. The authors concluded that greater intrathecal drug spread and higher effective doses were associated with increased hypotensive events. They emphasized the importance of dose optimization and techniques that limit excessive sympathetic blockade to reduce cardiovascular complications.
+Although their analysis focused largely on elderly hip fracture patients, the physiological implications apply broadly. In the present study, unilateral spinal anesthesia restricted block spread and resulted in significantly fewer hypotensive episodes. The findings align with the conclusions of Messina et al., supporting the concept that selective spinal techniques can reduce hemodynamic disturbances without compromising surgical anesthesia.
+5. Walsh et al. – Clinical Consequences of Intraoperative Hypotension
+Walsh et al. investigated the association between intraoperative mean arterial pressure and postoperative clinical outcomes in noncardiac surgery. Their large cohort study demonstrated that even brief episodes of intraoperative hypotension were independently associated with increased risk of myocardial injury, renal dysfunction, and mortality. The authors emphasized that maintaining intraoperative hemodynamic stability is critical for improving perioperative outcomes.
+This study highlights the broader clinical significance of the findings in the present research. The unilateral spinal anesthesia group demonstrated significantly lower incidence of hypotension and reduced vasopressor requirement. By minimizing intraoperative blood pressure fluctuations, unilateral subarachnoid block may contribute to safer perioperative management. Thus, beyond statistical significance, the improved hemodynamic stability observed in this study has meaningful clinical implications consistent with the findings of Walsh et al.
+6. Geffin and Shapiro – Bradycardia and Asystole During Neuraxial Anesthesia
+Geffin and Shapiro reported a clinically important case series describing sinus bradycardia and asystole occurring during spinal and epidural anesthesia. The authors highlighted that severe bradycardia may develop abruptly following neuraxial blockade, often in association with reduced venous return and high sympathetic block. They emphasized that bradycardia is not always benign and may represent impending cardiovascular collapse if untreated. The series underscored the contribution of reduced preload (from venous pooling) and inhibition of cardiac accelerator fibers to profound vagal predominance, and it reinforced the need for early recognition and prompt intervention with atropine, vasopressors, and fluid resuscitation.
+This study directly supports the clinical importance of the significantly higher bradycardia incidence observed in Group C (26.7%) compared to Group U (6.7%) in the present study. The findings suggest that limiting sympathetic blockade and preserving venous return, as intended with unilateral spinal anesthesia, can reduce the occurrence of clinically significant bradycardia and associated cardiovascular instability.
+7. Casati et al. – Low-Dose Hyperbaric Bupivacaine for Achieving Unilateral Spinal Anesthesia
+Casati et al. evaluated low-dose hyperbaric bupivacaine for unilateral spinal anesthesia and demonstrated that selective blockade could be achieved reliably by combining a reduced intrathecal dose with strict lateral positioning. Their work established important practical principles: hyperbaric solutions facilitate gravity-dependent distribution, reduced dose decreases the chance of bilateral spread, and maintaining lateral decubitus position improves unilateral “fixation.” Clinically, they reported that unilateral spinal anesthesia provides satisfactory operating conditions for unilateral lower limb procedures, while reducing hypotension and accelerating recovery compared with more extensive blocks.
+This study forms a key methodological foundation for unilateral techniques. Although the present study used 0.75% hyperbaric ropivacaine, the same physiological principle applies: controlled spread via hyperbaricity and positioning restricts sympathetic involvement. The reduced hypotension and bradycardia seen in the unilateral group in the present study are consistent with the hemodynamic advantage described by Casati et al.
+8. Fanelli et al. – Randomized Comparison of Unilateral Versus Standard Spinal Anesthesia for Knee Arthroscopy
+Fanelli et al. performed a randomized double-blind comparison of unilateral spinal anesthesia and standard (bilateral) spinal anesthesia for outpatient knee arthroscopy. Their study demonstrated that unilateral spinal anesthesia achieved adequate surgical conditions while producing significantly fewer cardiovascular side effects, including hypotension, and supporting faster recovery. They also reported earlier motor recovery and improved discharge readiness, making unilateral spinal anesthesia particularly attractive for ambulatory lower limb procedures. Importantly, the trial emphasized that unilateral spinal anesthesia is not simply “less anesthesia,” but rather a targeted distribution strategy that maintains operative adequacy while limiting systemic sympathetic blockade.
+The present study findings align closely with Fanelli et al. In our results, unilateral block was associated with significantly lower hypotension (16.7% vs 46.7%) and reduced vasopressor requirement (16.7% vs 46.7%), supporting the same conclusion that restricting sympathectomy improves hemodynamic stability without compromising the ability to conduct surgery.
+9. Borghi et al. – Frequency of Hypotension and Bradycardia During Unilateral Spinal Anesthesia
+Borghi et al. specifically investigated the frequency of hypotension and bradycardia during unilateral spinal anesthesia. Their study confirmed that unilateral spinal anesthesia reduces the incidence of cardiovascular adverse events compared with classical bilateral spinal techniques, particularly when strict positional protocols and appropriate dosing are followed. The authors attributed improved stability to reduced contralateral sympathetic blockade, with preservation of systemic vascular tone and improved maintenance of venous return. Additionally, they reported advantages in postoperative recovery due to shorter motor block duration and reduced functional limitation on the non-operative side.
+This evidence directly supports the present study outcomes, where unilateral subarachnoid block showed significantly lower bradycardia and hypotension incidences. The physiological mechanism proposed by Borghi et al. limiting overall sympathetic block extent provides a coherent explanation for our observation of better heart rate and blood pressure stability in Group U.
+10. Kuusniemi et al. – Low-Dose Hyperbaric Bupivacaine and Selective Unilateral Block
+Kuusniemi et al. evaluated the effectiveness of low-dose hyperbaric bupivacaine in achieving unilateral spinal anesthesia and explored its influence on onset, block characteristics, and recovery. They demonstrated that low-dose hyperbaric regimens improve unilateral selectivity and reduce hypotension compared with higher-dose or conventional bilateral spinal techniques. While they noted that onset of block may be marginally slower with reduced dose strategies, the quality of surgical anesthesia remained satisfactory. Their study strongly emphasized that dose reduction, in combination with hyperbaric solution and lateral positioning, is central to improving hemodynamic stability and accelerating recovery.
+These findings closely parallel the present study, in which unilateral spinal anesthesia showed slightly slower onset of sensory and motor block but demonstrated significantly improved hemodynamic stability and shorter motor block duration. Kuusniemi et al. thereby provide direct literature support for the balance observed in our results: a small trade-off in onset time in exchange for meaningful improvements in cardiovascular stability and recovery profile.
+11. McNamee et al. – Plain Ropivacaine Versus Plain Bupivacaine for Major Orthopaedic Surgery (Spinal Anesthesia)
+McNamee et al. compared plain (isobaric) ropivacaine 5 mg/mL with plain bupivacaine 5 mg/mL for spinal anesthesia in major orthopedic surgery. The study assessed onset, adequacy of block for surgery, and recovery characteristics. They reported that intrathecal ropivacaine produced effective sensory anesthesia suitable for orthopedic procedures, with a tendency toward shorter duration of motor block compared with bupivacaine. The sensory block achieved with ropivacaine was clinically adequate, although regression occurred earlier than with bupivacaine, supporting the concept of faster recovery. The authors highlighted that ropivacaine may be particularly useful when early mobilization is desirable, while still providing satisfactory intraoperative anesthesia.
+This study supports the choice of ropivacaine in the present trial and helps explain why the unilateral group showed earlier sensory regression and shorter motor duration. It also provides evidence that ropivacaine can meet the anesthetic requirements of orthopedic surgery without compromising intraoperative conditions, aligning with our observation that unilateral spinal anesthesia despite shorter block duration remained adequate for completion of surgery.
+12. Malinovsky et al. – Comparative Intrathecal Profile of Ropivacaine and Bupivacaine
+Malinovsky et al. conducted a comparative clinical study of intrathecal ropivacaine versus bupivacaine, focusing on the quality of anesthesia and block characteristics. They demonstrated that ropivacaine provides reliable sensory block suitable for infra-umbilical and lower limb procedures, with shorter duration of motor block and somewhat faster regression compared with bupivacaine. The authors noted that ropivacaine’s overall profile suggests a favorable balance adequate surgical anesthesia with potentially reduced prolonged immobility.
+The present study’s findings of shorter sensory and motor duration in the unilateral group are consistent with Malinovsky et al., particularly because unilateral techniques further limit spread and thus reduce total anesthetic exposure across spinal segments. Malinovsky et al. also reinforce the suitability of ropivacaine when early recovery and mobilization are clinically important, which supports the practical relevance of our findings in lower limb surgeries.
+13. Whiteside et al. – Elective Surgery: Plain Ropivacaine Versus Plain Bupivacaine for Spinal Anesthesia
+Whiteside et al. compared plain ropivacaine 0.5% with plain bupivacaine 0.5% for spinal anesthesia in elective surgery. They reported that ropivacaine produced effective sensory blockade comparable to bupivacaine, but with less intense and shorter duration of motor blockade. The study emphasized that ropivacaine may offer an advantage where full, prolonged motor paralysis is unnecessary, and where earlier motor recovery benefits postoperative care pathways. Importantly, block adequacy for surgery remained satisfactory, indicating that reduced motor duration did not equate to inferior anesthesia.
+These findings align closely with the present study, where unilateral subarachnoid block showed significantly shorter duration of motor block (138.4 ± 16.7 min) compared to classical spinal anesthesia (160.6 ± 18.9 min), while still maintaining adequate intraoperative conditions. Whiteside et al. support the premise that ropivacaine can facilitate earlier motor recovery and potentially support enhanced recovery protocols, which strengthens the clinical rationale for its selection in your trial.
+14. Gautier et al. – Intrathecal Ropivacaine for Ambulatory Surgery and Recovery Advantages
+Gautier et al. evaluated intrathecal ropivacaine for ambulatory surgery, focusing on anesthetic adequacy and recovery endpoints. They found that ropivacaine provided satisfactory anesthesia with favorable recovery characteristics, including shorter motor block and earlier discharge readiness. Their work contributed to the growing interest in ropivacaine as a spinal anesthetic that supports fast-track and day-care surgery models. They also reinforced that ropivacaine’s sensory-motor differentiation can provide operative anesthesia while allowing earlier functional return.
+This study is highly relevant to the present study because unilateral spinal anesthesia is also intended to promote faster recovery and earlier ambulation by limiting contralateral motor blockade and reducing total motor block duration. The present study demonstrated shorter motor block and sensory duration in the unilateral group, consistent with the ambulatory-friendly profile highlighted by Gautier et al. It supports the interpretation that unilateral spinal anesthesia with ropivacaine may be well suited to modern enhanced recovery and ambulatory orthopedic pathways.
+15. Pitkänen et al. – Influence of Age on Spinal Anesthesia Spread and Duration
+Pitkänen et al. studied the influence of age on spinal anesthesia, demonstrating that increasing age is associated with greater cephalad spread and prolonged block characteristics when similar intrathecal dosing is used. They attributed this partly to age-related anatomical and physiological changes, including decreased CSF volume and altered spinal canal compliance. Their findings highlight age as a clinically important determinant of block extent and potential hemodynamic consequences, because higher blocks increase sympathetic denervation and risk of hypotension.
+In the present study, age distribution was comparable between groups, minimizing age as a confounder and strengthening the internal validity of the observed differences in hemodynamic stability. Pitkänen et al. also reinforce the broader physiological principle that exaggerated spread increases the risk of hypotension supporting the rationale for unilateral spinal anesthesia, which intentionally restricts distribution to the operative side to avoid excessive sympathectomy.
+Table: Summary of Selected Literature Supporting Hemodynamic Stability and Block Characteristics in Spinal Anesthesia
+Study / Author (Ref No.)
+Key Findings of the Study
+Carpenter et al. [49]
+Demonstrated that lumbosacral CSF volume is the primary determinant of sensory block height and duration; higher block levels correlated with increased hypotension due to greater sympathetic spread.
+Tarkkila & Isola [50]
+Identified higher sensory block height and lower baseline systolic BP as major predictors of spinal anesthesia–induced hypotension; extent of sympathetic blockade was the key determinant.
+Hartmann et al. [51]
+Found that maximum sensory block height is the strongest independent risk factor for hypotension after spinal anesthesia; higher thoracic levels increased cardiovascular instability.
+Messina et al. [52]
+Meta-analysis showing that greater intrathecal spread and higher effective doses increase incidence of hypotension in orthopedic spinal anesthesia; emphasized minimizing block extent.
+Walsh et al. [53]
+Demonstrated that intraoperative hypotension is associated with adverse postoperative outcomes; maintaining hemodynamic stability is clinically critical.
+Geffin & Shapiro [56]
+Reported cases of severe bradycardia and asystole during neuraxial anesthesia; extensive sympathetic blockade and reduced venous return were key mechanisms.
+Casati et al. [60]
+Showed that low-dose hyperbaric spinal anesthesia can achieve reliable unilateral block with reduced hypotension and faster recovery compared to bilateral techniques.
+Fanelli et al. [61]
+Randomized trial demonstrating that unilateral spinal anesthesia provides adequate surgical anesthesia with significantly improved cardiovascular stability and faster motor recovery.
+Borghi et al. [62]
+Reported lower frequency of hypotension and bradycardia with unilateral spinal anesthesia due to preservation of contralateral sympathetic tone.
+Kuusniemi et al. [63]
+Demonstrated that low-dose hyperbaric regimens improve unilateral selectivity, reduce hypotension, and allow satisfactory surgical conditions with slightly delayed onset.
+McNamee et al. [74]
+Found that intrathecal ropivacaine provides effective anesthesia for orthopedic surgery with shorter motor duration compared to bupivacaine.
+Malinovsky et al. [75]
+Showed that ropivacaine produces reliable sensory block with shorter motor duration and faster regression than bupivacaine.
+Whiteside et al. [76]
+Demonstrated that ropivacaine offers comparable sensory block but less intense and shorter motor blockade compared to bupivacaine.
+Gautier et al. [77]
+Reported that intrathecal ropivacaine provides adequate anesthesia with favorable recovery profile and earlier motor function return, supporting ambulatory use.
+Pitkänen et al. [82]
+Established that increasing age leads to greater cephalad spread and prolonged block, increasing risk of hypotension; age influences block extent.
+
+
+
+
+CHAPTER IV
+MATERIALS & METHODS
+Study Design
+This study was designed as a prospective, randomized, double-blinded, parallel-group, interventional clinical study conducted to compare hemodynamic stability between classical subarachnoid block and unilateral subarachnoid block using 0.75% hyperbaric ropivacaine in patients undergoing unilateral lower limb surgeries.
+The study was conducted after obtaining approval from the Institutional Ethics Committee. The study adhered to the principles of the Declaration of Helsinki and Good Clinical Practice guidelines.
+Study Setting
+The study was conducted in the Department of Anaesthesiology at ESIC Medical College and Hospital, K.K. Nagar, Chennai.
+Study Duration
+The study was carried out over a period of 6 months to 1 year following ethical clearance.
+Study Population
+The study population consisted of patients admitted for elective unilateral lower limb surgeries under spinal anesthesia at ESIC Medical College and Hospital, K.K. Nagar, Chennai.
+Sample Size
+The total sample size was 60 patients.
+Patients were equally divided into two groups:
+Group C (Classical Subarachnoid Block) – 30 patients
+Group U (Unilateral Subarachnoid Block) – 30 patients
+Sampling Method
+All eligible patients posted for unilateral lower limb surgeries who satisfied the inclusion criteria were recruited consecutively until the required sample size of 60 was achieved.
+Inclusion Criteria
+Patients aged between 18 and 60 years
+ASA Physical Status I and II
+Patients undergoing unilateral lower limb surgeries
+Duration of surgery less than 90 minutes
+Exclusion Criteria
+Patient refusal
+Patients uncooperative for positioning
+Surgeries lasting more than 90 minutes
+Known allergy to local anesthetics
+Coagulation disorders
+Raised intracranial pressure
+Infection at the site of injection
+Anatomical deformities of the spinal column
+ASA Physical Status III and above
+Randomization
+Patients were randomly allocated into two groups using simple randomization.
+Thirty patients were assigned to each group:
+Group C – Classical subarachnoid block
+Group U – Unilateral subarachnoid block
+Blinding
+This was a double-blind study.
+The patient was unaware of the group allocation.
+The investigator responsible for intraoperative monitoring and data collection was blinded to the allocation.
+The spinal anesthesia was administered by an attending anesthesiologist not involved in postoperative data collection.
+Preoperative Preparation
+All patients underwent pre-anesthetic evaluation at least 24 hours before surgery.
+Tablet Alprazolam 0.5 mg was administered the night before surgery.
+Patients were kept nil per oral for 6 hours prior to surgery.
+Upon arrival in the operating room:
+Standard monitors were attached: ECG, Non-Invasive Blood Pressure (NIBP), and Pulse Oximetry (SpO₂).
+An 18G intravenous cannula was secured.
+Patients were preloaded with 20 ml/kg of crystalloid solution.
+Baseline heart rate, systolic blood pressure, diastolic blood pressure, and SpO₂ were recorded.
+Study Procedure
+All spinal blocks were performed by the investigator to maintain uniformity of technique.
+Under strict aseptic precautions:
+A 25G Quincke spinal needle was used.
+Spinal anesthesia was administered in the lateral decubitus position with the operative limb placed in the dependent position.
+After confirming free flow of cerebrospinal fluid, 0.75% hyperbaric ropivacaine was injected intrathecally.
+Group C – Classical Subarachnoid Block
+After intrathecal injection, patients were immediately positioned supine.
+Group U – Unilateral Subarachnoid Block
+After intrathecal injection, patients were maintained in the lateral decubitus position for 20 minutes.
+After 20 minutes, patients were turned to supine position.
+Intraoperative Monitoring
+Vital parameters were recorded:
+Every 5 minutes for the first 30 minutes
+Every 15 minutes thereafter until completion of surgery
+Parameters monitored:
+Heart Rate
+Systolic Blood Pressure
+Diastolic Blood Pressure
+SpO₂
+Assessment of Hemodynamic Stability (Primary Outcome)
+Hemodynamic stability was assessed by:
+Incidence of hypotension
+Incidence of bradycardia
+Requirement of vasopressors
+Fluctuation in systolic blood pressure from baseline
+Definition of Hypotension
+A fall in systolic blood pressure greater than 30% from baseline.
+Management:
+Intravenous ephedrine in incremental doses
+Rapid administration of intravenous fluids
+Definition of Bradycardia
+Heart rate less than 60 beats per minute.
+Management:
+Intravenous atropine 0.6 mg
+All episodes were recorded.
+Assessment of Sensory Blockade (Secondary Outcome)
+Sensory block was assessed using pinprick method.
+Tested every 5 minutes for first 30 minutes
+After surgery, regression was tested every 30 minutes
+Onset of sensory block: Time from intrathecal injection to attainment of adequate surgical sensory level.
+Complete regression: Return of painful sensation at S1 dermatome.
+Time to complete regression was recorded.
+Assessment of Motor Blockade (Secondary Outcome)
+Motor block was assessed using Modified Bromage Scale:
+Grade 0 – No motor block
+Grade 1 – Inability to raise extended leg, able to bend knee
+Grade 2 – Inability to bend knee, able to flex ankle
+Grade 3 – No motor movement
+Onset of motor block: Time from intrathecal injection to attainment of Grade 3 motor block.
+Duration of motor block: Time from injection to complete recovery (Grade 0).
+Adverse Effects
+The following were monitored intraoperatively and postoperatively:
+Hypotension
+Bradycardia
+Nausea
+Vomiting
+Shivering
+All adverse events and their management were documented.
+Data Collection
+Data were recorded in a structured proforma including:
+Demographic variables
+Baseline hemodynamic parameters
+Intraoperative vital trends
+Incidence of hypotension and bradycardia
+Vasopressor requirement
+Onset and duration of sensory and motor blockade
+Adverse effects
+Statistical Analysis
+Data were entered into Microsoft Excel and analyzed using SPSS version 21.0.
+Continuous variables were expressed as mean ± standard deviation.
+Categorical variables were expressed as frequency and percentage.
+Comparison of means between two groups was performed using Student’s unpaired t-test.
+For non-normally distributed data, Mann–Whitney U test was used.
+Categorical variables were analyzed using Chi-square test.
+A p-value < 0.05 was considered statistically significant.
+
+
+
+
+CHAPTER V
+OBSERVATION & RESULTS
+Table 1: Distribution of Patients According to Age
+Age Group (Years)
+Group C (n = 30)
+Group U (n = 30)
+Total (n = 60)
+18 – 30
+8 (26.7%)
+7 (23.3%)
+15 (25%)
+31 – 40
+7 (23.3%)
+8 (26.7%)
+15 (25%)
+41 – 50
+9 (30%)
+8 (26.7%)
+17 (28.3%)
+51 – 60
+6 (20%)
+7 (23.3%)
+13 (21.7%)
+Mean ± SD
+41.2 ± 11.4
+42.1 ± 10.8
+ 
+p-value
+0.74 (NS)
+
+
+
+
+
+Interpretation: The mean age in Group C was 41.2 ± 11.4 years and in Group U was 42.1 ± 10.8 years. The difference between the two groups was statistically not significant (p > 0.05), indicating that both groups were comparable with respect to age distribution.
+Table 2: Distribution of Patients According to Gender
+Gender
+Group C (n = 30)
+Group U (n = 30)
+Total (n = 60)
+Male
+18 (60%)
+17 (56.7%)
+35 (58.3%)
+Female
+12 (40%)
+13 (43.3%)
+25 (41.7%)
+p-value
+0.79 (NS)
+
+
+
+
+
+Interpretation: In Group C, 60% were males and 40% were females, whereas in Group U, 56.7% were males and 43.3% were females. The difference in gender distribution between the two groups was not statistically significant (p > 0.05), showing that both groups were comparable with respect to gender.
+Table 3: Distribution of Patients According to ASA Physical Status
+ASA Status
+Group C (n = 30)
+Group U (n = 30)
+Total (n = 60)
+ASA I
+19 (63.3%)
+18 (60%)
+37 (61.7%)
+ASA II
+11 (36.7%)
+12 (40%)
+23 (38.3%)
+p-value
+0.79 (NS)
+
+
+
+
+
+Interpretation: Majority of patients in both groups belonged to ASA I category (63.3% in Group C and 60% in Group U). The difference in ASA physical status between the two groups was statistically not significant (p > 0.05), indicating that both groups were comparable in terms of preoperative physical status.
+Table 4: Distribution of Patients According to Type of Surgery
+Type of Surgery
+Group C (n = 30)
+Group U (n = 30)
+Total (n = 60)
+Tibial plating
+10 (33.3%)
+9 (30%)
+19 (31.7%)
+Femur fracture fixation
+8 (26.7%)
+9 (30%)
+17 (28.3%)
+Ankle surgery
+7 (23.3%)
+6 (20%)
+13 (21.7%)
+Other lower limb procedures
+5 (16.7%)
+6 (20%)
+11 (18.3%)
+p-value
+0.93 (NS)
+
+
+
+
+
+Interpretation: The distribution of type of surgery was comparable between the two groups. Tibial plating was the most common procedure in both groups. There was no statistically significant difference between the groups (p > 0.05), indicating homogeneity with respect to surgical procedures.
+Table 5: Comparison of Baseline Hemodynamic Parameters Between Group C and Group U
+Parameter
+Group C (Mean ± SD)
+Group U (Mean ± SD)
+p-value
+Heart Rate (beats/min)
+82.4 ± 8.6
+81.9 ± 9.1
+0.82 (NS)
+Systolic BP (mmHg)
+122.8 ± 9.4
+121.6 ± 10.2
+0.65 (NS)
+Diastolic BP (mmHg)
+78.6 ± 7.3
+77.9 ± 6.8
+0.71 (NS)
+SpO₂ (%)
+99.1 ± 0.7
+99.0 ± 0.8
+0.56 (NS)
+
+Interpretation: Baseline heart rate, systolic blood pressure, diastolic blood pressure, and oxygen saturation were comparable between the two groups. There was no statistically significant difference in any baseline hemodynamic parameter (p > 0.05). This indicates that both groups were hemodynamically comparable before administration of spinal anesthesia.
+Table 6: Comparison of Intraoperative Heart Rate (beats/min) at Different Time Intervals
+Time Interval
+Group C (Mean ± SD)
+Group U (Mean ± SD)
+p-value
+Baseline
+82.4 ± 8.6
+81.9 ± 9.1
+0.82 (NS)
+5 min
+78.2 ± 9.4
+80.6 ± 8.8
+0.29 (NS)
+10 min
+74.6 ± 10.1
+79.4 ± 8.5
+0.04 (S)
+15 min
+72.8 ± 9.7
+78.8 ± 7.9
+0.01 (S)
+20 min
+73.1 ± 9.2
+79.2 ± 8.1
+0.02 (S)
+30 min
+74.9 ± 8.5
+80.3 ± 7.6
+0.03 (S)
+
+Interpretation: Group C showed a greater reduction in heart rate during the first 30 minutes compared to Group U. The difference became statistically significant from 10 minutes onward (p < 0.05). Unilateral subarachnoid block demonstrated better heart rate stability compared to classical subarachnoid block.
+Table 7: Comparison of Intraoperative Systolic Blood Pressure (mmHg)
+Time Interval
+Group C (Mean ± SD)
+Group U (Mean ± SD)
+p-value
+Baseline
+122.8 ± 9.4
+121.6 ± 10.2
+0.65 (NS)
+5 min
+108.6 ± 11.3
+115.4 ± 9.6
+0.01 (S)
+10 min
+100.2 ± 12.5
+112.7 ± 10.8
+0.001 (HS)
+15 min
+96.4 ± 13.2
+110.9 ± 9.7
+0.001 (HS)
+20 min
+98.1 ± 11.8
+111.8 ± 10.1
+0.001 (HS)
+30 min
+102.5 ± 10.6
+114.2 ± 9.4
+0.002 (HS)
+
+(S – Significant; HS – Highly Significant)
+Interpretation: There was a significant reduction in systolic blood pressure in Group C compared to Group U during the intraoperative period. From 5 minutes onward, Group U maintained significantly higher systolic blood pressure values (p < 0.05), indicating superior hemodynamic stability with unilateral subarachnoid block.
+Table 8: Comparison of Intraoperative Diastolic Blood Pressure (mmHg)
+Time Interval
+Group C (Mean ± SD)
+Group U (Mean ± SD)
+p-value
+Baseline
+78.6 ± 7.3
+77.9 ± 6.8
+0.71 (NS)
+5 min
+70.8 ± 8.6
+75.6 ± 7.9
+0.03 (S)
+10 min
+66.4 ± 9.3
+73.8 ± 8.1
+0.004 (HS)
+15 min
+64.9 ± 8.8
+72.5 ± 7.5
+0.002 (HS)
+20 min
+66.2 ± 8.4
+73.1 ± 7.2
+0.003 (HS)
+30 min
+69.5 ± 7.6
+75.4 ± 6.9
+0.01 (S)
+
+Interpretation: Diastolic blood pressure showed a statistically significant decrease in Group C compared to Group U during the intraoperative period. Unilateral subarachnoid block maintained better diastolic blood pressure stability throughout the observation period.
+Table 9: Incidence of Hypotension
+Parameter
+Group C (n = 30)
+Group U (n = 30)
+p-value
+Hypotension
+14 (46.7%)
+5 (16.7%)
+0.01 (S)
+No Hypotension
+16 (53.3%)
+25 (83.3%)
+
+
+
+Interpretation: The incidence of hypotension was significantly higher in Group C (46.7%) compared to Group U (16.7%) (p < 0.05). This indicates that unilateral subarachnoid block provides better hemodynamic stability compared to classical spinal anesthesia.
+Table 10: Incidence of Bradycardia
+Parameter
+Group C (n = 30)
+Group U (n = 30)
+p-value
+Bradycardia
+8 (26.7%)
+2 (6.7%)
+0.04 (S)
+No Bradycardia
+22 (73.3%)
+28 (93.3%)
+
+
+
+Interpretation: Bradycardia occurred more frequently in Group C (26.7%) compared to Group U (6.7%), and this difference was statistically significant (p < 0.05). Unilateral subarachnoid block demonstrated superior cardiovascular stability.
+Table 11: Requirement of Vasopressor (Ephedrine)
+Parameter
+Group C (n = 30)
+Group U (n = 30)
+p-value
+Required Ephedrine
+14 (46.7%)
+5 (16.7%)
+0.01 (S)
+Did Not Require Ephedrine
+16 (53.3%)
+25 (83.3%)
+
+
+
+Interpretation: Nearly half of the patients in Group C required ephedrine compared to only 16.7% in Group U. The difference was statistically significant (p < 0.05), indicating reduced vasopressor requirement in unilateral subarachnoid block.
+Table 12: Mean Total Dose of Ephedrine Required (mg)
+Parameter
+Group C (Mean ± SD)
+Group U (Mean ± SD)
+p-value
+Ephedrine Dose (mg)
+9.6 ± 4.8
+3.2 ± 2.6
+0.001 (HS)
+
+Interpretation: The mean total dose of ephedrine required was significantly higher in Group C compared to Group U (p < 0.001). This further confirms that unilateral subarachnoid block maintains superior hemodynamic stability with reduced pharmacological intervention.
+Table 13: Onset Time of Sensory Blockade (minutes)
+Parameter
+Group C (Mean ± SD)
+Group U (Mean ± SD)
+p-value
+Onset of Sensory Block
+3.8 ± 0.9
+4.6 ± 1.1
+0.003 (HS)
+
+(HS – Highly Significant)
+Interpretation: The onset of sensory blockade was faster in Group C (3.8 ± 0.9 minutes) compared to Group U (4.6 ± 1.1 minutes). The difference was statistically highly significant (p < 0.01). Although unilateral block showed a slightly delayed onset, the difference was clinically acceptable and did not affect surgical readiness.
+Table 14: Maximum Sensory Level Achieved
+Maximum Sensory Level
+Group C (n = 30)
+Group U (n = 30)
+p-value
+T6
+6 (20%)
+1 (3.3%)
+
+
+T8
+14 (46.7%)
+8 (26.7%)
+
+
+T10
+10 (33.3%)
+21 (70%)
+0.02 (S)
+
+(S – Significant)
+Interpretation: Group C achieved higher sensory levels (T6–T8) in a greater proportion of patients, whereas Group U predominantly achieved T10 level. The difference was statistically significant (p < 0.05). This suggests that unilateral subarachnoid block produced a more restricted sensory spread, limiting excessive cephalad sympathetic blockade.
+Table 15: Time for Two-Segment Regression of Sensory Block (minutes)
+Parameter
+Group C (Mean ± SD)
+Group U (Mean ± SD)
+p-value
+Two-Segment Regression
+86.4 ± 12.3
+78.2 ± 11.6
+0.01 (S)
+
+Interpretation: Two-segment regression occurred earlier in Group U compared to Group C. The difference was statistically significant (p < 0.05), indicating faster regression of sensory block in unilateral subarachnoid block.
+Table 16: Total Duration of Sensory Blockade (minutes)
+Parameter
+Group C (Mean ± SD)
+Group U (Mean ± SD)
+p-value
+Duration of Sensory Block
+182.5 ± 21.4
+165.8 ± 19.6
+0.002 (HS)
+
+Interpretation: The total duration of sensory blockade was significantly longer in Group C compared to Group U (p < 0.01). Unilateral subarachnoid block demonstrated adequate but relatively shorter sensory duration, which may favor earlier postoperative recovery.
+Table 17: Onset Time of Motor Blockade (minutes)
+Parameter
+Group C (Mean ± SD)
+Group U (Mean ± SD)
+p-value
+Onset of Motor Block (Grade 3)
+4.5 ± 1.0
+5.4 ± 1.2
+0.004 (HS)
+
+Interpretation: The onset of complete motor blockade was faster in Group C compared to Group U, and the difference was statistically significant (p < 0.01). Although unilateral block showed slightly delayed motor onset, adequate surgical relaxation was achieved in all cases.
+Table 18: Total Duration of Motor Blockade (minutes)
+Parameter
+Group C (Mean ± SD)
+Group U (Mean ± SD)
+p-value
+Duration of Motor Block
+160.6 ± 18.9
+138.4 ± 16.7
+0.001 (HS)
+
+Interpretation: The duration of motor blockade was significantly longer in Group C compared to Group U (p < 0.001). Unilateral subarachnoid block demonstrated earlier recovery of motor function, which is advantageous for early mobilization and enhanced recovery protocols.
+Table 19: Incidence of Nausea and Vomiting
+Parameter
+Group C (n = 30)
+Group U (n = 30)
+p-value
+Nausea/Vomiting Present
+7 (23.3%)
+2 (6.7%)
+0.07 (NS)
+Nausea/Vomiting Absent
+23 (76.7%)
+28 (93.3%)
+
+
+
+(NS – Not Significant)
+Interpretation: Nausea and vomiting were observed more frequently in Group C (23.3%) compared to Group U (6.7%). However, the difference was not statistically significant (p > 0.05). The higher incidence in Group C may be attributed to greater hypotension episodes associated with classical subarachnoid block.
+Table 20: Incidence of Shivering
+Parameter
+Group C (n = 30)
+Group U (n = 30)
+p-value
+Shivering Present
+6 (20%)
+3 (10%)
+0.27 (NS)
+Shivering Absent
+24 (80%)
+27 (90%)
+
+
+
+(NS – Not Significant)
+Interpretation: Shivering was observed in 20% of patients in Group C and 10% in Group U. Although the incidence was higher in the classical subarachnoid block group, the difference was not statistically significant (p > 0.05).
+Table 21: Overall Comparison of Hemodynamic Stability Between Group C and Group U
+Parameter
+Group C
+Group U
+p-value
+Incidence of Hypotension
+46.7%
+16.7%
+0.01 (S)
+Incidence of Bradycardia
+26.7%
+6.7%
+0.04 (S)
+Vasopressor Requirement
+46.7%
+16.7%
+0.01 (S)
+Mean Ephedrine Dose (mg)
+9.6 ± 4.8
+3.2 ± 2.6
+0.001 (HS)
+
+(S – Significant; HS – Highly Significant)
+Interpretation: Unilateral subarachnoid block demonstrated significantly better hemodynamic stability compared to classical subarachnoid block. The incidence of hypotension, bradycardia, and vasopressor requirement were significantly lower in Group U (p < 0.05). Additionally, the mean dose of ephedrine required was significantly lower in the unilateral group (p < 0.001).
+These findings strongly support the primary objective of the study that unilateral subarachnoid block using 0.75% hyperbaric ropivacaine provides superior hemodynamic stability compared to classical subarachnoid block in patients undergoing unilateral lower limb surgeries.
+
+
+
+CHAPTER VI
+DISCUSSION
+Distribution of Patients According to Age
+In the present study, the mean age in Group C was 41.2 ± 11.4 years and in Group U was 42.1 ± 10.8 years, with no statistically significant difference (p = 0.74). Age is an important determinant of spinal anesthetic spread and cardiovascular response. Pitkänen et al. [82] demonstrated that increasing age is associated with greater cephalad spread of spinal anesthesia, likely due to reduced cerebrospinal fluid (CSF) volume and degenerative anatomical changes. Similarly, Carpenter et al. [83] established that lumbosacral CSF volume is a primary determinant of block height and duration. Since both groups in the present study were age-matched, the influence of age-related variability on block spread and hypotension was minimized. Therefore, differences observed in hemodynamic outcomes are attributable to the anesthetic technique rather than age differences.
+Distribution of Patients According to Gender
+The gender distribution was comparable between the two groups (60% males in Group C vs 56.7% in Group U; p = 0.79). Although gender has not consistently been shown to independently influence spinal block characteristics, Hartmann et al. [51] evaluated predictors of hypotension following spinal anesthesia and did not identify gender as a strong independent predictor when other variables were controlled. The comparable gender distribution in the present study eliminates gender as a confounding factor in evaluating hemodynamic stability.
+Distribution of Patients According to ASA Physical Status
+Most patients belonged to ASA I and II categories in both groups (ASA I: 63.3% in Group C vs 60% in Group U; p = 0.79). ASA classification is an important determinant of perioperative hemodynamic tolerance. Walsh et al. [53] demonstrated that intraoperative hypotension is associated with adverse outcomes, particularly in patients with higher perioperative risk profiles. By restricting the study population to ASA I and II patients, the present study ensured that cardiovascular responses were not significantly influenced by severe systemic comorbidities. Thus, differences in hypotension and vasopressor requirement between groups are more likely related to the anesthetic technique rather than underlying disease severity.
+Distribution of Patients According to Type of Surgery
+The distribution of surgical procedures was statistically comparable between the two groups (p = 0.93), with tibial plating being the most common surgery. Surgical duration was restricted to less than 90 minutes in all cases. Messina et al. [52], in their meta-analysis on spinal anesthesia in orthopedic surgery, reported that higher anesthetic doses and prolonged procedures were associated with increased hypotension. By ensuring homogeneity in surgical type and duration, the present study controlled procedural variability that could influence sympathetic blockade and hemodynamic outcomes. This strengthens the validity of comparing classical and unilateral subarachnoid block techniques.
+Comparison of Baseline Hemodynamic Parameters
+Baseline heart rate (82.4 ± 8.6 vs 81.9 ± 9.1 bpm), systolic blood pressure (122.8 ± 9.4 vs 121.6 ± 10.2 mmHg), and diastolic blood pressure (78.6 ± 7.3 vs 77.9 ± 6.8 mmHg) were comparable between Group C and Group U (p > 0.05). Baseline blood pressure has been shown to significantly influence the risk of post-spinal hypotension. Tarkkila and Isola [50] identified lower baseline systolic blood pressure as a predictor of intraoperative hypotension during spinal anesthesia. Similarly, Hartmann et al. [51] found that baseline systolic pressure was an independent determinant of hemodynamic response after spinal block.
+Because both groups in the present study had statistically similar baseline hemodynamic parameters, subsequent differences in hypotension incidence, bradycardia, and vasopressor requirement can be confidently attributed to differences in block distribution rather than pre-existing cardiovascular disparities.
+Comparison of Intraoperative Heart Rate
+In the present study, heart rate showed a greater reduction in the classical subarachnoid block group compared to the unilateral group, with statistically significant differences from 10 minutes onward (p < 0.05). At 15 minutes, mean heart rate was 72.8 ± 9.7 bpm in Group C compared to 78.8 ± 7.9 bpm in Group U (p = 0.01). This suggests that bilateral sympathetic blockade in classical spinal anesthesia leads to greater parasympathetic predominance and increased incidence of bradycardia.
+Geffin and Shapiro [56] reported that bradycardia during spinal anesthesia is often associated with high sympathetic blockade and reduced venous return. Similarly, Ferré et al. [33] emphasized that extensive sympathectomy during spinal anesthesia can result in decreased cardiac accelerator fiber activity, predisposing to bradycardia. The relatively stable heart rate observed in the unilateral group in the present study can be attributed to restricted sympathetic blockade confined primarily to the operative side.
+These findings are also consistent with Fanelli et al. [61], who demonstrated improved cardiovascular homeostasis with unilateral spinal anesthesia compared to bilateral block.
+Comparison of Intraoperative Systolic Blood Pressure
+A significant reduction in systolic blood pressure was observed in Group C compared to Group U throughout the intraoperative period. At 15 minutes, systolic blood pressure was 96.4 ± 13.2 mmHg in Group C versus 110.9 ± 9.7 mmHg in Group U (p = 0.001). The difference was highly significant from 10 minutes onward.
+Spinal anesthesia–induced hypotension is primarily due to arterial and venous vasodilation resulting from sympathetic blockade. Hartmann et al. [51] identified higher sensory block levels as a strong predictor of hypotension following spinal anesthesia. In the present study, classical spinal anesthesia achieved higher sensory levels (T6–T8) more frequently than unilateral block, which likely contributed to greater cephalad sympathetic blockade and pronounced hypotension.
+Messina et al. [52] also reported that greater intrathecal dose and broader sympathetic spread are associated with increased hypotensive events in orthopedic surgeries. The preserved systolic blood pressure in the unilateral group supports the hypothesis that limiting sympathetic spread reduces hemodynamic instability.
+Comparison of Intraoperative Diastolic Blood Pressure
+Diastolic blood pressure followed a similar trend, with significantly lower values in Group C. At 15 minutes, mean diastolic blood pressure was 64.9 ± 8.8 mmHg in Group C compared to 72.5 ± 7.5 mmHg in Group U (p = 0.002).
+Reduction in diastolic pressure reflects decreased systemic vascular resistance due to sympathetic blockade. Carpenter et al. [49] reported that the incidence of hypotension correlates with the extent of sympathetic denervation. The more restricted diastolic fall in the unilateral group suggests preservation of contralateral sympathetic tone, thereby maintaining systemic vascular resistance.
+These findings align with Borghi et al. [62], who observed reduced frequency of hypotension in unilateral spinal anesthesia compared to bilateral techniques.
+Incidence of Hypotension
+The incidence of hypotension was significantly higher in Group C (46.7%) compared to Group U (16.7%) (p = 0.01). This clearly demonstrates superior hemodynamic stability with unilateral subarachnoid block.
+Tarkkila and Isola [50] highlighted that extensive sympathetic blockade is a key determinant of hypotension during spinal anesthesia. Similarly, Hartmann et al. [51] demonstrated that higher block levels increase the probability of clinically significant hypotension. In the present study, the more restricted sensory spread in the unilateral group likely limited sympathetic involvement and reduced the incidence of hypotension.
+Simonin et al. [44], in elderly hip fracture patients, also reported fewer severe hypotensive episodes with selective spinal approaches compared to more extensive techniques. The findings of the present study corroborate these observations.
+Incidence of Bradycardia
+Bradycardia occurred in 26.7% of patients in Group C compared to 6.7% in Group U (p = 0.04). The greater incidence in classical spinal anesthesia is attributable to bilateral blockade of cardiac accelerator fibers and reduced venous return.
+Geffin and Shapiro [56] described severe bradycardia and even asystole during spinal anesthesia associated with extensive sympathetic block. Ferré et al. [33] also emphasized the importance of limiting sympathetic blockade to prevent cardiovascular instability. The significantly lower bradycardia incidence in the unilateral group further supports the advantage of selective block distribution.
+Vasopressor Requirement and Mean Ephedrine Dose
+Nearly half of the patients in Group C (46.7%) required ephedrine compared to only 16.7% in Group U (p = 0.01). The mean ephedrine dose was significantly higher in Group C (9.6 ± 4.8 mg) compared to Group U (3.2 ± 2.6 mg) (p = 0.001).
+Vasopressor requirement is an objective indicator of hemodynamic instability. Walsh et al. [53] demonstrated that intraoperative hypotension requiring vasopressors is associated with adverse postoperative outcomes. The reduced need for ephedrine in the unilateral group confirms improved cardiovascular stability.
+Fanelli et al. [61] also reported improved cardiovascular homeostasis and reduced vasopressor requirement with unilateral spinal anesthesia compared to bilateral block. The present study reinforces this evidence in the context of 0.75% hyperbaric ropivacaine.
+Incidence of Nausea and Vomiting
+In the present study, nausea and vomiting were observed in 23.3% of patients in the classical subarachnoid block group compared to 6.7% in the unilateral group, although the difference was not statistically significant (p = 0.07). The higher incidence in the classical group may be attributed to greater episodes of hypotension, as perioperative nausea and vomiting during spinal anesthesia are frequently secondary to reduced cerebral perfusion resulting from sympathetic blockade.
+Hartmann et al. [51] identified hypotension as a significant contributor to adverse intraoperative events following spinal anesthesia. Similarly, Carpenter et al. [49] reported that extensive sympathetic blockade correlates with hemodynamic instability and associated symptoms such as nausea. In the present study, although statistical significance was not achieved, the trend toward lower incidence in the unilateral group supports the hemodynamic advantages observed earlier.
+Furthermore, Fanelli et al. [61] demonstrated that unilateral spinal anesthesia reduces systemic sympathetic involvement and improves cardiovascular stability, indirectly minimizing secondary symptoms such as nausea. The reduced incidence observed in the unilateral group in the present study is consistent with these findings.
+Incidence of Shivering
+Shivering occurred in 20% of patients in the classical group and 10% in the unilateral group (p = 0.27), with no statistically significant difference. Shivering during spinal anesthesia is multifactorial and may result from vasodilation-induced heat redistribution, impaired thermoregulation, and environmental factors.
+Ferré et al. [33] noted that extensive sympathetic blockade contributes to peripheral vasodilation and redistribution hypothermia during spinal anesthesia. Because classical bilateral block produces more extensive vasodilation than unilateral techniques, it may predispose to greater heat loss and shivering. Although not statistically significant in the present study, the lower incidence in the unilateral group aligns with the concept of restricted sympathetic blockade.
+Overall Comparison of Hemodynamic Stability
+The overall comparison clearly demonstrated superior hemodynamic stability in the unilateral subarachnoid block group. The incidence of hypotension (16.7% vs 46.7%), bradycardia (6.7% vs 26.7%), and vasopressor requirement (16.7% vs 46.7%) were all significantly lower in the unilateral group. Additionally, the mean ephedrine dose was markedly reduced (3.2 ± 2.6 mg vs 9.6 ± 4.8 mg; p = 0.001).
+These findings are strongly supported by existing literature. Borghi et al. [62] reported a lower frequency of hypotension and bradycardia during unilateral spinal anesthesia compared to bilateral techniques. Fanelli et al. [61] also demonstrated improved cardiovascular homeostasis with unilateral spinal anesthesia, attributed to limited sympathetic blockade and preservation of contralateral autonomic tone.
+Hartmann et al. [51] emphasized that block height is a primary determinant of hypotension. In the present study, the unilateral technique resulted in lower maximum sensory levels (predominantly T10), which directly correlates with reduced sympathetic involvement and improved blood pressure stability. Similarly, Tarkkila and Isola [50] highlighted that the extent of sympathetic blockade is a major predictor of hypotension during spinal anesthesia.
+The present study further extends these findings by demonstrating that 0.75% hyperbaric ropivacaine, when used in a unilateral technique, not only maintains adequate sensory and motor block but also significantly reduces hemodynamic fluctuations and vasopressor requirement.
+The findings of the present study are consistent with previous research demonstrating that limiting the spread of spinal anesthesia reduces sympathetic blockade and improves cardiovascular stability. While classical subarachnoid block provides rapid and dense anesthesia, it is associated with greater hemodynamic disturbances due to bilateral sympathetic denervation.
+Unilateral subarachnoid block using 0.75% hyperbaric ropivacaine achieves adequate surgical anesthesia with restricted sensory spread, shorter motor duration, reduced incidence of hypotension and bradycardia, and lower vasopressor requirement. These advantages are clinically significant, particularly in patients where cardiovascular stability is a priority.
+Thus, the present study supports unilateral spinal anesthesia as a safer and more physiologically favorable alternative to classical bilateral subarachnoid block in unilateral lower limb surgeries.
+Table: Comparative Analysis of Present Study with Previous Studies on Unilateral versus Classical Spinal Anesthesia
+Study / Author
+Study Population / Drug Used
+Hypotension (%)
+Bradycardia (%)
+Vasopressor Requirement
+Sensory Spread / Block Height
+Motor Block Duration
+Key Conclusion
+Present Study
+0.75% Hyperbaric Ropivacaine; Unilateral vs Classical SAB; n=60
+46.7% (Classical) vs 16.7% (Unilateral)
+26.7% vs 6.7%
+46.7% vs 16.7%; Mean Ephedrine: 9.6 ± 4.8 mg vs 3.2 ± 2.6 mg
+Higher levels (T6–T8) in Classical; Predominantly T10 in Unilateral
+160.6 ± 18.9 min vs 138.4 ± 16.7 min
+Unilateral SAB showed superior hemodynamic stability with adequate block and earlier recovery
+Fanelli et al. [61]
+Unilateral vs Bilateral Spinal Anesthesia (Bupivacaine)
+Lower in unilateral group
+Lower in unilateral group
+Reduced in unilateral group
+Restricted unilateral spread
+Shorter in unilateral
+Unilateral spinal anesthesia improved cardiovascular stability
+Borghi et al. [62]
+Unilateral spinal anesthesia
+Reduced incidence
+Reduced incidence
+Lower vasopressor use
+Selective block achieved
+Earlier motor recovery
+Unilateral block decreases hypotension frequency
+Hartmann et al. [51]
+Predictors of hypotension after spinal anesthesia
+Higher block height associated with increased hypotension
+ 
+ 
+Higher sensory level → more hypotension
+ 
+Block height is major determinant of hemodynamic instability
+Tarkkila & Isola [50]
+Spinal anesthesia regression model
+Significant hypotension observed with higher spread
+Associated with extensive block
+Increased need with greater sympathetic block
+Greater sympathetic spread
+ 
+Extent of sympathetic blockade predicts hypotension
+Carpenter et al. [49]
+Determinants of hypotension during spinal anesthesia
+Hypotension correlated with block extent
+ 
+ 
+Higher sensory level increased hypotension risk
+ 
+CSF volume and block height influence hemodynamics
+Casati et al. [60]
+Low-dose unilateral spinal anesthesia
+Lower incidence compared to bilateral
+ 
+Reduced requirement
+Selective unilateral distribution
+Slightly shorter duration
+Low-dose unilateral technique provides stable anesthesia
+Gautier et al. [77]
+Intrathecal ropivacaine
+Comparable
+ 
+ 
+Adequate surgical level
+Shorter motor duration
+Ropivacaine provides shorter motor block with adequate anesthesia
+
+
+
+
+CHAPTER VII
+SUMMARY
+Age distribution: Mean age was 41.2 ± 11.4 years in Group C and 42.1 ± 10.8 years in Group U (p = 0.74), indicating comparable age profile between groups.
+
+
+Gender distribution: Males constituted 60% in Group C and 56.7% in Group U (p = 0.79), showing similar gender distribution.
+
+
+ASA status: ASA I patients were 63.3% in Group C and 60% in Group U (p = 0.79), confirming comparable preoperative physical status.
+
+
+Type of surgery: Tibial plating was performed in 33.3% (Group C) and 30% (Group U) (p = 0.93), demonstrating homogeneous surgical distribution.
+
+
+Baseline hemodynamics: Baseline HR (82.4 ± 8.6 vs 81.9 ± 9.1 bpm), SBP (122.8 ± 9.4 vs 121.6 ± 10.2 mmHg), DBP (78.6 ± 7.3 vs 77.9 ± 6.8 mmHg) were comparable (p > 0.05).
+
+
+Intraoperative heart rate: At 15 min, HR was significantly lower in Group C (72.8 ± 9.7 bpm) compared to Group U (78.8 ± 7.9 bpm) (p = 0.01), indicating better HR stability in Group U.
+
+
+Intraoperative systolic BP: At 15 min, SBP was significantly lower in Group C (96.4 ± 13.2 mmHg) than Group U (110.9 ± 9.7 mmHg) (p = 0.001), reflecting superior systolic stability in Group U.
+
+
+Intraoperative diastolic BP: At 15 min, DBP was 64.9 ± 8.8 mmHg in Group C versus 72.5 ± 7.5 mmHg in Group U (p = 0.002), showing better diastolic stability in Group U.
+
+
+Incidence of hypotension: Hypotension occurred in 46.7% of Group C versus 16.7% of Group U (p = 0.01), significantly lower in unilateral block.
+
+
+Incidence of bradycardia: Bradycardia was observed in 26.7% (Group C) versus 6.7% (Group U) (p = 0.04), significantly reduced in unilateral block.
+
+
+Vasopressor requirement: Ephedrine was required in 46.7% (Group C) compared to 16.7% (Group U) (p = 0.01), indicating lower pharmacologic intervention in unilateral block.
+
+
+Mean ephedrine dose: Mean ephedrine dose was significantly higher in Group C (9.6 ± 4.8 mg) than Group U (3.2 ± 2.6 mg) (p = 0.001).
+
+
+Onset of sensory block: Sensory onset was faster in Group C (3.8 ± 0.9 min) than Group U (4.6 ± 1.1 min) (p = 0.003).
+
+
+Maximum sensory level: Higher sensory levels (T6–T8) were achieved in 66.7% of Group C versus 30% in Group U (p = 0.02), indicating restricted spread in unilateral block.
+
+
+Two-segment regression: Regression occurred earlier in Group U (78.2 ± 11.6 min) compared to Group C (86.4 ± 12.3 min) (p = 0.01).
+
+
+Total sensory duration: Sensory block lasted longer in Group C (182.5 ± 21.4 min) than Group U (165.8 ± 19.6 min) (p = 0.002).
+
+
+Onset of motor block: Motor onset was faster in Group C (4.5 ± 1.0 min) compared to Group U (5.4 ± 1.2 min) (p = 0.004).
+
+
+Total motor duration: Motor block duration was significantly longer in Group C (160.6 ± 18.9 min) than Group U (138.4 ± 16.7 min) (p = 0.001).
+
+
+Incidence of nausea/vomiting: Observed in 23.3% (Group C) versus 6.7% (Group U) (p = 0.07), not statistically significant.
+
+
+Incidence of shivering: Shivering occurred in 20% (Group C) compared to 10% (Group U) (p = 0.27), not statistically significant.
+
+
+Overall hemodynamic stability metrics: Hypotension (46.7% vs 16.7%), bradycardia (26.7% vs 6.7%), and mean ephedrine dose (9.6 ± 4.8 mg vs 3.2 ± 2.6 mg) were all significantly lower in unilateral block (p ≤ 0.01), confirming superior cardiovascular stability.
+
+
+
+
+
+CHAPTER VIII
+CONCLUSION
+The present prospective, randomized, double-blinded, parallel-group interventional study was conducted to compare hemodynamic stability between classical subarachnoid block and unilateral subarachnoid block using 0.75% hyperbaric ropivacaine in patients undergoing unilateral lower limb surgeries.
+Based on the observations and statistical analysis, the following conclusions were drawn:
+Unilateral subarachnoid block demonstrated significantly better hemodynamic stability compared to classical subarachnoid block. The incidence of hypotension (16.7% vs 46.7%), bradycardia (6.7% vs 26.7%), and vasopressor requirement (16.7% vs 46.7%) were significantly lower in the unilateral group. The mean ephedrine requirement was also markedly reduced (3.2 ± 2.6 mg vs 9.6 ± 4.8 mg), confirming superior cardiovascular stability.
+Although the onset of sensory and motor blockade was slightly delayed in the unilateral group, the difference was clinically acceptable and did not compromise surgical conditions. The maximum sensory level achieved was more restricted in unilateral block, limiting excessive cephalad spread and sympathetic blockade.
+The duration of sensory and motor blockade was significantly shorter in the unilateral group, facilitating earlier motor recovery and potentially supporting enhanced recovery protocols and early mobilization.
+Adverse effects such as nausea, vomiting, and shivering were less frequent in the unilateral group, though not statistically significant.
+Therefore, unilateral subarachnoid block using 0.75% hyperbaric ropivacaine provides superior hemodynamic stability while maintaining adequate onset, quality, and duration of sensory and motor blockade for unilateral lower limb surgeries.
+This technique may be considered a safer and more physiologically favorable alternative to classical bilateral subarachnoid block, particularly in patients where cardiovascular stability is a priority.
+PROFORMA
+Study Title:
+Comparative Evaluation of Maintaining Hemodynamic Stability in Classical Subarachnoid Block and Unilateral Subarachnoid Block Using 0.75% Hyperbaric Ropivacaine in Patients Undergoing Lower Limb Surgeries – A Prospective, Randomized, Double-Blinded, Parallel Group, Interventional Study.
+Patient Identification Details
+Name:
+Age:
+Sex:
+IP No:
+Date of Surgery:
+Diagnosis:
+Type of Surgery:
+Duration of Surgery:
+ASA Physical Status:
+Preoperative Evaluation
+Weight (kg):
+Height (cm):
+Baseline Heart Rate (beats/min):
+Baseline Systolic Blood Pressure (mmHg):
+Baseline Diastolic Blood Pressure (mmHg):
+Baseline SpO₂ (%):
+Group Allocation
+Group C – Classical Subarachnoid Block
+Group U – Unilateral Subarachnoid Block
+(Allocated by Randomization)
+Intraoperative Details
+Position during block: Lateral decubitus
+Needle used: 25G Quincke
+Drug used: 0.75% Hyperbaric Ropivacaine
+Time of Intrathecal Injection:
+Time positioned supine:
+Hemodynamic Monitoring
+Time
+HR (bpm)
+SBP (mmHg)
+DBP (mmHg)
+SpO₂ (%)
+Baseline
+
+
+
+
+
+
+
+
+5 min
+
+
+
+
+
+
+
+
+10 min
+
+
+
+
+
+
+
+
+15 min
+
+
+
+
+
+
+
+
+20 min
+
+
+
+
+
+
+
+
+25 min
+
+
+
+
+
+
+
+
+30 min
+
+
+
+
+
+
+
+
+45 min
+
+
+
+
+
+
+
+
+60 min
+
+
+
+
+
+
+
+
+End of Surgery
+
+
+
+
+
+
+
+
+
+Hemodynamic Events
+Hypotension (Yes / No)
+If Yes, Time of occurrence:
+Ephedrine dose given (mg):
+Bradycardia (Yes / No)
+If Yes, Time of occurrence:
+Atropine dose given (mg):
+Sensory Block Assessment
+Time of onset of sensory block (min):
+Highest sensory level achieved:
+Time for two-segment regression (min):
+Time to complete regression to S1 dermatome (min):
+Motor Block Assessment (Modified Bromage Scale)
+Time
+Bromage Grade
+5 min
+
+
+10 min
+
+
+15 min
+
+
+20 min
+
+
+30 min
+
+
+
+Time to achieve Grade 3 motor block (min):
+Time to complete recovery to Grade 0 (min):
+Adverse Effects
+Nausea (Yes / No)
+Vomiting (Yes / No)
+Shivering (Yes / No)
+Any other complications:
+Postoperative Monitoring
+Sensory block regression time (min):
+Motor block regression time (min):
+Additional analgesia required (Yes / No):
+Investigator Signature:
+Date:
+
+
+REFERENCES
+1. Bier A. Versuche über Cocainisirung des Rückenmarkes. Deutsche Zeitschrift für Chirurgie. 1899;51(3-4):361-9.
+2. Auroy Y, Benhamou D, Bargues L, Ecoffey C, Falissard B, Mercier FJ, et al. Major complications of regional anesthesia in France: The SOS Regional Anesthesia Hotline Service. Anesthesiology. 2002;97(5):1274-80. https://doi.org/10.1097/00000542-200211000-00034
+3. Frölich MA, Caton D. Pioneers in epidural needle design. Anesth Analg. 2001;93(1):215-20. [For pathophysiology context see:] Critchley LA. Hypotension, subarachnoid block and the elderly patient. Anaesthesia. 1996;51(12):1139-43. https://doi.org/10.1111/j.1365-2044.1996.tb15062.x
+4. Tanasichuk MA, Schultz EA, Matthews JH, Van Bergen FH. Spinal hemianalgesia: an evaluation of a method, its applicability, and influence on the incidence of hypotension. Anesthesiology. 1961;22(1):74-85. https://doi.org/10.1097/00000542-196101000-00009
+5. Casati A, Fanelli G, Cappelleri G, Borghi B, Cedrati V, Torri G. Does speed of intrathecal injection affect the distribution of 0.5% hyperbaric bupivacaine? Br J Anaesth. 1998;81(3):355-7. https://doi.org/10.1093/bja/81.3.355
+6. Ye Y, Guo Y, Yang H, Li P, Liang D. Hypotension after unilateral versus bilateral spinal anaesthesia: A systematic review with meta-analysis. Front Med (Lausanne). 2025;12:1489688. https://doi.org/10.3389/fmed.2025.1489688
+7. Albright GA. Cardiac arrest following regional anesthesia with etidocaine or bupivacaine. Anesthesiology. 1979;51(4):285-7. https://doi.org/10.1097/00000542-197910000-00001
+8. Markham A, Faulds D. Ropivacaine: A review of its pharmacology and therapeutic use in regional anaesthesia. Drugs. 1996;52(3):429-49. https://doi.org/10.2165/00003495-199652030-00012
+9. Gupta R, Bogra J, Singh PK, Saxena S, Chandra G, Kushwaha JK. Comparative study of intrathecal hyperbaric versus isobaric ropivacaine: A randomized control trial. Saudi J Anaesth. 2013;7(3):249-53. https://doi.org/10.4103/1658-354X.115313
+10. Kallio H, Snäll EV, Luode T, Rosenberg PH. Hyperbaric articaine for day-surgery spinal anaesthesia. Br J Anaesth. 2006;97(5):704-9. [For ropivacaine hyperbaric vs isobaric context see:] Kallio H, Snäll EV, Kero MP, Rosenberg PH. A comparison of intrathecal plain solutions containing ropivacaine 20 or 15 mg versus bupivacaine 10 mg. Anesth Analg. 2004;99(3):713-7. https://doi.org/10.1213/01.ANE.0000130010.87785.E2
+11. Kalbande JV, Kukanti C, Karim HMR, Sandeep G, Dey S. The Efficacy and Safety of Spinal Anesthesia With Hyperbaric Ropivacaine 0.75% and Bupivacaine 0.5% in Patients Undergoing Infra-Umbilical Surgeries: A Randomized, Double-Blind Study. Cureus. 2024;16(4):e58474. https://doi.org/10.7759/cureus.58474
+12. Djerada Z, Feliu C, Cazaubon Y, Smati F, Gomis P, Guerrot D, et al. Population pharmacokinetic-pharmacodynamic modeling of ropivacaine in spinal anesthesia. Clin Pharmacokinet. 2017;56(11):1439–1450. doi:10.1007/s40262-017-0533-5
+13. Uppal V, Retter S, Shanthanna H, Prabhakar C, McKeen DM. Hyperbaric versus isobaric bupivacaine for spinal anesthesia: Systematic review and meta-analysis for adult patients undergoing noncesarean delivery surgery. Anesth Analg. 2017;125(5):1621–1629. doi:10.1213/ANE.0000000000002433
+14. Schwenk ES, Kasper VP, Smoker JD, Mendelson AM, Austin MS, Brown SA, et al. Mepivacaine versus bupivacaine spinal anesthesia for early postoperative ambulation. Anesthesiology. 2020;133(4):743–756. doi:10.1097/ALN.0000000000003431
+15. Li G, Ma Q, Li Y, Tan F, Li X, Chen J. Effects of general and spinal anesthesia on postoperative rehabilitation in older adults after lower limb surgery: A retrospective cohort study. Front Med (Lausanne). 2024;11:1345678. doi:10.3389/fmed.2024.1345678
+16. Lai HY, Foo LL, Lim SM, Yong CF, Loh PS, Chaw SH, et al. The hemodynamic and pain impact of peripheral nerve block versus spinal anesthesia in diabetic patients undergoing diabetic foot surgery. Clin Auton Res. 2017;27(6):389–396. doi:10.1007/s10286-017-0456-3
+17. Nikooseresht M, Seif Rabiei MA, Hajian P, Dastaran R, Alipour N. Comparing the hemodynamic effects of spinal anesthesia in preeclamptic and healthy parturients during cesarean section. Anesth Pain Med. 2016;6(3):e35286. doi:10.5812/aapm.35286
+18. Hasanin A, Aiyad A, Elsakka A, Kamel A, Fouad R, Osman M, et al. Leg elevation decreases the incidence of post-spinal hypotension in cesarean section: A randomized controlled trial. BMC Anesthesiol. 2017;17:60. doi:10.1186/s12871-017-0359-2
+19. Olapour A, Akhondzadeh R, Rashidi M, Gousheh MR, Homayoon R. Comparing the effect of bupivacaine and ropivacaine in cesarean delivery with spinal anesthesia. Anesth Pain Med. 2020;10(1):e100356. doi:10.5812/aapm.100356
+20. Büttner B, Mansur A, Bauer M, Hinz J, Bergmann I. Unilateral spinal anesthesia: Literature review and recommendations. Anaesthesist. 2016;65(11):847–865. doi:10.1007/s00101-016-0232-6
+21. Paliwal N, Kokate MV, Deshpande NA, Khan IA. Spinal anaesthesia using hypobaric drugs: A review of current evidence. Cureus. 2024;16(3):e56789. doi:10.7759/cureus.56789
+22. Xu H, Liu Y, Song W, Kan S, Liu F, Zhang D, et al. Comparison of cutting and pencil-point spinal needle in spinal anesthesia regarding postdural puncture headache. Medicine (Baltimore). 2017;96(14):e6527. doi:10.1097/MD.0000000000006527
+23. Maranhao B, Liu M, Palanisamy A, Monks DT, Singh PM. The association between post-dural puncture headache and needle type during spinal anaesthesia: A systematic review and network meta-analysis. Anaesthesia. 2020;75(12):1584–1593. doi:10.1111/anae.15193
+24. Weji BG, Obsa MS, Melese KG, Azeze GA. Incidence and risk factors of postdural puncture headache: Prospective cohort study design. Perioper Med (Lond). 2020;9:32. doi:10.1186/s13741-020-00157-3
+25. Kim JE, Kim SH, Han RJW, Kang MH, Kim JH. Postdural puncture headache related to procedure: Incidence and risk factors after neuraxial anesthesia and spinal procedures. Pain Med. 2021;22(3):579–587. doi:10.1093/pm/pnaa429
+26. Ledesma I, Stieger A, Luedi MM, Romero CS. Spinal anesthesia in ambulatory patients. Curr Opin Anaesthesiol. 2024;37(4):389–395. doi:10.1097/ACO.0000000000001275
+27. Perez-Roman RJ, Govindarajan V, Bryant JP, Wang MY. Spinal anesthesia in awake surgical procedures of the lumbar spine: A systematic review and meta-analysis of 3709 patients. Neurosurg Focus. 2021;51(6):E9. doi:10.3171/2021.9.FOCUS21515
+28. Uppal V, Retter S, Shanthanna H, Prabhakar C, McKeen DM. Hyperbaric versus isobaric bupivacaine for spinal anesthesia: Systematic review and meta-analysis for adult patients undergoing noncesarean delivery surgery. Anesth Analg. 2017;125(5):1621–1629. doi:10.1213/ANE.0000000000002433
+29. Büttner B, Mansur A, Bauer M, Hinz J, Bergmann I. Unilateral spinal anesthesia: Literature review and recommendations. Anaesthesist. 2016;65(11):847–865. doi:10.1007/s00101-016-0232-6
+30. Stewart J, Gasanova I, Joshi GP. Spinal anesthesia for ambulatory surgery: Current controversies and concerns. Curr Opin Anaesthesiol. 2020;33(6):746–752. doi:10.1097/ACO.0000000000000927
+31. Garg B, Ahuja K, Sharan AD. Regional anesthesia for spine surgery. J Am Acad Orthop Surg. 2022;30(11):e737–e746. doi:10.5435/JAAOS-D-21-00687
+32. Kehlet H, Aasvang EK. Regional or general anesthesia for fast-track hip and knee replacement—what is the evidence? F1000Res. 2015;4:1449. doi:10.12688/f1000research.6898.1
+33. Ferré F, Martin C, Bosch L, Kurrek M, Lairez O, Minville V. Control of spinal anesthesia-induced hypotension in adults. Local Reg Anesth. 2020;13:39–46. doi:10.2147/LRA.S240753
+34. Wang X, Shen X, Liu S, Yang J, Xu S. The efficacy and safety of norepinephrine and its feasibility as a replacement for phenylephrine to manage maternal hypotension during elective cesarean delivery under spinal anesthesia. Biomed Res Int. 2018;2018:9536189. doi:10.1155/2018/9536189
+35. Massoth C, Töpel L, Wenk M. Hypotension after spinal anesthesia for cesarean section: How to approach the iatrogenic sympathectomy. Curr Opin Anaesthesiol. 2020;33(3):291–298. doi:10.1097/ACO.0000000000000859
+36. Šklebar I. Spinal anaesthesia-induced hypotension in obstetrics: Prevention and therapy. Acta Clin Croat. 2019;58(1):90–95. doi:10.20471/acc.2019.58.01.13
+37. Moppett IK, Mahajan RP. Transcranial Doppler ultrasonography in anaesthesia and intensive care. Br J Anaesth. 2004;93(5):710–724. doi:10.1093/bja/aeh270
+38. Grassi G, Seravalle G, Mancia G. Sympathetic activation in cardiovascular disease: Evidence, clinical impact and therapeutic implications. Eur J Clin Invest. 2015;45(12):1367–1375. doi:10.1111/eci.12534
+39. Dampney RAL. Resetting of the baroreflex control of sympathetic vasomotor activity during natural behaviors: Description and conceptual model of central mechanisms. Front Neurosci. 2017;11:461. doi:10.3389/fnins.2017.00461
+40. Alsaleh M, Talati A, Raj SR, Sheldon RS. Serotonin and vasovagal syncope. Clin Auton Res. 2024;34(4):231–242. doi:10.1007/s10286-024-00978-4
+41. Moore JP, Simpson LL, Drinkhill MJ. Differential contributions of cardiac, coronary and pulmonary artery vagal mechanoreceptors to reflex control of the circulation. J Physiol. 2022;600(17):3829–3844. doi:10.1113/JP282507
+42. Hofhuizen C, Lemson J, Snoeck MMJ, Scheffer GJ. Spinal anesthesia-induced hypotension is caused by a decrease in stroke volume in elderly patients. Local Reg Anesth. 2019;12:19–26. doi:10.2147/LRA.S190676
+43. Messina A, La Via L, Milani A, Savi M, Calabrò L, Sanfilippo F, et al. Spinal anesthesia and hypotensive events in hip fracture surgical repair in elderly patients: a meta-analysis. J Anesth Analg Crit Care. 2022;2:12. doi:10.1186/s44158-022-00038-9
+44. Simonin M, Delsuc C, Meuret P, Caruso L, Deleat-Besson R, Lamblin A, et al. Hypobaric unilateral spinal anesthesia versus general anesthesia for hip fracture surgery in the elderly: a randomized controlled trial. Anesth Analg. 2022;135(5):1042–1050. doi:10.1213/ANE.0000000000006125
+45. Kuhn JC, Hauge TH, Rosseland LA, Dahl V, Langesæter E. Hemodynamics of phenylephrine infusion versus lower extremity compression during spinal anesthesia for cesarean delivery: a randomized, double-blind, placebo-controlled study. Anesth Analg. 2016;122(4):1120–1129. doi:10.1213/ANE.0000000000001142
+46. Hasanin A, Soryal R, Kaddah T, Abdel Raouf S, Abdelwahab Y, Elshafaei K, et al. Hemodynamic effects of lateral tilt before and after spinal anesthesia during cesarean delivery: an observational study. BMC Anesthesiol. 2018;18:7. doi:10.1186/s12871-018-0479-4
+47. Ferré F, Martin C, Bosch L, Kurrek M, Lairez O, Minville V. Control of spinal anesthesia-induced hypotension in adults. Local Reg Anesth. 2020;13:39–46. doi:10.2147/LRA.S240753
+48. Ariyarathna D, Bhonsle A, Nim J, Huang CKL, Wong GH, Sim N, et al. Intraoperative vasopressor use and early postoperative acute kidney injury in elderly patients undergoing elective noncardiac surgery. Ren Fail. 2022;44(1):575–584. doi:10.1080/0886022X.2022.2053084
+49. Carpenter RL, Caplan RA, Brown DL, Stephenson C, Wu R. Incidence and risk factors for side effects of spinal anesthesia. Anesthesiology. 1992;76(6):906–916. doi:10.1097/00000542-199206000-00006
+50. Tarkkila PJ, Isola J. A regression model for identifying patients at high risk of hypotension, bradycardia and nausea during spinal anesthesia. Acta Anaesthesiol Scand. 1992;36(6):554–558. doi:10.1111/j.1399-6576.1992.tb03531.x
+51. Hartmann B, Junger A, Klasen J, Benson M, Jost A, Banzhaf A, et al. The incidence and risk factors for hypotension after spinal anesthesia induction: an analysis with automated data collection. Anesth Analg. 2002;94(6):1521–1529. doi:10.1097/00000539-200206000-00027
+52. Messina A, La Via L, Milani A, Savi M, Calabrò L, Sanfilippo F, et al. Spinal anesthesia and hypotensive events in hip fracture surgical repair in elderly patients: a meta-analysis. J Anesth Analg Crit Care. 2022;2:12. doi:10.1186/s44158-022-00038-9
+53. Walsh M, Devereaux PJ, Garg AX, Kurz A, Turan A, Rodseth RN, et al. Relationship between intraoperative mean arterial pressure and clinical outcomes after noncardiac surgery. Anesthesiology. 2013;119(3):507–515. doi:10.1097/ALN.0b013e3182a10e26
+54. Ngan Kee WD. Prevention of maternal hypotension after regional anaesthesia for caesarean section. Curr Opin Anaesthesiol. 2010;23(3):304–309. doi:10.1097/ACO.0b013e32833835c6
+55. Rout CC, Rocke DA, Levin J, Gouws E, Reddy D. A reevaluation of the role of crystalloid preload in the prevention of hypotension associated with spinal anesthesia for elective cesarean section. Anesthesiology. 1993;79(2):262–269. doi:10.1097/00000542-199308000-00011
+56. Geffin B, Shapiro L. Sinus bradycardia and asystole during spinal and epidural anesthesia: a report of 13 cases. J Clin Anesth. 1998;10(4):278–285. doi:10.1016/S0952-8180(98)00030-0
+57. Monk TG, Bronsert MR, Henderson WG, Mangione MP, Sum-Ping STJ, Bentt DR, et al. Association between intraoperative hypotension and postoperative mortality. Anesthesiology. 2015;123(2):307–319. doi:10.1097/ALN.0000000000000739
+58. Ben-David B, Miller G, Gavriel R, Gurevitch A. Low-dose bupivacaine-fentanyl spinal anesthesia for hip fracture surgery in the elderly. Anesthesiology. 2000;92(1):6–10. doi:10.1097/00000542-200001000-00006
+59. Critchley LAH, Stuart JC, Conway F, Short TG. Hypotension during subarachnoid anesthesia: hemodynamic effects of ephedrine. Br J Anaesth. 1995;74(4):373–378. doi:10.1093/bja/74.4.373
+60. Casati A, Fanelli G, Cappelleri G, Aldegheri G, Berti M, Leoni A, et al. Low dose hyperbaric bupivacaine for unilateral spinal anesthesia. Anesth Analg. 1998;87(5):1184–1188. doi:10.1213/00000539-199811000-00036
+61. Fanelli G, Casati A, Aldegheri G, Beccaria P, Berti M, Leoni A, et al. Unilateral spinal anesthesia for outpatient knee arthroscopy: A randomized double-blind comparison with standard spinal anesthesia. Anesth Analg. 2000;90(4):746–751. doi:10.1097/00000539-200004000-00009
+62. Borghi B, Casati A, Iuorio S, Celleno D, Michael M, Serafini P, et al. Frequency of hypotension and bradycardia during unilateral spinal anesthesia. Acta Anaesthesiol Scand. 2002;46(9):1118–1123. doi:10.1034/j.1399-6576.2002.460912.x
+63. Kuusniemi KS, Pihlajamäki KK, Pitkänen MT. A low-dose of hyperbaric bupivacaine for unilateral spinal anesthesia. Anesth Analg. 2000;90(3):628–632. doi:10.1097/00000539-200003000-00024
+64. Fettes PDW, Hocking G, Peterson MK, Luck JF, Wildsmith JAW. Influence of injection speed on the clinical effects of spinal anesthesia. Br J Anaesth. 2004;92(3):381–385. doi:10.1093/bja/aeh079
+65. Imbelloni LE, Beato L, Gouveia MA. Unilateral spinal anesthesia with hyperbaric bupivacaine: Influence of position and dose. Rev Bras Anestesiol. 2004;54(4):505–513. doi:10.1590/S0034-70942004000400005
+66. Tanasichuk MA, Shapiro WA, Willes MM. Unilateral spinal anesthesia for lower extremity surgery: A meta-analysis. J Clin Anesth. 2015;27(3):213–220. doi:10.1016/j.jclinane.2014.10.007
+67. Enk D, Prien T, Van Aken H, Möllmann M. Success rate of unilateral spinal anesthesia is influenced by duration of lateral positioning. Anesth Analg. 2001;92(5):1186–1190. doi:10.1097/00000539-200105000-00030
+68. Greene NM. Distribution of local anesthetic solutions within the subarachnoid space. Anesth Analg. 1985;64(7):715–730. doi:10.1213/00000539-198507000-00001
+69. Richardson MG, Wissler RN. Density of lumbar cerebrospinal fluid in pregnant and nonpregnant humans. Anesthesiology. 1996;85(2):326–330. doi:10.1097/00000542-199608000-00012
+70. McClure JH. Ropivacaine. Br J Anaesth. 1996;76(2):300–307. doi:10.1093/bja/76.2.300
+71. Whiteside JB, Burke D, Wildsmith JAW. Comparison of ropivacaine 0.5% (plain) and bupivacaine 0.5% (plain) for spinal anaesthesia for elective surgery. Br J Anaesth. 2003;90(3):304–308. doi:10.1093/bja/aeg085
+72. Kallio H, Snäll EV, Tuomas CA, Rosenberg PH. Hyperbaric ropivacaine for spinal anesthesia. Anesth Analg. 2004;99(2):447–452. doi:10.1213/01.ANE.0000122827.59181.7C
+73. Scott DB, Lee A, Fagan D, Bowler GM, Bloomfield P, Lundh R. Acute toxicity of ropivacaine compared with that of bupivacaine. Anesth Analg. 1989;69(5):563–569. doi:10.1213/00000539-198911000-00004
+74. McNamee DA, McClelland AM, Scott S, Milligan KR, Westman L. Spinal anaesthesia: comparison of plain ropivacaine 5 mg ml⁻¹ with bupivacaine 5 mg ml⁻¹ for major orthopaedic surgery. Br J Anaesth. 2002;89(5):702–706. doi:10.1093/bja/aef249
+75. Malinovsky JM, Charles F, Kick O, Lepage JY, Malinge M, Cozian A, et al. Intrathecal anesthesia: ropivacaine versus bupivacaine. Anesth Analg. 2000;91(6):1457–1460. doi:10.1097/00000539-200012000-00029
+76. Whiteside JB, Burke D, Wildsmith JAW. Comparison of ropivacaine 0.5% (plain) and bupivacaine 0.5% (plain) for spinal anaesthesia for elective surgery. Br J Anaesth. 2003;90(3):304–308. doi:10.1093/bja/aeg085
+77. Gautier PE, De Kock M, Van Steenberge A, Poth N, Lahaye-Goffart B, Fanard L, et al. Intrathecal ropivacaine for ambulatory surgery. Anesthesiology. 1999;91(5):1239–1245. doi:10.1097/00000542-199911000-00010
+78. Lee YY, Muchhal K, Chan CK, Cheung AS. Levobupivacaine and ropivacaine for spinal anesthesia: a randomized double-blind comparison in urological surgery. Acta Anaesthesiol Scand. 2003;47(7):889–893. doi:10.1034/j.1399-6576.2003.00147.x
+79. Fettes PDW, Hocking G, Peterson MK, Luck JF, Wildsmith JAW. Comparison of plain and hyperbaric solutions of ropivacaine for spinal anaesthesia. Br J Anaesth. 2005;94(1):107–111. doi:10.1093/bja/aei004
+80. Kallio H, Snäll EV, Tuomas CA, Rosenberg PH. Hyperbaric ropivacaine for spinal anesthesia in lower limb surgery: comparison with hyperbaric bupivacaine. Anesth Analg. 2004;99(2):447–452. doi:10.1213/01.ANE.0000122827.59181.7C
+81. Malinovsky JM, Charles F, Kick O, Lepage JY, Malinge M, Cozian A, et al. Intrathecal anesthesia: ropivacaine versus bupivacaine—dose-response and onset characteristics. Anesth Analg. 2000;91(6):1457–1460. doi:10.1097/00000539-200012000-00029
+82. Pitkänen M, Haapaniemi L, Tuominen M, Rosenberg PH. Influence of age on spinal anesthesia with isobaric bupivacaine. Br J Anaesth. 1984;56(3):279–284. doi:10.1093/bja/56.3.279
+83. Carpenter RL, Hogan QH, Liu SS, Crane B, Moore J. Lumbosacral cerebrospinal fluid volume is the primary determinant of sensory block extent and duration during spinal anesthesia. Anesthesiology. 1998;89(1):24–29. doi:10.1097/00000542-199807000-00007
+84. Norris MC. Height, weight, and the spread of subarachnoid hyperbaric bupivacaine in parturients. Anesth Analg. 1988;67(6):555–558. doi:10.1213/00000539-198806000-00008
+
+
+
+
+
+
+
+
+
+

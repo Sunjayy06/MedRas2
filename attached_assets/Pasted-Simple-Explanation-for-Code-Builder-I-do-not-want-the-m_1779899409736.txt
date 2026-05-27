@@ -1,0 +1,150 @@
+Simple Explanation for Code Builder
+
+I do not want the module to simply generate random thesis content. I want the module to write in the exact structure, flow, tone, and academic style of a standard Indian MD/MS thesis, like the sample thesis provided.
+
+The module should not behave like a general AI writer. It should behave like a medical thesis-writing engine that follows fixed chapter-wise templates, examiner-friendly formatting, and consistent academic language.
+
+1. The module should follow a fixed thesis structure
+
+The writing should follow this standard order:
+
+Title Page
+List of Abbreviations
+Abstract
+Chapter I: Introduction
+Chapter II: Aim and Objectives
+Chapter III: Review of Literature
+Chapter IV: Materials and Methods
+Chapter V: Observation and Results
+Chapter VI: Discussion
+Summary
+Conclusion
+Bibliography / References
+Annexures
+Proforma / Case Record Form
+
+The module should not create chapters in random order or write free-flowing content without this thesis structure.
+
+2. Each chapter should have its own writing style
+
+Every chapter should be generated differently based on its purpose.
+
+The Abstract should be short, structured, and divided into:
+Background, Aim, Methods, Results, and Conclusion.
+
+The Introduction should move from general background to specific study need. It should explain the topic, clinical importance, problem statement, existing knowledge, research gap, and finally the justification for the present study.
+
+The Aim and Objectives chapter should not be written as paragraphs. It should strictly follow this format:
+
+AIM:
+One clear sentence.
+
+PRIMARY OBJECTIVE:
+One clear measurable objective.
+
+SECONDARY OBJECTIVES:
+Numbered list of secondary outcomes.
+
+The Review of Literature should be written with academic subheadings. Each section should explain one concept in detail, include citations, and build logically toward the research gap.
+
+The Materials and Methods chapter should follow a fixed order, including study design, setting, duration, study population, sample size, inclusion criteria, exclusion criteria, procedure, outcome assessment, and statistical analysis.
+
+The Results chapter should follow the format:
+Table → Interpretation → Table → Interpretation.
+It should not be written as long paragraphs without tables.
+
+The Discussion should compare the present study findings with previous studies using named authors and reference numbers.
+
+The Summary should be in numbered or bullet points, with exact values, percentages, and p-values.
+
+The Conclusion should be short, evidence-linked, and based only on the study findings.
+
+3. The writing tone should be formal medical thesis style
+
+The tone should be:
+
+Academic
+Formal
+Examiner-friendly
+Clear and structured
+British English
+Medical dissertation style
+Not conversational
+Not generic AI writing
+
+For example, the module should write like:
+
+“The present study demonstrated a significantly lower incidence of hypotension in the unilateral subarachnoid block group compared with the classical subarachnoid block group.”
+
+It should not write like:
+
+“This shows that one method is better and may be useful for patients.”
+
+4. The module should use standard Indian MD thesis formatting
+
+The module must follow Indian MD/MS thesis conventions. This includes:
+
+Chapter headings in proper order
+Structured Aim and Objectives
+Abbreviations in a two-column table
+Results in formatted tables
+Interpretation below each table
+P-values labelled as S, NS, or HS
+List of Tables and List of Figures
+Vancouver-style citations
+References in the order of first appearance
+Proforma / Case Record Form template
+IEC approval statement in Methods
+Statistical software statement in Methods
+5. The module should maintain number consistency
+
+The same result value should remain the same across the Abstract, Results, Discussion, Summary, and Conclusion.
+
+For example, if Results says:
+
+“Hypotension occurred in 46.7% of Group C and 16.7% of Group U.”
+
+Then the same values must appear exactly the same in the Abstract, Discussion, Summary, and Conclusion.
+
+The module should not generate different numbers in different chapters.
+
+6. The module should maintain citation and reference consistency
+
+Each study should get only one reference number.
+
+For example, if “Smith et al.” is Reference 5, then every time that study is cited, it should remain Reference 5.
+
+The module should not duplicate the same study as Reference 5, Reference 12, and Reference 18.
+
+The reference list should be in the same order as citations first appear in the thesis.
+
+7. The module should write Discussion in examiner-expected format
+
+The Discussion should follow this pattern:
+
+Present study finding with exact numbers
+Explanation of why this finding occurred
+Comparison with previous study
+Whether it is similar or different
+Clinical meaning of the finding
+
+Example:
+
+“The present study observed a significantly higher incidence of hypotension in Group C compared with Group U. This may be attributed to greater bilateral sympathetic blockade in classical subarachnoid block. Similar findings were reported by Smith et al. (5), who observed reduced hypotension with unilateral spinal anaesthesia in lower limb surgeries.”
+
+8. The module should not only write content, it should generate thesis-ready output
+
+The goal is not just text generation. The module should create a ready-to-use MD thesis draft with:
+
+Correct chapter order
+Correct formatting
+Proper tables
+Proper citations
+Proper references
+Consistent numbers
+British English
+Formal academic tone
+Examiner-friendly flow
+Final simple instruction for the code builder
+
+Build the module as a template-controlled medical thesis generator, not a general writing tool. The AI should write chapter-wise content using fixed Indian MD/MS thesis structures, maintain citation and number consistency, generate tables where required, use formal British academic medical language, and follow the same content flow and tone as the uploaded sample thesis.
