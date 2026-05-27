@@ -949,15 +949,19 @@
         const baseHtml = baseText
           ? '<span class="th-existing">' + TrackChanges.renderPlainInline(baseText, locks) + '</span>'
           : '';
+        // Pre-resolve [CITE_n] for the preview so the user sees real [1], [2]
+        // numbers rather than raw placeholders. State is NOT mutated here.
+        const previewText = _previewCiteText(pendingDraft, pendingDraftSources);
         canvas.innerHTML =
           baseHtml +
           (baseText ? '<br><br>' : '') +
           '<span class="th-diff-block" data-pending="1">' +
-            '<span class="th-diff-add">' + TrackChanges.renderPlainInline(pendingDraft, locks) + '</span>' +
-            '<span class="th-diff-actions" contenteditable="false">' +
-              '<button class="th-accept" data-pending-act="accept" title="Accept the entire AI draft and add it to your chapter">✓ accept whole draft</button>' +
-              '<button class="th-reject" data-pending-act="reject" title="Discard the AI draft">✗ discard</button>' +
-            '</span>' +
+            '<span class="th-diff-add">' + TrackChanges.renderPlainInline(previewText, locks) + '</span>' +
+            '<div class="th-draft-bar" contenteditable="false">' +
+              '<span class="th-draft-bar-label">AI draft — citations mapped. Accept to add to your chapter.</span>' +
+              '<button class="th-accept" data-pending-act="accept">✓ Accept draft</button>' +
+              '<button class="th-reject" data-pending-act="reject">✗ Discard</button>' +
+            '</div>' +
           '</span>';
         canvas.querySelectorAll('button[data-pending-act]').forEach((btn) => {
           btn.addEventListener('click', (ev) => {
@@ -1150,6 +1154,38 @@
         renderSuggestList();
       });
     });
+  }
+
+  // ---------- citation preview (read-only, no state mutation) ----------
+  // Computes what [CITE_n] tags will become when accepted, so the user sees
+  // real [1], [2] numbers in the pending draft preview.
+  function _previewCiteText(draftText, sources) {
+    if (!draftText) return '';
+    if (!sources || !sources.length) {
+      return draftText.replace(/\[CITE_\d+\]/g, '[?]');
+    }
+    const existingRefs = ThesisState.get().references || [];
+    const preview = existingRefs.slice();
+    const map = Object.create(null);
+    const re = /\[CITE_(\d+)\]/g;
+    let m;
+    while ((m = re.exec(draftText)) !== null) {
+      const n = m[1];
+      if (map[n] !== undefined) continue;
+      const src = sources[parseInt(n, 10) - 1];
+      if (!src) { map[n] = null; continue; }
+      const srcDoi   = (src.doi   || '').toLowerCase().trim();
+      const srcTitle = (src.title || '').toLowerCase().trim();
+      let pos = preview.findIndex((r) =>
+        (srcDoi   && r.doi   && r.doi.toLowerCase().trim()   === srcDoi) ||
+        (srcTitle && r.title && r.title.toLowerCase().trim() === srcTitle)
+      );
+      if (pos === -1) { preview.push(src); pos = preview.length - 1; }
+      map[n] = pos + 1;
+    }
+    return draftText.replace(/\[CITE_(\d+)\]/g, (_, n) =>
+      map[n] != null ? '[' + map[n] + ']' : '[?]'
+    );
   }
 
   // ---------- citation resolution on draft acceptance ----------
