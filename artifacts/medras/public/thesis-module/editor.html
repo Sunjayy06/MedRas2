@@ -84,7 +84,12 @@
   <section class="th-pane th-pane-center">
     <div class="th-editor-toolbar">
       <span class="th-current" id="th-cur-label">…</span>
-      <span id="th-wc" style="font-size:12.5px"></span>
+      <div id="th-wc" style="display:flex;align-items:center;gap:7px;min-width:0">
+        <span id="th-wc-text" style="font-size:12.5px;white-space:nowrap"></span>
+        <div id="th-wc-track" style="display:none;width:76px;height:5px;background:rgba(0,0,0,.09);border-radius:99px;overflow:hidden;flex-shrink:0" title="Word count progress">
+          <div id="th-wc-fill" style="height:100%;border-radius:99px;width:0%;transition:width .22s ease,background-color .22s ease"></div>
+        </div>
+      </div>
       <select id="th-style-pick" class="th-btn th-btn-light th-btn-sm"
               style="font-size:12px; cursor:pointer; padding:0 8px" title="Writing style"></select>
       <button id="th-toggle-mode" class="th-btn th-btn-light th-btn-sm">Mode: Write</button>
@@ -763,27 +768,58 @@
     const c = ThesisState.getChapter(chapterId);
     const w = (String(c.text||'').match(/\b\w+\b/g) || []).length;
     const budget = chapter.word_budget;  // [min, max] or undefined
-    const el = document.getElementById('th-wc');
+    const textEl  = document.getElementById('th-wc-text');
+    const track   = document.getElementById('th-wc-track');
+    const fill    = document.getElementById('th-wc-fill');
+    const fmt     = n => n.toLocaleString();
 
     if (!budget) {
       const t = chapter.target_words || 0;
-      el.textContent = `${w} words${t ? ' / target ' + t : ''}`;
-      el.style.color = 'var(--th-text-soft)';
+      if (t) {
+        const pct = Math.min(w / t * 100, 100);
+        const barColor = pct >= 100 ? 'var(--th-emerald)' : (pct >= 60 ? '#f59e0b' : '#93c5fd');
+        fill.style.width  = pct + '%';
+        fill.style.backgroundColor = barColor;
+        track.style.display = 'block';
+        const badge = pct >= 100 ? ' ✓' : ` · ${fmt(t - w)} to go`;
+        textEl.textContent = `${fmt(w)} words${badge}`;
+        textEl.style.color = pct >= 100 ? 'var(--th-emerald-d)' : 'var(--th-text-soft)';
+        textEl.style.fontWeight = pct >= 100 ? '600' : '400';
+      } else {
+        track.style.display = 'none';
+        textEl.textContent = `${fmt(w)} words`;
+        textEl.style.color = 'var(--th-text-soft)';
+        textEl.style.fontWeight = '400';
+      }
       return;
     }
+
     const [mn, mx] = budget;
-    let color = 'var(--th-emerald-d)';   // within range — green
-    let badge = '';
+    let color, barColor, badge, pct;
     if (w < mn) {
-      color = w < mn * 0.60 ? '#c0392b' : '#d68910';  // red if very short, amber if approaching
-      badge = ` ↑ ${mn - w} more needed`;
+      pct = w / mn * 100;
+      const isVeryShort = w < mn * 0.60;
+      color    = isVeryShort ? '#c0392b' : '#d68910';
+      barColor = isVeryShort ? '#ef4444' : '#f59e0b';
+      badge    = ` ↑ ${fmt(mn - w)} to go`;
     } else if (w > mx) {
-      color = w > mx * 1.25 ? '#c0392b' : '#d68910';
-      badge = ` ↓ ${w - mx} over`;
+      pct = 100;
+      const isWayOver = w > mx * 1.25;
+      color    = isWayOver ? '#c0392b' : '#d68910';
+      barColor = isWayOver ? '#ef4444' : '#f59e0b';
+      badge    = ` ↓ ${fmt(w - mx)} over`;
+    } else {
+      pct = 100;
+      color    = 'var(--th-emerald-d)';
+      barColor = 'var(--th-emerald)';
+      badge    = ' ✓';
     }
-    el.textContent = `${w} words · ${mn}–${mx}${badge}`;
-    el.style.color = color;
-    el.style.fontWeight = (w >= mn && w <= mx) ? '400' : '600';
+    textEl.textContent = `${fmt(w)} / ${fmt(mn)}–${fmt(mx)}${badge}`;
+    textEl.style.color = color;
+    textEl.style.fontWeight = badge === ' ✓' ? '400' : '600';
+    fill.style.width = Math.min(pct, 100) + '%';
+    fill.style.backgroundColor = barColor;
+    track.style.display = 'block';
   }
 
   // Save while typing (write mode) + [@  cite trigger
