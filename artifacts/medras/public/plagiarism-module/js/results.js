@@ -120,6 +120,38 @@
     fnEl.innerHTML = `File: <strong>${escapeHtml(result.filename)}</strong>`;
   }
 
+  // ---- Bridge: "Reduce plagiarism →" hands off checked text to reducer ----
+  // Instead of opening the reducer empty, we stage the text that was just
+  // checked into pm:reduceInput so reduce-results.html starts immediately.
+  const reduceBtn = document.querySelector('[data-testid="button-reduce"]');
+  if (reduceBtn) {
+    reduceBtn.addEventListener("click", function (e) {
+      e.preventDefault();
+      let inputRaw;
+      try { inputRaw = sessionStorage.getItem("pm:checkedInput"); } catch (_) {}
+      if (inputRaw) {
+        try {
+          const inp = JSON.parse(inputRaw);
+          if (inp && inp.text && inp.text.trim()) {
+            const reducePayload = {
+              text: inp.text,
+              title: inp.filename
+                ? inp.filename.replace(/\.[^.]+$/, "") + " — rewritten"
+                : "Rewritten document",
+              protected_terms: inp.protected_terms || [],
+            };
+            if (inp.filename) reducePayload.filename = inp.filename;
+            sessionStorage.setItem("pm:reduceInput", JSON.stringify(reducePayload));
+            window.location.href = "/plagiarism-module/reduce-results.html";
+            return;
+          }
+        } catch (_) {}
+      }
+      // Fallback: no bridged text — go to intake to upload fresh
+      window.location.href = "/plagiarism-module/intake.html";
+    });
+  }
+
   // ---- Download report ----
   const dlBtn = document.getElementById("pm-download-report");
   if (dlBtn) {

@@ -422,6 +422,15 @@
           ...result,
           checked_at: new Date().toISOString(),
         }));
+        // Bridge: save original input so results page can hand off to reducer
+        // without the user having to paste the text a second time.
+        try {
+          sessionStorage.setItem("pm:checkedInput", JSON.stringify({
+            text: text,
+            protected_terms: protectedTerms,
+            filename: docAnalysis ? (docAnalysis.filename || null) : null,
+          }));
+        } catch (_) { /* non-fatal — bridge degrades gracefully */ }
         window.location.href = "/plagiarism-module/results.html";
       }
     } catch (err) {
