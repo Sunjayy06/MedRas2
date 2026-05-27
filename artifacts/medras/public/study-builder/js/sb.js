@@ -1431,7 +1431,7 @@
           source:  'helix',
         };
       });
-      sessionStorage.setItem('medras.helix.references', JSON.stringify(mirror));
+      localStorage.setItem('medras.helix.references', JSON.stringify(mirror));
     } catch (_) {}
   }
 

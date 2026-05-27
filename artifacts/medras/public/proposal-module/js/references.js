@@ -577,8 +577,8 @@
   // ===================== Helix import =====================
   function importFromHelix() {
     var raw = null;
-    try { raw = sessionStorage.getItem('medras.helix.references'); } catch (_) {}
-    if (!raw) { try { raw = sessionStorage.getItem('sb.folio'); } catch (_) {} }
+    try { raw = localStorage.getItem('medras.helix.references'); } catch (_) {}
+    if (!raw) { try { raw = localStorage.getItem('sb.folio'); } catch (_) {} }
     var helixRefs;
     try { helixRefs = JSON.parse(raw || 'null'); } catch (_) { helixRefs = null; }
     if (!Array.isArray(helixRefs) || !helixRefs.length) {
@@ -692,7 +692,7 @@
       // Update count badge
       var helixAvail = document.getElementById("prop-helix-avail");
       try {
-        var hRaw = sessionStorage.getItem('medras.helix.references') || sessionStorage.getItem('sb.folio');
+        var hRaw = localStorage.getItem('medras.helix.references') || localStorage.getItem('sb.folio');
         var hArr = hRaw ? JSON.parse(hRaw) : [];
         if (Array.isArray(hArr) && hArr.length && helixAvail) {
           helixAvail.textContent = hArr.length + ' paper' + (hArr.length > 1 ? 's' : '') + ' pinned in Study Builder — click to import all.';

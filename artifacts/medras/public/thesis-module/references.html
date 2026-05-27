@@ -29,11 +29,33 @@
   <span class="th-eyebrow">Station 4 of 9 · References</span>
   <h1 class="th-h1">Build your reference library</h1>
   <p class="th-sub">
-    Combine three sources: paste DOIs you already have, search for high-quality
-    papers in the right databases for your domain, or pull from your saved
-    library across past theses.
+    Combine sources: paste DOIs you already have, search the right databases for
+    your domain, or pull from your saved library across past theses.
     <strong id="th-min-ref-note"></strong>
   </p>
+
+  <!-- Auto-detected Helix banner — shown on load if unimported refs exist -->
+  <div id="th-helix-banner" style="display:none;
+    background:linear-gradient(135deg,#ecfdf5 0%,#d1fae5 100%);
+    border:1.5px solid var(--th-emerald-d,#059669);
+    border-radius:10px; padding:14px 18px;
+    align-items:center; gap:14px; margin-bottom:20px; flex-wrap:wrap">
+    <div style="font-size:22px; flex-shrink:0">📚</div>
+    <div style="flex:1; min-width:200px">
+      <div style="font-weight:700; font-size:14.5px; color:#065f46">
+        References ready from Helix
+      </div>
+      <div id="th-helix-banner-sub" style="font-size:13px; color:#047857; margin-top:2px"></div>
+    </div>
+    <button id="th-helix-banner-btn" class="th-btn th-btn-primary"
+      style="flex-shrink:0; background:var(--th-emerald-d); border-color:var(--th-emerald-d)">
+      Import all →
+    </button>
+    <button id="th-helix-banner-skip" style="
+      background:none; border:none; cursor:pointer; font-size:18px;
+      color:#6b7280; padding:0 4px; line-height:1; flex-shrink:0"
+      title="Dismiss">✕</button>
+  </div>
 
   <div class="th-grid cols-2">
     <!-- Add by DOI -->
@@ -94,16 +116,6 @@
       </div>
     </div>
 
-    <!-- Import from Helix (Study Builder) -->
-    <div class="th-card">
-      <h3 class="th-h3">Import from Study Builder</h3>
-      <p style="font-size:13px; color:var(--th-text-soft); margin:0 0 8px">
-        Pull references that Helix found when generating your research plan.
-        Duplicates (by DOI) are silently skipped.
-      </p>
-      <button id="th-helix-import" class="th-btn th-btn-primary">Import from Helix</button>
-      <span id="th-helix-status" style="font-size:13px; color:var(--th-text-soft); margin-left:10px"></span>
-    </div>
   </div>
 
   <div class="th-card">
@@ -631,29 +643,45 @@
     }
   });
 
-  // ---------- Import from Helix (Study Builder) ----------
-  document.getElementById('th-helix-import').addEventListener('click', () => {
-    const helixStat = document.getElementById('th-helix-status');
+  // ---------- Helix auto-detect banner ----------
+  function _helixNewRefs() {
     let raw = null;
-    try { raw = sessionStorage.getItem('medras.helix.references'); } catch (_) {}
-    if (!raw) {
-      helixStat.textContent = 'No Study Builder references found. Run Helix first to generate a research plan.';
-      return;
-    }
-    let helixRefs = [];
-    try { helixRefs = JSON.parse(raw); } catch (_) { helixStat.textContent = 'Could not parse Helix data.'; return; }
-    if (!Array.isArray(helixRefs) || !helixRefs.length) {
-      helixStat.textContent = 'Helix reference list is empty.';
-      return;
-    }
+    try { raw = localStorage.getItem('medras.helix.references'); } catch (_) {}
+    if (!raw) return [];
+    let all = [];
+    try { all = JSON.parse(raw); } catch (_) { return []; }
+    if (!Array.isArray(all) || !all.length) return [];
     const existing = new Set((ThesisState.get().references || []).map((r) => (r.doi || '').toLowerCase()));
-    const fresh = helixRefs.filter((r) => !(r.doi && existing.has((r.doi || '').toLowerCase())));
-    if (!fresh.length) { helixStat.textContent = 'All Helix references already in your library.'; return; }
+    return all.filter((r) => !(r.doi && existing.has((r.doi || '').toLowerCase())));
+  }
+
+  function _doHelixImport() {
+    const fresh = _helixNewRefs();
+    if (!fresh.length) {
+      ThesisState.toast('All Helix references are already in your library.');
+      return;
+    }
     ThesisState.addReferences(fresh);
-    ThesisState.libSaveMany(fresh.filter((r) => r.verified));
-    helixStat.textContent = `Imported ${fresh.length} references from Helix.`;
+    document.getElementById('th-helix-banner').style.display = 'none';
     renderLib();
+    ThesisState.toast(`✓ Imported ${fresh.length} reference${fresh.length > 1 ? 's' : ''} from Helix.`);
+  }
+
+  // Wire banner buttons
+  document.getElementById('th-helix-banner-btn').addEventListener('click', _doHelixImport);
+  document.getElementById('th-helix-banner-skip').addEventListener('click', () => {
+    document.getElementById('th-helix-banner').style.display = 'none';
   });
+
+  // Show banner on load if there are unimported Helix refs
+  (function checkHelixOnLoad() {
+    const fresh = _helixNewRefs();
+    if (!fresh.length) return;
+    const banner = document.getElementById('th-helix-banner');
+    const sub    = document.getElementById('th-helix-banner-sub');
+    sub.textContent = `${fresh.length} paper${fresh.length > 1 ? 's' : ''} pinned in Helix — click to add them all. Duplicates are skipped automatically.`;
+    banner.style.display = 'flex';
+  })();
 
   // ---------- Import from saved library ----------
   document.getElementById('th-import-saved').addEventListener('click', async () => {
