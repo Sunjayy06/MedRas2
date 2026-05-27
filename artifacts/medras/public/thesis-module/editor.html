@@ -1297,11 +1297,14 @@
         // Pre-resolve [CITE_n] for the preview so the user sees real [1], [2]
         // numbers rather than raw placeholders. State is NOT mutated here.
         const previewText = _previewCiteText(pendingDraft, pendingDraftSources);
+        // Convert Markdown headings/bold to HTML so the preview shows real bold
+        // subheadings rather than raw ** or ## characters.
+        const previewHtml = mdToHtml(previewText);
         canvas.innerHTML =
           baseHtml +
           (baseText ? '<br><br>' : '') +
           '<span class="th-diff-block" data-pending="1">' +
-            '<span class="th-diff-add">' + TrackChanges.renderPlainInline(previewText, locks) + '</span>' +
+            '<div class="th-diff-add th-diff-add-block">' + previewHtml + '</div>' +
             '<div class="th-draft-bar" contenteditable="false">' +
               '<span class="th-draft-bar-label">AI draft — citations mapped. Accept to add to your chapter.</span>' +
               '<button class="th-accept" data-pending-act="accept">✓ Accept draft</button>' +
@@ -1309,14 +1312,26 @@
             '</div>' +
           '</span>';
         canvas.querySelectorAll('button[data-pending-act]').forEach((btn) => {
-          btn.addEventListener('click', (ev) => {
+          btn.addEventListener('click', async (ev) => {
             ev.preventDefault();
             if (btn.dataset.pendingAct === 'accept') {
-              const resolved = _resolveDraftCitations(pendingDraft, pendingDraftSources);
-              const next = baseText ? baseText + '\n\n' + resolved : resolved;
-              ThesisState.setChapter(chapterId, { text: next, html: null });
+              const srcSnapshot = pendingDraftSources.slice(); // snapshot before clearing
+              const resolved    = _resolveDraftCitations(pendingDraft, pendingDraftSources);
+              const next        = baseText ? baseText + '\n\n' + resolved : resolved;
+              // Build HTML: reuse stored HTML for existing text, convert new draft from Markdown
+              const existingHtml  = ThesisState.getChapter(chapterId).html;
+              const newHtml       = mdToHtml(resolved);
+              const combinedHtml  = baseText
+                ? (existingHtml || mdToHtml(baseText)) + (newHtml ? '\n' + newHtml : '')
+                : newHtml;
+              ThesisState.setChapter(chapterId, { text: next, html: combinedHtml || null });
+              // Add all retrieved-but-uncited sources; then auto-boost toward 100
+              _addUncitedSources(srcSnapshot);
               const newTotal = (ThesisState.get().references || []).length;
-              ThesisState.toast(`Draft accepted. Citations mapped to your reference library (${newTotal} refs).`);
+              ThesisState.toast(
+                `Draft accepted — ${newTotal} ref${newTotal !== 1 ? 's' : ''} in library.`
+              );
+              if (newTotal < 100) _autoBoostRefs(chapter.title || chapter.label || chapterId, newTotal);
             } else {
               ThesisState.toast('Draft discarded — your text was not changed.');
             }
@@ -1690,6 +1705,105 @@
         return refNum != null ? String(refNum) : '';
       })
       .replace(/\[\s*(?:,\s*)*\]/g, '');
+  }
+
+  // ---------- markdown → HTML converter for the editor canvas ----------
+  // Converts AI draft output (Markdown-lite) to proper HTML so headings,
+  // bold subheadings, and paragraphs render visually in the canvas.
+  function mdToHtml(text) {
+    if (!text) return '';
+    const esc = (s) => String(s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+    // Inline markdown: **bold**, *italic*, [n] citation tags
+    function inlineMd(line) {
+      // Escape HTML entities first (preserves [1], [2,3] citations literally)
+      let s = esc(line);
+      // **bold**
+      s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+      // *italic* (not preceded/followed by *)
+      s = s.replace(/(?<!\*)\*(?!\*)([^*]+)(?<!\*)\*(?!\*)/g, '<em>$1</em>');
+      return s;
+    }
+
+    const lines = String(text).split('\n');
+    const out = [];
+    let paraBuf = [];
+
+    function flushPara() {
+      if (!paraBuf.length) return;
+      const content = paraBuf.join(' ').trim();
+      if (content) out.push('<p>' + content + '</p>');
+      paraBuf = [];
+    }
+
+    for (const rawLine of lines) {
+      // Heading levels (#### → h4, ### → h3, ## → h2)
+      const h4 = rawLine.match(/^####\s+(.+)/);
+      if (h4) { flushPara(); out.push('<h4>' + inlineMd(h4[1].trim()) + '</h4>'); continue; }
+      const h3 = rawLine.match(/^###\s+(.+)/);
+      if (h3) { flushPara(); out.push('<h3>' + inlineMd(h3[1].trim()) + '</h3>'); continue; }
+      const h2 = rawLine.match(/^##\s+(.+)/);
+      if (h2) { flushPara(); out.push('<h2>' + inlineMd(h2[1].trim()) + '</h2>'); continue; }
+      // Standalone bold line (AI often writes **Subheading** as its own line)
+      const boldOnly = rawLine.match(/^\*\*([^*]{3,80})\*\*\s*$/);
+      if (boldOnly) { flushPara(); out.push('<h3>' + esc(boldOnly[1].trim()) + '</h3>'); continue; }
+      // Empty line = paragraph break
+      if (!rawLine.trim()) { flushPara(); continue; }
+      // Regular line → accumulate into paragraph
+      paraBuf.push(inlineMd(rawLine));
+    }
+    flushPara();
+    return out.join('\n');
+  }
+
+  // Add sources that were retrieved by RAG but not cited in the draft text.
+  // Called on draft accept so the reference library grows even for references
+  // the AI retrieved but didn't directly use as [CITE_n] markers.
+  function _addUncitedSources(sources) {
+    if (!sources || !sources.length) return;
+    const existing = ThesisState.get().references || [];
+    const dois   = new Set(existing.map(r => (r.doi   || '').toLowerCase()).filter(Boolean));
+    const titles = new Set(existing.map(r => (r.title || '').toLowerCase().trim()).filter(Boolean));
+    const toAdd = sources.filter(r => {
+      const doi   = (r.doi   || '').toLowerCase();
+      const title = (r.title || '').toLowerCase().trim();
+      return !(doi && dois.has(doi)) && !(title && titles.has(title));
+    }).map(r => ({ ...r, verified: !!(r.doi), source: r.source || 'AI-draft' }));
+    if (toAdd.length) ThesisState.addReferences(toAdd);
+  }
+
+  // Background PubMed search to top up the reference library toward 100.
+  // Fires silently after each subsection accept if the library is below 100.
+  async function _autoBoostRefs(sectionHint, currentCount) {
+    const needed = 100 - currentCount;
+    if (needed <= 0) return;
+    try {
+      const setup = (ThesisState.get().setup || {});
+      const topic = [setup.title, sectionHint].filter(Boolean).join(' — ');
+      const data  = await ThesisState.api('/references/search', {
+        topic, limit: Math.min(needed, 10),
+      });
+      const results = data.records || [];
+      if (!results.length) return;
+      const existing = ThesisState.get().references || [];
+      const dois   = new Set(existing.map(r => (r.doi   || '').toLowerCase()).filter(Boolean));
+      const titles = new Set(existing.map(r => (r.title || '').toLowerCase().trim()).filter(Boolean));
+      const toAdd = results.filter(r => {
+        const doi   = (r.doi   || '').toLowerCase();
+        const title = (r.title || '').toLowerCase().trim();
+        return !(doi && dois.has(doi)) && !(title && titles.has(title));
+      }).map(r => ({ ...r, verified: !!(r.doi), source: 'auto-boost' }));
+      if (!toAdd.length) return;
+      ThesisState.addReferences(toAdd);
+      const newTotal = (ThesisState.get().references || []).length;
+      ThesisState.toast(
+        `+${toAdd.length} related reference${toAdd.length > 1 ? 's' : ''} added (${newTotal}/100).`
+      );
+      renderSideRefs();
+      renderChapterRefPanel();
+    } catch (_) { /* silent — non-critical */ }
   }
 
   // ---------- helper actions ----------

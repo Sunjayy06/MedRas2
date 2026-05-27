@@ -308,13 +308,51 @@ textarea.th-input { resize: vertical; line-height: 1.55; min-height: 68px; }
 .th-editor-toolbar .th-current { font-weight: 700; color: var(--th-ink-900);
   font-size: 14px; margin-right: auto; }
 .th-editor-canvas {
-  flex: 1; padding: 18px 22px; overflow-y: auto;
-  font-size: 14.5px; line-height: 1.7;
-  font-family: 'Inter', sans-serif;
+  flex: 1; padding: 28px 36px; overflow-y: auto;
+  font-size: 16px; line-height: 1.65;
+  font-family: 'Georgia', 'Times New Roman', Georgia, serif;
+  color: var(--th-ink-900);
+  /* pre-wrap kept for plain-text fallback; HTML block elements override it */
   white-space: pre-wrap;
 }
 .th-editor-canvas:focus { outline: none; }
 .th-editor-canvas[contenteditable="true"] { caret-color: var(--th-emerald-d); }
+
+/* Headings inside the editor canvas — rendered from Markdown via mdToHtml() */
+.th-editor-canvas h2 {
+  font-family: var(--th-font-display);
+  font-size: 19px; font-weight: 700; line-height: 1.3;
+  color: var(--th-ink-900);
+  margin: 1.4em 0 0.45em;
+  white-space: normal;
+}
+.th-editor-canvas h3 {
+  font-family: var(--th-font-display);
+  font-size: 16.5px; font-weight: 700; line-height: 1.3;
+  color: var(--th-ink-800);
+  margin: 1.1em 0 0.35em;
+  white-space: normal;
+}
+.th-editor-canvas h4 {
+  font-size: 15.5px; font-weight: 700; font-style: italic;
+  color: var(--th-ink-800); line-height: 1.3;
+  margin: 0.9em 0 0.3em;
+  white-space: normal;
+}
+.th-editor-canvas p {
+  margin: 0 0 0.85em;
+  text-align: justify;
+  white-space: normal;
+}
+.th-editor-canvas strong { font-weight: 700; }
+.th-editor-canvas em { font-style: italic; }
+
+/* Diff-add block (pending draft preview) — needs normal white-space for HTML content */
+.th-diff-add-block {
+  display: block;
+  padding: 4px 0;
+  white-space: normal;
+}
 
 /* Inline track-changes (per-sentence ✓/✗ icon buttons) */
 .th-diff-add {
