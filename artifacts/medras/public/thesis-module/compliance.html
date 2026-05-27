@@ -64,12 +64,14 @@
   </p>
 
   <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px">
-    <button id="th-run" class="th-btn th-btn-primary">Run pre-flight check</button>
+    <button id="th-run" class="th-btn th-btn-primary">▶ Run pre-flight check</button>
     <a class="th-btn th-btn-light" href="/thesis-module/dashboard.html">← Dashboard</a>
     <a class="th-btn th-btn-light" href="/thesis-module/assets.html">Manage figures</a>
   </div>
 
-  <div id="th-comp-status" style="font-size:13px; color:var(--th-text-soft); margin-bottom:8px">Click "Run pre-flight check" to begin.</div>
+  <div id="th-comp-status" style="font-size:13px; color:var(--th-text-soft); margin-bottom:8px">
+    Click <strong>Run pre-flight check</strong> to begin — takes about 3 seconds.
+  </div>
 
   <div id="th-comp-summary" class="th-comp-summary" style="display:none"></div>
 
@@ -115,9 +117,14 @@
 
   async function run() {
     var status = document.getElementById('th-comp-status');
-    status.innerHTML = '<span class="th-spinner"></span>Running 9 compliance rules…';
+    var runBtn = document.getElementById('th-run');
+    runBtn.disabled = true;
+    runBtn.textContent = 'Running…';
+    var s = ThesisState.get();
+    var isArticle = ((s.setup && s.setup.mode) || 'thesis') === 'article';
+    status.innerHTML = '<span class="th-spinner"></span>' +
+      (isArticle ? 'Running manuscript compliance rules…' : 'Running 9 compliance rules…');
     try {
-      var s = ThesisState.get();
       var res = await ThesisState.api('/compliance-check', s);
       renderSummary(res);
       renderItems(res.items || []);
@@ -126,6 +133,9 @@
     } catch (e) {
       status.textContent = '';
       ThesisState.toast('Compliance check failed: ' + e.message);
+    } finally {
+      runBtn.disabled = false;
+      runBtn.innerHTML = '▶ Run pre-flight check';
     }
   }
 
@@ -381,6 +391,21 @@
   }
 
   document.getElementById('th-run').addEventListener('click', run);
+
+  // Adapt intro copy for article mode
+  (function adaptCopy() {
+    var s = ThesisState.get();
+    var mode = (s.setup && s.setup.mode) || 'thesis';
+    if (mode !== 'article') return;
+    var intro = document.getElementById('th-comp-intro');
+    if (intro && !exportIntent) {
+      intro.textContent =
+        'We check your manuscript against standard reporting requirements — word count, ' +
+        'references, verified DOIs, sections at length, plagiarism cap, AI cap, ' +
+        'and declarations. Complete the reporting checklist below after running this check.';
+    }
+  })();
+
   // Auto-run on load if (a) there's any chapter content yet, or
   // (b) the user explicitly arrived with export-intent (in which case
   // they expect the gate to be ready immediately).

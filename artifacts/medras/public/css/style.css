@@ -262,6 +262,11 @@ ul {
   box-shadow: none;
 }
 
+.btn:focus-visible {
+  outline: 2.5px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
 .btn-secondary {
   background: rgba(255, 255, 255, 0.06);
   color: rgba(255, 255, 255, 0.88);
@@ -617,11 +622,54 @@ ul {
   color: var(--color-text-muted);
 }
 
-/* Per-category accent colours on the mini label. */
-.orbit-node[data-cat="plan"] .orbit-node-abbr    { color: #6b5bd2; }
+/* Per-category accent colours — mini label, CTA, hover border, and glow */
+.orbit-node[data-cat="plan"]    .orbit-node-abbr { color: #6b5bd2; }
 .orbit-node[data-cat="compute"] .orbit-node-abbr { color: #2f6fed; }
-.orbit-node[data-cat="write"] .orbit-node-abbr   { color: #9333ea; }
-.orbit-node[data-cat="verify"] .orbit-node-abbr  { color: #0d9488; }
+.orbit-node[data-cat="write"]   .orbit-node-abbr { color: #7c3aed; }
+.orbit-node[data-cat="verify"]  .orbit-node-abbr { color: #0d9488; }
+
+.orbit-node[data-cat="plan"]    .orbit-node-cta  { color: #6b5bd2; }
+.orbit-node[data-cat="compute"] .orbit-node-cta  { color: #2f6fed; }
+.orbit-node[data-cat="write"]   .orbit-node-cta  { color: #7c3aed; }
+.orbit-node[data-cat="verify"]  .orbit-node-cta  { color: #0d9488; }
+
+/* Available-glow per category */
+.orbit-node.is-available[data-cat="plan"]    .orbit-node-num,
+.orbit-node.is-available[data-cat="plan"]    .orbit-node-abbr  { color: #6b5bd2; }
+.orbit-node.is-available[data-cat="plan"]                      {
+  border-color: rgba(107,91,210,.5);
+  box-shadow: 0 0 0 4px rgba(107,91,210,.08), 0 12px 28px -16px rgba(107,91,210,.4);
+}
+.orbit-node.is-available[data-cat="compute"] .orbit-node-num,
+.orbit-node.is-available[data-cat="compute"] .orbit-node-abbr  { color: #2f6fed; }
+/* compute keeps blue default */
+
+.orbit-node.is-available[data-cat="write"]   .orbit-node-num,
+.orbit-node.is-available[data-cat="write"]   .orbit-node-abbr  { color: #7c3aed; }
+.orbit-node.is-available[data-cat="write"]                      {
+  border-color: rgba(124,58,237,.5);
+  box-shadow: 0 0 0 4px rgba(124,58,237,.08), 0 12px 28px -16px rgba(124,58,237,.38);
+}
+.orbit-node.is-available[data-cat="verify"]  .orbit-node-num,
+.orbit-node.is-available[data-cat="verify"]  .orbit-node-abbr  { color: #0d9488; }
+.orbit-node.is-available[data-cat="verify"]                     {
+  border-color: rgba(13,148,136,.5);
+  box-shadow: 0 0 0 4px rgba(13,148,136,.08), 0 12px 28px -16px rgba(13,148,136,.38);
+}
+
+/* Per-category hover/focus border and shadow */
+.orbit-node[data-cat="plan"]:hover,
+.orbit-node[data-cat="plan"]:focus-visible,
+.orbit-node[data-cat="plan"]:focus-within   { border-color: #6b5bd2; box-shadow: 0 18px 44px -12px rgba(107,91,210,.30); }
+.orbit-node[data-cat="compute"]:hover,
+.orbit-node[data-cat="compute"]:focus-visible,
+.orbit-node[data-cat="compute"]:focus-within { border-color: #2f6fed; box-shadow: 0 18px 44px -12px rgba(47,111,237,.30); }
+.orbit-node[data-cat="write"]:hover,
+.orbit-node[data-cat="write"]:focus-visible,
+.orbit-node[data-cat="write"]:focus-within   { border-color: #7c3aed; box-shadow: 0 18px 44px -12px rgba(124,58,237,.30); }
+.orbit-node[data-cat="verify"]:hover,
+.orbit-node[data-cat="verify"]:focus-visible,
+.orbit-node[data-cat="verify"]:focus-within  { border-color: #0d9488; box-shadow: 0 18px 44px -12px rgba(13,148,136,.30); }
 
 /* Touch / coarse-pointer devices at any width get the same always-expanded
    stacked layout — they have no hover, so the orbit's hover-to-reveal
