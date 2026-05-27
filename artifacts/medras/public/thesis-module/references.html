@@ -155,12 +155,21 @@
         <button class="th-btn th-btn-light th-btn-sm th-cite-fmt-btn" data-fmt="harvard"
           style="font-size:11px;padding:0 8px;height:26px;border-radius:5px">Harvard</button>
       </div>
+      <button id="th-import-helix-btn" class="th-btn th-btn-light th-btn-sm"
+        style="border-color:var(--th-emerald); color:var(--th-emerald-d)"
+        title="Import references pinned in the Helix Study Builder">
+        📚 Import from Helix
+      </button>
       <button id="th-import-saved" class="th-btn th-btn-light th-btn-sm">
-        Import from my saved library
+        Import from saved library
       </button>
       <button id="th-dedup-btn" class="th-btn th-btn-light th-btn-sm"
         title="Find duplicate references by DOI or title/year">
         Find duplicates
+      </button>
+      <button id="th-fix-cite-order-btn" class="th-btn th-btn-warning th-btn-sm"
+        title="Merge duplicates and renumber all in-text citations in order of first appearance across every chapter (Vancouver)">
+        ⟳ Fix citation order
       </button>
     </div>
     <!-- Duplicate-review panel — hidden until scan runs -->
@@ -197,6 +206,7 @@
 .th-cite-fmt-btn.is-active{background:var(--th-emerald-d,#047857);color:#fff;border-color:var(--th-emerald-d,#047857)}
 </style>
 <script src="/thesis-module/js/thesis-state.js"></script>
+<script src="/thesis-module/js/writing-modes.js"></script>
 <script src="/thesis-module/js/track-changes.js"></script>
 <script>
 (function () {
@@ -692,6 +702,7 @@
 
   // Wire banner buttons
   document.getElementById('th-helix-banner-btn').addEventListener('click', _doHelixImport);
+  document.getElementById('th-import-helix-btn').addEventListener('click', _doHelixImport);
   document.getElementById('th-helix-banner-skip').addEventListener('click', () => {
     document.getElementById('th-helix-banner').style.display = 'none';
   });
@@ -756,6 +767,110 @@
     ThesisState.addReferences(fresh);
     renderLib();
     ThesisState.toast(`Imported ${fresh.length} from your saved library.`);
+  });
+
+  // ---------- Fix citation order (whole thesis) ----------
+  async function _globalRenumberCitations() {
+    const s    = ThesisState.get();
+    const refs = (s.references || []).slice();
+    if (!refs.length) { ThesisState.toast('No references in library to renumber.', 3500); return; }
+
+    // Load spine so we can scan chapters in reading order
+    let spine;
+    try {
+      const sp = await ThesisState.api('/spine' + WritingModes.spineQuery(s.setup || {}));
+      spine = sp.spine || [];
+    } catch (e) {
+      ThesisState.toast('Could not load chapter list: ' + e.message); return;
+    }
+
+    // ── Step 1: Deduplicate ────────────────────────────────────────────────
+    const canonical = [];
+    const dedupMap  = {};
+    refs.forEach((ref, i) => {
+      const doi   = (ref.doi   || '').toLowerCase().trim();
+      const title = (ref.title || '').toLowerCase().trim();
+      const existIdx = canonical.findIndex(r =>
+        (doi   && r.doi   && r.doi.toLowerCase().trim()   === doi  ) ||
+        (title && r.title && r.title.toLowerCase().trim() === title)
+      );
+      if (existIdx === -1) { canonical.push(ref); dedupMap[i + 1] = canonical.length; }
+      else                 { dedupMap[i + 1] = existIdx + 1; }
+    });
+    const dupsMerged = refs.length - canonical.length;
+
+    // ── Step 2: Scan all chapters for first appearance ─────────────────────
+    const firstAppearance = {};
+    let nextSeq = 1;
+    const INLINE_RE = /\[(\d+(?:\s*,\s*\d+)*)\]/g;
+    for (const ch of spine) {
+      const text = ThesisState.getChapter(ch.id).text || '';
+      INLINE_RE.lastIndex = 0;
+      let m;
+      while ((m = INLINE_RE.exec(text)) !== null) {
+        const nums = m[1].split(',').map(n => parseInt(n.trim(), 10));
+        for (const n of nums) {
+          if (!n || !dedupMap[n]) continue;
+          const can = dedupMap[n];
+          if (firstAppearance[can] === undefined) firstAppearance[can] = nextSeq++;
+        }
+      }
+    }
+
+    // ── Step 3: Build old → final map ─────────────────────────────────────
+    const finalMap = {};
+    for (const [old, can] of Object.entries(dedupMap)) {
+      finalMap[parseInt(old)] = firstAppearance[can] ?? parseInt(old);
+    }
+
+    // ── Step 4: Reorder library ───────────────────────────────────────────
+    const finalRefs = new Array(canonical.length).fill(null);
+    for (const [can, seq] of Object.entries(firstAppearance)) {
+      finalRefs[seq - 1] = canonical[parseInt(can) - 1];
+    }
+    let tail = Object.keys(firstAppearance).length;
+    canonical.forEach(r => { if (!finalRefs.includes(r)) finalRefs[tail++] = r; });
+
+    // ── Step 5: Rewrite chapter texts ─────────────────────────────────────
+    let chaptersChanged = 0;
+    for (const ch of spine) {
+      const text = ThesisState.getChapter(ch.id).text || '';
+      if (!text) continue;
+      const newText = text.replace(/\[(\d+(?:\s*,\s*\d+)*)\]/g, (_, inner) => {
+        const nums    = inner.split(',').map(n => parseInt(n.trim(), 10));
+        const newNums = [...new Set(nums.map(n => finalMap[n] || n))];
+        newNums.sort((a, b) => a - b);
+        return '[' + newNums.join(', ') + ']';
+      });
+      if (newText !== text) {
+        ThesisState.setChapter(ch.id, { text: newText, html: null });
+        chaptersChanged++;
+      }
+    }
+
+    // ── Step 6: Persist and report ────────────────────────────────────────
+    ThesisState.patch({ references: finalRefs.filter(Boolean) });
+    renderLib();
+    refreshMinRefNote();
+    const parts = [];
+    if (dupsMerged    > 0) parts.push(`${dupsMerged} duplicate${dupsMerged !== 1 ? 's' : ''} merged`);
+    if (chaptersChanged > 0) parts.push(`${chaptersChanged} chapter${chaptersChanged !== 1 ? 's' : ''} updated`);
+    ThesisState.toast(
+      parts.length
+        ? `Citations fixed — ${parts.join(', ')}. Numbers now flow 1, 2, 3… in order of first appearance.`
+        : 'Citations already consistent — nothing to change.',
+      5500
+    );
+  }
+
+  document.getElementById('th-fix-cite-order-btn').addEventListener('click', () => {
+    if (!window.confirm(
+      'This will:\n' +
+      '• Merge any duplicate references (same DOI or title → one entry)\n' +
+      '• Renumber all in-text citations across every chapter in order of first appearance\n\n' +
+      'All chapter text will be updated. Continue?'
+    )) return;
+    _globalRenumberCitations();
   });
 
   renderLib();

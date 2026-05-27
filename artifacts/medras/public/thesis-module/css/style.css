@@ -163,6 +163,15 @@ a:hover { text-decoration: underline; }
   background: var(--th-line); border-color: var(--th-text-soft);
   transform: translateY(-1px); box-shadow: 0 2px 6px rgba(7,20,16,.08);
 }
+/* Warning / amber variant — used for tools that mutate state (renumber, reorder) */
+.th-btn-warning {
+  background: #fffbeb; color: #92400e;
+  border: 1px solid #ca8a04;
+}
+.th-btn-warning:hover:not([disabled]) {
+  background: #fef3c7; border-color: #a16207;
+  transform: translateY(-1px); box-shadow: 0 2px 6px rgba(180,120,0,.12);
+}
 /* Danger variant */
 .th-btn-danger { background: #fef2f2; color: var(--th-danger); border: 1px solid #fca5a5; }
 .th-btn-danger:hover:not([disabled]) { background: #fee2e2; transform: translateY(-1px); }
