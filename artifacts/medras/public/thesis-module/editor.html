@@ -729,7 +729,61 @@
           esc((r.title || '').slice(0,55)) + (r.title && r.title.length > 55 ? '…' : '') + '<br>' +
           '<span style="color:var(--th-text-soft)">' + esc(auth) + ' · ' + esc(String(r.year||'n.d.')) + '</span></div>';
       }).join('') +
-      (refs.length > 5 ? '<div style="font-size:11px;color:var(--th-text-soft);margin-top:4px">+ ' + (refs.length-5) + ' more</div>' : '');
+      (refs.length > 5 ? '<div style="font-size:11px;color:var(--th-text-soft);margin-top:4px">+ ' + (refs.length-5) + ' more</div>' : '') +
+      '<button id="th-cite-all-sec" class="th-btn th-btn-primary th-btn-sm" ' +
+      'style="margin-top:8px;width:100%;font-size:12px;text-align:center">⌦ Cite all ' + refs.length +
+      ' ref' + (refs.length > 1 ? 's' : '') + ' at cursor</button>';
+    const citeAllBtn = document.getElementById('th-cite-all-sec');
+    if (citeAllBtn) citeAllBtn.addEventListener('click', citeAllSectionRefs);
+  }
+
+  function citeAllSectionRefs() {
+    if (mode !== 'write') { ThesisState.toast('Switch to Write mode to insert citations.'); return; }
+    const secId = CH_TO_SEC[chapterId] || CH_TO_SEC[(chapterId || '').split('_').slice(0,2).join('_')];
+    if (!secId) return;
+    const s       = ThesisState.get();
+    const allRefs = s.references || [];
+    const tagged  = allRefs
+      .map((r, i) => ({ r, num: i + 1 }))
+      .filter(({ r }) => (r.section_tags || []).includes(secId));
+    if (!tagged.length) return;
+
+    const fmt      = (document.getElementById('th-cite-fmt') || {}).value || 'numeric';
+    const lastName = function (a) {
+      const p = String(a || '').replace(/[.,]/g, '').trim().split(/\s+/);
+      return p.length > 1 ? p[p.length - 1] : p[0];
+    };
+    let text;
+    if (fmt === 'numeric') {
+      text = tagged.map(({ num }) => '[CITE_' + num + ']').join('');
+    } else {
+      text = tagged.map(({ r }) => {
+        const authors = r.authors || [];
+        const first   = lastName(authors[0]) || '?';
+        const suffix  = authors.length > 1 ? ' et al.' : '';
+        return fmt === 'author_year'
+          ? first + suffix + ' (' + (r.year || 'n.d.') + ')'
+          : first + suffix;
+      }).join(', ');
+    }
+
+    const canvas = document.getElementById('th-editor-canvas');
+    canvas.focus();
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount && canvas.contains(sel.getRangeAt(0).startContainer)) {
+      document.execCommand('insertText', false, text);
+    } else {
+      const existing = canvas.innerText.trimEnd();
+      canvas.innerText = existing + (existing ? ' ' : '') + text;
+      const rng = document.createRange();
+      rng.selectNodeContents(canvas);
+      rng.collapse(false);
+      sel.removeAllRanges();
+      sel.addRange(rng);
+    }
+    ThesisState.setChapter(chapterId, { text: canvas.innerText });
+    renderChapterRefPanel();
+    ThesisState.toast('Cited ' + tagged.length + ' reference' + (tagged.length > 1 ? 's' : '') + ' from ' + (SEC_LABELS[secId] || secId) + '.');
   }
 
   document.getElementById('th-cite-search').addEventListener('input', (e) => {
