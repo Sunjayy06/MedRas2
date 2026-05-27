@@ -30,6 +30,9 @@ class Settings:
     openai_api_key: str | None = field(default_factory=lambda: (
         os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
     ))
+    gemini_api_key: str | None = field(default_factory=lambda: (
+        os.environ.get("AI_INTEGRATIONS_GEMINI_API_KEY") or os.environ.get("GEMINI_API_KEY")
+    ))
     copyleaks_email: str | None = field(default_factory=lambda: os.environ.get("COPYLEAKS_EMAIL"))
     copyleaks_api_key: str | None = field(default_factory=lambda: os.environ.get("COPYLEAKS_API_KEY"))
     cors_allow_origins: List[str] = field(
@@ -44,6 +47,10 @@ class Settings:
     @property
     def has_openai(self) -> bool:
         return bool(self.openai_api_key)
+
+    @property
+    def has_gemini(self) -> bool:
+        return bool(self.gemini_api_key)
 
     @property
     def has_copyleaks(self) -> bool:
