@@ -123,6 +123,20 @@
       <button id="th-import-saved" class="th-btn th-btn-light th-btn-sm">
         Import from my saved library
       </button>
+      <button id="th-dedup-btn" class="th-btn th-btn-light th-btn-sm"
+        title="Find duplicate references by DOI or title/year">
+        Find duplicates
+      </button>
+    </div>
+    <!-- Duplicate-review panel — hidden until scan runs -->
+    <div id="th-dedup-panel" style="display:none;margin-bottom:12px;border:1px solid var(--th-amber,#f59e0b);border-radius:8px;overflow:hidden">
+      <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(245,158,11,.06);border-bottom:1px solid rgba(245,158,11,.2)">
+        <span id="th-dedup-title" style="font-weight:600;font-size:13.5px;flex:1"></span>
+        <button id="th-dedup-remove" class="th-btn th-btn-light th-btn-sm"
+          style="border-color:var(--th-amber);color:#92400e;display:none">Remove selected</button>
+        <button id="th-dedup-dismiss" class="th-btn th-btn-light th-btn-sm">Dismiss</button>
+      </div>
+      <div id="th-dedup-list" style="padding:0 14px 10px"></div>
     </div>
     <div id="th-lib-list">
       <div class="th-empty">No references yet. Add some above.</div>
@@ -306,6 +320,107 @@
     else if (r.url) cite += ' Available at: ' + r.url;
     return cite;
   }
+
+  // ── Duplicate finder ─────────────────────────────────────────────────
+  const dedupBtn     = document.getElementById('th-dedup-btn');
+  const dedupPanel   = document.getElementById('th-dedup-panel');
+  const dedupTitle   = document.getElementById('th-dedup-title');
+  const dedupList    = document.getElementById('th-dedup-list');
+  const dedupRemove  = document.getElementById('th-dedup-remove');
+  const dedupDismiss = document.getElementById('th-dedup-dismiss');
+
+  dedupDismiss.addEventListener('click', () => { dedupPanel.style.display = 'none'; });
+
+  dedupRemove.addEventListener('click', () => {
+    const toRemove = new Set(
+      [...dedupList.querySelectorAll('input[type=checkbox]:checked')].map((cb) => parseInt(cb.dataset.idx, 10))
+    );
+    if (!toRemove.size) return;
+    ThesisState.patch((st) => {
+      st.references = (st.references || []).filter((_, i) => !toRemove.has(i));
+      return st;
+    });
+    dedupPanel.style.display = 'none';
+    renderLib();
+    window.medrasAlert ? window.medrasAlert(`Removed ${toRemove.size} duplicate${toRemove.size > 1 ? 's' : ''}.`, 'success')
+      : alert(`Removed ${toRemove.size} duplicate(s).`);
+  });
+
+  dedupBtn.addEventListener('click', async () => {
+    const s = ThesisState.get();
+    const refs = s.references || [];
+    if (!refs.length) {
+      dedupTitle.textContent = 'No references to check.';
+      dedupList.innerHTML = '';
+      dedupRemove.style.display = 'none';
+      dedupPanel.style.display = '';
+      return;
+    }
+    dedupBtn.disabled = true;
+    dedupBtn.textContent = 'Scanning…';
+    try {
+      const res = await fetch('/api/references/dedupe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ references: refs }),
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      const dups = data.duplicates || {};   // { "3": "Duplicate DOI of #1", … }
+      const keys = Object.keys(dups);
+
+      if (!keys.length) {
+        dedupTitle.textContent = '✓ No duplicates found across ' + refs.length + ' references.';
+        dedupList.innerHTML = '';
+        dedupRemove.style.display = 'none';
+        dedupPanel.style.display = '';
+        return;
+      }
+
+      dedupTitle.textContent = `⚠ ${keys.length} duplicate${keys.length > 1 ? 's' : ''} found — tick to remove:`;
+      dedupRemove.style.display = '';
+      dedupRemove.textContent = `Remove ${keys.length} selected`;
+
+      dedupList.innerHTML = keys.map((idxStr) => {
+        const idx = parseInt(idxStr, 10);
+        const r   = refs[idx] || {};
+        const num = idx + 1;
+        const auth = (r.authors || []).length
+          ? ((r.authors[0].split(/[\s,]+/).filter(Boolean).reverse()[0] || '?') +
+             (r.authors.length > 1 ? ' et al.' : '')) : '?';
+        const reason = esc(dups[idxStr] || 'Duplicate');
+        return `<label style="display:flex;align-items:flex-start;gap:10px;padding:7px 0;
+                  border-bottom:1px solid var(--th-line);cursor:pointer;font-size:13px">
+          <input type="checkbox" data-idx="${idx}" checked style="margin-top:2px;flex-shrink:0" />
+          <div>
+            <span style="color:var(--th-amber,#f59e0b);font-weight:700">[${num}]</span>
+            <span style="font-weight:600">${esc((r.title || 'Untitled').slice(0, 60))}${(r.title||'').length > 60 ? '…' : ''}</span>
+            <br>
+            <span style="color:var(--th-text-soft)">${esc(auth)}${r.year ? ' · ' + esc(String(r.year)) : ''}</span>
+            <span style="margin-left:8px;font-size:11.5px;background:rgba(245,158,11,.1);
+              color:#92400e;padding:1px 7px;border-radius:4px">${reason}</span>
+          </div>
+        </label>`;
+      }).join('');
+
+      // Keep remove-button count in sync with checkboxes
+      dedupList.addEventListener('change', () => {
+        const checked = dedupList.querySelectorAll('input:checked').length;
+        dedupRemove.textContent = checked ? `Remove ${checked} selected` : 'Remove selected';
+        dedupRemove.disabled = !checked;
+      });
+
+      dedupPanel.style.display = '';
+    } catch (err) {
+      dedupTitle.textContent = 'Scan failed: ' + err.message;
+      dedupList.innerHTML = '';
+      dedupRemove.style.display = 'none';
+      dedupPanel.style.display = '';
+    } finally {
+      dedupBtn.disabled = false;
+      dedupBtn.textContent = 'Find duplicates';
+    }
+  });
 
   // Style toggle buttons
   document.querySelectorAll('.th-cite-fmt-btn').forEach((btn) => {
