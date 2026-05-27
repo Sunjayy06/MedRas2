@@ -1,0 +1,410 @@
+Sigma Statistical Analysis Engine: Simple Step-by-Step Guide
+
+Main Goal
+
+The software should work like a smart, end-to-end automated statistical analysis system. The user should not need strong research or statistics knowledge. 
+The system should understand the proposal, understand the Excel sheet, clean the data, suggest the right tests, run the analysis, generate graphs, and finally create a submission-ready Word or PDF document.
+
+The full experience should feel simple, intelligent, and hassle-free.
+
+---
+
+# Step 1: Start the Project
+
+When the user starts, the system should ask whether they already have an Excel sheet.
+
+The user can choose either:
+
+1. Upload an existing Excel sheet
+2. Generate a practice Excel sheet
+
+If the user uploads an Excel sheet, the system should read it automatically.
+
+If the user does not have an Excel sheet, the system can help generate a sample/practice Excel format based on their study details.
+
+---
+
+# Step 2: Understand the Study Proposal or Objective
+
+The system should ask whether the user has a study proposal.
+
+If the user has a proposal, they can upload it.
+
+If the user does not have a proposal, the system should give an open text box where the user can write in simple English:
+
+* What is the study about?
+* What is the objective?
+* What is the outcome variable?
+* What are the predictors or comparison variables?
+* What is the study design?
+* What methodology is planned?
+
+The AI should read either the uploaded proposal or the open-ended text and automatically identify the important research details.
+
+---
+
+# Step 3: AI Reads and Understands the Study
+
+The AI should automatically extract and show a preview of:
+
+* Study title
+* Aim and objectives
+* Study design
+* Sample size
+* Outcome variables
+* Predictor variables
+* Type of data
+* Groups for comparison
+* Planned methodology
+* Expected statistical approach
+
+The user should be able to review this preview before moving ahead.
+
+---
+
+# Step 4: AI Reads the Excel Sheet
+
+The AI should read the Excel sheet and identify the type of each variable.
+
+It should automatically classify variables as:
+
+* Categorical
+* Continuous
+* Nominal
+* Ordinal
+* Scale
+* String
+* Numeric
+
+For example:
+
+* Age = continuous / scale / numeric
+* Gender = categorical / nominal
+* Treatment group = categorical / nominal
+* Pain score = ordinal or scale, depending on format
+* Outcome status = categorical / nominal
+
+The user should not have to manually select everything from dropdowns.
+
+---
+
+# Step 5: Match Study Objective with Excel Data
+
+The AI should compare the study objective with the uploaded Excel sheet.
+
+It should check whether the required variables are present.
+
+For example, if the objective is to compare age with treatment outcome, the system should identify:
+
+* Age as the independent or descriptive variable
+* Treatment outcome as the dependent or outcome variable
+* The correct statistical test needed
+
+The system should communicate this internally to the analysis engine.
+
+---
+
+# Step 6: Show the Planned Analysis Before Running It
+
+Before running any analysis, the system should show a clear preview of the analysis plan.
+
+The preview should include:
+
+## Descriptive Statistics Plan
+
+For example:
+
+* Age will be shown as mean, standard deviation, median, and range.
+* Gender will be shown as frequency and percentage.
+* Treatment groups will be shown as frequency and percentage.
+
+## Analytical Statistics Plan
+
+For example:
+
+* Age vs treatment outcome will be tested using Independent t-test or Mann-Whitney U test.
+* Gender vs treatment outcome will be tested using Chi-square test or Fisher’s exact test.
+* Correlation between two continuous variables will be tested using Pearson or Spearman correlation.
+* Predictors of outcome will be tested using regression if applicable.
+
+The user should see which test is planned and why it is being used.
+
+---
+
+# Step 7: Check and Clean the Excel Sheet
+
+Before analysis, the system should automatically check the Excel sheet for:
+
+* Duplicate entries
+* Missing values
+* Wrong data types
+* Spelling variations in categories
+* Inconsistent coding
+* Blank rows
+* Outliers
+* Invalid values
+* Mixed numeric and text entries
+
+For example:
+
+* “Male”, “male”, “M” should be identified as the same category if appropriate.
+* Empty age values should be flagged.
+* Duplicate patient IDs should be detected.
+
+---
+
+# Step 8: Ask User How to Handle Missing Data
+
+If missing data is found, the system should not directly proceed without confirmation.
+
+It should ask the user in simple language:
+
+“Missing data has been found. Do you want to fill the missing values using an imputation method, remove incomplete rows, or proceed without changes?”
+
+The system can suggest the best option based on the study design and amount of missing data.
+
+For example:
+
+* If missing data is very low, complete-case analysis may be suggested.
+* If missing data is moderate, imputation may be suggested.
+* If critical outcome variables are missing, the system should warn the user.
+
+---
+
+# Step 9: Show Cleaned Data Preview
+
+Before analysis, the user should see a preview of the cleaned Excel sheet.
+
+The preview should show:
+
+* Corrected variable names
+* Data type assigned to each column
+* Missing data summary
+* Duplicate handling summary
+* Recoded categories
+* Final number of cases included in analysis
+
+The user should be able to approve this before the analysis starts.
+
+---
+
+# Step 10: AI-Assisted Chat Box for Data Changes
+
+There should be an AI-assisted chat box where the user can type instructions in plain English.
+
+For example, the user can write:
+
+* “Merge duplicate patient IDs.”
+* “Recode Male and M as Male.”
+* “Change pain score into mild, moderate, and severe.”
+* “Remove rows with missing outcome values.”
+* “Convert age into age groups.”
+* “Rename this variable.”
+* “Use this column as the outcome variable.”
+* “Do not include this variable in analysis.”
+
+The AI should understand the instruction and communicate it correctly to the backend system.
+
+Python can then perform the actual data cleaning, recoding, merging, or transformation.
+
+This will reduce the need for complicated dropdowns.
+
+---
+
+# Step 11: Confirm Final Dataset and Analysis Plan
+
+After all corrections, the system should again show:
+
+* Final cleaned dataset preview
+* Final variable classification
+* Final analysis plan
+* Final list of statistical tests
+* Planned graphs
+* Planned tables
+
+The user should confirm before running the final analysis.
+
+This step is important to avoid mistakes.
+
+---
+
+# Step 12: Run Statistical Analysis
+
+After confirmation, the system should run the analysis automatically using Python.
+
+The analysis should include:
+
+## Descriptive Statistics
+
+* Frequency
+* Percentage
+* Mean
+* Standard deviation
+* Median
+* Interquartile range
+* Minimum and maximum values
+
+## Analytical Statistics
+
+* Chi-square test
+* Fisher’s exact test
+* Independent t-test
+* Paired t-test
+* ANOVA
+* Mann-Whitney U test
+* Kruskal-Wallis test
+* Correlation
+* Regression
+* Logistic regression
+* Sensitivity and specificity, if applicable
+* Other tests based on study design
+
+The system should choose tests intelligently based on data type, distribution, sample size, and study objective.
+
+---
+
+# Step 13: Generate Tables and Graphs
+
+The system should automatically generate:
+
+* Dissertation-ready tables
+* Journal-style tables
+* Bar charts
+* Pie charts
+* Line graphs
+* Box plots
+* Correlation plots
+* Regression tables
+* P-value tables
+
+The graphs should include percentages wherever required.
+
+Only the most suitable type of graph should be used for each result.
+
+For example:
+
+* Pie chart for two-category variables
+* Bar chart for multiple categories
+* Box plot for continuous variables across groups
+* Line chart only when there is a time-based trend
+
+---
+
+# Step 14: Show Results Preview
+
+Before creating the final document, the system should show a preview of:
+
+* Descriptive statistics
+* Analytical statistics
+* P-values
+* Graphs
+* Interpretation under each table
+* Key findings
+
+The user should be able to review the output before downloading.
+
+---
+
+# Step 15: AI-Assisted Chat Box for Result Corrections
+
+After the results preview, there should again be an AI-assisted chat box.
+
+The user can type simple instructions such as:
+
+* “Remove this graph.”
+* “Add percentage values to this chart.”
+* “Change this table title.”
+* “Re-run analysis without this variable.”
+* “Use Mann-Whitney instead of t-test.”
+* “Add interpretation below this table.”
+* “This variable is wrongly classified.”
+* “Make the discussion more detailed.”
+* “Generate only significant results.”
+* “Add more graphs.”
+
+The AI should understand the user’s plain English and communicate the exact change to the backend system.
+
+Only the required part should be re-analysed instead of repeating the entire process unnecessarily.
+
+---
+
+# Step 16: Final Confirmation Before Download
+
+Once the user is satisfied, the system should ask:
+
+“Do you want to download the final report as Word or PDF?”
+
+The user can choose:
+
+* Word document
+* PDF document
+* Both
+
+---
+
+# Step 17: Generate Submission-Ready Document
+
+The final document should be properly formatted and ready for submission.
+
+It should include:
+
+* Title
+* Aim and objectives
+* Methodology summary
+* Statistical analysis plan
+* Results section
+* Tables
+* Graphs
+* Figure titles
+* Table interpretations
+* P-values
+* Summary of findings
+* Conclusion
+* Optional discussion section, if required
+
+The output should look like a proper dissertation, thesis, or journal-ready report.
+
+---
+
+# Step 18: Keep AI Integrated Throughout the System
+
+AI should be used throughout the platform, not only in one place.
+
+AI should help in:
+
+* Reading the proposal
+* Understanding open-ended user input
+* Identifying objectives
+* Identifying outcome and predictor variables
+* Understanding study design
+* Classifying Excel variables
+* Planning statistical tests
+* Detecting errors
+* Suggesting data cleaning options
+* Understanding user instructions in plain English
+* Communicating user changes to the system
+* Creating interpretations
+* Generating submission-ready content
+
+Python should handle:
+
+* Data cleaning
+* Variable conversion
+* Statistical testing
+* P-value calculation
+* Graph generation
+* Excel manipulation
+* Re-analysis
+
+AI should understand and guide.
+Python should execute accurately.
+
+---
+
+# Final Product Vision
+
+The final software should be a smart, intelligent, premium, end-to-end automated research and statistical analysis platform.
+
+The user should not feel confused by complicated dropdowns or statistical terms. They should be able to upload a proposal and Excel sheet, review the AI-generated plan, approve the data cleaning, run the analysis, review the results, request changes in plain English, and download a submission-ready Word or PDF document.
+
+The platform should feel simple for beginners, but powerful enough for serious medical research, dissertations, theses, and journal submissions.
