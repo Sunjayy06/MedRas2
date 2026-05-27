@@ -1315,7 +1315,6 @@
           btn.addEventListener('click', async (ev) => {
             ev.preventDefault();
             if (btn.dataset.pendingAct === 'accept') {
-              const srcSnapshot = pendingDraftSources.slice(); // snapshot before clearing
               const resolved    = _resolveDraftCitations(pendingDraft, pendingDraftSources);
               const next        = baseText ? baseText + '\n\n' + resolved : resolved;
               // Build HTML: reuse stored HTML for existing text, convert new draft from Markdown
@@ -1325,13 +1324,10 @@
                 ? (existingHtml || mdToHtml(baseText)) + (newHtml ? '\n' + newHtml : '')
                 : newHtml;
               ThesisState.setChapter(chapterId, { text: next, html: combinedHtml || null });
-              // Add all retrieved-but-uncited sources; then auto-boost toward 100
-              _addUncitedSources(srcSnapshot);
               const newTotal = (ThesisState.get().references || []).length;
               ThesisState.toast(
                 `Draft accepted — ${newTotal} ref${newTotal !== 1 ? 's' : ''} in library.`
               );
-              if (newTotal < 100) _autoBoostRefs(chapter.title || chapter.label || chapterId, newTotal);
             } else {
               ThesisState.toast('Draft discarded — your text was not changed.');
             }
@@ -1756,54 +1752,6 @@
     }
     flushPara();
     return out.join('\n');
-  }
-
-  // Add sources that were retrieved by RAG but not cited in the draft text.
-  // Called on draft accept so the reference library grows even for references
-  // the AI retrieved but didn't directly use as [CITE_n] markers.
-  function _addUncitedSources(sources) {
-    if (!sources || !sources.length) return;
-    const existing = ThesisState.get().references || [];
-    const dois   = new Set(existing.map(r => (r.doi   || '').toLowerCase()).filter(Boolean));
-    const titles = new Set(existing.map(r => (r.title || '').toLowerCase().trim()).filter(Boolean));
-    const toAdd = sources.filter(r => {
-      const doi   = (r.doi   || '').toLowerCase();
-      const title = (r.title || '').toLowerCase().trim();
-      return !(doi && dois.has(doi)) && !(title && titles.has(title));
-    }).map(r => ({ ...r, verified: !!(r.doi), source: r.source || 'AI-draft' }));
-    if (toAdd.length) ThesisState.addReferences(toAdd);
-  }
-
-  // Background PubMed search to top up the reference library toward 100.
-  // Fires silently after each subsection accept if the library is below 100.
-  async function _autoBoostRefs(sectionHint, currentCount) {
-    const needed = 100 - currentCount;
-    if (needed <= 0) return;
-    try {
-      const setup = (ThesisState.get().setup || {});
-      const topic = [setup.title, sectionHint].filter(Boolean).join(' — ');
-      const data  = await ThesisState.api('/references/search', {
-        topic, limit: Math.min(needed, 10),
-      });
-      const results = data.records || [];
-      if (!results.length) return;
-      const existing = ThesisState.get().references || [];
-      const dois   = new Set(existing.map(r => (r.doi   || '').toLowerCase()).filter(Boolean));
-      const titles = new Set(existing.map(r => (r.title || '').toLowerCase().trim()).filter(Boolean));
-      const toAdd = results.filter(r => {
-        const doi   = (r.doi   || '').toLowerCase();
-        const title = (r.title || '').toLowerCase().trim();
-        return !(doi && dois.has(doi)) && !(title && titles.has(title));
-      }).map(r => ({ ...r, verified: !!(r.doi), source: 'auto-boost' }));
-      if (!toAdd.length) return;
-      ThesisState.addReferences(toAdd);
-      const newTotal = (ThesisState.get().references || []).length;
-      ThesisState.toast(
-        `+${toAdd.length} related reference${toAdd.length > 1 ? 's' : ''} added (${newTotal}/100).`
-      );
-      renderSideRefs();
-      renderChapterRefPanel();
-    } catch (_) { /* silent — non-critical */ }
   }
 
   // ---------- helper actions ----------
