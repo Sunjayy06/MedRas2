@@ -138,6 +138,12 @@
     <h4>Chapter tools</h4>
     <div id="th-helper-strip"></div>
 
+    <!-- Introduction section coverage audit — shown only for Chapter I -->
+    <div id="th-intro-audit" style="display:none; margin-top:12px">
+      <h4>Section coverage</h4>
+      <div id="th-intro-audit-list" style="display:flex;flex-direction:column;gap:3px;font-size:12px"></div>
+    </div>
+
     <h4 style="margin-top:16px">Assigned to this section</h4>
     <div id="th-sec-assign-panel" style="font-size:12px;color:var(--th-text-soft);margin-bottom:6px">—</div>
 
@@ -959,11 +965,67 @@
     banner.style.display = 'flex';
   }
 
+  // ---------- Introduction section-coverage audit ----------
+  const _INTRO_AUDIT_SECTIONS = [
+    { label: 'Definition & incidence',          re: /incidence|prevalence|reported.{0,40}range|range.{0,20}\d+.{0,10}%/i },
+    { label: 'Clinical relevance & impact',     re: /patient.{0,40}satisfaction|quality of life|healthcare.{0,25}burden|recovery|functional.{0,25}outcome/i },
+    { label: 'Pathophysiology',                 re: /pathophysiolog|mechanism|cytokine|receptor|molecular|cellular|inflamm/i },
+    { label: 'Assessment & current strategies', re: /assess|grading|visual analog|VAS|treatment|management|intervention|prevent|strateg/i },
+    { label: 'Rationale for intervention',      re: /rationale|mechanism of action|may be beneficial|proposed.{0,25}agent|study.{0,30}agent/i },
+    { label: 'International evidence (RCTs)',   re: /randomis|randomiz|controlled.{0,30}trial|comparative|systematic|meta.?analy/i },
+    { label: 'Indian evidence & gap',           re: /india|indian|institutional|regional|local.{0,20}stud|conducted.{0,20}at/i },
+    { label: 'Study aim statement',             re: /present study.{0,30}aims?|aims?.{0,20}evaluat|aims?.{0,20}assess|aims?.{0,20}determin|aims?.{0,20}compare/i },
+  ];
+
+  function _renderIntroAudit() {
+    const panel = document.getElementById('th-intro-audit');
+    const list  = document.getElementById('th-intro-audit-list');
+    if (!panel || !list) return;
+    if (chapterId !== 'introduction') { panel.style.display = 'none'; return; }
+    const text = ThesisState.getChapter(chapterId).text || '';
+    if (!text.trim()) { panel.style.display = 'none'; return; }
+
+    panel.style.display = 'block';
+    const wc = (text.match(/\b\w+\b/g) || []).length;
+    const budget = chapter.word_budget || [Math.round((chapter.target_words || 1800) * 0.83), Math.round((chapter.target_words || 1800) * 1.22)];
+    const wcOk    = wc >= budget[0];
+    const wcOver  = wc > budget[1];
+    const wcColor = wcOk && !wcOver ? 'var(--th-emerald-d)' : wcOver ? '#7c3aed' : '#b45309';
+    const wcIcon  = wcOk && !wcOver ? '✓' : wcOver ? '↑' : '↗';
+    const wcBg    = wcOk && !wcOver ? 'rgba(16,185,129,0.07)' : wcOver ? 'rgba(124,58,237,0.07)' : 'rgba(251,191,36,0.12)';
+    const wcNote  = wcOver ? 'above target' : wcOk ? 'in range' : `${(budget[0] - wc).toLocaleString()} words short`;
+
+    const sectionRows = _INTRO_AUDIT_SECTIONS.map(sec => {
+      const found = sec.re.test(text);
+      return `<div style="display:flex;align-items:center;gap:6px;padding:3px 7px;border-radius:5px;
+                   background:${found ? 'rgba(16,185,129,0.06)' : 'rgba(239,68,68,0.06)'}">
+        <span style="font-size:10px;width:14px;text-align:center;flex-shrink:0;
+              color:${found ? 'var(--th-emerald-d)' : '#dc2626'}">${found ? '✓' : '✗'}</span>
+        <span style="color:${found ? 'var(--th-text)' : '#dc2626'};line-height:1.3">${sec.label}</span>
+      </div>`;
+    }).join('');
+
+    const passed = _INTRO_AUDIT_SECTIONS.filter(s => s.re.test(text)).length;
+    list.innerHTML = `
+      <div style="padding:5px 8px;border-radius:6px;background:${wcBg};margin-bottom:6px;
+                  display:flex;justify-content:space-between;align-items:center">
+        <span style="color:${wcColor};font-weight:600">${wcIcon} ${wc.toLocaleString()} words <span style="font-weight:400;font-size:11px">(${wcNote})</span></span>
+        <span style="color:var(--th-text-soft);font-size:11px">${budget[0].toLocaleString()}–${budget[1].toLocaleString()}</span>
+      </div>
+      <div style="padding:4px 8px;margin-bottom:5px;font-size:11px;color:var(--th-text-soft);
+                  border-left:3px solid ${passed===8?'var(--th-emerald)':passed>=5?'#f59e0b':'#ef4444'};padding-left:8px">
+        ${passed}/8 expected subsections detected
+      </div>
+      ${sectionRows}`;
+  }
+
   // ---------- editor body ----------
   function renderEditor() {
     const c = ThesisState.getChapter(chapterId);
     // Show the repair banner if the saved chapter text has leftover CITE_n tokens
     _updateRepairBanner(c.text || '');
+    // Show/update section coverage audit for Introduction
+    _renderIntroAudit();
     const canvas = document.getElementById('th-editor-canvas');
     if (mode === 'write') {
       canvas.contentEditable = 'true';
@@ -1283,8 +1345,49 @@
       citeMap[n] = pos + 1; // 1-based for Vancouver style
     }
 
-    // Persist any newly added references
-    if (newRefs.length > existingRefs.length) {
+    // --- Sequential renumbering for newly-added refs (Vancouver: cite in order
+    // of first appearance). For refs already in the library we keep their
+    // existing positions. For refs added by this draft we reorder them to match
+    // the order in which they first appear in the draft text, appending after
+    // the existing library entries so existing chapter numbers are unaffected.
+    const existingCount = existingRefs.length;
+    const newlyAdded = newRefs.slice(existingCount);  // refs added by this draft
+
+    if (newlyAdded.length > 0) {
+      // Build a map: current 1-based position → first-appearance sequential slot
+      const seqMap = Object.create(null);  // oldPos (1-based) → newPos (1-based)
+      let nextSeq = existingCount + 1;
+      const scanRe = /CITE_(\d+)/g;
+      let sm;
+      while ((sm = scanRe.exec(draftText)) !== null) {
+        const n = sm[1];
+        const oldPos = citeMap[n];
+        if (oldPos == null || oldPos <= existingCount) continue; // existing ref — keep
+        if (seqMap[oldPos] !== undefined) continue;              // already assigned
+        seqMap[oldPos] = nextSeq++;
+      }
+      // Reorder the newly-added refs array to match first-appearance order
+      const reorderedNew = new Array(newlyAdded.length).fill(null);
+      for (const [oldPos, newPos] of Object.entries(seqMap)) {
+        const srcIdx = parseInt(oldPos, 10) - 1 - existingCount;  // 0-based in newlyAdded
+        const dstIdx = newPos - 1 - existingCount;                // 0-based in reorderedNew
+        if (srcIdx >= 0 && dstIdx >= 0 && dstIdx < reorderedNew.length) {
+          reorderedNew[dstIdx] = newlyAdded[srcIdx];
+        }
+      }
+      // Fill any gaps defensively (shouldn't happen in practice)
+      for (let i = 0; i < reorderedNew.length; i++) {
+        if (!reorderedNew[i]) reorderedNew[i] = newlyAdded[i];
+      }
+      // Update citeMap to use the new sequential positions
+      for (const [n, oldPos] of Object.entries(citeMap)) {
+        if (oldPos != null && oldPos > existingCount && seqMap[oldPos] !== undefined) {
+          citeMap[n] = seqMap[oldPos];
+        }
+      }
+      ThesisState.patch({ references: [...existingRefs, ...reorderedNew] });
+    } else if (newRefs.length > existingRefs.length) {
+      // Refs already existed in the library — just persist the unchanged list
       ThesisState.patch({ references: newRefs });
     }
 
@@ -1443,7 +1546,10 @@
         // The backend deduplicates and prepends session-library refs before RAG results.
         const allRefs = (s.references || []).filter((r) => !r.retracted);
         const wordBudget = chapter.word_budget;   // [min, max] or undefined
-        const wordLimit  = wordBudget ? wordBudget[1] : undefined;
+        // Use the chapter's sweet-spot target (not the max) so the LLM aims for
+        // the middle of the range rather than the ceiling.
+        const wordLimit  = chapter.target_words
+          || (wordBudget ? Math.round((wordBudget[0] + wordBudget[1]) / 2) : undefined);
         const res = await ThesisState.api('/draft-section', {
           chapter_id: chapterId,
           topic, citation_style: cite,

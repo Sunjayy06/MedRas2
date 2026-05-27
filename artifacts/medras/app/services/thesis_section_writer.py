@@ -771,8 +771,10 @@ async def draft_section(
 
     n_records = len(records)
     word_hint = (
-        f"TARGET WORD COUNT: {word_limit} words. Write to this length — do not produce a "
-        f"shorter draft. Every paragraph must be substantive.\n"
+        f"TARGET WORD COUNT: {word_limit} words "
+        f"(minimum {int(word_limit * 0.85)} words — do NOT produce a shorter draft). "
+        f"Every paragraph must be fully substantive. Do not pad with filler sentences, "
+        f"but do not truncate either — write until you reach the target.\n"
         if word_limit else ""
     )
     user_text = (
