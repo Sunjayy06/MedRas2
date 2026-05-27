@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Research Diary · Scriptorium · MedRAS</title>
+<link rel="stylesheet" href="/css/tokens.css" />
+<link rel="stylesheet" href="/thesis-module/css/style.css" />
+<link rel="stylesheet" href="/css/medras-nav.css" />
+<style>
+/* ---- Diary-specific styles ---- */
+.dr-layout {
+  display: grid;
+  grid-template-columns: 1fr 280px;
+  gap: 28px;
+  align-items: start;
+}
+@media (max-width: 860px) {
+  .dr-layout { grid-template-columns: 1fr; }
+}
+
+/* Composer */
+.dr-composer {
+  background: #fff;
+  border: 1.5px solid var(--th-line);
+  border-radius: 14px;
+  padding: 20px;
+  margin-bottom: 24px;
+  box-shadow: 0 2px 8px rgba(7,20,16,.06);
+}
+.dr-tag-row {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  margin-bottom: 14px;
+}
+.dr-tag {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 5px 12px; border-radius: 999px;
+  font-size: 12.5px; font-weight: 600; cursor: pointer;
+  border: 1.5px solid transparent;
+  background: var(--th-paper-2); color: var(--th-text-soft);
+  transition: background .1s, border-color .12s, color .1s;
+  user-select: none;
+}
+.dr-tag.is-selected {
+  background: var(--tag-bg);
+  color: var(--tag-color);
+  border-color: var(--tag-color);
+}
+.dr-textarea {
+  width: 100%; min-height: 110px; resize: vertical;
+  padding: 12px 14px;
+  border: 1.5px solid var(--th-line); border-radius: 10px;
+  font-family: inherit; font-size: 14.5px; line-height: 1.65;
+  color: var(--th-text); background: var(--th-paper);
+  transition: border-color .12s;
+}
+.dr-textarea:focus {
+  outline: none; border-color: var(--th-emerald);
+  box-shadow: 0 0 0 3px rgba(16,185,129,.12);
+}
+.dr-composer-footer {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-top: 10px;
+}
+.dr-char-count { font-size: 12px; color: var(--th-text-soft); }
+
+/* Filter bar */
+.dr-filter-bar {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+.dr-search {
+  flex: 1; min-width: 180px;
+  padding: 8px 12px;
+  border: 1.5px solid var(--th-line); border-radius: 8px;
+  font-size: 13.5px; font-family: inherit; background: #fff;
+  color: var(--th-text);
+}
+.dr-search:focus { outline: none; border-color: var(--th-emerald); }
+.dr-filter-tag {
+  padding: 5px 12px; border-radius: 999px; font-size: 12.5px; font-weight: 600;
+  border: 1.5px solid var(--th-line); background: var(--th-paper-2);
+  color: var(--th-text-soft); cursor: pointer;
+  transition: background .1s, border-color .12s, color .1s;
+}
+.dr-filter-tag.is-active {
+  background: var(--tag-bg, var(--th-paper-2));
+  color: var(--tag-color, var(--th-ink-900));
+  border-color: var(--tag-color, var(--th-line));
+}
+
+/* Entry list */
+.dr-empty {
+  text-align: center; padding: 56px 24px;
+  color: var(--th-text-soft); font-size: 14px;
+}
+.dr-empty-icon { font-size: 40px; display: block; margin-bottom: 12px; }
+
+.dr-day-group { margin-bottom: 28px; }
+.dr-day-label {
+  font-size: 11.5px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.1em; color: var(--th-text-soft);
+  border-bottom: 1px solid var(--th-line); padding-bottom: 7px;
+  margin-bottom: 12px;
+}
+
+.dr-entry {
+  background: #fff; border: 1.5px solid var(--th-line);
+  border-radius: 12px; padding: 16px 18px;
+  margin-bottom: 10px;
+  transition: border-color .12s, box-shadow .12s;
+  position: relative;
+}
+.dr-entry:hover { border-color: var(--th-emerald); box-shadow: 0 2px 8px rgba(7,20,16,.07); }
+.dr-entry.is-editing {
+  border-color: var(--th-emerald);
+  box-shadow: 0 0 0 3px rgba(16,185,129,.10);
+}
+.dr-entry-head {
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 10px;
+}
+.dr-entry-tag-pill {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 11.5px; font-weight: 700; padding: 2px 9px;
+  border-radius: 999px; border: 1px solid var(--tag-color);
+  color: var(--tag-color); background: var(--tag-bg);
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.dr-entry-time {
+  font-size: 11.5px; font-family: var(--th-mono); color: var(--th-text-soft);
+}
+.dr-entry-edited { font-size: 11px; color: var(--th-text-soft); font-style: italic; }
+.dr-entry-actions {
+  margin-left: auto; display: flex; gap: 6px;
+}
+.dr-icon-btn {
+  appearance: none; border: 0; background: transparent;
+  cursor: pointer; font-size: 14px; padding: 4px 7px;
+  border-radius: 6px; color: var(--th-text-soft);
+  transition: background .1s, color .1s;
+}
+.dr-icon-btn:hover { background: var(--th-paper-2); color: var(--th-ink-900); }
+.dr-icon-btn.danger:hover { background: #fef2f2; color: var(--th-danger); }
+
+.dr-entry-body {
+  font-size: 14px; line-height: 1.7; color: var(--th-text);
+  white-space: pre-wrap; word-break: break-word;
+}
+.dr-entry-edit-area {
+  width: 100%; min-height: 80px; resize: vertical;
+  padding: 10px 12px; border: 1.5px solid var(--th-emerald);
+  border-radius: 8px; font-size: 14px; font-family: inherit;
+  line-height: 1.65; color: var(--th-text); background: var(--th-paper);
+  display: none;
+}
+.dr-entry-edit-area:focus { outline: none; }
+.dr-entry-edit-actions { display: none; gap: 6px; margin-top: 8px; }
+
+/* Stats sidebar */
+.dr-stats-card {
+  background: #fff; border: 1.5px solid var(--th-line);
+  border-radius: 14px; padding: 20px;
+  box-shadow: 0 2px 8px rgba(7,20,16,.05);
+  position: sticky; top: 100px;
+}
+.dr-stats-title {
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.1em; color: var(--th-text-soft); margin-bottom: 16px;
+}
+.dr-stat { display: flex; flex-direction: column; margin-bottom: 14px; }
+.dr-stat-value {
+  font-family: var(--th-font-display); font-size: 26px; font-weight: 800;
+  color: var(--th-ink-900); line-height: 1;
+}
+.dr-stat-label { font-size: 12px; color: var(--th-text-soft); margin-top: 3px; }
+.dr-stat-streak .dr-stat-value { color: var(--th-emerald-d); }
+.dr-streak-bar {
+  display: flex; gap: 3px; flex-wrap: wrap; margin-top: 8px;
+}
+.dr-streak-dot {
+  width: 10px; height: 10px; border-radius: 2px;
+  background: var(--th-line);
+}
+.dr-streak-dot.on { background: var(--th-emerald); }
+
+.dr-export-btn {
+  width: 100%; margin-top: 18px;
+  text-align: center;
+}
+
+/* Search highlight */
+mark.dr-hl {
+  background: rgba(245,180,49,.35); border-radius: 2px;
+  padding: 0 1px;
+}
+</style>
+</head>
+<body data-medras-module="scriptorium">
+<header class="th-header">
+  <a class="th-brand" href="/thesis-module/"><span class="th-brand-mark">S</span><span>MedRAS — Scriptorium</span></a>
+  <nav class="th-nav">
+    <a href="/thesis-module/dashboard.html">Dashboard</a>
+    <a href="/thesis-module/editor.html">Editor</a>
+    <a href="/">← MedRAS</a>
+  </nav>
+</header>
+<div class="th-stepbar">
+  <a class="th-step is-done" href="/thesis-module/setup.html" style="text-decoration:none">1 · Setup</a>
+  <a class="th-step is-done" href="/thesis-module/guidelines.html" style="text-decoration:none">2 · Guidelines</a>
+  <a class="th-step is-done" href="/thesis-module/references.html" style="text-decoration:none">3 · References</a>
+  <a class="th-step is-done" href="/thesis-module/data.html" style="text-decoration:none">4 · Data &amp; Stats</a>
+  <a class="th-step is-done" href="/thesis-module/dashboard.html" style="text-decoration:none">5 · Dashboard</a>
+  <a class="th-step" href="/thesis-module/editor.html" style="text-decoration:none">6 · Editor</a>
+  <a class="th-step" href="/thesis-module/compliance.html" style="text-decoration:none">7 · Compliance</a>
+  <a class="th-step" href="/thesis-module/export.html" style="text-decoration:none">8 · Export</a>
+  <span class="th-step is-active" style="margin-left:auto">📓 Diary</span>
+</div>
+
+<main class="th-shell th-wide">
+  <a class="th-back-link" href="/thesis-module/dashboard.html">← Back to Dashboard</a>
+  <div style="display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:14px; margin-bottom:6px">
+    <div>
+      <span class="th-eyebrow">Research Diary</span>
+      <h1 class="th-h1" id="dr-title">Research Diary</h1>
+      <p class="th-sub" id="dr-sub">Timestamp your progress, blockers, meetings, and milestones. Everything is stored in your browser alongside your thesis.</p>
+    </div>
+  </div>
+
+  <div class="dr-layout">
+    <!-- Main column -->
+    <div>
+      <!-- Composer -->
+      <div class="dr-composer">
+        <div class="dr-tag-row" id="dr-tag-row"></div>
+        <textarea class="dr-textarea" id="dr-text"
+          placeholder="What happened today? Note a finding, a decision, a question, a result…&#10;&#10;Ctrl+Enter to save quickly."
+          maxlength="5000"></textarea>
+        <div class="dr-composer-footer">
+          <span class="dr-char-count" id="dr-char-count">0 / 5000</span>
+          <button class="th-btn th-btn-primary" id="dr-add-btn">Add entry</button>
+        </div>
+      </div>
+
+      <!-- Filter bar -->
+      <div class="dr-filter-bar" id="dr-filter-bar">
+        <input class="dr-search" id="dr-search" type="search" placeholder="Search entries…" />
+        <button class="dr-filter-tag is-active" data-filter="all">All</button>
+      </div>
+
+      <!-- Entry list -->
+      <div id="dr-list"></div>
+    </div>
+
+    <!-- Stats sidebar -->
+    <aside>
+      <div class="dr-stats-card">
+        <div class="dr-stats-title">This study</div>
+        <div class="dr-stat">
+          <span class="dr-stat-value" id="dr-stat-total">0</span>
+          <span class="dr-stat-label">entries logged</span>
+        </div>
+        <div class="dr-stat">
+          <span class="dr-stat-value" id="dr-stat-words">0</span>
+          <span class="dr-stat-label">words written</span>
+        </div>
+        <div class="dr-stat">
+          <span class="dr-stat-value" id="dr-stat-week">0</span>
+          <span class="dr-stat-label">entries this week</span>
+        </div>
+        <div class="dr-stat dr-stat-streak">
+          <span class="dr-stat-value" id="dr-stat-streak">0</span>
+          <span class="dr-stat-label">day streak 🔥</span>
+          <div class="dr-streak-bar" id="dr-streak-bar"></div>
+        </div>
+        <div class="dr-export-btn">
+          <button class="th-btn th-btn-ghost" id="dr-export-btn" style="width:100%">Export as Markdown</button>
+        </div>
+      </div>
+    </aside>
+  </div>
+</main>
+
+<script src="/thesis-module/js/thesis-state.js"></script>
+<script src="/thesis-module/js/diary.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var TAGS = ResearchDiary.TAGS;
+  var state    = ThesisState.get();
+  var thesisId = state.id || 'default';
+  var thesisTitle = (state.setup && state.setup.title) || 'Untitled thesis';
+
+  var allEntries   = [];
+  var activeTag    = 'all';
+  var searchQuery  = '';
+  var selectedTag  = 'general';
+
+  /* ---- update page heading with thesis title ---- */
+  document.getElementById('dr-sub').textContent =
+    thesisTitle + ' · entries are stored locally in your browser.';
+
+  /* ---- build composer tag row ---- */
+  var tagRow = document.getElementById('dr-tag-row');
+  TAGS.forEach(function (t) {
+    var btn = document.createElement('button');
+    btn.className = 'dr-tag' + (t.id === selectedTag ? ' is-selected' : '');
+    btn.dataset.tag = t.id;
+    btn.style.setProperty('--tag-color', t.color);
+    btn.style.setProperty('--tag-bg',    t.bg);
+    btn.innerHTML = t.emoji + ' ' + t.label;
+    btn.addEventListener('click', function () {
+      selectedTag = t.id;
+      tagRow.querySelectorAll('.dr-tag').forEach(function (b) {
+        b.classList.toggle('is-selected', b.dataset.tag === selectedTag);
+      });
+    });
+    tagRow.appendChild(btn);
+  });
+
+  /* ---- char counter ---- */
+  var textarea  = document.getElementById('dr-text');
+  var charCount = document.getElementById('dr-char-count');
+  textarea.addEventListener('input', function () {
+    charCount.textContent = textarea.value.length + ' / 5000';
+  });
+
+  /* ---- Ctrl+Enter to submit ---- */
+  textarea.addEventListener('keydown', function (e) {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      e.preventDefault();
+      addEntry();
+    }
+  });
+
+  /* ---- Add entry ---- */
+  document.getElementById('dr-add-btn').addEventListener('click', addEntry);
+
+  async function addEntry() {
+    var text = textarea.value.trim();
+    if (!text) { textarea.focus(); return; }
+    var btn = document.getElementById('dr-add-btn');
+    btn.disabled = true; btn.textContent = 'Saving…';
+    try {
+      var entry = await ResearchDiary.add(thesisId, selectedTag, text);
+      allEntries.unshift(entry);
+      textarea.value = '';
+      charCount.textContent = '0 / 5000';
+      renderList();
+      renderStats();
+      renderFilterBar();
+    } catch (e) {
+      ThesisState.toast('Could not save entry: ' + e.message);
+    } finally {
+      btn.disabled = false; btn.textContent = 'Add entry';
+    }
+  }
+
+  /* ---- Search ---- */
+  var searchTimer;
+  document.getElementById('dr-search').addEventListener('input', function (e) {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(function () {
+      searchQuery = e.target.value.trim();
+      renderList();
+    }, 180);
+  });
+
+  /* ---- Filter bar ---- */
+  function renderFilterBar() {
+    var bar = document.getElementById('dr-filter-bar');
+    var search = bar.querySelector('#dr-search');
+    // remove old tag filters (keep search)
+    bar.querySelectorAll('.dr-filter-tag').forEach(function (b) { b.remove(); });
+
+    var usedTags = {};
+    allEntries.forEach(function (e) { usedTags[e.tag] = (usedTags[e.tag] || 0) + 1; });
+
+    var allBtn = document.createElement('button');
+    allBtn.className = 'dr-filter-tag' + (activeTag === 'all' ? ' is-active' : '');
+    allBtn.dataset.filter = 'all';
+    allBtn.textContent = 'All (' + allEntries.length + ')';
+    allBtn.addEventListener('click', function () { activeTag = 'all'; renderFilterBar(); renderList(); });
+    bar.appendChild(allBtn);
+
+    TAGS.filter(function (t) { return usedTags[t.id]; }).forEach(function (t) {
+      var btn = document.createElement('button');
+      btn.className = 'dr-filter-tag' + (activeTag === t.id ? ' is-active' : '');
+      btn.dataset.filter = t.id;
+      btn.style.setProperty('--tag-color', t.color);
+      btn.style.setProperty('--tag-bg', t.bg);
+      btn.textContent = t.emoji + ' ' + t.label + ' (' + usedTags[t.id] + ')';
+      btn.addEventListener('click', function () { activeTag = t.id; renderFilterBar(); renderList(); });
+      bar.appendChild(btn);
+    });
+  }
+
+  /* ---- Entry list ---- */
+  function renderList() {
+    var filtered = allEntries.filter(function (e) {
+      if (activeTag !== 'all' && e.tag !== activeTag) return false;
+      if (searchQuery) {
+        return e.text.toLowerCase().indexOf(searchQuery.toLowerCase()) !== -1;
+      }
+      return true;
+    });
+
+    var list = document.getElementById('dr-list');
+    if (!filtered.length) {
+      list.innerHTML = '<div class="dr-empty">' +
+        '<span class="dr-empty-icon">' + (allEntries.length ? '🔍' : '📓') + '</span>' +
+        (allEntries.length
+          ? 'No entries match your filter or search.'
+          : 'Your diary is empty.<br>Add your first entry above — even a single line counts.') +
+        '</div>';
+      return;
+    }
+
+    // Group by day
+    var groups = {};
+    filtered.forEach(function (e) {
+      var day = e.created_at.slice(0, 10);
+      if (!groups[day]) groups[day] = [];
+      groups[day].push(e);
+    });
+
+    list.innerHTML = '';
+    Object.keys(groups).sort(function (a, b) { return b.localeCompare(a); }).forEach(function (day) {
+      var grp = document.createElement('div');
+      grp.className = 'dr-day-group';
+      grp.innerHTML = '<div class="dr-day-label">' + _fmtDay(day) + '</div>';
+      groups[day].forEach(function (e) { grp.appendChild(_buildEntryEl(e)); });
+      list.appendChild(grp);
+    });
+  }
+
+  function _hl(text) {
+    if (!searchQuery) return _esc(text);
+    var re = new RegExp('(' + searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
+    return _esc(text).replace(re, '<mark class="dr-hl">$1</mark>');
+  }
+
+  function _buildEntryEl(e) {
+    var tag    = TAGS.find(function (t) { return t.id === e.tag; }) || TAGS[0];
+    var time   = e.created_at.slice(11, 16);
+    var edited = e.edited ? ' · edited' : '';
+
+    var div = document.createElement('div');
+    div.className = 'dr-entry';
+    div.dataset.id = e.id;
+    div.innerHTML =
+      '<div class="dr-entry-head">' +
+        '<span class="dr-entry-tag-pill" style="--tag-color:' + tag.color + ';--tag-bg:' + tag.bg + '">' +
+          tag.emoji + ' ' + tag.label +
+        '</span>' +
+        '<span class="dr-entry-time">' + time + '</span>' +
+        (edited ? '<span class="dr-entry-edited">' + edited + '</span>' : '') +
+        '<div class="dr-entry-actions">' +
+          '<button class="dr-icon-btn edit-btn" title="Edit entry">✏️</button>' +
+          '<button class="dr-icon-btn danger del-btn" title="Delete entry">🗑</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="dr-entry-body">' + _hl(e.text) + '</div>' +
+      '<textarea class="dr-entry-edit-area"></textarea>' +
+      '<div class="dr-entry-edit-actions">' +
+        '<button class="th-btn th-btn-sm th-btn-primary save-edit-btn">Save</button>' +
+        '<button class="th-btn th-btn-sm th-btn-light cancel-edit-btn">Cancel</button>' +
+      '</div>';
+
+    /* edit */
+    var editBtn  = div.querySelector('.edit-btn');
+    var delBtn   = div.querySelector('.del-btn');
+    var body     = div.querySelector('.dr-entry-body');
+    var editArea = div.querySelector('.dr-entry-edit-area');
+    var editActs = div.querySelector('.dr-entry-edit-actions');
+
+    editBtn.addEventListener('click', function () {
+      div.classList.add('is-editing');
+      body.style.display = 'none';
+      editArea.style.display = 'block';
+      editArea.value = e.text;
+      editActs.style.display = 'flex';
+      editArea.focus();
+    });
+    div.querySelector('.cancel-edit-btn').addEventListener('click', function () {
+      div.classList.remove('is-editing');
+      body.style.display = '';
+      editArea.style.display = 'none';
+      editActs.style.display = 'none';
+    });
+    div.querySelector('.save-edit-btn').addEventListener('click', async function () {
+      var newText = editArea.value.trim();
+      if (!newText) return;
+      try {
+        var updated = await ResearchDiary.update(e.id, thesisId, e.tag, newText);
+        if (updated) {
+          var idx = allEntries.findIndex(function (x) { return x.id === e.id; });
+          if (idx !== -1) allEntries[idx] = updated;
+          renderList(); renderStats();
+        }
+      } catch (err) { ThesisState.toast('Save failed: ' + err.message); }
+    });
+
+    /* delete */
+    delBtn.addEventListener('click', async function () {
+      if (!confirm('Delete this entry? This cannot be undone.')) return;
+      try {
+        await ResearchDiary.remove(e.id);
+        allEntries = allEntries.filter(function (x) { return x.id !== e.id; });
+        renderList(); renderStats(); renderFilterBar();
+      } catch (err) { ThesisState.toast('Delete failed: ' + err.message); }
+    });
+
+    return div;
+  }
+
+  /* ---- Stats ---- */
+  function renderStats() {
+    var s = ResearchDiary.stats(allEntries);
+    document.getElementById('dr-stat-total').textContent  = s.total;
+    document.getElementById('dr-stat-words').textContent  = s.words.toLocaleString();
+    document.getElementById('dr-stat-week').textContent   = s.thisWeek;
+    document.getElementById('dr-stat-streak').textContent = s.streak;
+
+    // 14-day activity dots
+    var bar = document.getElementById('dr-streak-bar');
+    bar.innerHTML = '';
+    var activeDays = new Set(allEntries.map(function (e) { return e.created_at.slice(0, 10); }));
+    for (var i = 13; i >= 0; i--) {
+      var d   = new Date();
+      d.setDate(d.getDate() - i);
+      var iso = d.toISOString().slice(0, 10);
+      var dot = document.createElement('div');
+      dot.className = 'dr-streak-dot' + (activeDays.has(iso) ? ' on' : '');
+      dot.title = iso;
+      bar.appendChild(dot);
+    }
+  }
+
+  /* ---- Export ---- */
+  document.getElementById('dr-export-btn').addEventListener('click', async function () {
+    try {
+      var md = await ResearchDiary.exportMarkdown(thesisId, thesisTitle);
+      var blob = new Blob([md], { type: 'text/markdown' });
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'research-diary-' + (thesisTitle.slice(0, 30).replace(/\s+/g, '-').toLowerCase() || 'diary') + '.md';
+      a.click();
+      setTimeout(function () { URL.revokeObjectURL(a.href); }, 3000);
+    } catch (err) { ThesisState.toast('Export failed: ' + err.message); }
+  });
+
+  /* ---- helpers ---- */
+  function _fmtDay(iso) {
+    var d = new Date(iso + 'T12:00:00Z');
+    return d.toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  }
+  function _esc(s) {
+    return String(s || '')
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  /* ---- Init ---- */
+  async function init() {
+    try {
+      allEntries = await ResearchDiary.listForThesis(thesisId);
+    } catch (e) {
+      allEntries = [];
+      ThesisState.toast('Could not load diary entries: ' + e.message);
+    }
+    renderFilterBar();
+    renderList();
+    renderStats();
+    textarea.focus();
+  }
+
+  init();
+})();
+</script>
+<script src="/js/medras-nav.js" defer></script>
+</body>
+</html>
