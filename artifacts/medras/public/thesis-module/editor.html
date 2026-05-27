@@ -152,6 +152,11 @@
     <div id="th-refpanel-list"></div>
     <button id="th-ref-insert" class="th-btn th-btn-light th-btn-sm"
       style="margin-top:6px; width:100%; font-size:12px">+ Insert citation (or type [@)</button>
+    <button id="th-fix-citations-btn" class="th-btn th-btn-light th-btn-sm"
+      style="margin-top:5px; width:100%; font-size:12px; border-color:#ca8a04; color:#92400e"
+      title="Deduplicate library and renumber all citations in order of first appearance across every chapter">
+      ⟳ Fix citation order (whole thesis)
+    </button>
 
     <h4 style="margin-top:16px">AI suggestions</h4>
     <div id="th-suggest-status" style="font-size:12.5px; color:var(--th-text-soft); margin-bottom:8px">
@@ -218,6 +223,17 @@
     if (isResultsChapter && draftBtn) {
       draftBtn.style.display = 'none';
     }
+    // Wire global citation fix button
+    const fixCiteBtn = document.getElementById('th-fix-citations-btn');
+    if (fixCiteBtn) fixCiteBtn.addEventListener('click', () => {
+      if (!window.confirm(
+        'This will:\n' +
+        '• Merge any duplicate references (same DOI or title → one entry)\n' +
+        '• Renumber all citations across every chapter in order of first appearance\n\n' +
+        'All chapter text will be updated. Continue?'
+      )) return;
+      _globalRenumberCitations();
+    });
     // Wire orphaned-citation repair banner buttons
     const repairBtn    = document.getElementById('th-cite-repair-btn');
     const dismissBtn   = document.getElementById('th-cite-repair-dismiss');
@@ -1087,6 +1103,110 @@
         ${passed}/${total} expected sub-sections detected
       </div>
       ${sectionRows}`;
+  }
+
+  // ---------- Global citation renumber + deduplication ----------
+  // Vancouver rule: one unique number per study, numbered in order of first
+  // appearance across all chapters in spine order. Repeated citations reuse
+  // the same number. Duplicate library entries (same DOI or same title) are
+  // merged into a single canonical entry.
+  function _globalRenumberCitations() {
+    const s    = ThesisState.get();
+    const refs = (s.references || []).slice();
+    if (!refs.length) {
+      ThesisState.toast('No references in library to renumber.', 3500); return;
+    }
+    const spineOrder = spine.map(ch => ch.id);
+
+    // ── Step 1: Deduplicate library ─────────────────────────────────────────
+    // canonical[] = deduped list; dedupMap[oldNum 1-based] = canonicalNum 1-based
+    const canonical = [];
+    const dedupMap  = {};
+    refs.forEach((ref, i) => {
+      const doi   = (ref.doi   || '').toLowerCase().trim();
+      const title = (ref.title || '').toLowerCase().trim();
+      const existIdx = canonical.findIndex(r =>
+        (doi   && r.doi   && r.doi.toLowerCase().trim()   === doi  ) ||
+        (title && r.title && r.title.toLowerCase().trim() === title)
+      );
+      if (existIdx === -1) {
+        canonical.push(ref);
+        dedupMap[i + 1] = canonical.length;
+      } else {
+        dedupMap[i + 1] = existIdx + 1;
+      }
+    });
+    const dupsMerged = refs.length - canonical.length;
+
+    // ── Step 2: Scan all chapters in spine order for first appearance ───────
+    // firstAppearance[canonicalNum] = sequential position (1-based)
+    const firstAppearance = {};
+    let nextSeq = 1;
+    const INLINE_RE = /\[(\d+(?:\s*,\s*\d+)*)\]/g;
+    for (const chId of spineOrder) {
+      const text = ThesisState.getChapter(chId).text || '';
+      let m;
+      INLINE_RE.lastIndex = 0;
+      while ((m = INLINE_RE.exec(text)) !== null) {
+        const nums = m[1].split(',').map(n => parseInt(n.trim(), 10));
+        for (const n of nums) {
+          if (!n || !dedupMap[n]) continue;
+          const can = dedupMap[n];
+          if (firstAppearance[can] === undefined) firstAppearance[can] = nextSeq++;
+        }
+      }
+    }
+
+    // ── Step 3: Build final map: oldNum → final sequential number ──────────
+    // old → canonical → sequential
+    const finalMap = {};
+    for (const [old, can] of Object.entries(dedupMap)) {
+      finalMap[parseInt(old)] = firstAppearance[can] ?? parseInt(old);
+    }
+
+    // ── Step 4: Reorder canonical refs by sequential position ───────────────
+    const finalRefs = new Array(canonical.length).fill(null);
+    for (const [can, seq] of Object.entries(firstAppearance)) {
+      finalRefs[seq - 1] = canonical[parseInt(can) - 1];
+    }
+    // Append any refs not cited in text at the end
+    let tail = Object.keys(firstAppearance).length;
+    canonical.forEach(r => {
+      if (!finalRefs.includes(r)) finalRefs[tail++] = r;
+    });
+
+    // ── Step 5: Rewrite all chapter texts ──────────────────────────────────
+    let chaptersChanged = 0;
+    for (const chId of spineOrder) {
+      const ch   = ThesisState.getChapter(chId);
+      const text = ch.text || '';
+      if (!text) continue;
+      const newText = text.replace(/\[(\d+(?:\s*,\s*\d+)*)\]/g, (_, inner) => {
+        const nums    = inner.split(',').map(n => parseInt(n.trim(), 10));
+        const newNums = [...new Set(nums.map(n => finalMap[n] || n))];
+        newNums.sort((a, b) => a - b);
+        return '[' + newNums.join(', ') + ']';
+      });
+      if (newText !== text) {
+        ThesisState.setChapter(chId, { text: newText, html: null });
+        chaptersChanged++;
+      }
+    }
+
+    // ── Step 6: Persist ────────────────────────────────────────────────────
+    ThesisState.patch({ references: finalRefs.filter(Boolean) });
+
+    const parts = [];
+    if (dupsMerged > 0)    parts.push(`${dupsMerged} duplicate${dupsMerged !== 1 ? 's' : ''} merged`);
+    if (chaptersChanged > 0) parts.push(`${chaptersChanged} chapter${chaptersChanged !== 1 ? 's' : ''} updated`);
+    const msg = parts.length
+      ? `Citations fixed — ${parts.join(', ')}. Numbers now flow 1, 2, 3… in order of first appearance.`
+      : 'Citations already consistent — nothing to change.';
+    ThesisState.toast(msg, 5500);
+
+    renderEditor();
+    renderChapterRefPanel();
+    _renderChapterAudit();
   }
 
   // ---------- editor body ----------
