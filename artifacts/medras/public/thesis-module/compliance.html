@@ -67,6 +67,8 @@
     <button id="th-run" class="th-btn th-btn-primary">▶ Run pre-flight check</button>
     <a class="th-btn th-btn-light" href="/thesis-module/dashboard.html">← Dashboard</a>
     <a class="th-btn th-btn-light" href="/thesis-module/assets.html">Manage figures</a>
+    <a class="th-btn th-btn-light" href="/thesis-module/export.html" id="th-goto-export"
+       style="margin-left:auto">Export →</a>
   </div>
 
   <div id="th-comp-status" style="font-size:13px; color:var(--th-text-soft); margin-bottom:8px">
@@ -197,6 +199,18 @@
         '<span style="flex:1"></span>' +
         '<a id="th-gate-cta" href="/thesis-module/export.html" class="th-btn th-btn-light">Export anyway →</a>';
     }
+    // Persist last compliance result so export.html can show a status banner
+    ThesisState.patch(function(st) {
+      st._last_compliance = {
+        ts:   Date.now(),
+        pass: sum.pass  || 0,
+        warn: sum.warn  || 0,
+        fail: sum.fail  || 0,
+        pages: sum.pages_estimated || 0,
+        refs:  sum.references || 0,
+      };
+      return st;
+    });
     // If the user came in with export-intent, scroll the gate into view
     // and pulse the CTA so they know exactly what to click next.
     if (exportIntent) {

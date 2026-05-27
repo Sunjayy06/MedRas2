@@ -65,6 +65,9 @@
     references and (optionally) consent forms in every language you tick.
   </p>
 
+  <!-- Last compliance result banner — populated by JS -->
+  <div id="th-export-comp-banner" style="display:none;margin-bottom:16px;padding:11px 16px;border-radius:10px;font-size:13.5px;display:flex;align-items:center;gap:12px;flex-wrap:wrap"></div>
+
   <section class="th-card">
     <h3 class="th-h3">What we'll include</h3>
     <div class="th-tile-row" id="th-summary"></div>
@@ -592,6 +595,38 @@
     }
   });
 
+  function renderComplianceBanner(s) {
+    var banner = document.getElementById('th-export-comp-banner');
+    if (!banner) return;
+    var lc = s._last_compliance;
+    if (!lc) return;
+    var ageMs = Date.now() - (lc.ts || 0);
+    var ageMin = Math.round(ageMs / 60000);
+    var ageStr = ageMin < 2 ? 'just now' : ageMin < 60 ? ageMin + ' min ago' : Math.round(ageMin/60) + ' h ago';
+    if (lc.fail === 0 && lc.warn === 0) {
+      banner.style.cssText = 'display:flex;margin-bottom:16px;padding:11px 16px;border-radius:10px;font-size:13.5px;align-items:center;gap:12px;flex-wrap:wrap;background:#ecf6ed;border:1px solid var(--th-emerald)';
+      banner.innerHTML =
+        '<span style="font-size:18px;flex-shrink:0">✓</span>' +
+        '<div style="flex:1"><strong style="color:var(--th-emerald-d)">Pre-flight passed</strong>' +
+        '<span style="color:var(--th-text-soft);font-size:12.5px;margin-left:8px">(' + esc(ageStr) + ') — ' +
+        lc.pass + ' checks clear · ~' + lc.pages + ' pages · ' + lc.refs + ' refs</span></div>';
+    } else if (lc.fail === 0) {
+      banner.style.cssText = 'display:flex;margin-bottom:16px;padding:11px 16px;border-radius:10px;font-size:13.5px;align-items:center;gap:12px;flex-wrap:wrap;background:#fff8e1;border:1px solid var(--th-gold)';
+      banner.innerHTML =
+        '<span style="font-size:18px;flex-shrink:0">⚠</span>' +
+        '<div style="flex:1"><strong style="color:#7a5d00">' + lc.warn + ' warning' + (lc.warn===1?'':'s') + '</strong>' +
+        '<span style="color:var(--th-text-soft);font-size:12.5px;margin-left:8px">from pre-flight ' + esc(ageStr) + ' — review before submitting</span></div>' +
+        '<a href="/thesis-module/compliance.html" class="th-btn th-btn-light th-btn-sm" style="flex-shrink:0">Re-run check</a>';
+    } else {
+      banner.style.cssText = 'display:flex;margin-bottom:16px;padding:11px 16px;border-radius:10px;font-size:13.5px;align-items:center;gap:12px;flex-wrap:wrap;background:#fdecec;border:1px solid #f5b3b3';
+      banner.innerHTML =
+        '<span style="font-size:18px;flex-shrink:0">✗</span>' +
+        '<div style="flex:1"><strong style="color:#a02">' + lc.fail + ' failure' + (lc.fail===1?'':'s') + ' in pre-flight</strong>' +
+        '<span style="color:var(--th-text-soft);font-size:12.5px;margin-left:8px">(' + esc(ageStr) + ') — fix before submitting to reviewers</span></div>' +
+        '<a href="/thesis-module/compliance.html" class="th-btn th-btn-light th-btn-sm" style="flex-shrink:0;border-color:#f5b3b3">Fix issues →</a>';
+    }
+  }
+
   (function init() {
     var s = ThesisState.get();
     s.consent = s.consent || { languages: [{code:'en',label:'English'}], delivery: 'attached' };
@@ -607,6 +642,7 @@
     bindJournalMeta();
     renderLangGrid();
     renderSummary();
+    renderComplianceBanner(s);
     checklistGate(s);
     adaptForMode(s);
 

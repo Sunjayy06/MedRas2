@@ -52,6 +52,9 @@
     <tbody></tbody>
   </table>
 
+  <!-- Citation coverage audit — rendered by JS below -->
+  <div id="th-cite-audit" style="margin-top:20px"></div>
+
 </main>
 
 <script src="/thesis-module/js/thesis-state.js"></script>
@@ -141,6 +144,9 @@
       });
     });
 
+    // Citation coverage audit
+    renderCitationAudit(spine, s);
+
     // Gate "Convert to article" button — requires 4 core chapters to have content
     const cvBtn = document.getElementById('cv-dash-btn');
     if (cvBtn) {
@@ -156,6 +162,138 @@
         cvBtn.title = '';
       }
     }
+  }
+
+  // --- Citation coverage audit ---
+  const AUDIT_SKIP = new Set([
+    'title_page','certificates','certificate','declaration',
+    'abbreviations','abbreviations_acronyms',
+    'proforma','case_proforma','consent_form',
+    'annexures','appendices',
+  ]);
+
+  function renderCitationAudit(spine, s) {
+    const auditEl = document.getElementById('th-cite-audit');
+    if (!auditEl) return;
+    const refs = s.references || [];
+    if (!refs.length) {
+      auditEl.innerHTML =
+        '<div class="th-card th-flat">' +
+        '<p style="color:var(--th-text-soft);font-size:13.5px;margin:0">Add references to the library to see citation coverage across chapters.</p></div>';
+      return;
+    }
+
+    // Only chapters that produce citable prose
+    const bodyChs = spine.filter((ch) => !AUDIT_SKIP.has(ch.id));
+
+    // Build cited-number sets per chapter
+    const citedBy = {};
+    bodyChs.forEach((ch) => {
+      const text = ((s.chapters || {})[ch.id] || {}).text || '';
+      const cited = new Set();
+      const re = /\[CITE_(\d+)\]/g;
+      let m;
+      while ((m = re.exec(text)) !== null) cited.add(parseInt(m[1], 10));
+      citedBy[ch.id] = cited;
+    });
+
+    // Per-ref: how many chapters cite it?
+    const refUsage = refs.map((_, i) => bodyChs.filter((ch) => citedBy[ch.id].has(i + 1)).length);
+    // Per-chapter: how many distinct refs?
+    const chUsage  = bodyChs.map((ch) => citedBy[ch.id].size);
+
+    const totalCited  = refs.filter((_, i) => refUsage[i] > 0).length;
+    const totalUnused = refs.length - totalCited;
+
+    // Column headers — rotate short labels vertically
+    const thCols = bodyChs.map((ch) => {
+      const lbl   = (ch.label || ch.id).replace(/^Chapter\s+\w+\s*[—–\-]\s*/i, '');
+      const short = lbl.length > 14 ? lbl.slice(0, 13) + '…' : lbl;
+      return `<th title="${esc(ch.label || ch.id)}"
+        style="writing-mode:vertical-lr;transform:rotate(180deg);min-width:26px;max-width:30px;
+               font-size:10px;font-weight:600;padding:4px 2px;white-space:nowrap;
+               color:var(--th-text-soft);cursor:default;vertical-align:bottom">${esc(short)}</th>`;
+    }).join('');
+
+    // Data rows
+    const rowsHtml = refs.map((r, i) => {
+      const num   = i + 1;
+      const used  = refUsage[i];
+      const auth  = (r.authors || []).length
+        ? ((r.authors[0].split(/[\s,]+/).filter(Boolean).reverse()[0] || '?') +
+           (r.authors.length > 1 ? ' et al.' : ''))
+        : '?';
+      const numCol = used === 0
+        ? 'var(--th-amber,#f59e0b)'
+        : used >= Math.ceil(bodyChs.length * 0.5)
+          ? 'var(--th-emerald-d)' : 'var(--th-text)';
+      const rowBg = used === 0 ? 'background:rgba(245,158,11,.04);' : '';
+      const cells = bodyChs.map((ch) => {
+        const yes = citedBy[ch.id].has(num);
+        return `<td style="text-align:center;padding:3px 1px;font-size:12.5px">` +
+          (yes ? `<span style="color:var(--th-emerald-d)" title="Cited in ${esc(ch.label||ch.id)}">✓</span>`
+               : `<span style="color:var(--th-line)">—</span>`) +
+          `</td>`;
+      }).join('');
+      const usageCell = `<td style="text-align:right;font-weight:700;font-size:11.5px;
+        white-space:nowrap;color:${numCol};padding:3px 8px;border-left:1px solid var(--th-line)">` +
+        (used > 0 ? used + ' ch' : '⚠ unused') + `</td>`;
+      return `<tr style="${rowBg}">
+        <td style="font-size:11.5px;padding:3px 8px 3px 4px;white-space:nowrap;
+                   border-right:1px solid var(--th-line)">
+          <span style="color:var(--th-emerald-d);font-weight:700;margin-right:3px">[${num}]</span>
+          <span title="${esc(r.title||'')}">${esc(auth)}${r.year ? ' (' + esc(String(r.year)) + ')' : ''}</span>
+        </td>${cells}${usageCell}</tr>`;
+    }).join('');
+
+    // Footer summary row
+    const footCells = bodyChs.map((ch, ci) => {
+      const n = chUsage[ci];
+      const col = n === 0 ? 'var(--th-text-soft)' : n >= Math.ceil(refs.length * 0.25) ? 'var(--th-emerald-d)' : 'var(--th-amber)';
+      return `<td style="text-align:center;padding:4px 1px;font-size:11.5px;font-weight:700;
+        color:${col};border-top:2px solid var(--th-line)">${n}</td>`;
+    }).join('');
+
+    auditEl.innerHTML = `
+      <div class="th-card th-flat">
+        <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:8px">
+          <h3 style="margin:0;font-size:15px;color:var(--th-ink-900)">Citation coverage across thesis</h3>
+          <span style="font-size:12px;color:var(--th-text-soft)">${refs.length} refs × ${bodyChs.length} chapters</span>
+        </div>
+        <div style="display:flex;gap:14px;font-size:12.5px;margin-bottom:12px;flex-wrap:wrap">
+          <span style="color:var(--th-emerald-d);font-weight:600">✓ ${totalCited} of ${refs.length} refs cited somewhere</span>
+          ${totalUnused > 0
+            ? `<span style="color:var(--th-amber,#f59e0b);font-weight:600">⚠ ${totalUnused} never cited — shown in amber</span>`
+            : `<span style="color:var(--th-text-soft)">All references are cited at least once.</span>`}
+        </div>
+        <div style="overflow-x:auto">
+          <div style="max-height:420px;overflow-y:auto">
+            <table style="border-collapse:collapse;font-size:12px;min-width:100%">
+              <thead style="position:sticky;top:0;background:var(--th-paper,#fff);z-index:2">
+                <tr>
+                  <th style="text-align:left;padding:4px 8px 4px 4px;font-size:11px;
+                    color:var(--th-text-soft);font-weight:600;min-width:170px;
+                    border-right:1px solid var(--th-line)">Reference</th>
+                  ${thCols}
+                  <th style="text-align:right;padding:4px 8px;font-size:11px;
+                    color:var(--th-text-soft);font-weight:600;min-width:62px;
+                    border-left:1px solid var(--th-line)">Used in</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${rowsHtml}
+                <tr>
+                  <td style="font-size:11px;padding:5px 8px 5px 4px;color:var(--th-text-soft);
+                    font-style:italic;border-top:2px solid var(--th-line);
+                    border-right:1px solid var(--th-line)">Refs per chapter →</td>
+                  ${footCells}
+                  <td style="border-top:2px solid var(--th-line)"></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>`;
   }
 
   render();

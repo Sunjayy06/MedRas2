@@ -119,6 +119,20 @@
   --tk-max-card:  880px;
   --tk-max-wide:  1120px;
   --tk-max-full:  1440px;
+
+  /* ── Module accent palette ────────────────────────────────────────
+     Each product has one canonical accent hue. Use these tokens in
+     module nav badges, card borders, and on-dark pill chips.
+     ──────────────────────────────────────────────────────────────── */
+  --tk-mod-helix:      #0d9488;  /* Study Builder  — teal     */
+  --tk-mod-cohort:     #2563eb;  /* Sample Size    — blue     */
+  --tk-mod-sigma:      #7c3aed;  /* Statistics     — purple   */
+  --tk-mod-prologue:   #1c3060;  /* Proposal       — navy     */
+  --tk-mod-script:     #059669;  /* Thesis/Article — emerald  */
+  --tk-mod-novus:      #d97706;  /* Plagiarism     — amber    */
+  --tk-mod-folio:      #ea580c;  /* Documents      — orange   */
+  --tk-mod-compass:    #6b7280;  /* Compass (soon) — slate    */
+  --tk-mod-fieldwork:  #6b7280;  /* Fieldwork (soon)          */
 }
 
 /* ── Shared button reset ─────────────────────────────────────────────── */
@@ -214,4 +228,28 @@
   height: var(--tk-btn-h-lg);
   padding: 0 var(--tk-btn-px-lg);
   font-size: 16px;
+}
+
+/* Secondary — teal filled (step-forward / confirm actions) */
+.tk-btn-secondary {
+  background: var(--tk-teal-600);
+  color: #fff;
+  box-shadow: 0 1px 3px rgba(8,145,178,.22), 0 4px 12px rgba(8,145,178,.15);
+}
+.tk-btn-secondary:hover {
+  background: #0e7490;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(8,145,178,.3), 0 8px 20px rgba(8,145,178,.2);
+}
+
+/* Success — green (export / download actions) */
+.tk-btn-success {
+  background: var(--tk-green-600);
+  color: #fff;
+  box-shadow: 0 1px 3px rgba(22,163,74,.22), 0 4px 12px rgba(22,163,74,.15);
+}
+.tk-btn-success:hover {
+  background: var(--tk-green-700);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(22,163,74,.3), 0 8px 20px rgba(22,163,74,.2);
 }
