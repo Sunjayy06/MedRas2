@@ -264,6 +264,7 @@ async def draft_section(request: Request, payload: Dict[str, Any]) -> Dict[str, 
             ref_library=ref_library,
             word_limit=word_limit,
             subsection_hint=subsection_hint,
+            rol_writing_format=payload.get("rol_writing_format"),
         )
     except GeneratorError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
@@ -481,6 +482,32 @@ async def proforma_template() -> Response:
             "Content-Disposition": 'attachment; filename="proforma_template.docx"'
         },
     )
+
+
+@router.post("/earlier-studies")
+@limiter.limit("5/minute")
+async def earlier_studies_endpoint(
+    request: Request, payload: Dict[str, Any]
+) -> Dict[str, Any]:
+    """Generate the Earlier Studies section for Review of Literature.
+
+    Retrieves up to 20 records, selects up to 15 most relevant, and returns:
+    ``{text, table_html, paragraphs, sources}``.
+    """
+    ref_lib_raw = payload.get("ref_library")
+    ref_library = None
+    if isinstance(ref_lib_raw, list):
+        ref_library = [r for r in ref_lib_raw if not r.get("retracted")][:200]
+    try:
+        result = await thesis_section_writer.generate_earlier_studies(
+            topic=payload.get("topic") or "",
+            extra_context=payload.get("extra_context"),
+            ref_library=ref_library,
+            domain_hint=payload.get("domain_hint"),
+        )
+    except GeneratorError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return result
 
 
 @router.post("/extract-style-sample")

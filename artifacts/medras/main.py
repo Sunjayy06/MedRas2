@@ -83,6 +83,17 @@ async def root() -> FileResponse:
     return FileResponse(index)
 
 
+# Favicon — redirect /favicon.ico to the SVG variant so browsers don't 404.
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon() -> FileResponse:
+    svg = PUBLIC_DIR / "favicon.svg"
+    if svg.exists():
+        return FileResponse(svg, media_type="image/svg+xml",
+                            headers={"Cache-Control": "public, max-age=86400"})
+    from fastapi.responses import Response as _R
+    return _R(status_code=204)
+
+
 # Static assets (CSS / JS / images / additional HTML pages).
 # Mounted last so explicit routes above take priority.
 app.mount("/", StaticFiles(directory=str(PUBLIC_DIR), html=True), name="public")

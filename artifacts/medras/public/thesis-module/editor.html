@@ -307,10 +307,15 @@
       try { sample = sessionStorage.getItem('medras.thesis.style_sample') || null; } catch(_){}
     }
     const setup = ThesisState.get().setup || {};
+    let rolWritingFormat = null;
+    if (chapterId === 'literature_review') {
+      try { rolWritingFormat = sessionStorage.getItem('medras.thesis.rol_writing_style') || null; } catch(_){}
+    }
     return {
       style_choice: choice,
       style_sample: sample,
       mode: (setup.mode || 'thesis').toLowerCase(),
+      ...(rolWritingFormat ? { rol_writing_format: rolWritingFormat } : {}),
     };
   }
 
@@ -959,9 +964,12 @@
       scan_text: { icon: '🔍', label: 'Auto-extract abbreviations', act: 'scan' },
       draft_by_section: { icon: '📋', label: 'Draft section-by-section', act: 'draft_by_section' },
       proforma_upload:  { icon: '📋', label: 'Upload your filled proforma', act: 'proforma_upload' },
+      rol_style_select: { icon: '🎯', label: 'Choose writing style',         act: 'rol_style_select' },
+      earlier_studies:  { icon: '📚', label: 'Generate Earlier Studies',      act: 'earlier_studies' },
     };
     const isResults  = chapterId === 'results' || chapterId.startsWith('results_');
     const isProforma = chapterId === 'proforma';
+    const isRoL      = chapterId === 'literature_review';
     // Chapter-specific tool buttons only — AI Draft/Improve/Import are hardcoded above the strip
     let filteredHelpers = helpers.map((h) => map[h]).filter(Boolean);
     // ai_draft in the map is for chapter-spine reference; the hardcoded button handles it
@@ -978,12 +986,37 @@
         + '<a href="/api/thesis/proforma-template" download="proforma_template.docx" '
         + 'style="color:#0369a1;font-weight:600;display:inline-block;margin-top:5px">'
         + '\u2b07\ufe0f Download blank proforma template (DOCX)</a></div>'
+      : isRoL
+      ? (function() {
+          let rolStyle = '';
+          try { rolStyle = sessionStorage.getItem('medras.thesis.rol_writing_style') || ''; } catch(_){}
+          const styleLabel = rolStyle === 'author_et_al' ? 'Author et al.' : rolStyle === 'statement_based' ? 'Statement-based' : '';
+          const styleBadge = styleLabel
+            ? `<span style="display:inline-block;margin-left:6px;padding:1px 8px;border-radius:12px;background:#d1fae5;color:#065f46;font-size:11px;font-weight:700">${styleLabel}</span>`
+            : '<span style="display:inline-block;margin-left:6px;padding:1px 8px;border-radius:12px;background:#fef3c7;color:#92400e;font-size:11px;font-weight:700">Style not set</span>';
+          return '<div class="th-results-notice" style="background:#fefce8;border-color:#fde047;color:#713f12">'
+            + '<strong>Review of Literature — target: 15,000–17,000 words.</strong>' + styleBadge + '<br>'
+            + '<span style="font-size:12px">Step\u00a01: Choose style below. '
+            + 'Step\u00a02: Use \u201cDraft section-by-section\u201d to build 12\u201313 subsections. '
+            + 'Step\u00a03: Click \u201cGenerate Earlier Studies\u201d last.</span></div>';
+        })()
       : '';
     if (!items.length && !notice) { el.innerHTML = '<p style="font-size:12px;color:var(--th-text-soft);margin:0">No chapter-specific tools for this section.</p>'; return; }
-    el.innerHTML = notice + items.map((it) => `
-      <button class="th-helper-btn" data-act="${it.act}">
+    // Detect if RoL style is missing so we can highlight the style-selector button
+    let rolStyleMissing = false;
+    if (isRoL) {
+      try { rolStyleMissing = !sessionStorage.getItem('medras.thesis.rol_writing_style'); } catch(_){}
+    }
+    el.innerHTML = notice + items.map((it) => {
+      const needsAttention = isRoL && it.act === 'rol_style_select' && rolStyleMissing;
+      const attnStyle = needsAttention
+        ? 'background:linear-gradient(135deg,#fef3c7 0%,#fde68a 100%);border:1.5px solid #f59e0b;color:#78350f;font-weight:700;'
+        : '';
+      return `<button class="th-helper-btn" data-act="${it.act}" style="${attnStyle}">
         <span class="th-helper-icon">${it.icon}</span><span>${esc(it.label)}</span>
-      </button>`).join('');
+        ${needsAttention ? '<span style="font-size:9px;background:#f59e0b;color:#fff;border-radius:9px;padding:1px 5px;margin-left:4px;font-weight:700">Required first</span>' : ''}
+      </button>`;
+    }).join('');
     el.querySelectorAll('button[data-act]').forEach((b) => {
       b.addEventListener('click', () => handleHelper(b.dataset.act));
     });
@@ -1692,7 +1725,20 @@
     }
     if (act === 'import') { openImportModal(); return; }
     if (act === 'proforma_upload') { openImportModal(); return; }
-    if (act === 'draft_by_section') { toggleSectionPlanner(); return; }
+    if (act === 'rol_style_select') { openRoLStyleModal(); return; }
+    if (act === 'earlier_studies')  { openEarlierStudiesModal(); return; }
+    if (act === 'draft_by_section') {
+      if (chapterId === 'literature_review') {
+        let rolStyle = '';
+        try { rolStyle = sessionStorage.getItem('medras.thesis.rol_writing_style') || ''; } catch(_){}
+        if (!rolStyle) {
+          ThesisState.toast('Choose a writing style for the Review of Literature first — click "Choose writing style".', 4500);
+          openRoLStyleModal();
+          return;
+        }
+      }
+      toggleSectionPlanner(); return;
+    }
     if (act === 'sigma_import') {
       const sigmaData = _getSigmaData();
       if (!sigmaData) {
@@ -1729,6 +1775,16 @@
     }
 
     if (act === 'draft') {
+      // Gate for Review of Literature: require style selection before any draft
+      if (chapterId === 'literature_review') {
+        let rolStyle = '';
+        try { rolStyle = sessionStorage.getItem('medras.thesis.rol_writing_style') || ''; } catch(_){}
+        if (!rolStyle) {
+          ThesisState.toast('Choose a writing style for the Review of Literature first — click "Choose writing style".', 4500);
+          openRoLStyleModal();
+          return;
+        }
+      }
       // Hard gate: a chapter label is NOT a research topic. Without a real
       // title, RAG returns junk and the AI drafts unsupported prose.
       if (!setup.title) {
@@ -2692,6 +2748,226 @@
     </div>
   </div>
 </div>
+
+<!-- ======= RoL Writing Style Selection Modal ======= -->
+<div id="th-rol-style-overlay"
+     style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1200;
+            place-items:center;overflow-y:auto"
+     onclick="if(event.target===this)closeRoLStyleModal()">
+  <div style="background:#fff;border-radius:14px;padding:28px 30px;max-width:540px;width:90%;
+              margin:auto;position:relative;box-shadow:0 16px 40px rgba(0,0,0,.22)">
+    <button onclick="closeRoLStyleModal()"
+            style="position:absolute;top:14px;right:16px;background:none;border:none;
+                   font-size:20px;cursor:pointer;color:#6b7280;line-height:1">✕</button>
+    <h2 style="font-size:17px;font-weight:700;color:#111827;margin:0 0 5px">
+      Choose writing style for Review of Literature
+    </h2>
+    <p style="font-size:12.5px;color:#6b7280;margin:0 0 20px;line-height:1.55">
+      This choice affects how every subsection reads. Select before drafting.
+    </p>
+    <div style="display:grid;gap:12px">
+      <label id="th-rol-card-author"
+             style="display:flex;gap:14px;align-items:flex-start;border:2px solid #e5e7eb;
+                    border-radius:10px;padding:15px 16px;cursor:pointer;transition:all .15s">
+        <input type="radio" name="th_rol_style" value="author_et_al"
+               style="margin-top:3px;flex-shrink:0;accent-color:#059669">
+        <div>
+          <div style="font-weight:700;font-size:13.5px;color:#111827;margin-bottom:3px">
+            Author et al. format
+          </div>
+          <div style="font-size:12px;color:#4b5563;line-height:1.5">
+            <em>"Sharma et al. reported that the incidence was 34%…"</em><br>
+            Author names appear in each sentence. Traditional MD/MS examiner-preferred style.
+          </div>
+        </div>
+      </label>
+      <label id="th-rol-card-statement"
+             style="display:flex;gap:14px;align-items:flex-start;border:2px solid #e5e7eb;
+                    border-radius:10px;padding:15px 16px;cursor:pointer;transition:all .15s">
+        <input type="radio" name="th_rol_style" value="statement_based"
+               style="margin-top:3px;flex-shrink:0;accent-color:#059669">
+        <div>
+          <div style="font-weight:700;font-size:13.5px;color:#111827;margin-bottom:3px">
+            Statement-based format
+          </div>
+          <div style="font-size:12px;color:#4b5563;line-height:1.5">
+            <em>"Previous studies have reported an incidence of 30–40%…"</em><br>
+            Concept-first, citations inline. Produces smoother analytical prose.
+          </div>
+        </div>
+      </label>
+    </div>
+    <div style="margin-top:20px;display:flex;gap:10px;justify-content:flex-end">
+      <button onclick="closeRoLStyleModal()" class="th-btn th-btn-light">Cancel</button>
+      <button onclick="confirmRoLStyle()" class="th-btn th-btn-primary">Confirm style</button>
+    </div>
+  </div>
+</div>
+
+<!-- ======= Earlier Studies Generation Modal ======= -->
+<div id="th-es-overlay"
+     style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1200;
+            place-items:center;overflow-y:auto"
+     onclick="if(event.target===this)closeEarlierStudiesModal()">
+  <div style="background:#fff;border-radius:14px;padding:28px 30px;max-width:740px;width:92%;
+              margin:auto;position:relative;box-shadow:0 16px 40px rgba(0,0,0,.22)">
+    <button onclick="closeEarlierStudiesModal()"
+            style="position:absolute;top:14px;right:16px;background:none;border:none;
+                   font-size:20px;cursor:pointer;color:#6b7280;line-height:1">✕</button>
+    <h2 style="font-size:17px;font-weight:700;color:#111827;margin:0 0 5px">
+      Earlier Studies
+    </h2>
+    <p style="font-size:12.5px;color:#6b7280;margin:0 0 14px;line-height:1.55">
+      AI selects up to 15 retrieved studies and writes one structured paragraph per study,
+      followed by a 6-column comparison table. Insert at the end of your Review of Literature.
+    </p>
+    <div id="th-es-status"
+         style="font-size:13px;color:#374151;min-height:18px;margin-bottom:10px"></div>
+    <div id="th-es-preview" style="display:none">
+      <div style="font-size:11.5px;font-weight:600;color:#6b7280;text-transform:uppercase;
+                  letter-spacing:.05em;margin-bottom:5px">Paragraphs</div>
+      <div id="th-es-para-box"
+           style="max-height:300px;overflow-y:auto;border:1px solid #e5e7eb;border-radius:8px;
+                  padding:14px;font-size:12.5px;line-height:1.75;background:#f9fafb;
+                  white-space:pre-wrap;margin-bottom:14px"></div>
+      <div style="font-size:11.5px;font-weight:600;color:#6b7280;text-transform:uppercase;
+                  letter-spacing:.05em;margin-bottom:5px">Comparison Table</div>
+      <div id="th-es-table-box"
+           style="max-height:300px;overflow:auto;border:1px solid #e5e7eb;
+                  border-radius:8px;margin-bottom:16px"></div>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end">
+      <button onclick="closeEarlierStudiesModal()" class="th-btn th-btn-light">Close</button>
+      <button id="th-es-gen-btn" onclick="generateEarlierStudies()"
+              class="th-btn th-btn-primary">Generate Earlier Studies</button>
+      <button id="th-es-insert-btn" onclick="insertEarlierStudies()"
+              class="th-btn th-btn-primary"
+              style="display:none;background:#065f46;border-color:#065f46">
+        ✓ Insert into chapter
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+  /* ---- RoL Style Modal ---- */
+  function openRoLStyleModal() {
+    const ov = document.getElementById('th-rol-style-overlay');
+    if (!ov) return;
+    let saved = '';
+    try { saved = sessionStorage.getItem('medras.thesis.rol_writing_style') || ''; } catch(_){}
+    ov.querySelectorAll('input[name="th_rol_style"]').forEach((r) => {
+      r.checked = (r.value === saved);
+    });
+    _highlightRoLCards();
+    ov.style.display = 'grid';
+    document.body.style.overflow = 'hidden';
+  }
+  function closeRoLStyleModal() {
+    const ov = document.getElementById('th-rol-style-overlay');
+    if (ov) ov.style.display = 'none';
+    document.body.style.overflow = '';
+  }
+  function confirmRoLStyle() {
+    const chosen = document.querySelector('input[name="th_rol_style"]:checked');
+    if (!chosen) { ThesisState.toast('Please choose a style.'); return; }
+    try { sessionStorage.setItem('medras.thesis.rol_writing_style', chosen.value); } catch(_){}
+    closeRoLStyleModal();
+    const label = chosen.value === 'author_et_al' ? 'Author et al.' : 'Statement-based';
+    ThesisState.toast(`Writing style set to "${label}". Now use "Draft section-by-section" to begin.`, 4000);
+    renderHelpers();  // refresh notice badge
+  }
+  function _highlightRoLCards() {
+    ['th-rol-card-author', 'th-rol-card-statement'].forEach((id) => {
+      const card = document.getElementById(id);
+      if (!card) return;
+      const inp = card.querySelector('input');
+      const sel = inp && inp.checked;
+      card.style.borderColor = sel ? '#059669' : '#e5e7eb';
+      card.style.background  = sel ? '#f0fdf4' : '#fff';
+    });
+  }
+  document.addEventListener('change', (e) => {
+    if (e.target && e.target.name === 'th_rol_style') _highlightRoLCards();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      if (document.getElementById('th-rol-style-overlay')?.style.display === 'grid') { closeRoLStyleModal(); }
+      if (document.getElementById('th-es-overlay')?.style.display === 'grid') { closeEarlierStudiesModal(); }
+    }
+  });
+
+  /* ---- Earlier Studies Modal ---- */
+  let _esResult = null;
+  function openEarlierStudiesModal() {
+    const ov = document.getElementById('th-es-overlay');
+    if (!ov) return;
+    ov.style.display = 'grid';
+    document.body.style.overflow = 'hidden';
+  }
+  function closeEarlierStudiesModal() {
+    const ov = document.getElementById('th-es-overlay');
+    if (ov) ov.style.display = 'none';
+    document.body.style.overflow = '';
+  }
+  async function generateEarlierStudies() {
+    const genBtn   = document.getElementById('th-es-gen-btn');
+    const insBtn   = document.getElementById('th-es-insert-btn');
+    const statusEl = document.getElementById('th-es-status');
+    const preview  = document.getElementById('th-es-preview');
+    const paraBox  = document.getElementById('th-es-para-box');
+    const tableBox = document.getElementById('th-es-table-box');
+    if (!genBtn) return;
+    const s = ThesisState.get();
+    const setup = s.setup || {};
+    if (!setup.title) {
+      ThesisState.toast('Add your thesis title in Setup before generating Earlier Studies.', 4000);
+      return;
+    }
+    genBtn.disabled = true;
+    genBtn.textContent = 'Generating…';
+    statusEl.innerHTML = '<span class="th-loading"></span> Retrieving and analysing studies…';
+    preview.style.display = 'none';
+    insBtn.style.display = 'none';
+    const ctxParts = [];
+    if (setup.aim)               ctxParts.push('AIM: ' + setup.aim);
+    if (setup.primary_objective) ctxParts.push('OBJECTIVES:\n' + setup.primary_objective);
+    if (setup.study_type)        ctxParts.push('STUDY TYPE: ' + setup.study_type);
+    if (setup.population)        ctxParts.push('POPULATION: ' + setup.population);
+    if (setup.setting)           ctxParts.push('SETTING: ' + setup.setting);
+    const allRefs = (s.references || []).filter((r) => !r.retracted);
+    try {
+      const res = await ThesisState.api('/earlier-studies', {
+        topic:         setup.title,
+        extra_context: ctxParts.length ? ctxParts.join('\n\n') : undefined,
+        domain_hint:   setup.domain || undefined,
+        ref_library:   allRefs.length >= 1 ? allRefs : undefined,
+      });
+      _esResult = res;
+      paraBox.textContent = res.text || '';
+      tableBox.innerHTML  = res.table_html || '';
+      preview.style.display = '';
+      insBtn.style.display  = '';
+      const n = (res.paragraphs || []).length;
+      statusEl.textContent = `Generated ${n} study summar${n !== 1 ? 'ies' : 'y'}.`;
+    } catch (e) {
+      statusEl.textContent = 'Failed: ' + e.message;
+    } finally {
+      genBtn.disabled = false;
+      genBtn.textContent = 'Regenerate';
+    }
+  }
+  function insertEarlierStudies() {
+    if (!_esResult) return;
+    const canvas = document.getElementById('th-editor-canvas');
+    if (!canvas) return;
+    const existing = canvas.innerText.trimEnd();
+    canvas.innerText = (existing ? existing + '\n\n' : '') + (_esResult.text || '');
+    ThesisState.setChapter(chapterId, { text: canvas.innerText });
+    closeEarlierStudiesModal();
+    ThesisState.toast('Earlier Studies section inserted.', 3000);
+  }
+</script>
 
 <script src="/js/medras-nav.js" defer></script>
 <script>

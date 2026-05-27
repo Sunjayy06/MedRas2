@@ -70,9 +70,12 @@ CHAPTER_SPINE: List[Chapter] = [
      "helpers": ["study_builder"],
      "description": "Single aim + 2-4 specific measurable objectives."},
     {"id": "literature_review", "label": "Chapter III — Review of Literature", "group": "body",
-     "target_words": 6500, "word_budget": [5500, 7500],
-     "helpers": ["ai_draft", "draft_by_section", "rag_cite", "summarise_refs", "plagiarism"],
-     "description": "Synthesise prior work — agreements, disagreements, gaps."},
+     "target_words": 15000, "word_budget": [15000, 17000],
+     "helpers": ["rol_style_select", "ai_draft", "draft_by_section", "rag_cite",
+                 "earlier_studies", "summarise_refs", "plagiarism"],
+     "description": "Elaborate dissertation-level review — 15,000–17,000 words across 12–13 "
+                    "subsections. Choose style first, then draft section-by-section. "
+                    "Earlier Studies section generated last."},
     {"id": "methods", "label": "Chapter IV — Materials & Methods", "group": "body",
      "target_words": 2200, "word_budget": [1800, 2400],
      "helpers": ["sample_size", "study_builder", "ai_draft", "rag_cite"],
