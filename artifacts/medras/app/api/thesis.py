@@ -6,6 +6,7 @@ Endpoints
 * ``POST /api/thesis/parse-guidelines``      — multipart upload of uni rules PDF
 * ``POST /api/thesis/references/verify-dois``— bulk DOI verification
 * ``POST /api/thesis/references/search``     — distilled RAG search
+* ``GET  /api/thesis/proforma-template``     — blank standard Indian MD/MS proforma DOCX download
 * ``POST /api/thesis/draft-section``         — RAG-grounded fresh section draft
 * ``POST /api/thesis/improve-section``       — sentence-level inline-diff suggestions
 * ``POST /api/thesis/draft-abstract``        — structured abstract from researcher's own data
@@ -457,6 +458,29 @@ async def import_section(request: Request, file: UploadFile = File(...)) -> Dict
         )
 
     return result
+
+
+@router.get("/proforma-template")
+async def proforma_template() -> Response:
+    """Return a blank standard Indian MD / MS proforma as a downloadable DOCX.
+
+    The template covers all 14 conventional sections (patient identification,
+    chief complaints, history, examination, investigations, diagnosis, treatment,
+    outcome, follow-up) in the format used across NBEMS MD/MS programmes.
+    """
+    from app.services.proforma_template import build_proforma_docx
+
+    buf = build_proforma_docx()
+    return Response(
+        content=buf.getvalue(),
+        media_type=(
+            "application/vnd.openxmlformats-officedocument"
+            ".wordprocessingml.document"
+        ),
+        headers={
+            "Content-Disposition": 'attachment; filename="proforma_template.docx"'
+        },
+    )
 
 
 @router.post("/extract-style-sample")

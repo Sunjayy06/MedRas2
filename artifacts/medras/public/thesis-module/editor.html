@@ -958,8 +958,10 @@
       import_stats: { icon: '↓', label: 'Import stats output', act: 'data' },
       scan_text: { icon: '🔍', label: 'Auto-extract abbreviations', act: 'scan' },
       draft_by_section: { icon: '📋', label: 'Draft section-by-section', act: 'draft_by_section' },
+      proforma_upload:  { icon: '📋', label: 'Upload your filled proforma', act: 'proforma_upload' },
     };
-    const isResults = chapterId === 'results' || chapterId.startsWith('results_');
+    const isResults  = chapterId === 'results' || chapterId.startsWith('results_');
+    const isProforma = chapterId === 'proforma';
     // Chapter-specific tool buttons only — AI Draft/Improve/Import are hardcoded above the strip
     let filteredHelpers = helpers.map((h) => map[h]).filter(Boolean);
     // ai_draft in the map is for chapter-spine reference; the hardcoded button handles it
@@ -969,6 +971,13 @@
     const el = document.getElementById('th-helper-strip');
     const notice = isResults
       ? '<div class="th-results-notice"><strong>Results are researcher-provided.</strong><br>Import from Sigma or upload your data — AI does not generate study results.</div>'
+      : isProforma
+      ? '<div class="th-results-notice" style="background:#f0f9ff;border-color:#bae6fd;color:#0c4a6e">'
+        + '<strong>Proforma is researcher-provided.</strong><br>'
+        + 'Upload your filled data collection form (DOCX or PDF). A blank standard Indian MD\u2009/\u2009MS template is provided.<br>'
+        + '<a href="/api/thesis/proforma-template" download="proforma_template.docx" '
+        + 'style="color:#0369a1;font-weight:600;display:inline-block;margin-top:5px">'
+        + '\u2b07\ufe0f Download blank proforma template (DOCX)</a></div>'
       : '';
     if (!items.length && !notice) { el.innerHTML = '<p style="font-size:12px;color:var(--th-text-soft);margin:0">No chapter-specific tools for this section.</p>'; return; }
     el.innerHTML = notice + items.map((it) => `
@@ -1682,6 +1691,7 @@
       return;
     }
     if (act === 'import') { openImportModal(); return; }
+    if (act === 'proforma_upload') { openImportModal(); return; }
     if (act === 'draft_by_section') { toggleSectionPlanner(); return; }
     if (act === 'sigma_import') {
       const sigmaData = _getSigmaData();
@@ -1935,9 +1945,16 @@
     if (fileLabel) fileLabel.textContent = 'Drop a DOCX, PDF, or TXT file here';
     const s1status = document.getElementById('th-import-s1-status');
     if (s1status) s1status.textContent = '';
-    // Update title for results chapters
+    // Update title and paste-area visibility based on chapter type
     const title = document.getElementById('th-import-title');
-    if (title) title.textContent = _isResultsChapter() ? 'Add your results' : 'Import existing content';
+    const isProforma = chapterId === 'proforma';
+    if (title) title.textContent = isProforma ? 'Upload your filled proforma'
+      : _isResultsChapter() ? 'Add your results' : 'Import existing content';
+    // Proforma: hide paste option — researchers upload their document
+    const pasteDivider = document.getElementById('th-import-paste-divider');
+    const pasteArea    = document.getElementById('th-import-paste');
+    if (pasteDivider) pasteDivider.style.display = isProforma ? 'none' : '';
+    if (pasteArea)    pasteArea.style.display    = isProforma ? 'none' : '';
     showImportStage(1);
     document.getElementById('th-import-overlay').style.display = 'block';
     document.getElementById('th-import-modal').style.display = 'block';
@@ -2123,6 +2140,12 @@
     const thesisR = document.getElementById('th-import-actions-thesis-results');
     const articleR = document.getElementById('th-import-actions-article-results');
     const skipBanner = document.getElementById('th-import-skip-review');
+    const isProformaChap = chapterId === 'proforma';
+    // For the proforma chapter: hide Polish option, show only Use as-is
+    if (generic) {
+      const polishBtn = document.getElementById('th-import-polish');
+      if (polishBtn) polishBtn.style.display = isProformaChap ? 'none' : '';
+    }
     if (isResults && !isArticle) {
       if (generic)   generic.style.display = 'none';
       if (articleR)  articleR.style.display = 'none';
@@ -2557,7 +2580,7 @@
       <button type="button" class="th-btn th-btn-light th-btn-sm" onclick="document.getElementById('th-import-file').click();event.stopPropagation()">Browse file</button>
     </div>
 
-    <div style="text-align:center;margin:12px 0;font-size:12px;color:var(--th-text-soft)">— or paste text directly —</div>
+    <div id="th-import-paste-divider" style="text-align:center;margin:12px 0;font-size:12px;color:var(--th-text-soft)">— or paste text directly —</div>
 
     <textarea id="th-import-paste" class="th-input" rows="5"
       placeholder="Paste your chapter text here…"
