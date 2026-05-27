@@ -139,13 +139,17 @@
     const year = r.year || 'n.d.';
     const journal = r.journal || r.source || '';
     const link = r.doi ? `https://doi.org/${esc(r.doi)}` : (r.url || '');
+    const statusColor = r.retracted ? '#dc2626' : (r.verified ? 'var(--th-emerald-d)' : 'var(--th-amber)');
+    const statusIcon  = r.retracted ? '✕' : (r.verified ? '✓' : '?');
     return `
-      <div class="th-ref-row" data-id="${esc(r._id || r.doi || '')}" data-doi="${esc(r.doi || '')}">
-        <div style="font-weight:700; color:${r.verified ? 'var(--th-emerald-d)' : 'var(--th-amber)'}">
-          ${r.verified ? '✓' : '?'}
-        </div>
+      <div class="th-ref-row" data-id="${esc(r._id || r.doi || '')}" data-doi="${esc(r.doi || '')}"
+           style="${r.retracted ? 'background:#fff5f5;border-left:3px solid #dc2626;' : ''}">
+        <div style="font-weight:700; color:${statusColor}">${statusIcon}</div>
         <div>
           <div class="th-ref-title">${esc(r.title || 'Untitled')}</div>
+          ${r.retracted ? `<div style="display:inline-flex;align-items:center;gap:4px;background:#fee2e2;color:#dc2626;
+            font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:4px;margin:3px 0;letter-spacing:.03em">
+            ⚠ RETRACTED — AI will not cite this paper. Consider removing it.</div>` : ''}
           <div class="th-ref-meta">
             ${esc(authors)} · ${esc(year)} · ${esc(journal)}
             ${link ? ` · <a href="${link}" target="_blank" rel="noopener">DOI</a>` : ''}
@@ -195,12 +199,15 @@
       if (!dois.length) { status.textContent = 'No DOI found.'; return; }
       status.innerHTML = `<span class="th-loading"></span> Verifying ${dois.length} DOI${dois.length>1?'s':''}…`;
       const ver = await ThesisState.api('/references/verify-dois', { dois });
-      const verified = (ver.records || []).filter((r) => r.verified);
-      const failed = (ver.records || []).filter((r) => !r.verified);
+      const verified   = (ver.records || []).filter((r) => r.verified);
+      const failed     = (ver.records || []).filter((r) => !r.verified);
+      const retracted  = verified.filter((r) => r.retracted);
       ThesisState.addReferences(verified);
       ThesisState.libSaveMany(verified);
+      const retractedNote = retracted.length
+        ? ` · ⚠ ${retracted.length} retracted (shown in red — AI will not cite them)` : '';
       status.textContent = `Added ${verified.length}` +
-        (failed.length ? `, ${failed.length} failed (not found in Crossref)` : '');
+        (failed.length ? `, ${failed.length} failed (not found in Crossref)` : '') + retractedNote;
       document.getElementById('th-doi-text').value = '';
       renderLib();
     } catch (e) { status.textContent = 'Error: ' + e.message; }

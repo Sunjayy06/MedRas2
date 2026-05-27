@@ -239,7 +239,11 @@ async def draft_section(request: Request, payload: Dict[str, Any]) -> Dict[str, 
     extra_context?, domain_hint?, mode?, style_choice?, style_sample?,
     ref_library?}``."""
     ref_lib_raw = payload.get("ref_library")
-    ref_library = ref_lib_raw[:200] if isinstance(ref_lib_raw, list) else None
+    # Never ground the AI on retracted papers; silently exclude them.
+    if isinstance(ref_lib_raw, list):
+        ref_library = [r for r in ref_lib_raw if not r.get("retracted")][:200]
+    else:
+        ref_library = None
     try:
         result = await thesis_section_writer.draft_section(
             chapter_id=payload.get("chapter_id") or "",
@@ -265,7 +269,10 @@ async def improve_section(request: Request, payload: Dict[str, Any]) -> Dict[str
     locked_numbers?, domain_hint?, mode?, style_choice?, style_sample?,
     ref_library?}``."""
     ref_lib_raw = payload.get("ref_library")
-    ref_library = ref_lib_raw[:200] if isinstance(ref_lib_raw, list) else None
+    if isinstance(ref_lib_raw, list):
+        ref_library = [r for r in ref_lib_raw if not r.get("retracted")][:200]
+    else:
+        ref_library = None
     try:
         result = await thesis_section_writer.improve_section(
             chapter_id=payload.get("chapter_id") or "",

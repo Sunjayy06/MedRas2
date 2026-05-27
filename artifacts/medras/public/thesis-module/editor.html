@@ -333,7 +333,7 @@
           <div class="th-refpanel-title">${esc((r.title || '').slice(0, 65))}${(r.title || '').length > 65 ? '…' : ''}</div>
           <div class="th-refpanel-meta">${esc(auth)} · ${esc(String(r.year || 'n.d.'))}${r.journal ? ' · <em>' + esc(r.journal) + '</em>' : ''}</div>
           ${r.doi ? `<div><a href="https://doi.org/${esc(r.doi)}" target="_blank" rel="noopener" style="font-size:10px;color:var(--th-emerald-d);word-break:break-all">${esc(r.doi)}</a></div>` : ''}
-          ${!r.verified ? '<div style="font-size:10px;color:#b45309;font-style:italic">⚠ unverified — not cited by AI</div>' : ''}
+          ${r.retracted ? '<div style="font-size:10px;color:#dc2626;font-weight:700;background:#fee2e2;padding:2px 5px;border-radius:3px;margin-top:2px">⚠ RETRACTED — not cited by AI</div>' : (!r.verified ? '<div style="font-size:10px;color:#b45309;font-style:italic">⚠ unverified — not cited by AI</div>' : '')}
           <div class="th-refpanel-replace-panel" id="th-replace-${idx}" style="display:none;margin-top:6px"></div>
         </div>
         <div style="display:flex;flex-direction:column;gap:2px;flex-shrink:0">

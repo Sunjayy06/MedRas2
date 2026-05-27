@@ -76,6 +76,22 @@ async def verify_doi(doi: str) -> Optional[Dict[str, Any]]:
         if nm:
             authors.append(nm)
     issued = (((data.get("issued") or {}).get("date-parts") or [[None]])[0] or [None])[0]
+
+    # --- retraction detection ---
+    # Crossref signals retraction via update-to[].type == "retraction",
+    # or the work's own type == "retraction", or a title prefix "RETRACTED:".
+    retracted = False
+    work_type = (data.get("type") or "").lower()
+    if work_type == "retraction":
+        retracted = True
+    if not retracted:
+        for upd in (data.get("update-to") or []):
+            if (upd.get("type") or "").lower() == "retraction":
+                retracted = True
+                break
+    if not retracted:
+        retracted = (title or "").upper().startswith("RETRACTED:")
+
     return {
         "doi": data.get("DOI") or doi,
         "title": (title or "").strip(),
@@ -86,6 +102,7 @@ async def verify_doi(doi: str) -> Optional[Dict[str, Any]]:
         "url": data.get("URL") or f"https://doi.org/{doi}",
         "source": "crossref",
         "verified": True,
+        "retracted": retracted,
     }
 
 
