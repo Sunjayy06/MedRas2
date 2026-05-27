@@ -1767,7 +1767,7 @@
   }
 
   // Null-safe event binding — silently skips missing elements (modal HTML lives
-  // after the </script> tag so may not be in the DOM at the synchronous parse phase).
+  // after the <\/script> tag so may not be in the DOM at the synchronous parse phase).
   function _on(id, evt, fn) {
     const el = document.getElementById(id);
     if (el) el.addEventListener(evt, fn);
@@ -1826,7 +1826,7 @@
 
   init();
   // initImportModal() is deferred to DOMContentLoaded so the modal HTML
-  // (declared after this </script> block) is guaranteed to exist in the DOM
+  // (declared after this <\/script> block) is guaranteed to exist in the DOM
   // before any getElementById / addEventListener calls run.
   document.addEventListener('DOMContentLoaded', initImportModal);
 })();
