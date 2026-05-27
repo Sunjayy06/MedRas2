@@ -23,9 +23,11 @@ from typing import Iterable, List, Optional
 # ---------------------------------------------------------------------------
 
 DOMAIN_DATABASE_MAP: dict[str, list[str]] = {
-    "medical_clinical":     ["pubmed", "europe_pmc", "cochrane", "crossref", "openalex"],
-    "pharmacology":         ["pubmed", "europe_pmc", "crossref", "openalex"],
-    "nursing":              ["pubmed", "europe_pmc", "cinahl_open", "crossref"],
+    # medical_clinical: Cochrane is now live (Europe PMC abstract layer).
+    # medrxiv covers both medRxiv and bioRxiv preprints.
+    "medical_clinical":     ["pubmed", "europe_pmc", "cochrane", "medrxiv", "crossref", "openalex"],
+    "pharmacology":         ["pubmed", "europe_pmc", "medrxiv", "crossref", "openalex"],
+    "nursing":              ["pubmed", "europe_pmc", "cochrane", "cinahl_open", "crossref"],
     "engineering":          ["semantic_scholar", "crossref", "openalex", "ieee_open"],
     "computer_science":     ["semantic_scholar", "crossref", "openalex", "arxiv"],
     "social_sciences":      ["semantic_scholar", "openalex", "crossref", "doaj"],

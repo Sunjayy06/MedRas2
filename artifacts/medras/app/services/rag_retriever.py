@@ -67,7 +67,6 @@ _USER_AGENT = "MedRAS/1.0 (academic research assistant; mailto:research@medras.l
 
 # Subscription-required messages for closed sources.
 _SUBSCRIPTION_MESSAGES: Dict[str, str] = {
-    "cochrane":    "Cochrane Library requires an institutional subscription. Visit cochranelibrary.com to search systematic reviews directly.",
     "cinahl_open": "CINAHL is a subscription-only nursing database. Ask your institution's library for access.",
     "ieee_open":   "IEEE Xplore requires a subscription for most content. Try ieeexplore.ieee.org for open-access papers.",
 }
@@ -256,11 +255,31 @@ async def _pubmed_efetch_abstracts(client: httpx.AsyncClient, pmids: List[str]) 
 
 
 async def _search_pubmed(client: httpx.AsyncClient, query: str, limit: int) -> List[Record]:
-    # 1) esearch -> list of PMIDs
+    # 1) esearch → PMIDs.  usehistory=y makes PubMed return the MeSH-expanded
+    #    querytranslation alongside the idlist.  sort=relevance surfaces the
+    #    best-matching papers first instead of the most-recent ones.
     es = await _get_json(client, "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi",
-                         params={"db": "pubmed", "term": query, "retmax": limit, "retmode": "json"})
+                         params={"db": "pubmed", "term": query, "retmax": limit,
+                                 "retmode": "json", "usehistory": "y", "sort": "relevance"})
     if not es: return []
-    ids = (((es.get("esearchresult") or {}).get("idlist")) or [])[:limit]
+    esr = es.get("esearchresult") or {}
+    ids = (esr.get("idlist") or [])[:limit]
+
+    # Zero results with the plain query?  Retry with the MeSH-expanded
+    # querytranslation PubMed built via Automatic Term Mapping.  This recovers
+    # colloquial terms ("heart attack" → "Myocardial Infarction"[MeSH]) and
+    # abbreviations ("MI") that ATM maps but for which the raw query returned
+    # nothing.
+    if not ids:
+        translation = (esr.get("querytranslation") or "").strip()
+        if translation and translation.lower() != query.lower():
+            es2 = await _get_json(
+                client, "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi",
+                params={"db": "pubmed", "term": translation, "retmax": limit,
+                        "retmode": "json", "sort": "relevance"},
+            )
+            if es2:
+                ids = ((es2.get("esearchresult") or {}).get("idlist") or [])[:limit]
     if not ids: return []
     # 2) esummary (metadata) and efetch (abstracts) in parallel.
     su_task = _get_json(client, "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi",
@@ -313,6 +332,77 @@ async def _search_europe_pmc(client: httpx.AsyncClient, query: str, limit: int) 
                        if it.get("fullTextUrlList") else ""),
             abstract=_clean(it.get("abstractText")),
             raw_id=_clean(it.get("id") or it.get("pmid") or ""),
+        ))
+    return out
+
+
+async def _search_medrxiv(client: httpx.AsyncClient, query: str, limit: int) -> List[Record]:
+    """Search medRxiv and bioRxiv preprints via Europe PMC preprint index.
+
+    Europe PMC indexes both servers under source code PPR.  We restrict to
+    their journal names so no other preprint server bleeds in.
+    """
+    epmc_q = f'{query} (JOURNAL:"medRxiv" OR JOURNAL:"bioRxiv")'
+    data = await _get_json(client, "https://www.ebi.ac.uk/europepmc/webservices/rest/search",
+                           params={"query": epmc_q, "pageSize": limit, "format": "json",
+                                   "resultType": "core", "synonym": "true"})
+    if not data: return []
+    out: List[Record] = []
+    for it in ((data.get("resultList") or {}).get("result") or [])[:limit]:
+        journal_raw = _clean(it.get("journalTitle") or "")
+        if journal_raw.lower() not in ("medrxiv", "biorxiv"):
+            continue
+        authors_raw = (it.get("authorList") or {}).get("author") or []
+        authors = [_clean(a.get("fullName") or
+                          " ".join(filter(None, [a.get("firstName"), a.get("lastName")])))
+                   for a in authors_raw]
+        doi = _clean(it.get("doi") or "")
+        full_url_list = ((it.get("fullTextUrlList") or {}).get("fullTextUrl") or [{}])
+        fallback_url = _clean((full_url_list[0] if full_url_list else {}).get("url") or "")
+        out.append(Record(
+            source="medrxiv",
+            title=_clean(it.get("title")),
+            authors=[a for a in authors if a],
+            year=_norm_year(it.get("pubYear")),
+            journal=f"{journal_raw} (preprint)",
+            doi=doi,
+            url=f"https://doi.org/{doi}" if doi else fallback_url,
+            abstract=_clean(it.get("abstractText")),
+            raw_id=_clean(it.get("id") or doi or ""),
+        ))
+    return out
+
+
+async def _search_cochrane(client: httpx.AsyncClient, query: str, limit: int) -> List[Record]:
+    """Search Cochrane Database of Systematic Reviews via Europe PMC free-abstract layer.
+
+    The full Cochrane Library requires an institutional subscription; however
+    Europe PMC indexes Cochrane review abstracts and DOIs under open terms of
+    service.  This replaces the stub adapter and gives researchers immediate
+    access to systematic-review evidence without a subscription.
+    """
+    epmc_q = f'{query} JOURNAL:"Cochrane Database of Systematic Reviews"'
+    data = await _get_json(client, "https://www.ebi.ac.uk/europepmc/webservices/rest/search",
+                           params={"query": epmc_q, "pageSize": limit, "format": "json",
+                                   "resultType": "core", "synonym": "true"})
+    if not data: return []
+    out: List[Record] = []
+    for it in ((data.get("resultList") or {}).get("result") or [])[:limit]:
+        authors_raw = (it.get("authorList") or {}).get("author") or []
+        authors = [_clean(a.get("fullName") or
+                          " ".join(filter(None, [a.get("firstName"), a.get("lastName")])))
+                   for a in authors_raw]
+        doi = _clean(it.get("doi") or "")
+        out.append(Record(
+            source="cochrane",
+            title=_clean(it.get("title")),
+            authors=[a for a in authors if a],
+            year=_norm_year(it.get("pubYear")),
+            journal="Cochrane Database of Systematic Reviews",
+            doi=doi,
+            url=f"https://doi.org/{doi}" if doi else "",
+            abstract=_clean(it.get("abstractText")),
+            raw_id=_clean(it.get("id") or doi or ""),
         ))
     return out
 
@@ -407,11 +497,13 @@ _LIVE_ADAPTERS: Dict[str, Callable[[httpx.AsyncClient, str, int], Awaitable[List
     "semantic_scholar": _search_semantic_scholar,
     "pubmed":           _search_pubmed,
     "europe_pmc":       _search_europe_pmc,
+    "medrxiv":          _search_medrxiv,
+    "cochrane":         _search_cochrane,
     "arxiv":            _search_arxiv,
     "doaj":             _search_doaj,
 }
 
-_STUB_SOURCES = ("cochrane", "cinahl_open", "ieee_open")
+_STUB_SOURCES = ("cinahl_open", "ieee_open")
 
 ADAPTERS: tuple[str, ...] = tuple(list(_LIVE_ADAPTERS.keys()) + list(_STUB_SOURCES))
 

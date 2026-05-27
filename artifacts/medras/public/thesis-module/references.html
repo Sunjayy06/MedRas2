@@ -54,10 +54,22 @@
     <div class="th-card">
       <h3 class="th-h3">Search the right databases</h3>
       <p style="font-size:13px; color:var(--th-text-soft); margin:0 0 8px">
-        We auto-route to PubMed / Cochrane / IEEE / DOAJ etc based on your domain.
-        Distillation drops abstract-less, predatory and off-topic results.
+        Searches PubMed, Cochrane, medRxiv/bioRxiv preprints, Semantic Scholar
+        and OpenAlex for your domain. Predatory, abstract-less and registry
+        records are filtered automatically.
       </p>
-      <input id="th-search-q" class="th-input" placeholder="e.g. metformin in PCOS adolescents" />
+      <div class="th-source-callout">
+        <strong>Live sources</strong>
+        <span class="th-src-badge" data-src="pubmed">PubMed</span>
+        <span class="th-src-badge" data-src="cochrane">Cochrane</span>
+        <span class="th-src-badge" data-src="medrxiv">medRxiv/bioRxiv</span>
+        <span class="th-src-badge" data-src="europe_pmc">Europe PMC</span>
+        <span class="th-src-badge" data-src="openalex">OpenAlex</span>
+        <span class="th-src-badge" data-src="semantic_scholar">Semantic Scholar</span>
+        <span class="th-src-badge" data-src="crossref">Crossref</span>
+        <span class="th-src-badge" data-src="doaj">DOAJ</span>
+      </div>
+      <input id="th-search-q" class="th-input" placeholder="e.g. metformin in PCOS adolescents" style="margin-top:10px" />
       <div style="display:flex; gap:8px; margin-top:8px">
         <button id="th-search-go" class="th-btn th-btn-primary">Search</button>
         <span id="th-search-status" style="font-size:13px; color:var(--th-text-soft); align-self:center"></span>
@@ -133,11 +145,22 @@
     note.style.color = (have >= min) ? 'var(--th-emerald-d)' : 'var(--th-amber)';
   }
 
+  const _SRC_LABEL = {
+    pubmed:'PubMed', cochrane:'Cochrane', medrxiv:'medRxiv', biorxiv:'bioRxiv',
+    europe_pmc:'Europe PMC', openalex:'OpenAlex', semantic_scholar:'Semantic Scholar',
+    crossref:'Crossref', doaj:'DOAJ', arxiv:'arXiv',
+  };
+  function srcBadge(src) {
+    if (!src) return '';
+    const label = _SRC_LABEL[src] || src;
+    return `<span class="th-src-badge" data-src="${esc(src)}">${esc(label)}</span>`;
+  }
+
   function refRowHtml(r) {
     const authors = (r.authors || []).slice(0, 3).join(', ') +
                     ((r.authors || []).length > 3 ? ' et al.' : '');
     const year = r.year || 'n.d.';
-    const journal = r.journal || r.source || '';
+    const journal = r.journal || '';
     const link = r.doi ? `https://doi.org/${esc(r.doi)}` : (r.url || '');
     const statusColor = r.retracted ? '#dc2626' : (r.verified ? 'var(--th-emerald-d)' : 'var(--th-amber)');
     const statusIcon  = r.retracted ? '✕' : (r.verified ? '✓' : '?');
@@ -146,7 +169,7 @@
            style="${r.retracted ? 'background:#fff5f5;border-left:3px solid #dc2626;' : ''}">
         <div style="font-weight:700; color:${statusColor}">${statusIcon}</div>
         <div>
-          <div class="th-ref-title">${esc(r.title || 'Untitled')}</div>
+          <div class="th-ref-title">${srcBadge(r.source)}${esc(r.title || 'Untitled')}</div>
           ${r.retracted ? `<div style="display:inline-flex;align-items:center;gap:4px;background:#fee2e2;color:#dc2626;
             font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:4px;margin:3px 0;letter-spacing:.03em">
             ⚠ RETRACTED — AI will not cite this paper. Consider removing it.</div>` : ''}
@@ -236,10 +259,10 @@
         <div class="th-ref-row" data-i="${i}">
           <div><input type="checkbox" data-pick="${i}" /></div>
           <div>
-            <div class="th-ref-title">${esc(r.title || '')}</div>
+            <div class="th-ref-title">${srcBadge(r.source)}${esc(r.title || '')}</div>
             <div class="th-ref-meta">
               ${esc((r.authors || []).slice(0,3).join(', '))} · ${esc(r.year || 'n.d.')}
-              · ${esc(r.journal || r.source || '')} · score ${r.score}
+              · ${esc(r.journal || '')} · score ${r.score}
             </div>
             ${r.summary ? `<div class="th-ref-summary">${esc(r.summary)}</div>` : ''}
           </div>

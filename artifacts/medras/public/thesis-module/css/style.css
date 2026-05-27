@@ -423,3 +423,34 @@ textarea.th-input { resize: vertical; line-height: 1.55; min-height: 68px; }
 
 .th-back-link { display: inline-block; margin-bottom: 18px;
   color: var(--th-text-soft); font-size: 13px; }
+
+/* --- Source provenance badges (reference search results) --- */
+.th-src-badge {
+  display: inline-block;
+  font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.05em;
+  padding: 1px 7px; border-radius: 999px;
+  background: var(--th-paper-2); color: var(--th-text-soft);
+  vertical-align: middle; margin-right: 6px; flex-shrink: 0;
+}
+.th-src-badge[data-src="pubmed"]           { background:rgba(37,99,235,.10);   color:#1d4ed8; }
+.th-src-badge[data-src="cochrane"]         { background:rgba(217,119,6,.12);   color:#b45309; }
+.th-src-badge[data-src="medrxiv"],
+.th-src-badge[data-src="biorxiv"]          { background:rgba(124,58,237,.12);  color:#6d28d9; }
+.th-src-badge[data-src="europe_pmc"]       { background:rgba(6,182,212,.12);   color:#0e7490; }
+.th-src-badge[data-src="openalex"]         { background:rgba(16,185,129,.12);  color:#059669; }
+.th-src-badge[data-src="semantic_scholar"] { background:rgba(59,130,246,.10);  color:#2563eb; }
+.th-src-badge[data-src="crossref"]         { background:rgba(107,114,128,.10); color:#4b5563; }
+.th-src-badge[data-src="doaj"]             { background:rgba(16,185,129,.10);  color:#059669; }
+.th-src-badge[data-src="arxiv"]            { background:rgba(185,28,28,.10);   color:#b91c1c; }
+
+/* --- New-capability callout strip (used on references.html) --- */
+.th-source-callout {
+  display:flex; flex-wrap:wrap; gap:6px; align-items:center;
+  background: var(--th-paper); border:1px solid var(--th-line);
+  border-left:3px solid var(--th-emerald); border-radius:8px;
+  padding:9px 12px; font-size:12px; color:var(--th-text-soft);
+  margin-top:10px;
+}
+.th-source-callout strong { color:var(--th-emerald-d); font-size:11px;
+  text-transform:uppercase; letter-spacing:.05em; }
