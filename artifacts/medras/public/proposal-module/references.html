@@ -42,6 +42,27 @@
         Or, if you don't have any yet, we can generate plausible suggestions to seed your list.
       </p>
 
+      <!-- Auto-detect Helix banner — shown on load if unimported Helix refs exist -->
+      <div id="prop-helix-banner" style="display:none;
+        background:linear-gradient(135deg,#ecfdf5 0%,#d1fae5 100%);
+        border:1.5px solid #059669; border-radius:10px;
+        padding:14px 18px; align-items:center; gap:14px;
+        margin-bottom:20px; flex-wrap:wrap">
+        <div style="font-size:22px;flex-shrink:0">📚</div>
+        <div style="flex:1;min-width:200px">
+          <div style="font-weight:700;font-size:14.5px;color:#065f46">References ready from Helix</div>
+          <div id="prop-helix-banner-sub" style="font-size:13px;color:#047857;margin-top:2px"></div>
+        </div>
+        <button id="prop-helix-banner-btn" type="button"
+          style="flex-shrink:0;padding:8px 18px;background:#059669;color:#fff;
+                 border:none;border-radius:7px;font-weight:600;cursor:pointer;font-size:13.5px">
+          Import all →
+        </button>
+        <button id="prop-helix-banner-skip" type="button"
+          style="background:none;border:none;cursor:pointer;font-size:18px;
+                 color:#6b7280;padding:0 4px;line-height:1;flex-shrink:0" title="Dismiss">✕</button>
+      </div>
+
       <!-- ============== Pre-flight ============== -->
       <section class="prop-out-preflight" id="prop-ref-preflight" data-testid="card-preflight">
         <h2>How would you like to add your references?</h2>
@@ -178,5 +199,42 @@
     <script src="/proposal-module/js/proposal-state.js?v=2026050605"></script>
     <script src="/proposal-module/js/references.js?v=2026050610"></script>
     <script src="/js/medras-nav.js" defer></script>
+    <script>
+    // Auto-detect Helix references on load and show the banner
+    (function () {
+      var banner   = document.getElementById('prop-helix-banner');
+      var bannerSub = document.getElementById('prop-helix-banner-sub');
+      var bannerBtn = document.getElementById('prop-helix-banner-btn');
+      var bannerSkip = document.getElementById('prop-helix-banner-skip');
+      if (!banner) return;
+
+      function helixCount() {
+        try {
+          var raw = localStorage.getItem('medras.helix.references') || localStorage.getItem('sb.folio');
+          if (!raw) return 0;
+          var arr = JSON.parse(raw);
+          return Array.isArray(arr) ? arr.length : 0;
+        } catch (_) { return 0; }
+      }
+
+      var count = helixCount();
+      if (!count) return;
+
+      bannerSub.textContent = count + ' paper' + (count > 1 ? 's' : '') +
+        ' pinned in Helix — click to add them all. Duplicates are skipped automatically.';
+      banner.style.display = 'flex';
+
+      bannerBtn.addEventListener('click', function () {
+        banner.style.display = 'none';
+        // Delegate to the fully-featured importFromHelix() already wired in references.js
+        var helixCard = document.getElementById('prop-ref-pre-helix');
+        if (helixCard) helixCard.click();
+      });
+
+      bannerSkip.addEventListener('click', function () {
+        banner.style.display = 'none';
+      });
+    })();
+    </script>
   </body>
 </html>
