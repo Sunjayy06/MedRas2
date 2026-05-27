@@ -2527,6 +2527,9 @@
   let _draftAllCurrent    = '';   // title of subsection being drafted
   let _draftAllDone       = 0;
   let _draftAllTotal      = 0;
+  // Per-card inline edit state
+  let _editingSubsectionId = null;   // id of card currently showing edit form
+  let _editOverrides       = {};     // {id: {title, word_target, extra_focus}}
 
   function toggleSectionPlanner() {
     const panel = document.getElementById('th-section-planner');
@@ -2616,28 +2619,70 @@
     }
 
     const cards = _sectionPlan.map((sec) => {
-      const status   = _sectionStatuses[sec.id] || 'pending';
-      const drafting = status === 'drafting';
-      const drafted  = status === 'drafted';
-      const dot      = drafted ? '🟢' : drafting ? '🟡' : '⚪';
+      const status      = _sectionStatuses[sec.id] || 'pending';
+      const drafting    = status === 'drafting';
+      const drafted     = status === 'drafted';
+      const dot         = drafted ? '🟢' : drafting ? '🟡' : '⚪';
       const btnDisabled = drafting || _draftAllInProgress;
-      const btnLabel = drafting
+      const btnLabel    = drafting
         ? '<span class="th-loading" style="width:10px;height:10px"></span>'
         : drafted ? '↻ Re-draft' : 'Draft →';
+      const isEditing   = _editingSubsectionId === sec.id;
+      const ov          = _editOverrides[sec.id] || {};
+
+      const editForm = isEditing ? `
+        <div style="border-top:1px solid var(--th-line);margin-top:8px;padding-top:8px">
+          <div style="margin-bottom:6px">
+            <label style="font-size:10.5px;font-weight:600;color:var(--th-text-soft);display:block;margin-bottom:2px">Subsection title</label>
+            <input id="th-edit-title-${esc(sec.id)}" type="text" value="${esc(ov.title !== undefined ? ov.title : sec.title)}"
+              style="width:100%;box-sizing:border-box;padding:5px 8px;border:1.5px solid var(--th-line);border-radius:6px;font-size:12px;font-family:inherit;background:var(--th-paper)" />
+          </div>
+          <div style="display:flex;gap:8px;margin-bottom:6px">
+            <div style="flex:0 0 110px">
+              <label style="font-size:10.5px;font-weight:600;color:var(--th-text-soft);display:block;margin-bottom:2px">Word target</label>
+              <input id="th-edit-wt-${esc(sec.id)}" type="number" min="400" max="3000" step="100"
+                value="${ov.word_target !== undefined ? ov.word_target : sec.word_target}"
+                style="width:100%;box-sizing:border-box;padding:5px 8px;border:1.5px solid var(--th-line);border-radius:6px;font-size:12px;font-family:inherit;background:var(--th-paper)" />
+            </div>
+            <div style="flex:1;min-width:0">
+              <label style="font-size:10.5px;font-weight:600;color:var(--th-text-soft);display:block;margin-bottom:2px">Custom focus <span style="font-weight:400">(optional)</span></label>
+              <input id="th-edit-focus-${esc(sec.id)}" type="text" placeholder="e.g. Focus on Indian studies and recent RCTs"
+                value="${esc(ov.extra_focus || '')}"
+                style="width:100%;box-sizing:border-box;padding:5px 8px;border:1.5px solid var(--th-line);border-radius:6px;font-size:12px;font-family:inherit;background:var(--th-paper)" />
+            </div>
+          </div>
+          <div style="display:flex;gap:6px">
+            <button class="th-btn th-btn-primary th-btn-sm" data-edit-redraft="${esc(sec.id)}"
+              style="font-size:11px;flex:1">↻ Re-draft with changes</button>
+            <button class="th-btn th-btn-light th-btn-sm" data-edit-cancel="${esc(sec.id)}"
+              style="font-size:11px">Cancel</button>
+          </div>
+        </div>` : '';
+
+      const editBtn = (!_draftAllInProgress && !drafting)
+        ? `<button class="th-btn th-btn-light th-btn-sm" data-edit-open="${esc(sec.id)}"
+             style="font-size:11px;padding:3px 7px;flex-shrink:0" title="Edit scope before re-drafting">✏</button>`
+        : '';
+
       return `<div style="padding:8px 10px;border-radius:7px;margin-bottom:6px;
-          border:1.5px solid ${drafted ? 'var(--th-emerald-d)' : drafting ? 'var(--th-gold)' : 'var(--th-line)'};
-          background:${drafted ? '#f0fdf4' : drafting ? '#fefce8' : 'var(--th-paper-2)'}">
+          border:1.5px solid ${isEditing ? 'var(--th-emerald-d)' : drafted ? 'var(--th-emerald-d)' : drafting ? 'var(--th-gold)' : 'var(--th-line)'};
+          background:${isEditing ? '#f0fdf4' : drafted ? '#f0fdf4' : drafting ? '#fefce8' : 'var(--th-paper-2)'}">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px">
           <div style="flex:1;min-width:0">
-            <div style="font-weight:600;font-size:12px">${dot} ${esc(sec.title)}</div>
-            ${sec.description ? `<div style="font-size:11px;color:var(--th-text-soft);margin-top:2px">${esc(sec.description)}</div>` : ''}
-            <div style="font-size:10.5px;color:var(--th-text-soft);margin-top:2px">~${sec.word_target} words</div>
+            <div style="font-weight:600;font-size:12px">${dot} ${esc(ov.title !== undefined ? ov.title : sec.title)}</div>
+            ${(ov.extra_focus && !isEditing) ? `<div style="font-size:10.5px;color:var(--th-emerald-d);margin-top:2px">Focus: ${esc(ov.extra_focus)}</div>` : ''}
+            ${sec.description && !ov.extra_focus ? `<div style="font-size:11px;color:var(--th-text-soft);margin-top:2px">${esc(sec.description)}</div>` : ''}
+            <div style="font-size:10.5px;color:var(--th-text-soft);margin-top:2px">~${ov.word_target !== undefined ? ov.word_target : sec.word_target} words</div>
           </div>
-          <button class="th-btn th-btn-primary th-btn-sm"
-            data-plan-sec="${esc(sec.id)}"
-            style="white-space:nowrap;font-size:11px;padding:3px 8px;flex-shrink:0"
-            ${btnDisabled ? 'disabled' : ''}>${btnLabel}</button>
+          <div style="display:flex;gap:4px;flex-shrink:0">
+            ${editBtn}
+            <button class="th-btn th-btn-primary th-btn-sm"
+              data-plan-sec="${esc(sec.id)}"
+              style="white-space:nowrap;font-size:11px;padding:3px 8px"
+              ${btnDisabled ? 'disabled' : ''}>${btnLabel}</button>
+          </div>
         </div>
+        ${editForm}
       </div>`;
     }).join('');
 
@@ -2647,7 +2692,53 @@
     body.querySelectorAll('button[data-plan-sec]').forEach((btn) => {
       btn.addEventListener('click', () => {
         const sec = _sectionPlan.find((s) => s.id === btn.dataset.planSec);
-        if (sec) _handleSubsectionDraft(sec);
+        if (!sec) return;
+        const ov = _editOverrides[sec.id] || {};
+        const merged = Object.assign({}, sec,
+          ov.title      !== undefined ? { title:       ov.title }       : {},
+          ov.word_target !== undefined ? { word_target: ov.word_target } : {}
+        );
+        _handleSubsectionDraft(merged);
+      });
+    });
+    // Wire ✏ open-edit buttons
+    body.querySelectorAll('button[data-edit-open]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        _editingSubsectionId = _editingSubsectionId === btn.dataset.editOpen ? null : btn.dataset.editOpen;
+        _renderPlannerCards();
+      });
+    });
+    // Wire cancel-edit buttons
+    body.querySelectorAll('button[data-edit-cancel]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        _editingSubsectionId = null;
+        _renderPlannerCards();
+      });
+    });
+    // Wire re-draft-with-changes buttons
+    body.querySelectorAll('button[data-edit-redraft]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const secId = btn.dataset.editRedraft;
+        const sec   = _sectionPlan.find((s) => s.id === secId);
+        if (!sec) return;
+        const titleEl = document.getElementById('th-edit-title-' + secId);
+        const wtEl    = document.getElementById('th-edit-wt-'    + secId);
+        const focEl   = document.getElementById('th-edit-focus-' + secId);
+        const newTitle  = (titleEl && titleEl.value.trim()) || sec.title;
+        const newWt     = (wtEl    && parseInt(wtEl.value, 10))  || sec.word_target;
+        const newFocus  = (focEl   && focEl.value.trim()) || '';
+        // Persist overrides so Draft All and re-opens see them
+        _editOverrides[secId] = { title: newTitle, word_target: newWt, extra_focus: newFocus };
+        _editingSubsectionId  = null;
+        // Merge overrides into section for the draft call
+        const merged = Object.assign({}, sec, {
+          title:       newTitle,
+          word_target: newWt,
+          description: newFocus
+            ? (newFocus + (sec.description ? ' — ' + sec.description : ''))
+            : sec.description,
+        });
+        _handleSubsectionDraft(merged);
       });
     });
     // Wire Draft All button
