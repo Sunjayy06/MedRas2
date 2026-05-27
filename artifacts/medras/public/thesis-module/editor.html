@@ -94,6 +94,8 @@
               style="font-size:12px; cursor:pointer; padding:0 8px" title="Writing style"></select>
       <button id="th-toggle-mode" class="th-btn th-btn-light th-btn-sm">Mode: Write</button>
       <button id="th-save" class="th-btn th-btn-primary th-btn-sm">Save</button>
+      <button id="th-sub-btn" class="th-btn th-btn-light th-btn-sm" style="padding:2px 9px" title="Subscript — H₂O, CO₂">X<sub style="font-size:9px;line-height:1">2</sub></button>
+      <button id="th-sup-btn" class="th-btn th-btn-light th-btn-sm" style="padding:2px 9px" title="Superscript — cm², p<0.05">X<sup style="font-size:9px;line-height:1">2</sup></button>
     </div>
     <div id="th-editor-canvas" class="th-editor-canvas" contenteditable="true"
          spellcheck="true" data-testid="editor"></div>
@@ -110,6 +112,9 @@
 
     <h4>Helpers</h4>
     <div id="th-helper-strip"></div>
+
+    <h4 style="margin-top:16px">Assigned to this section</h4>
+    <div id="th-sec-assign-panel" style="font-size:12px;color:var(--th-text-soft);margin-bottom:6px">—</div>
 
     <h4 style="margin-top:16px">Cited in this chapter</h4>
     <div id="th-refpanel-count" style="font-size:11px; color:var(--th-text-soft); margin-bottom:4px"></div>
@@ -128,10 +133,16 @@
 <!-- Cite picker popup (must be in DOM before the inline script below runs) -->
 <div id="th-cite-overlay"></div>
 <div id="th-cite-picker" role="dialog" aria-label="Insert citation">
-  <div style="padding:10px 12px;border-bottom:1px solid var(--th-line);display:flex;gap:8px;align-items:center">
+  <div style="padding:10px 12px;border-bottom:1px solid var(--th-line);display:flex;gap:8px;align-items:center;flex-wrap:wrap">
     <input id="th-cite-search" class="th-input" placeholder="Search by author or title…"
-      style="flex:1;font-size:13px" autocomplete="off" />
-    <button id="th-cite-close" style="background:none;border:none;cursor:pointer;font-size:18px;color:var(--th-text-soft);line-height:1">×</button>
+      style="flex:1;min-width:140px;font-size:13px" autocomplete="off" />
+    <select id="th-cite-fmt" title="Insert format"
+      style="font-size:11.5px;border:1.5px solid var(--th-line);border-radius:7px;padding:3px 6px;background:#fff;cursor:pointer;color:var(--th-text);flex-shrink:0">
+      <option value="numeric">[N] — numeric</option>
+      <option value="author_year">Author et al. (Year)</option>
+      <option value="author_short">Author et al.</option>
+    </select>
+    <button id="th-cite-close" style="background:none;border:none;cursor:pointer;font-size:18px;color:var(--th-text-soft);line-height:1;flex-shrink:0">×</button>
   </div>
   <div id="th-cite-results" style="max-height:280px;overflow-y:auto"></div>
 </div>
@@ -166,6 +177,7 @@
     renderHelpers();
     renderEditor();
     renderChapterRefPanel();
+    renderSecAssignPanel();
     document.getElementById('th-cur-label').textContent = chapter.label;
   }
 
@@ -597,7 +609,31 @@
     closeCitePicker();
     if (mode !== 'write') return;
     const canvas = document.getElementById('th-editor-canvas');
-    const tag = '[CITE_' + num + ']';
+
+    // Build tag based on selected format
+    const fmt = (document.getElementById('th-cite-fmt') || {}).value || 'numeric';
+    let tag;
+    if (fmt === 'numeric') {
+      tag = '[CITE_' + num + ']';
+    } else {
+      const refs = ThesisState.get().references || [];
+      const r    = refs[num - 1];
+      if (r) {
+        const authors  = r.authors || [];
+        // Extract last name of first author
+        const lastName = function (a) {
+          const p = String(a || '').replace(/[.,]/g, '').trim().split(/\s+/);
+          return p.length > 1 ? p[p.length - 1] : p[0];
+        };
+        const first  = lastName(authors[0]) || '?';
+        const suffix = authors.length > 1 ? ' et al.' : '';
+        tag = fmt === 'author_year'
+          ? first + suffix + ' (' + (r.year || 'n.d.') + ')'
+          : first + suffix;
+      } else {
+        tag = '[CITE_' + num + ']';
+      }
+    }
 
     // Cursor-aware: replace [@... token or insert at saved caret position
     if (_atRange) {
@@ -639,6 +675,61 @@
     rng2.collapse(false);
     sel3.removeAllRanges();
     sel3.addRange(rng2);
+  }
+
+  // ---------- sub / sup toolbar ----------
+  document.getElementById('th-sub-btn').addEventListener('click', () => {
+    const canvas = document.getElementById('th-editor-canvas');
+    canvas.focus();
+    document.execCommand('subscript', false, null);
+  });
+  document.getElementById('th-sup-btn').addEventListener('click', () => {
+    const canvas = document.getElementById('th-editor-canvas');
+    canvas.focus();
+    document.execCommand('superscript', false, null);
+  });
+
+  // ---------- section assignment panel ----------
+  const CH_TO_SEC = {
+    introduction:'intro', aims_and_objectives:'aims', aims:'aims',
+    review_of_literature:'litrev', literature_review:'litrev', litreview:'litrev',
+    materials_and_methods:'methods', methodology:'methods', methods:'methods',
+    results:'results', observations:'results',
+    discussion:'discuss',
+    summary:'summary',
+    conclusion:'conclude', conclusions:'conclude',
+    recommendations:'recomm',
+  };
+  const SEC_LABELS = {
+    intro:'Introduction', aims:'Aims & Objectives', litrev:'Literature Review',
+    methods:'Materials & Methods', results:'Results', discuss:'Discussion',
+    summary:'Summary', conclude:'Conclusion', recomm:'Recommendations',
+  };
+
+  function renderSecAssignPanel() {
+    const panel = document.getElementById('th-sec-assign-panel');
+    if (!panel) return;
+    const secId = CH_TO_SEC[chapterId] || CH_TO_SEC[(chapterId || '').split('_').slice(0,2).join('_')];
+    if (!secId) { panel.textContent = 'No section mapping for this chapter.'; return; }
+    const s    = ThesisState.get();
+    const refs = (s.references || []).filter((r) => (r.section_tags || []).includes(secId));
+    if (!refs.length) {
+      panel.innerHTML = '<span style="color:var(--th-text-soft)">No references tagged for <em>' +
+        (SEC_LABELS[secId] || secId) + '</em> yet. Tag them on the <a href="/thesis-module/references.html">References page</a>.</span>';
+      return;
+    }
+    panel.innerHTML = '<div style="color:var(--th-emerald-d);font-weight:600;margin-bottom:4px">' + refs.length +
+      ' ref' + (refs.length > 1 ? 's' : '') + ' tagged for <em>' + (SEC_LABELS[secId] || secId) + '</em></div>' +
+      refs.slice(0, 5).map((r) => {
+        const auth = (r.authors || []).length
+          ? (r.authors[0].split(/[\s,]+/).filter(Boolean).reverse()[0] || '?') + ((r.authors.length > 1) ? ' et al.' : '')
+          : '—';
+        return '<div style="padding:3px 0;border-bottom:1px solid var(--th-line);font-size:11.5px">' +
+          '<span style="color:var(--th-emerald-d);font-weight:700;margin-right:4px">[' + (((s.references||[]).indexOf(r))+1) + ']</span>' +
+          esc((r.title || '').slice(0,55)) + (r.title && r.title.length > 55 ? '…' : '') + '<br>' +
+          '<span style="color:var(--th-text-soft)">' + esc(auth) + ' · ' + esc(String(r.year||'n.d.')) + '</span></div>';
+      }).join('') +
+      (refs.length > 5 ? '<div style="font-size:11px;color:var(--th-text-soft);margin-top:4px">+ ' + (refs.length-5) + ' more</div>' : '');
   }
 
   document.getElementById('th-cite-search').addEventListener('input', (e) => {

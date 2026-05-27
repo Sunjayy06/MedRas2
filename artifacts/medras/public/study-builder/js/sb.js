@@ -1412,8 +1412,27 @@
       }
     }
     try { sessionStorage.setItem('sb.folio', JSON.stringify(folioItems)); } catch (_) {}
+    _syncHelixMirror();
     _renderFolio();
     _updateFolioToggle();
+  }
+
+  /* Write a normalised copy of folio to the key Scriptorium + Prologue import buttons read. */
+  function _syncHelixMirror() {
+    try {
+      var mirror = folioItems.map(function (f) {
+        return {
+          title:   f.title   || '',
+          authors: Array.isArray(f.authors) ? f.authors : (f.authors ? [f.authors] : []),
+          journal: f.journal || '',
+          year:    String(f.year   || ''),
+          doi:     f.doi     || '',
+          url:     f.url     || '',
+          source:  'helix',
+        };
+      });
+      sessionStorage.setItem('medras.helix.references', JSON.stringify(mirror));
+    } catch (_) {}
   }
 
   function _renderFolio() {
@@ -1450,6 +1469,7 @@
       rem.addEventListener('click', () => {
         folioItems.splice(idx, 1);
         try { sessionStorage.setItem('sb.folio', JSON.stringify(folioItems)); } catch (_) {}
+        _syncHelixMirror();
         _renderFolio();
         _updateFolioToggle();
       });

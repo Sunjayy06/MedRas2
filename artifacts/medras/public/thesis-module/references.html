@@ -130,11 +130,29 @@
   </div>
 </main>
 
+<style>
+.th-ref-secs{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+.th-ref-sec-chip{font-size:10.5px;padding:2px 9px;border-radius:999px;border:1.5px solid var(--th-line);background:var(--th-paper-2,#f8faf9);color:var(--th-text-soft);cursor:pointer;transition:background .12s,color .12s,border-color .12s;user-select:none;font-weight:600;letter-spacing:.03em}
+.th-ref-sec-chip:hover{border-color:var(--th-emerald);color:var(--th-emerald-d)}
+.th-ref-sec-chip.is-on{background:var(--th-emerald-d,#047857);color:#fff;border-color:var(--th-emerald-d,#047857)}
+</style>
 <script src="/thesis-module/js/thesis-state.js"></script>
 <script src="/thesis-module/js/track-changes.js"></script>
 <script>
 (function () {
   const esc = TrackChanges.escapeHtml;
+
+  const SECTIONS = [
+    { id:'intro',    label:'Intro',    color:'#2563eb' },
+    { id:'aims',     label:'Aims',     color:'#7c3aed' },
+    { id:'litrev',   label:'Lit Rev',  color:'#0891b2' },
+    { id:'methods',  label:'Methods',  color:'#059669' },
+    { id:'results',  label:'Results',  color:'#d97706' },
+    { id:'discuss',  label:'Discuss',  color:'#92400e' },
+    { id:'summary',  label:'Summary',  color:'#64748b' },
+    { id:'conclude', label:'Concl.',   color:'#475569' },
+    { id:'recomm',   label:'Recomm.',  color:'#374151' },
+  ];
 
   function refreshMinRefNote() {
     const s = ThesisState.get();
@@ -179,6 +197,14 @@
             ${r.score != null ? ` · score ${r.score}` : ''}
           </div>
           ${r.summary ? `<div class="th-ref-summary">${esc(r.summary)}</div>` : ''}
+          <div class="th-ref-secs">
+            ${SECTIONS.map((s) => {
+              const on = (r.section_tags || []).includes(s.id);
+              return `<span class="th-ref-sec-chip${on ? ' is-on' : ''}" data-sec="${s.id}"
+                style="${on ? `background:${s.color};border-color:${s.color};color:#fff` : ''}"
+                title="Tag for ${s.label}">${s.label}</span>`;
+            }).join('')}
+          </div>
         </div>
         <div class="th-ref-actions">
           <button class="th-btn th-btn-light th-btn-sm" data-act="remove">Remove</button>
@@ -208,8 +234,35 @@
         renderLib();
       });
     });
+
     refreshMinRefNote();
   }
+
+  // Section tag chip toggles — attached ONCE to the container (not re-added per renderLib call)
+  document.getElementById('th-lib-list').addEventListener('click', (e) => {
+    const chip = e.target.closest('.th-ref-sec-chip');
+    if (!chip) return;
+    const sec = chip.dataset.sec;
+    const row = chip.closest('.th-ref-row');
+    if (!row) return;
+    const refId = row.dataset.id;
+    ThesisState.patch((st) => {
+      const r = (st.references || []).find((x) => (x._id || x.doi || '') === refId);
+      if (r) {
+        r.section_tags = r.section_tags || [];
+        const i = r.section_tags.indexOf(sec);
+        if (i === -1) r.section_tags.push(sec); else r.section_tags.splice(i, 1);
+      }
+      return st;
+    });
+    // Instant visual toggle without full re-render
+    const secObj = SECTIONS.find((s) => s.id === sec);
+    const nowOn  = !chip.classList.contains('is-on');
+    chip.classList.toggle('is-on', nowOn);
+    chip.style.background  = nowOn && secObj ? secObj.color : '';
+    chip.style.borderColor = nowOn && secObj ? secObj.color : '';
+    chip.style.color       = nowOn ? '#fff' : '';
+  });
 
   // ---------- DOI add ----------
   document.getElementById('th-doi-add').addEventListener('click', async () => {

@@ -1613,6 +1613,8 @@ a:hover { text-decoration: underline; }
 }
 .prop-ref-pre-card--primary { background: rgba(122, 162, 255, 0.14); border-color: rgba(122, 162, 255, 0.45); }
 .prop-ref-pre-card--rec     { background: rgba(80, 200, 140, 0.10); border-color: rgba(80, 200, 140, 0.40); position: relative; }
+.prop-ref-pre-card--helix   { background: rgba(34, 211, 170, 0.08); border-color: rgba(34, 211, 170, 0.38); }
+.prop-ref-pre-card--helix strong { color: #5eead4; }
 .prop-ref-pre-card--fallback{ background: rgba(255, 200, 80, 0.06); border-color: rgba(255, 200, 80, 0.30); }
 .prop-ref-pre-card--fallback strong { color: #ffd58a; }
 
