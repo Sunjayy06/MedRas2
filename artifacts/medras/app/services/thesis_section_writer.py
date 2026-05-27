@@ -698,6 +698,7 @@ async def draft_section(
     style_sample: Optional[str] = None,
     ref_library: Optional[List[Dict[str, Any]]] = None,
     word_limit: Optional[int] = None,
+    subsection_hint: Optional[Dict[str, Any]] = None,
     limit_per_db: int = DEFAULT_LIMIT_PER_DB,
     total_limit: int = DEFAULT_TOTAL_LIMIT,
 ) -> Dict[str, Any]:
@@ -792,6 +793,23 @@ async def draft_section(
     # 3) AI call — Gemini 2.5 Flash PRIMARY (long-context RAG academic drafting),
     # GPT-4o FALLBACK when Gemini is unavailable.
     sys_prompt = _system_prompt_for(chapter_id, mode, style_choice, style_sample)
+    if subsection_hint and isinstance(subsection_hint, dict):
+        _sh_title = str(subsection_hint.get("title") or "").strip()
+        _sh_desc  = str(subsection_hint.get("description") or "").strip()
+        _sh_wt    = int(subsection_hint.get("word_target") or word_limit or 800)
+        if _sh_title:
+            sys_prompt = (
+                sys_prompt +
+                f"\n\n=== SUBSECTION-BY-SUBSECTION MODE ===\n"
+                f"Draft ONLY the following single subsection — do NOT write any other subsections "
+                f"or chapter-level intro/outro text.\n"
+                f"Subsection heading: **{_sh_title}**\n"
+                + (f"Scope: {_sh_desc}\n" if _sh_desc else "")
+                + f"Target length: {_sh_wt} words (minimum {int(_sh_wt * 0.85)} words).\n"
+                f"Start with the bold heading '**{_sh_title}**' on its own line, "
+                f"then write only the content for that subsection.\n"
+                f"=== END SUBSECTION MODE ==="
+            )
     try:
         raw = await asyncio.to_thread(_call_gemini_json, sys_prompt, user_text)
     except GeneratorError as _e1:
@@ -842,6 +860,92 @@ async def draft_section(
             "summary": f"Full {chapter_id} draft — accept or reject paragraph-by-paragraph.",
         }],
     }
+
+
+# ---------------------------------------------------------------------------
+# Public — plan subsections for a draftable chapter
+# ---------------------------------------------------------------------------
+
+async def plan_subsections(
+    *, chapter_id: str, topic: str,
+    aim: Optional[str] = None,
+    objectives: Optional[str] = None,
+    study_type: Optional[str] = None,
+    extra_context: Optional[str] = None,
+    mode: str = "thesis",
+) -> Dict[str, Any]:
+    """Generate a structured subsection plan for a draftable chapter.
+
+    Returns ``{sections: [{id, title, description, word_target}]}``.
+    Uses a lightweight Gemini call (no RAG retrieval needed).
+    """
+    topic = (topic or "").strip()
+    if not topic or _GENERIC_TOPIC_RE.match(topic) or len(topic) < 12:
+        raise GeneratorError(
+            "A valid thesis topic is required to plan subsections. "
+            "Open Setup and fill in your thesis title."
+        )
+    draftable = _ARTICLE_CHAPTER_BRIEFS if mode == "article" else _CHAPTER_BRIEFS
+    if chapter_id not in draftable:
+        raise GeneratorError(f"Section '{chapter_id}' does not support subsection planning.")
+
+    _CHAPTER_LABELS = {
+        "literature_review": "Review of Literature",
+        "introduction": "Introduction",
+        "discussion": "Discussion",
+        "methods": "Materials & Methods",
+        "results": "Observations & Results",
+    }
+    chapter_label = _CHAPTER_LABELS.get(chapter_id, chapter_id.replace("_", " ").title())
+
+    ctx_parts: List[str] = []
+    if aim:          ctx_parts.append(f"AIM: {aim}")
+    if objectives:   ctx_parts.append(f"OBJECTIVES:\n{objectives}")
+    if study_type:   ctx_parts.append(f"STUDY TYPE: {study_type}")
+    if extra_context: ctx_parts.append(extra_context[:2000])
+    ctx_block = "\n".join(ctx_parts)
+
+    system = (
+        "You are a senior medical thesis editor. Generate a concise subsection plan for one "
+        "chapter of an Indian MD/MS/PhD thesis. Respond ONLY with valid JSON:\n"
+        '{"sections": [{"id": "s1", "title": "1. ...", "description": "...", "word_target": 900}, ...]}\n\n'
+        "Rules:\n"
+        "- 4–7 thematic subsections, each SPECIFIC to the research question.\n"
+        "- Titles must be numbered (e.g. '1. Pathophysiology of POST') — not generic labels.\n"
+        "- word_target: integer, 600–1200 per section; total should ≈ chapter word budget.\n"
+        "- description: one sentence on what this subsection should synthesise.\n"
+        "- id: 's1', 's2', … in order."
+    )
+    user = (
+        f"CHAPTER: {chapter_label}\n"
+        f"THESIS TOPIC: {topic}\n"
+        + (f"\n{ctx_block}\n" if ctx_block else "")
+        + "\nGenerate the subsection plan now."
+    )
+
+    try:
+        raw = await asyncio.to_thread(_call_gemini_json, system, user, 1200, GEMINI_TIMEOUT_S)
+    except GeneratorError:
+        raw = await asyncio.to_thread(_call_openai_json, system, user, 900)
+
+    sections_raw = raw.get("sections") or []
+    if not sections_raw or not isinstance(sections_raw, list):
+        raise GeneratorError("AI returned an empty plan. Please retry.")
+
+    clean: List[Dict[str, Any]] = []
+    for i, s in enumerate(sections_raw[:8]):
+        if not isinstance(s, dict): continue
+        title = str(s.get("title") or "").strip()
+        if not title: continue
+        clean.append({
+            "id": str(s.get("id") or f"s{i + 1}"),
+            "title": title,
+            "description": str(s.get("description") or "").strip(),
+            "word_target": max(400, min(1500, int(s.get("word_target") or 800))),
+        })
+    if not clean:
+        raise GeneratorError("Could not parse the subsection plan. Please retry.")
+    return {"sections": clean}
 
 
 # ---------------------------------------------------------------------------

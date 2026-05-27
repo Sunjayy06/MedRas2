@@ -247,6 +247,9 @@ async def draft_section(request: Request, payload: Dict[str, Any]) -> Dict[str, 
     try:
         word_limit_raw = payload.get("word_limit")
         word_limit = int(word_limit_raw) if word_limit_raw and str(word_limit_raw).isdigit() else None
+        subsection_hint = payload.get("subsection_hint")
+        if not isinstance(subsection_hint, dict):
+            subsection_hint = None
         result = await thesis_section_writer.draft_section(
             chapter_id=payload.get("chapter_id") or "",
             topic=payload.get("topic") or "",
@@ -259,6 +262,26 @@ async def draft_section(request: Request, payload: Dict[str, Any]) -> Dict[str, 
             style_sample=payload.get("style_sample"),
             ref_library=ref_library,
             word_limit=word_limit,
+            subsection_hint=subsection_hint,
+        )
+    except GeneratorError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return result
+
+
+@router.post("/plan-subsections")
+@limiter.limit("10/minute")
+async def plan_subsections_endpoint(request: Request, payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Body: ``{chapter_id, topic, aim?, objectives?, study_type?, extra_context?, mode?}``."""
+    try:
+        result = await thesis_section_writer.plan_subsections(
+            chapter_id=payload.get("chapter_id") or "",
+            topic=payload.get("topic") or "",
+            aim=payload.get("aim"),
+            objectives=payload.get("objectives"),
+            study_type=payload.get("study_type"),
+            extra_context=payload.get("extra_context"),
+            mode=payload.get("mode") or "thesis",
         )
     except GeneratorError as exc:
         raise HTTPException(status_code=400, detail=str(exc))

@@ -71,7 +71,7 @@ CHAPTER_SPINE: List[Chapter] = [
      "description": "Single aim + 2-4 specific measurable objectives."},
     {"id": "literature_review", "label": "Chapter III — Review of Literature", "group": "body",
      "target_words": 6500, "word_budget": [5500, 7500],
-     "helpers": ["ai_draft", "rag_cite", "summarise_refs", "plagiarism"],
+     "helpers": ["ai_draft", "draft_by_section", "rag_cite", "summarise_refs", "plagiarism"],
      "description": "Synthesise prior work — agreements, disagreements, gaps."},
     {"id": "methods", "label": "Chapter IV — Materials & Methods", "group": "body",
      "target_words": 2200, "word_budget": [1800, 2400],

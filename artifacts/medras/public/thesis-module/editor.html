@@ -139,6 +139,16 @@
     <h4>Chapter tools</h4>
     <div id="th-helper-strip"></div>
 
+    <!-- Section-by-section planner — revealed for long draftable chapters -->
+    <div id="th-section-planner" style="display:none; margin-top:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <h4 style="margin:0">📋 Section plan</h4>
+        <button id="th-planner-refresh" class="th-btn th-btn-light th-btn-sm"
+          style="font-size:11px" title="Re-generate plan from AI">↻ Refresh</button>
+      </div>
+      <div id="th-planner-body" style="font-size:12.5px"></div>
+    </div>
+
     <!-- Chapter section coverage audit -->
     <div id="th-chapter-audit" style="display:none; margin-top:12px">
       <h4>Section coverage</h4>
@@ -947,6 +957,7 @@
       consent_translate: { icon: '🌐', label: 'Generate consent forms', act: 'consent' },
       import_stats: { icon: '↓', label: 'Import stats output', act: 'data' },
       scan_text: { icon: '🔍', label: 'Auto-extract abbreviations', act: 'scan' },
+      draft_by_section: { icon: '📋', label: 'Draft section-by-section', act: 'draft_by_section' },
     };
     const isResults = chapterId === 'results' || chapterId.startsWith('results_');
     // Chapter-specific tool buttons only — AI Draft/Improve/Import are hardcoded above the strip
@@ -1671,6 +1682,7 @@
       return;
     }
     if (act === 'import') { openImportModal(); return; }
+    if (act === 'draft_by_section') { toggleSectionPlanner(); return; }
     if (act === 'sigma_import') {
       const sigmaData = _getSigmaData();
       if (!sigmaData) {
@@ -2363,6 +2375,155 @@
     _on('th-import-article-asis',     'click', function() { finishImport('use_as_is'); });
     _on('th-import-article-transition','click', function() { finishImport('article_transition'); });
   }
+
+  // ===== Section-by-section planner =====
+  let _sectionPlan     = null;   // [{id,title,description,word_target}] from API
+  let _sectionStatuses = {};     // {id: 'pending'|'drafting'|'drafted'}
+  let _plannerVisible  = false;
+
+  function toggleSectionPlanner() {
+    const panel = document.getElementById('th-section-planner');
+    if (!panel) return;
+    _plannerVisible = !_plannerVisible;
+    panel.style.display = _plannerVisible ? 'block' : 'none';
+    if (_plannerVisible) {
+      // Restore saved statuses from state
+      const saved = ((ThesisState.get().chapters || {})[chapterId] || {})._subsection_statuses;
+      if (saved) _sectionStatuses = { ...saved };
+      if (!_sectionPlan) {
+        _startPlannerLoad();
+      } else {
+        _renderPlannerCards();
+      }
+    }
+  }
+
+  async function _startPlannerLoad(force) {
+    if (force) { _sectionPlan = null; _sectionStatuses = {}; }
+    const body = document.getElementById('th-planner-body');
+    if (!body) return;
+    body.innerHTML = '<div style="display:flex;align-items:center;gap:8px;color:var(--th-text-soft)"><span class="th-loading"></span> Planning subsections from your research topic…</div>';
+    const s = ThesisState.get();
+    const setup = s.setup || {};
+    if (!setup.title) {
+      body.innerHTML = '<div style="color:var(--th-danger);font-size:12.5px">Add your thesis title in Setup first, then come back here.</div>';
+      return;
+    }
+    try {
+      const res = await ThesisState.api('/plan-subsections', {
+        chapter_id: chapterId,
+        topic: setup.title,
+        aim: setup.aim || undefined,
+        objectives: setup.primary_objective || undefined,
+        study_type: setup.study_type || undefined,
+      });
+      _sectionPlan = res.sections || [];
+      _renderPlannerCards();
+    } catch (e) {
+      body.innerHTML = `<div style="color:var(--th-danger);font-size:12.5px">${esc(e.message)}</div>
+        <button class="th-btn th-btn-light th-btn-sm" style="margin-top:8px"
+          onclick="(function(){_sectionPlan=null;_startPlannerLoad(true)})()">↻ Retry</button>`;
+    }
+  }
+
+  function _renderPlannerCards() {
+    const body = document.getElementById('th-planner-body');
+    if (!body || !_sectionPlan) return;
+    const draftedCount = _sectionPlan.filter((s) => _sectionStatuses[s.id] === 'drafted').length;
+    const progress = `<div style="font-size:11px;color:var(--th-text-soft);margin-bottom:8px">${draftedCount} of ${_sectionPlan.length} subsections drafted</div>`;
+    const cards = _sectionPlan.map((sec) => {
+      const status   = _sectionStatuses[sec.id] || 'pending';
+      const drafting = status === 'drafting';
+      const drafted  = status === 'drafted';
+      const dot      = drafted ? '🟢' : drafting ? '🟡' : '⚪';
+      const btnLabel = drafting
+        ? '<span class="th-loading" style="width:10px;height:10px"></span>'
+        : drafted ? '↻ Re-draft' : 'Draft →';
+      return `<div style="padding:8px 10px;border-radius:7px;margin-bottom:6px;
+          border:1.5px solid ${drafted ? 'var(--th-emerald-d)' : 'var(--th-line)'};
+          background:${drafted ? '#f0fdf4' : 'var(--th-paper-2)'}">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px">
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:600;font-size:12px">${dot} ${esc(sec.title)}</div>
+            ${sec.description ? `<div style="font-size:11px;color:var(--th-text-soft);margin-top:2px">${esc(sec.description)}</div>` : ''}
+            <div style="font-size:10.5px;color:var(--th-text-soft);margin-top:2px">~${sec.word_target} words</div>
+          </div>
+          <button class="th-btn th-btn-primary th-btn-sm"
+            data-plan-sec="${esc(sec.id)}"
+            style="white-space:nowrap;font-size:11px;padding:3px 8px;flex-shrink:0"
+            ${drafting ? 'disabled' : ''}>${btnLabel}</button>
+        </div>
+      </div>`;
+    }).join('');
+    body.innerHTML = progress + cards;
+    body.querySelectorAll('button[data-plan-sec]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const sec = _sectionPlan.find((s) => s.id === btn.dataset.planSec);
+        if (sec) _handleSubsectionDraft(sec);
+      });
+    });
+  }
+
+  async function _handleSubsectionDraft(section) {
+    const s = ThesisState.get();
+    const setup = s.setup || {};
+    if (!setup.title) { ThesisState.toast('Add your thesis title in Setup first.', 4000); return; }
+
+    _sectionStatuses[section.id] = 'drafting';
+    _renderPlannerCards();
+
+    const status = document.getElementById('th-suggest-status');
+    if (status) status.innerHTML = `<span class="th-loading"></span> Drafting <strong>${esc(section.title)}</strong>…`;
+
+    const cite    = setup.citation_style || 'vancouver';
+    const ctxParts = [];
+    if (setup.aim)               ctxParts.push('AIM: ' + setup.aim);
+    if (setup.primary_objective) ctxParts.push('OBJECTIVES:\n' + setup.primary_objective);
+    if (setup.study_type)        ctxParts.push('STUDY TYPE: ' + setup.study_type);
+    const extraContext = ctxParts.length ? ctxParts.join('\n\n') : undefined;
+    const allRefs  = (s.references || []).filter((r) => !r.retracted);
+    const styleParams = getStyleParams();
+
+    _aiInFlight = true;
+    try {
+      const res = await ThesisState.api('/draft-section', {
+        chapter_id: chapterId,
+        topic: setup.title,
+        citation_style: cite,
+        locked_numbers: s.locked_numbers || {},
+        domain_hint: setup.domain || undefined,
+        extra_context: extraContext,
+        ref_library: allRefs.length >= 1 ? allRefs : undefined,
+        word_limit: section.word_target,
+        subsection_hint: section,
+        ...styleParams,
+      });
+      pendingDraft       = res.text;
+      pendingDraftSources = res.sources || [];
+      pendingDraftMeta   = { sources_count: pendingDraftSources.length };
+      suggestions        = [];
+      mode               = 'review';
+      _sectionStatuses[section.id] = 'drafted';
+      // Persist statuses so they survive page reload
+      ThesisState.setChapter(chapterId, { _subsection_statuses: { ..._sectionStatuses } });
+      renderEditor(); renderSuggestList(); renderChapterRefPanel(); renderSideChapters();
+      _renderPlannerCards();
+      if (status) status.textContent = `"${section.title}" ready (${pendingDraftMeta.sources_count} sources). Click ✓ to accept, ✗ to discard.`;
+    } catch (e) {
+      _sectionStatuses[section.id] = 'pending';
+      _renderPlannerCards();
+      if (status) status.textContent = '';
+      ThesisState.toast('Draft failed: ' + e.message);
+    } finally {
+      _aiInFlight = false;
+    }
+  }
+
+  // Wire refresh button (deferred to DOMContentLoaded so the panel HTML is in the DOM)
+  document.addEventListener('DOMContentLoaded', () => {
+    const refreshBtn = document.getElementById('th-planner-refresh');
+    if (refreshBtn) refreshBtn.addEventListener('click', () => _startPlannerLoad(true));
+  });
 
   init();
   // initImportModal() is deferred to DOMContentLoaded so the modal HTML
