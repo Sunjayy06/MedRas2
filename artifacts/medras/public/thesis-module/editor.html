@@ -97,6 +97,18 @@
       <button id="th-sub-btn" class="th-btn th-btn-light th-btn-sm" style="padding:2px 9px" title="Subscript — H₂O, CO₂">X<sub style="font-size:9px;line-height:1">2</sub></button>
       <button id="th-sup-btn" class="th-btn th-btn-light th-btn-sm" style="padding:2px 9px" title="Superscript — cm², p<0.05">X<sup style="font-size:9px;line-height:1">2</sup></button>
     </div>
+    <!-- Orphaned-citation repair banner — shown when chapter text contains leftover CITE_n -->
+    <div id="th-cite-repair-banner" style="display:none;align-items:center;gap:10px;
+         padding:9px 14px;background:#fefce8;border:1.5px solid #ca8a04;border-radius:8px;
+         margin-bottom:8px;font-size:13px;color:#78350f">
+      <span id="th-cite-repair-msg" style="flex:1 1 auto"></span>
+      <button id="th-cite-repair-btn" style="padding:5px 14px;border-radius:6px;font-size:12px;
+              font-weight:600;cursor:pointer;border:none;background:#ca8a04;color:#fff;
+              white-space:nowrap">✦ Repair now</button>
+      <button id="th-cite-repair-dismiss" style="padding:5px 10px;border-radius:6px;font-size:12px;
+              cursor:pointer;border:1px solid #ca8a04;background:transparent;color:#92400e">
+              Dismiss</button>
+    </div>
     <div id="th-editor-canvas" class="th-editor-canvas" contenteditable="true"
          spellcheck="true" data-testid="editor"></div>
   </section>
@@ -200,6 +212,14 @@
     if (isResultsChapter && draftBtn) {
       draftBtn.style.display = 'none';
     }
+    // Wire orphaned-citation repair banner buttons
+    const repairBtn    = document.getElementById('th-cite-repair-btn');
+    const dismissBtn   = document.getElementById('th-cite-repair-dismiss');
+    if (repairBtn)  repairBtn.addEventListener('click', () => handleHelper('repair_cites'));
+    if (dismissBtn) dismissBtn.addEventListener('click', () => {
+      const banner = document.getElementById('th-cite-repair-banner');
+      if (banner) banner.style.display = 'none';
+    });
     renderHelpers();
     renderEditor();
     renderChapterRefPanel();
@@ -924,9 +944,26 @@
     });
   }
 
+  // ---------- orphaned-citation repair banner ----------
+  function _updateRepairBanner(text) {
+    const banner  = document.getElementById('th-cite-repair-banner');
+    const msg     = document.getElementById('th-cite-repair-msg');
+    if (!banner) return;
+    const matches = text.match(/CITE_\d+/g);
+    if (!matches || !matches.length) {
+      banner.style.display = 'none';
+      return;
+    }
+    const count = new Set(matches).size;
+    if (msg) msg.textContent = `⚠ ${count} unresolved citation${count !== 1 ? 's' : ''} (CITE_n) found in this chapter. Click Repair to map them to your reference library.`;
+    banner.style.display = 'flex';
+  }
+
   // ---------- editor body ----------
   function renderEditor() {
     const c = ThesisState.getChapter(chapterId);
+    // Show the repair banner if the saved chapter text has leftover CITE_n tokens
+    _updateRepairBanner(c.text || '');
     const canvas = document.getElementById('th-editor-canvas');
     if (mode === 'write') {
       canvas.contentEditable = 'true';
@@ -1269,6 +1306,31 @@
     const setup = s.setup || {};
     const cite = setup.citation_style || 'vancouver';
     const topic = setup.title || chapter.label;
+    if (act === 'repair_cites') {
+      const chText = ThesisState.getChapter(chapterId).text || '';
+      const refs   = ThesisState.get().references || [];
+      const orphans = new Set();
+      const re = /CITE_(\d+)/g; let m;
+      while ((m = re.exec(chText)) !== null) orphans.add(parseInt(m[1], 10));
+      if (!orphans.size) { ThesisState.toast('No leftover citation placeholders found.'); return; }
+      let repaired = 0, unmapped = 0;
+      const fixed = chText
+        .replace(/CITE_(\d+)/g, (_, n) => {
+          const idx = parseInt(n, 10) - 1;
+          if (refs[idx]) { repaired++; return String(idx + 1); }
+          unmapped++;
+          return '?';
+        })
+        .replace(/\[\s*(?:,\s*)*\]/g, '');
+      ThesisState.setChapter(chapterId, { text: fixed, html: null });
+      mode = 'write';
+      renderEditor(); renderChapterRefPanel();
+      const msg = unmapped
+        ? `Repaired ${repaired} citation${repaired !== 1 ? 's' : ''}. ${unmapped} could not be mapped — marked [?].`
+        : `Repaired ${repaired} citation${repaired !== 1 ? 's' : ''} — all resolved.`;
+      ThesisState.toast(msg, 4500);
+      return;
+    }
     if (act === 'import') { openImportModal(); return; }
     if (act === 'sigma_import') {
       const sigmaData = _getSigmaData();
