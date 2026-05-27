@@ -110,7 +110,20 @@
       <a class="th-btn th-btn-primary th-btn-sm" href="/thesis-module/compliance.html?then=export">⬇ Continue to Export</a>
     </div>
 
-    <h4>Helpers</h4>
+    <h4>AI writing</h4>
+    <div style="display:flex; flex-direction:column; gap:6px; margin-bottom:10px">
+      <button id="th-ai-draft-btn" class="th-helper-btn" style="border-color:var(--th-emerald);color:var(--th-emerald-d);background:rgba(16,185,129,0.04)">
+        <span class="th-helper-icon">✦</span><span>AI: Draft this section</span>
+      </button>
+      <button id="th-ai-improve-btn" class="th-helper-btn">
+        <span class="th-helper-icon">✎</span><span>AI: Suggest improvements</span>
+      </button>
+      <button id="th-ai-import-btn" class="th-helper-btn">
+        <span class="th-helper-icon">↑</span><span>Import existing content</span>
+      </button>
+    </div>
+
+    <h4>Chapter tools</h4>
     <div id="th-helper-strip"></div>
 
     <h4 style="margin-top:16px">Assigned to this section</h4>
@@ -124,7 +137,7 @@
 
     <h4 style="margin-top:16px">AI suggestions</h4>
     <div id="th-suggest-status" style="font-size:12.5px; color:var(--th-text-soft); margin-bottom:8px">
-      Click "AI: Suggest improvements" or "AI: Draft this section" — every change still needs your ✓.
+      Use the buttons above to draft or improve this section — every AI change needs your ✓.
     </div>
     <div id="th-suggest-list"></div>
   </aside>
@@ -174,6 +187,18 @@
     renderSideChapters();
     renderSideLocks();
     renderSideRefs();
+    // Wire hardcoded AI writing buttons (always visible regardless of spine state)
+    const isResultsChapter = chapterId === 'results' || chapterId.startsWith('results_');
+    const draftBtn   = document.getElementById('th-ai-draft-btn');
+    const improveBtn = document.getElementById('th-ai-improve-btn');
+    const importBtn2 = document.getElementById('th-ai-import-btn');
+    if (draftBtn)   { draftBtn.addEventListener('click', () => handleHelper('draft')); }
+    if (improveBtn) { improveBtn.addEventListener('click', () => handleHelper('improve')); }
+    if (importBtn2) { importBtn2.addEventListener('click', () => handleHelper('import')); }
+    // For results chapters: hide Draft (AI doesn't generate results data), show Sigma import notice
+    if (isResultsChapter && draftBtn) {
+      draftBtn.style.display = 'none';
+    }
     renderHelpers();
     renderEditor();
     renderChapterRefPanel();
@@ -878,18 +903,17 @@
       scan_text: { icon: '🔍', label: 'Auto-extract abbreviations', act: 'scan' },
     };
     const isResults = chapterId === 'results' || chapterId.startsWith('results_');
-    const improve = { icon: '✎', label: 'AI: Suggest improvements', act: 'improve' };
-    const importBtn = { icon: '↑', label: 'Import existing content', act: 'import' };
-    // For results chapters: remove ai_draft, add sigma_import at top
+    // Chapter-specific tool buttons only — AI Draft/Improve/Import are hardcoded above the strip
     let filteredHelpers = helpers.map((h) => map[h]).filter(Boolean);
-    if (isResults) filteredHelpers = filteredHelpers.filter((it) => it.act !== 'draft');
-    const items = isResults
-      ? [{ icon: '📊', label: 'Import from Sigma', act: 'sigma_import' }, importBtn, improve].concat(filteredHelpers)
-      : [importBtn, improve].concat(filteredHelpers);
+    // ai_draft in the map is for chapter-spine reference; the hardcoded button handles it
+    filteredHelpers = filteredHelpers.filter((it) => it.act !== 'draft');
+    const sigmaImport = { icon: '📊', label: 'Import from Sigma', act: 'sigma_import' };
+    const items = isResults ? [sigmaImport].concat(filteredHelpers) : filteredHelpers;
     const el = document.getElementById('th-helper-strip');
     const notice = isResults
-      ? '<div class="th-results-notice"><strong>Results are researcher-provided.</strong><br>Import via Sigma or file upload — the AI does not generate data for this section.</div>'
+      ? '<div class="th-results-notice"><strong>Results are researcher-provided.</strong><br>Import from Sigma or upload your data — AI does not generate study results.</div>'
       : '';
+    if (!items.length && !notice) { el.innerHTML = '<p style="font-size:12px;color:var(--th-text-soft);margin:0">No chapter-specific tools for this section.</p>'; return; }
     el.innerHTML = notice + items.map((it) => `
       <button class="th-helper-btn" data-act="${it.act}">
         <span class="th-helper-icon">${it.icon}</span><span>${esc(it.label)}</span>
