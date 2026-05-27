@@ -119,6 +119,7 @@
     <h4>What's next</h4>
     <div style="display:flex; flex-direction:column; gap:6px; margin-bottom:14px">
       <a id="th-attach-fig" class="th-btn th-btn-light th-btn-sm" href="/thesis-module/assets.html">📎 Attach figure to this chapter</a>
+      <button id="th-share-guide-btn" class="th-btn th-btn-light th-btn-sm" style="text-align:left">📤 Share this section with Guide</button>
       <a class="th-btn th-btn-light th-btn-sm" href="/thesis-module/compliance.html">✓ Pre-flight compliance</a>
       <a class="th-btn th-btn-primary th-btn-sm" href="/thesis-module/compliance.html?then=export">⬇ Continue to Export</a>
     </div>
@@ -1469,6 +1470,133 @@
   }
 
   document.getElementById('th-save').addEventListener('click', doSave);
+
+  document.getElementById('th-share-guide-btn').addEventListener('click', function shareWithGuide() {
+    const s   = ThesisState.get();
+    const ch  = ThesisState.getChapter(chapterId);
+    const setup = s.setup || {};
+    const refs  = s.references || [];
+    const text  = ch.text || '';
+    const html  = ch.html || (text ? mdToHtml(text) : '');
+
+    if (!text.trim()) {
+      ThesisState.toast('This chapter has no content yet — write some text first.', 3500);
+      return;
+    }
+
+    // Extract cited reference numbers that appear as [N] in the chapter text
+    const citedNums = new Set();
+    const citePat = /\[(\d+)\]/g;
+    let m;
+    while ((m = citePat.exec(text)) !== null) {
+      const n = parseInt(m[1], 10);
+      if (n >= 1 && n <= refs.length) citedNums.add(n);
+    }
+
+    const chapterLabel = chapter ? (chapter.label || chapter.title || chapterId) : chapterId;
+    const thesisTitle  = setup.title || 'Thesis';
+
+    // Build reference list — only refs cited in this chapter, in citation-order
+    const sortedNums = Array.from(citedNums).sort((a, b) => a - b);
+    const refItems = sortedNums.map((n) => {
+      const r = refs[n - 1];
+      if (!r) return '';
+      const authors = (r.authors || []).slice(0, 6).join(', ') + ((r.authors || []).length > 6 ? ' et al.' : '');
+      const doi = r.doi ? ` doi: <a href="https://doi.org/${r.doi}" target="_blank">${r.doi}</a>` : '';
+      return `<li value="${n}">${authors}. ${r.title || ''}. <em>${r.journal || r.source || ''}</em>. ${r.year || ''}.${doi}</li>`;
+    }).filter(Boolean).join('');
+
+    const refsBlock = citedNums.size > 0
+      ? `<h2 class="sec-head">References</h2><ol class="ref-list">${refItems}</ol>`
+      : '';
+
+    const aim = setup.aim
+      ? `<p class="meta-aim"><strong>Aim:</strong> ${setup.aim}</p>` : '';
+    const pi  = (setup.investigator_name || setup.pi_name)
+      ? `<p class="meta-aim"><strong>Principal Investigator:</strong> ${setup.investigator_name || setup.pi_name}</p>` : '';
+    const inst = setup.institution
+      ? `<p class="meta-aim"><strong>Institution:</strong> ${setup.institution}</p>` : '';
+
+    const today = new Date().toLocaleDateString('en-IN', { day:'2-digit', month:'long', year:'numeric' });
+
+    const pageHtml = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>${chapterLabel} — ${thesisTitle}</title>
+<style>
+  @page { margin: 1in; }
+  @media print { .no-print { display:none !important; } body { padding:0; } .page { padding:0; } }
+  * { box-sizing:border-box; }
+  body { font-family:"Times New Roman",Times,serif; font-size:12pt; line-height:1.8;
+         color:#111; background:#f5f5f4; margin:0; padding:24px 0 48px; }
+  .page { max-width:760px; margin:0 auto; background:#fff;
+          padding:60px 72px 72px; box-shadow:0 2px 16px rgba(0,0,0,.1); }
+  /* Toolbar */
+  .toolbar { display:flex; align-items:center; justify-content:space-between;
+             margin-bottom:28px; padding-bottom:16px; border-bottom:2px solid #e5e7eb;
+             gap:12px; flex-wrap:wrap; }
+  .toolbar-title { font-family:system-ui,sans-serif; font-size:12px; font-weight:600;
+                   color:#6b7280; }
+  .print-btn { padding:8px 20px; background:#059669; color:#fff; border:none;
+               border-radius:6px; font-size:13px; font-weight:600; cursor:pointer;
+               font-family:system-ui,sans-serif; white-space:nowrap; }
+  .print-btn:hover { background:#047857; }
+  /* Meta block */
+  .meta-block { margin-bottom:28px; padding-bottom:20px; border-bottom:1px solid #e5e7eb; }
+  .meta-label { font-family:system-ui,sans-serif; font-size:9pt; color:#9ca3af;
+                text-transform:uppercase; letter-spacing:.07em; margin-bottom:4px; }
+  .thesis-title { font-size:11pt; color:#374151; margin:0 0 6px; font-weight:600; }
+  .chapter-name { font-size:18pt; font-weight:700; margin:0 0 10px; line-height:1.3; }
+  .meta-aim { font-size:10pt; color:#6b7280; margin:3px 0;
+              font-family:system-ui,sans-serif; }
+  .share-date { font-family:system-ui,sans-serif; font-size:9pt; color:#9ca3af;
+                margin-top:8px; }
+  /* Chapter content */
+  .content p { margin:0 0 10pt; text-align:justify; }
+  .content h1,.content h2,.content h3 { font-size:13pt; font-weight:700; margin:18pt 0 6pt; }
+  .content strong { font-weight:700; }
+  .content em { font-style:italic; }
+  .content sup { font-size:8pt; vertical-align:super; line-height:0; }
+  /* References */
+  .sec-head { font-size:13pt; font-weight:700; margin:32pt 0 10pt;
+              padding-top:16pt; border-top:1px solid #e5e7eb; }
+  .ref-list { padding-left:22pt; margin:0; font-size:10.5pt; line-height:1.6; }
+  .ref-list li { margin-bottom:6pt; }
+  .ref-list a { color:#059669; word-break:break-all; }
+  /* Footer */
+  .watermark { font-family:system-ui,sans-serif; font-size:9px; color:#d1d5db;
+               text-align:center; margin-top:48px; border-top:1px solid #f3f4f6;
+               padding-top:12px; }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="toolbar no-print">
+    <span class="toolbar-title">MedRAS — Section preview for guide review</span>
+    <button class="print-btn" onclick="window.print()">🖨 Print / Save as PDF</button>
+  </div>
+  <div class="meta-block">
+    <div class="meta-label">Thesis</div>
+    <p class="thesis-title">${thesisTitle}</p>
+    <p class="chapter-name">${chapterLabel}</p>
+    ${aim}${pi}${inst}
+    <p class="share-date">Shared for review · ${today}</p>
+  </div>
+  <div class="content">${html}</div>
+  ${refsBlock}
+  <div class="watermark no-print">Generated by MedRAS · For guide review only · Not for submission</div>
+</div>
+</body></html>`;
+
+    const win = window.open('', '_blank');
+    if (!win) {
+      ThesisState.toast('Pop-up blocked — please allow pop-ups for this site and try again.', 4000);
+      return;
+    }
+    win.document.write(pageHtml);
+    win.document.close();
+  });
 
   document.addEventListener('keydown', (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key === 's') {
