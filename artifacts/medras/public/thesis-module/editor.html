@@ -94,6 +94,7 @@
               style="font-size:12px; cursor:pointer; padding:0 8px" title="Writing style"></select>
       <button id="th-toggle-mode" class="th-btn th-btn-light th-btn-sm">Mode: Write</button>
       <button id="th-save" class="th-btn th-btn-primary th-btn-sm">Save</button>
+      <span id="th-autosave-label" style="font-size:11px;color:var(--th-emerald-d);opacity:0;transition:opacity .4s;white-space:nowrap">✓ Auto-saved</span>
       <button id="th-sub-btn" class="th-btn th-btn-light th-btn-sm" style="padding:2px 9px" title="Subscript — H₂O, CO₂">X<sub style="font-size:9px;line-height:1">2</sub></button>
       <button id="th-sup-btn" class="th-btn th-btn-light th-btn-sm" style="padding:2px 9px" title="Superscript — cm², p<0.05">X<sup style="font-size:9px;line-height:1">2</sup></button>
     </div>
@@ -575,7 +576,8 @@
 
   let _pickerOpen = false;
   let _atRange = null;       // saved Selection range capturing where [@ was typed
-  let _refPanelTimer = null; // debounce handle for prose-to-panel citation scan
+  let _refPanelTimer  = null; // debounce handle for prose-to-panel citation scan
+  let _autoSaveTimer  = null; // 30 s idle auto-save
 
   function openCitePicker() {
     if (_pickerOpen) return;
@@ -1353,6 +1355,17 @@
     // Debounce panel re-render to 400 ms (avoids redundant work on each keystroke)
     clearTimeout(_refPanelTimer);
     _refPanelTimer = setTimeout(renderChapterRefPanel, 400);
+    // Auto-save after 30 s of idle typing (silent — no toast)
+    clearTimeout(_autoSaveTimer);
+    _autoSaveTimer = setTimeout(() => {
+      ThesisState.setChapter(chapterId, { text: canvas.innerText, html: canvas.innerHTML });
+      renderSideChapters();
+      const lbl = document.getElementById('th-autosave-label');
+      if (lbl) {
+        lbl.style.opacity = '1';
+        setTimeout(() => { lbl.style.opacity = '0'; }, 2500);
+      }
+    }, 30000);
     // Caret-local detection: check only text in the current node up to cursor position
     const sel = window.getSelection();
     let caretLocal = '';
