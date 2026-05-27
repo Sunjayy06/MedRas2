@@ -41,6 +41,11 @@ log = logging.getLogger(__name__)
 
 DEFAULT_LIMIT_PER_DB = 4
 DEFAULT_TOTAL_LIMIT = 18
+# Review of Literature fetches more per subsection so each of the 12–13
+# subsections can cite a distinct set of papers (different PubMed/OpenAlex
+# queries per subsection title → unique records → library grows to 40+).
+_ROL_LIMIT_PER_DB = 8
+_ROL_TOTAL_LIMIT  = 30
 GEMINI_TIMEOUT_S = 90.0
 GEMINI_MAX_TOKENS = 6000
 OPENAI_MAX_TOKENS_IMPROVE = 3000   # improve mode: GPT-4o produces precise diffs
@@ -790,9 +795,23 @@ async def draft_section(
                 "to this chapter topic. Add more references or broaden your topic."
             )
     else:
+        # For Review of Literature subsections, build a subsection-specific query
+        # so each of the 12-13 subsections queries PubMed/OpenAlex for its own
+        # subtopic and retrieves a distinct set of papers.  Without this every
+        # subsection gets the same ~10 papers and the library never grows beyond 10.
+        _rag_query = topic
+        _rag_lpdb  = limit_per_db
+        _rag_total = total_limit
+        if chapter_id == "literature_review":
+            _rag_lpdb  = _ROL_LIMIT_PER_DB
+            _rag_total = _ROL_TOTAL_LIMIT
+            if subsection_hint and isinstance(subsection_hint, dict):
+                _sh_t = str(subsection_hint.get("title") or "").strip()
+                if _sh_t:
+                    _rag_query = f"{topic} {_sh_t}"
         _rag = await thesis_reference_library.search(
-            topic, domain_hint=domain_hint,
-            limit=total_limit, limit_per_db=limit_per_db,
+            _rag_query, domain_hint=domain_hint,
+            limit=_rag_total, limit_per_db=_rag_lpdb,
         )
         records = _rag["records"]
         if ref_library:
@@ -801,7 +820,7 @@ async def draft_section(
             extra = [r for r in ref_library
                      if (r.get("doi") or "").lower() not in rag_dois]
             records = extra[:5] + records
-            records = records[:total_limit]
+            records = records[:_rag_total]
         if len(records) < 3:
             raise GeneratorError(
                 "Found fewer than 3 high-quality references for this topic. "
@@ -846,6 +865,11 @@ async def draft_section(
         _sh_desc  = str(subsection_hint.get("description") or "").strip()
         _sh_wt    = int(subsection_hint.get("word_target") or word_limit or 800)
         if _sh_title:
+            _cite_req = (
+                "\nCITATION REQUIREMENT: You MUST cite at least 6 different retrieved papers "
+                "in this subsection (more is better). Use a wide spread of citation indices — "
+                "do not rely only on [CITE_1] and [CITE_2]. Every factual claim needs a [CITE_n].\n"
+            ) if chapter_id == "literature_review" else ""
             sys_prompt = (
                 sys_prompt +
                 f"\n\n=== SUBSECTION-BY-SUBSECTION MODE ===\n"
@@ -856,6 +880,7 @@ async def draft_section(
                 + f"Target length: {_sh_wt} words (minimum {int(_sh_wt * 0.85)} words).\n"
                 f"Start with the bold heading '**{_sh_title}**' on its own line, "
                 f"then write only the content for that subsection.\n"
+                + _cite_req +
                 f"=== END SUBSECTION MODE ==="
             )
     # Review of Literature subsections are 1,200–2,000 words each → need more tokens
