@@ -414,17 +414,7 @@ textarea.th-input { resize: vertical; line-height: 1.55; min-height: 68px; }
 .th-lock-chip .th-lock-x { margin-left: 6px; cursor: pointer; opacity: 0.65; }
 .th-lock-chip .th-lock-x:hover { opacity: 1; }
 
-/* Compliance items */
-.th-compliance-item {
-  display: grid; grid-template-columns: 28px 1fr auto;
-  gap: 12px; padding: 12px; border: 1px solid var(--th-line);
-  border-radius: 10px; margin-bottom: 8px; background: #fff;
-  align-items: center;
-}
-.th-compliance-icon { font-size: 18px; }
-.th-compliance-icon.pass { color: var(--th-success); }
-.th-compliance-icon.warn { color: var(--th-amber); }
-.th-compliance-icon.fail { color: var(--th-danger); }
+/* Compliance items — canonical styles live inline in compliance.html; this block is intentionally empty */
 
 /* Loading shimmer */
 .th-loading {

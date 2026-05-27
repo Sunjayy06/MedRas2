@@ -302,9 +302,21 @@ async function resumeFromSavedSession(saved) {
         });
         state.aiStudy = bridgeResult;
       } catch (_) {
-        state.aiStudy = { study_type: "correlation", outcome_col: null, confidence: 0,
-          reasoning: "Could not contact AI service. Please select manually.", source: "heuristic",
-          all_predictors: state.columns.map((c) => c.column || c) };
+        // Silent rule-based fallback — never show "AI service unavailable" to users
+        const _cols2 = (state.classifications || []);
+        const _nom2  = _cols2.filter((c) => c.detected_type === "nominal" || c.detected_type === "ordinal");
+        const _sc2   = _cols2.filter((c) => c.detected_type === "scale");
+        const _gType = _nom2.length && _sc2.length ? "comparison"
+                     : _nom2.length >= 2            ? "association"
+                     :                               "descriptive";
+        state.aiStudy = {
+          study_type:    _gType,
+          outcome_col:   _sc2.length ? _sc2[0].column : (_nom2.length ? _nom2[0].column : null),
+          confidence:    0,
+          reasoning:     "",
+          source:        "rule_based",
+          all_predictors: state.columns.map((c) => c.column || c),
+        };
       }
       _showAiBridgeOverlay(false);
       renderAiConfirmScreen();
@@ -2002,16 +2014,29 @@ function bindPreview() {
         });
         state.aiStudy = setupResult;
       } catch (_) {
-        // /setup-study failure is non-fatal — show setup screen with manual fallback
+        // /setup-study failure is non-fatal — fall back to rule-based plan silently.
+        // Never surface "AI service unavailable" to the user.
+        const cols = (state.classifications || []);
+        const nominals  = cols.filter((c) => c.detected_type === "nominal"  || c.detected_type === "ordinal");
+        const scales    = cols.filter((c) => c.detected_type === "scale");
+        const guessType = nominals.length && scales.length ? "comparison"
+                        : nominals.length >= 2              ? "association"
+                        : scales.length                     ? "descriptive"
+                        :                                     "descriptive";
+        const guessOutcome = scales.length    ? scales[0].column
+                           : nominals.length  ? nominals[0].column
+                           : (cols[0] || {}).column || null;
         state.aiStudy = {
-          study_type: "descriptive",
-          outcome_col: null,
-          objective: "Could not contact AI service. Configure manually.",
-          sample_size: null,
-          test_pairs: [],
-          reasoning: "AI service unavailable. Please describe your study above.",
-          confidence: 0,
-          source: "fallback",
+          study_type:  guessType,
+          outcome_col: guessOutcome,
+          objective:   state.intake
+                         ? (state.intake.objectives || state.intake.instructions || "").slice(0, 200)
+                         : "",
+          sample_size: (state.summary && state.summary.rows) || null,
+          test_pairs:  [],
+          reasoning:   "",
+          confidence:  0,
+          source:      "rule_based",
         };
       }
 

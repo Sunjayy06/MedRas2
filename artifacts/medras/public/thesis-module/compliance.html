@@ -16,23 +16,29 @@
   .th-comp-tile.warn .v { color:var(--th-amber); }
   .th-comp-tile.fail .v { color:var(--th-danger); }
   @keyframes th-item-in { from { opacity:0; transform:translateY(5px); } to { opacity:1; transform:none; } }
-  .th-comp-item { display:grid; grid-template-columns: 36px 1fr auto; gap:12px; padding:12px 14px; border-bottom:1px solid var(--th-line); align-items:start; animation:th-item-in .18s ease-out both; }
+  .th-comp-list { background:#fff; border:1px solid var(--th-line); border-radius:12px; overflow:hidden; }
+  .th-comp-item { display:grid; grid-template-columns: 36px 1fr auto; gap:12px; padding:14px 16px; border-bottom:1px solid var(--th-line); align-items:start; animation:th-item-in .18s ease-out both; transition: background .12s; }
+  .th-comp-item:last-child { border-bottom: none; }
+  .th-comp-item:hover { background: var(--th-paper, #f9fafb); }
+  .th-comp-item.pass-row { border-left: 3px solid var(--th-emerald-d); }
+  .th-comp-item.warn-row { border-left: 3px solid var(--th-amber); }
+  .th-comp-item.fail-row { border-left: 3px solid var(--th-danger); }
   .th-comp-item:nth-child(2) { animation-delay:.04s; }
   .th-comp-item:nth-child(3) { animation-delay:.08s; }
   .th-comp-item:nth-child(4) { animation-delay:.12s; }
   .th-comp-item:nth-child(5) { animation-delay:.16s; }
   .th-comp-item:nth-child(n+6) { animation-delay:.20s; }
-  .th-comp-icon { width:30px; height:30px; border-radius:50%; display:grid; place-items:center; font-weight:700; color:#fff; font-size:15px; flex-shrink:0; }
+  .th-comp-icon { width:30px; height:30px; border-radius:50%; display:grid; place-items:center; font-weight:700; color:#fff; font-size:15px; flex-shrink:0; margin-top:1px; }
   .th-comp-icon.pass { background: var(--th-emerald-d); }
   .th-comp-icon.warn { background: var(--th-amber); }
   .th-comp-icon.fail { background: var(--th-danger); }
-  .th-comp-label { font-weight:600; color:var(--th-ink-900); }
-  .th-comp-detail { font-size:13px; color:var(--th-text-soft); margin-top:3px; }
-  .th-comp-empty { padding:32px; text-align:center; color:var(--th-text-soft); background:#fff; border:1px dashed var(--th-line); border-radius:10px; }
+  .th-comp-label { font-weight:600; font-size:14px; color:var(--th-ink-900); margin-bottom:2px; }
+  .th-comp-detail { font-size:12.5px; color:var(--th-text-soft); margin-top:2px; line-height:1.45; }
+  .th-comp-empty { padding:36px; text-align:center; color:var(--th-text-soft); background:#fff; border:1px dashed var(--th-line); border-radius:12px; font-size:14px; }
   .th-spinner { display:inline-block; width:14px; height:14px; border:2px solid rgba(0,0,0,.15); border-top-color: var(--th-emerald); border-radius:50%; animation: th-spin .8s linear infinite; vertical-align:-2px; margin-right:6px; }
   @keyframes th-spin { to { transform: rotate(360deg); } }
-  .th-gate { margin-top:18px; padding:14px 16px; border-radius:10px; background: #fff8e1; border:1px solid var(--th-gold); display:flex; gap:14px; align-items:center; flex-wrap:wrap; }
-  .th-gate.is-clear { background:#ecf6ed; border-color:var(--th-emerald); }
+  .th-gate { margin-top:20px; padding:16px 18px; border-radius:12px; background: #fffbeb; border:1px solid var(--th-gold); display:flex; gap:14px; align-items:center; flex-wrap:wrap; box-shadow: 0 2px 8px rgba(217,119,6,.08); }
+  .th-gate.is-clear { background:#f0fdf4; border-color:var(--th-emerald); box-shadow: 0 2px 8px rgba(5,150,105,.08); }
 </style>
 </head>
 <body data-medras-module="scriptorium" data-medras-module="scriptorium">
@@ -77,7 +83,7 @@
 
   <div id="th-comp-summary" class="th-comp-summary" style="display:none"></div>
 
-  <div id="th-comp-list" class="th-card" style="padding:0; display:none"></div>
+  <div id="th-comp-list" class="th-card th-comp-list" style="padding:0; display:none"></div>
 
   <div id="th-comp-empty" class="th-comp-empty" style="display:none">No checks run yet.</div>
 
@@ -167,7 +173,7 @@
     empty.style.display = 'none';
     list.innerHTML = items.map(function (it) {
       return `
-        <div class="th-comp-item">
+        <div class="th-comp-item ${esc(it.status)}-row">
           <div class="th-comp-icon ${esc(it.status)}">${icon(it.status)}</div>
           <div>
             <div class="th-comp-label">${esc(it.label)}</div>

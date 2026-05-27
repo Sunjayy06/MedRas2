@@ -97,8 +97,17 @@ html.mn-active body {
 .mn-item-active {
   color: #fff;
   font-weight: 600;
-  border-bottom-color: #3b82f6;
+  border-bottom-color: #3b82f6; /* default; overridden per module below */
 }
+
+/* ── Per-module accent colours on active nav item ──────────────── */
+body[data-medras-module="helix"]        .mn-item-active { border-bottom-color: var(--tk-mod-helix,     #0d9488); }
+body[data-medras-module="cohort"]       .mn-item-active { border-bottom-color: var(--tk-mod-cohort,    #2563eb); }
+body[data-medras-module="sigma"]        .mn-item-active { border-bottom-color: var(--tk-mod-sigma,     #7c3aed); }
+body[data-medras-module="prologue"]     .mn-item-active { border-bottom-color: #4a7ac8; }
+body[data-medras-module="scriptorium"]  .mn-item-active { border-bottom-color: var(--tk-mod-script,    #059669); }
+body[data-medras-module="novus"]        .mn-item-active { border-bottom-color: var(--tk-mod-novus,     #d97706); }
+body[data-medras-module="folio"]        .mn-item-active { border-bottom-color: var(--tk-mod-folio,     #ea580c); }
 
 /* ── Coming-soon placeholder items ─────────────────────────────── */
 .mn-item-soon {

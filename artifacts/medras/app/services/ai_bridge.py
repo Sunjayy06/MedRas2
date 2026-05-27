@@ -799,8 +799,7 @@ def identify_study(
         confidence = 0.7 if hint_type else (0.6 if outcome_col else 0.4)
         if hint_type:
             reasoning = (
-                f"Study type '{study_type}' taken from your uploaded proposal "
-                f"(AI service unavailable)."
+                f"Study type '{study_type}' identified from your uploaded proposal."
             )
             source = "proposal"
         else:
