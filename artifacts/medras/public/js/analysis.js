@@ -417,14 +417,13 @@ const SCREENS = [
   "normality", "plan", "results", "export",
 ];
 // Map a logical screen id to which step number is "active" in the tracker.
-// 8-step model: 1 Start, 2 Data input, 3 Variables, 4 Review data (quality),
-//               5 Normality, 6 Plan and Run, 7 Results, 8 Export.
+// 7-step model: 1 Setup, 2 Data, 3 Variables+Quality (merged), 4 Normality,
+//               5 Plan, 6 Results, 7 Export.
 const SCREEN_TO_STEP = {
   "1": 1, "intake": 1,
   "2a": 2, "2c": 2, "2c-custom": 2, "preview": 2, "setup": 2, "ai-confirm": 2,
-  "3": 3,
-  "4": 4, "missing": 4,
-  "normality": 5, "plan": 6, "results": 7, "corr-results": 7, "export": 8,
+  "3": 3, "4": 3, "missing": 3,
+  "normality": 4, "plan": 5, "results": 6, "corr-results": 6, "export": 7,
 };
 
 function showScreen(id) {
@@ -467,7 +466,7 @@ function showScreen(id) {
     const helpBtn = passBadge.querySelector(".se-pass-help");
     const tip     = passBadge.querySelector(".se-pass-tip");
     const step    = SCREEN_TO_STEP[id] || 1;
-    const isAnalysis = step >= 5;
+    const isAnalysis = step >= 4;
     const labelText = isAnalysis
       ? "Pass 2 of 2 — statistical analysis"
       : "Pass 1 of 2 — data preparation";
@@ -490,7 +489,7 @@ function showScreen(id) {
 function bindStepNavBack() {
   const STEP_TO_SCREEN = {
     1: "1", 2: "preview", 3: "4",
-    4: "normality", 5: "plan", 6: "results", 7: "export",
+    4: "normality", 5: "plan", 6: "results",
   };
   $$(".se-step").forEach((node) => {
     node.addEventListener("click", () => {
