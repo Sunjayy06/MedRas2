@@ -476,6 +476,30 @@ async def search(database: str, query: str, limit: int = DEFAULT_LIMIT_PER_DB,
     return records
 
 
+_REGISTRY_TITLE_RE = re.compile(
+    r"\[\s*(clinical\s+trial\s+registr\w*|trial\s+registr\w*|registry\s+record)\s*\]",
+    re.IGNORECASE,
+)
+_REGISTRY_JOURNALS = frozenset({"clinicaltrials.gov", "isrctn", "ctri", "drks", "euctr",
+                                 "anzctr", "jprn", "chictr", "irct"})
+
+
+def _is_registry_record(r: "Record") -> bool:
+    """Return True for clinical-trial registry entries that should never appear
+    as citable evidence (they are registrations, not published research)."""
+    title = (r.get("title") or "").strip()
+    if _REGISTRY_TITLE_RE.search(title):
+        return True
+    journal = (r.get("journal") or "").strip().lower()
+    if journal in _REGISTRY_JOURNALS or "clinicaltrials.gov" in journal:
+        return True
+    authors = r.get("authors") or []
+    if (len(authors) == 1
+            and str(authors[0]).strip().lower() in ("unknown sponsor", "unknown")):
+        return True
+    return False
+
+
 def _dedupe(records: List[Record]) -> List[Record]:
     """Drop records with no title; deduplicate by DOI then by (title, year)."""
     seen_doi: set[str] = set()
@@ -483,6 +507,7 @@ def _dedupe(records: List[Record]) -> List[Record]:
     out: List[Record] = []
     for r in records:
         if r.get("is_stub"): continue
+        if _is_registry_record(r): continue
         title = (r.get("title") or "").strip()
         if not title: continue
         doi = (r.get("doi") or "").strip().lower()

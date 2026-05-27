@@ -98,6 +98,12 @@ async def verify_doi(doi: str) -> Optional[Dict[str, Any]]:
 # anything OpenAlex or Semantic Scholar might pass through.)
 _BAD_VENUE_TOKENS = (
     "predatory", "vanity press", "research gate preprint",
+    "clinicaltrials.gov", "isrctn", "anzctr", "drks", "euctr",
+)
+
+_REGISTRY_TITLE_SUFFIX_RE = re.compile(
+    r"\[\s*(clinical\s+trial\s+registr\w*|trial\s+registr\w*|registry\s+record)\s*\]",
+    re.IGNORECASE,
 )
 
 # Recency window per domain. Older work is fine for foundational topics
@@ -127,8 +133,16 @@ def _quality_filter(records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         title = (r.get("title") or "").strip()
         if not title or len(title) < 6:
             continue
+        # Drop clinical-trial registry entries — they are registrations, not
+        # published evidence. Identified by title bracket tag or venue name.
+        if _REGISTRY_TITLE_SUFFIX_RE.search(title):
+            continue
         venue = (r.get("journal") or "").lower()
         if any(t in venue for t in _BAD_VENUE_TOKENS):
+            continue
+        authors = r.get("authors") or []
+        if (len(authors) == 1
+                and str(authors[0]).strip().lower() in ("unknown sponsor", "unknown")):
             continue
         # Records with no abstract are de-prioritised but kept (some
         # high-quality refs from Crossref legitimately lack abstracts).
