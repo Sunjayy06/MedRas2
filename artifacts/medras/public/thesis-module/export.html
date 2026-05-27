@@ -235,47 +235,56 @@
       Subsequent downloads are instant.
     </p>
     <div id="th-checklist-gate-warn" style="display:none;background:#fff8e1;border:1px solid var(--th-gold);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:13px;gap:12px;align-items:flex-start"></div>
-    <div style="display:flex; flex-wrap:wrap; gap:10px">
-      <button id="th-dl-zip"  class="th-btn th-btn-primary">⬇ Download All (.zip — Word + PDF)</button>
-      <button id="th-dl-docx" class="th-btn th-btn-ghost">⬇ Word only (.docx)</button>
-      <button id="th-dl-pdf"  class="th-btn th-btn-ghost">⬇ PDF only</button>
-      <button id="th-dl-plag" class="th-btn th-btn-light">Send to Plagiarism Checker →</button>
+    <!-- Download button group -->
+    <div class="th-dl-group">
+      <span class="th-dl-group-label">Choose format</span>
+      <button id="th-dl-zip"  class="th-btn th-btn-primary">⬇ All formats (.zip)</button>
+      <button id="th-dl-docx" class="th-btn th-btn-ghost">⬇ Word (.docx)</button>
+      <button id="th-dl-pdf"  class="th-btn th-btn-ghost">⬇ PDF</button>
+      <button id="th-dl-plag" class="th-btn th-btn-light" style="margin-left:auto">Send to Plagiarism Checker →</button>
     </div>
-    <div id="th-dl-status" class="th-status info" style="display:none"></div>
+    <div id="th-dl-status" class="th-status info" style="display:none;margin-top:10px"></div>
 
-    <div style="margin-top:18px; padding-top:16px; border-top:1px solid var(--th-line);">
-      <p style="font-size:12px; color:var(--th-text-soft); margin:0 0 10px;">
-        <strong>Want to reformat citations, renumber tables, or apply supervisor feedback?</strong>
-        Open your draft in Folio — MedRAS's document polish tool.
-      </p>
-      <button id="th-open-folio" class="th-btn th-btn-light" style="border-color:#7c3aed; color:#7c3aed;">
-        Open draft in Folio for final polish →
-      </button>
-      <div id="th-folio-status" style="font-size:12px; color:var(--th-text-soft); margin-top:6px; display:none;"></div>
-    </div>
+    <!-- After-export next steps -->
+    <p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;
+       color:var(--th-text-soft);margin:20px 0 10px">After export</p>
+    <div class="th-next-grid">
+      <div class="th-next-card">
+        <div class="th-next-card-icon" style="background:rgba(124,58,237,.10);color:#7c3aed">✦</div>
+        <div class="th-next-card-body">
+          <div class="th-next-card-title">Polish in Folio</div>
+          <div class="th-next-card-desc">Reformat citations, renumber tables, apply supervisor feedback in MedRAS's document editor.</div>
+          <button id="th-open-folio" class="th-btn th-btn-sm th-btn-light" style="border-color:#7c3aed;color:#7c3aed;margin-top:8px">
+            Open in Folio →
+          </button>
+          <div id="th-folio-status" style="font-size:12px;color:var(--th-text-soft);margin-top:6px;display:none"></div>
+        </div>
+      </div>
 
-    <div style="margin-top:14px; padding-top:14px; border-top:1px solid var(--th-line);">
-      <p style="font-size:12px; color:var(--th-text-soft); margin:0 0 10px;">
-        <strong>Ready to check for plagiarism and AI content?</strong>
-        Send your full thesis text to Novus — MedRAS's originality and AI-reduction engine.
-      </p>
-      <button id="th-open-novus" class="th-btn th-btn-light" style="border-color:#0e7490; color:#0e7490;">
-        Check with Novus →
-      </button>
-      <div id="th-novus-status" style="font-size:12px; color:var(--th-text-soft); margin-top:6px; display:none;"></div>
-    </div>
+      <div class="th-next-card">
+        <div class="th-next-card-icon" style="background:rgba(217,119,6,.10);color:#b45309">⊙</div>
+        <div class="th-next-card-body">
+          <div class="th-next-card-title">Check originality</div>
+          <div class="th-next-card-desc">Send to Novus for plagiarism scoring, AI-likelihood detection, and rewrite pipeline.</div>
+          <button id="th-open-novus" class="th-btn th-btn-sm th-btn-light" style="border-color:#0e7490;color:#0e7490;margin-top:8px">
+            Open in Novus →
+          </button>
+          <div id="th-novus-status" style="font-size:12px;color:var(--th-text-soft);margin-top:6px;display:none"></div>
+        </div>
+      </div>
 
-    <div style="margin-top:14px; padding-top:14px; border-top:1px solid var(--th-line);">
-      <p style="font-size:12px; color:var(--th-text-soft); margin:0 0 10px;">
-        <strong>Ready to publish?</strong>
-        Convert your thesis to a journal article — AI condenses Introduction, Methods and Discussion
-        to article length while preserving your Results exactly as written.
-      </p>
-      <a id="th-convert-btn" href="/thesis-module/convert.html"
-         class="th-btn th-btn-light" style="border-color:var(--th-gold); color:#7a5d00;">
-        Convert to article ✦
-      </a>
-      <div id="th-convert-hint" style="font-size:12px; color:var(--th-text-soft); margin-top:6px; display:none;"></div>
+      <div class="th-next-card" id="th-convert-card">
+        <div class="th-next-card-icon" style="background:rgba(245,180,49,.12);color:#7a5d00">✦</div>
+        <div class="th-next-card-body">
+          <div class="th-next-card-title">Convert to article</div>
+          <div class="th-next-card-desc">AI condenses Introduction, Methods &amp; Discussion to journal length — Results preserved exactly.</div>
+          <a id="th-convert-btn" href="/thesis-module/convert.html"
+             class="th-btn th-btn-sm th-btn-light" style="border-color:var(--th-gold);color:#7a5d00;margin-top:8px">
+            Convert to article ✦
+          </a>
+          <div id="th-convert-hint" style="font-size:12px;color:var(--th-text-soft);margin-top:6px;display:none"></div>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -705,6 +714,8 @@
           'Confirm the metadata and author contribution fields. Your manuscript ' +
           'exports in DOCX and PDF with title page, all sections, references, ' +
           'CRediT statement, data availability, and competing interests.';
+        var convertCard = document.getElementById('th-convert-card');
+        if (convertCard) convertCard.style.display = 'none';
         if (consentTitle) consentTitle.textContent = 'Ethics / participant consent';
         if (consentSub)   consentSub.textContent =
           'If your study recruited human participants, generate and attach the ' +

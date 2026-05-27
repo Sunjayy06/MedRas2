@@ -691,6 +691,41 @@ textarea.th-input { resize: vertical; line-height: 1.55; min-height: 68px; }
 .th-gate { gap: 12px; }
 .th-gate.is-clear .th-btn-primary { min-width: 140px; }
 
+/* ─── Export: "After export" next-steps grid ────────────────────────────── */
+.th-next-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin-top: 4px;
+}
+.th-next-card {
+  display: flex; gap: 12px; padding: 14px 16px;
+  border: 1px solid var(--th-line); border-radius: 10px;
+  background: var(--th-paper); align-items: flex-start;
+  transition: border-color .15s, box-shadow .15s;
+}
+.th-next-card:hover { border-color: var(--th-text-soft); box-shadow: 0 2px 8px rgba(7,20,16,.07); }
+.th-next-card-icon {
+  width: 36px; height: 36px; border-radius: 9px;
+  display: grid; place-items: center;
+  font-size: 17px; flex-shrink: 0;
+}
+.th-next-card-body { flex: 1; min-width: 0; }
+.th-next-card-title { font-weight: 700; font-size: 14px; color: var(--th-ink-900); margin-bottom: 4px; }
+.th-next-card-desc  { font-size: 12.5px; color: var(--th-text-soft); line-height: 1.45; }
+
+/* ─── Export: download button group ─────────────────────────────────────── */
+.th-dl-group {
+  display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+  padding: 14px 16px; background: var(--th-paper);
+  border: 1px solid var(--th-line); border-radius: 10px;
+}
+.th-dl-group-label {
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .06em; color: var(--th-text-soft);
+  flex-basis: 100%; margin-bottom: -4px;
+}
+
 /* ─── Import-modal: sigma pre-fill notice ───────────────────────────────── */
 #th-sigma-notice {
   background: rgba(16,185,129,.07); border: 1px solid rgba(16,185,129,.25);

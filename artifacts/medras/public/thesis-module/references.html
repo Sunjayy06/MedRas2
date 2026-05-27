@@ -172,6 +172,21 @@
         ⟳ Fix citation order
       </button>
     </div>
+    <!-- Chapter filter bar -->
+    <div id="th-filter-bar" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px;align-items:center">
+      <span style="font-size:11.5px;color:var(--th-text-soft);margin-right:2px;flex-shrink:0">Filter by chapter:</span>
+      <button class="th-ref-filter-btn is-active" data-filter="">All</button>
+      <button class="th-ref-filter-btn" data-filter="intro"   data-color="#2563eb">Intro</button>
+      <button class="th-ref-filter-btn" data-filter="aims"    data-color="#7c3aed">Aims</button>
+      <button class="th-ref-filter-btn" data-filter="litrev"  data-color="#0891b2">Lit Rev</button>
+      <button class="th-ref-filter-btn" data-filter="methods" data-color="#059669">Methods</button>
+      <button class="th-ref-filter-btn" data-filter="results" data-color="#d97706">Results</button>
+      <button class="th-ref-filter-btn" data-filter="discuss" data-color="#92400e">Discuss</button>
+      <button class="th-ref-filter-btn" data-filter="summary" data-color="#64748b">Summary</button>
+      <button class="th-ref-filter-btn" data-filter="conclude" data-color="#475569">Concl.</button>
+      <button class="th-ref-filter-btn" data-filter="recomm"  data-color="#374151">Recomm.</button>
+      <span id="th-filter-note" style="font-size:11.5px;color:var(--th-text-soft);margin-left:6px"></span>
+    </div>
     <!-- Duplicate-review panel — hidden until scan runs -->
     <div id="th-dedup-panel" style="display:none;margin-bottom:12px;border:1px solid var(--th-amber,#f59e0b);border-radius:8px;overflow:hidden">
       <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(245,158,11,.06);border-bottom:1px solid rgba(245,158,11,.2)">
@@ -204,6 +219,9 @@
 .th-ref-sec-chip:hover{border-color:var(--th-emerald);color:var(--th-emerald-d)}
 .th-ref-sec-chip.is-on{background:var(--th-emerald-d,#047857);color:#fff;border-color:var(--th-emerald-d,#047857)}
 .th-cite-fmt-btn.is-active{background:var(--th-emerald-d,#047857);color:#fff;border-color:var(--th-emerald-d,#047857)}
+.th-ref-filter-btn{font-size:11px;font-weight:600;padding:3px 11px;border-radius:999px;border:1.5px solid var(--th-line);background:var(--th-paper-2);color:var(--th-text-soft);cursor:pointer;transition:background .12s,color .12s,border-color .12s;letter-spacing:.03em;white-space:nowrap}
+.th-ref-filter-btn:hover{border-color:var(--th-emerald);color:var(--th-emerald-d)}
+.th-ref-filter-btn.is-active{background:var(--th-emerald-d,#047857);color:#fff;border-color:var(--th-emerald-d,#047857)}
 </style>
 <script src="/thesis-module/js/thesis-state.js"></script>
 <script src="/thesis-module/js/writing-modes.js"></script>
@@ -476,18 +494,89 @@
     });
   });
 
+  // ── Chapter filter ────────────────────────────────────────────────────
+  let _activeFilter = '';   // '' = show all; any SECTIONS id = filtered
+
+  // Sync filter-bar button counts and active style after any state change
+  function _syncFilterBar() {
+    const refs = ThesisState.get().references || [];
+    document.querySelectorAll('.th-ref-filter-btn').forEach((btn) => {
+      const f = btn.dataset.filter;
+      const col = btn.dataset.color || '';
+      if (f === '') {
+        // "All" button — show total count
+        btn.textContent = `All (${refs.length})`;
+        btn.classList.toggle('is-active', _activeFilter === '');
+        btn.style.background    = _activeFilter === '' ? '' : '';
+        btn.style.borderColor   = '';
+        btn.style.color         = '';
+      } else {
+        const n = refs.filter(r => (r.section_tags || []).includes(f)).length;
+        const sec = SECTIONS.find(s => s.id === f);
+        btn.textContent = `${sec ? sec.label : f} (${n})`;
+        const isOn = _activeFilter === f;
+        btn.classList.toggle('is-active', isOn);
+        // When active, use the chapter's own colour; otherwise the emerald default handles it
+        if (isOn && col) {
+          btn.style.background  = col;
+          btn.style.borderColor = col;
+          btn.style.color       = '#fff';
+        } else {
+          btn.style.background  = '';
+          btn.style.borderColor = '';
+          btn.style.color       = '';
+        }
+      }
+    });
+  }
+
+  // Wire chapter-filter clicks (once, on the static bar element)
+  document.getElementById('th-filter-bar').addEventListener('click', (e) => {
+    const btn = e.target.closest('.th-ref-filter-btn');
+    if (!btn) return;
+    _activeFilter = btn.dataset.filter;
+    _syncFilterBar();
+    renderLib();
+  });
+
   // ── Library renderer ──────────────────────────────────────────────────
   function renderLib() {
     const s = ThesisState.get();
     const list = document.getElementById('th-lib-list');
-    document.getElementById('th-lib-count').textContent =
-      `(${(s.references || []).length} references)`;
-    if (!s.references || !s.references.length) {
+    const all  = s.references || [];
+
+    // Apply chapter filter
+    const visible = _activeFilter
+      ? all.filter(r => (r.section_tags || []).includes(_activeFilter))
+      : all;
+
+    // Update count label
+    document.getElementById('th-lib-count').textContent = _activeFilter
+      ? `(showing ${visible.length} of ${all.length} references)`
+      : `(${all.length} references)`;
+
+    // Filter note
+    const note = document.getElementById('th-filter-note');
+    if (_activeFilter && visible.length === 0) {
+      const sec = SECTIONS.find(s => s.id === _activeFilter);
+      note.textContent = `No references tagged for ${sec ? sec.label : _activeFilter} yet — tag them using the chips on each row.`;
+    } else {
+      note.textContent = '';
+    }
+
+    _syncFilterBar();
+
+    if (!visible.length && !all.length) {
       list.innerHTML = '<div class="th-empty">No references yet. Add some above.</div>';
       refreshMinRefNote();
       return;
     }
-    list.innerHTML = s.references.map(refRowHtml).join('');
+    if (!visible.length) {
+      list.innerHTML = '';
+      refreshMinRefNote();
+      return;
+    }
+    list.innerHTML = visible.map(refRowHtml).join('');
 
     // Remove buttons
     list.querySelectorAll('button[data-act=remove]').forEach((btn) => {
@@ -557,6 +646,8 @@
     chip.style.background  = nowOn && secObj ? secObj.color : '';
     chip.style.borderColor = nowOn && secObj ? secObj.color : '';
     chip.style.color       = nowOn ? '#fff' : '';
+    // Keep filter-bar counts in sync without a full re-render
+    _syncFilterBar();
   });
 
   // ---------- DOI add ----------
