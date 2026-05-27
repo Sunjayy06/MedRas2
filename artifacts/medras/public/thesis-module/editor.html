@@ -1379,7 +1379,7 @@
     }
   });
 
-  document.getElementById('th-save').addEventListener('click', () => {
+  function doSave() {
     if (mode === 'write') {
       const canvas = document.getElementById('th-editor-canvas');
       ThesisState.setChapter(chapterId, { text: canvas.innerText, html: canvas.innerHTML });
@@ -1387,6 +1387,15 @@
       renderSideChapters();
     } else {
       ThesisState.toast('Saved automatically as you accept / reject.');
+    }
+  }
+
+  document.getElementById('th-save').addEventListener('click', doSave);
+
+  document.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+      e.preventDefault();
+      doSave();
     }
   });
 
