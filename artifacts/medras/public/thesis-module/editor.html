@@ -1161,13 +1161,15 @@
   // real [1], [2] numbers in the pending draft preview.
   function _previewCiteText(draftText, sources) {
     if (!draftText) return '';
+    // No source map — replace every CITE_n token with ? (keep brackets)
     if (!sources || !sources.length) {
-      return draftText.replace(/\[CITE_\d+\]/g, '[?]');
+      return draftText.replace(/CITE_\d+/g, '?');
     }
     const existingRefs = ThesisState.get().references || [];
     const preview = existingRefs.slice();
     const map = Object.create(null);
-    const re = /\[CITE_(\d+)\]/g;
+    // Scan ALL CITE_n tokens, including those inside compound [CITE_2, CITE_3]
+    const re = /CITE_(\d+)/g;
     let m;
     while ((m = re.exec(draftText)) !== null) {
       const n = m[1];
@@ -1183,8 +1185,10 @@
       if (pos === -1) { preview.push(src); pos = preview.length - 1; }
       map[n] = pos + 1;
     }
-    return draftText.replace(/\[CITE_(\d+)\]/g, (_, n) =>
-      map[n] != null ? '[' + map[n] + ']' : '[?]'
+    // Replace each bare CITE_n token — brackets stay in place, so
+    // [CITE_2, CITE_3] → [2, 3] and [CITE_1] → [1] both work correctly.
+    return draftText.replace(/CITE_(\d+)/g, (_, n) =>
+      map[n] != null ? String(map[n]) : '?'
     );
   }
 
@@ -1195,15 +1199,19 @@
   function _resolveDraftCitations(draftText, sources) {
     if (!draftText) return '';
     if (!sources || !sources.length) {
-      // No source map — strip [CITE_n] to avoid polluting accepted text
-      return draftText.replace(/\[CITE_\d+\]/g, '');
+      // No source map — strip every CITE_n token; also clean up any empty
+      // brackets that result (e.g. [, ] or [] after removing compound cites).
+      return draftText
+        .replace(/CITE_\d+/g, '')
+        .replace(/\[\s*(?:,\s*)*\]/g, '');
     }
     const s = ThesisState.get();
     const existingRefs = s.references || [];
     const newRefs = existingRefs.slice(); // copy so we can append
     const citeMap = Object.create(null); // 'n' → 1-based library position
 
-    const re = /\[CITE_(\d+)\]/g;
+    // Scan ALL CITE_n tokens including inside compound [CITE_2, CITE_3]
+    const re = /CITE_(\d+)/g;
     let m;
     while ((m = re.exec(draftText)) !== null) {
       const n = m[1];
@@ -1243,11 +1251,16 @@
       ThesisState.patch({ references: newRefs });
     }
 
-    // Replace [CITE_n] with [refNum]; strip any that couldn't be mapped
-    return draftText.replace(/\[CITE_(\d+)\]/g, (match, n) => {
-      const refNum = citeMap[n];
-      return refNum != null ? '[' + refNum + ']' : '';
-    });
+    // Replace each bare CITE_n token with its mapped number — brackets stay
+    // in place, so [CITE_2, CITE_3] → [2, 3] and [CITE_1] → [1].
+    // Unmapped tokens (no source) become empty string; then clean up any
+    // orphaned bracket artifacts like [, ] or [].
+    return draftText
+      .replace(/CITE_(\d+)/g, (_, n) => {
+        const refNum = citeMap[n];
+        return refNum != null ? String(refNum) : '';
+      })
+      .replace(/\[\s*(?:,\s*)*\]/g, '');
   }
 
   // ---------- helper actions ----------
