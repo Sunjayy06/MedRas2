@@ -57,6 +57,29 @@
       title="Dismiss">✕</button>
   </div>
 
+  <!-- Auto-detected Proposal banner — shown on load if proposal sources exist -->
+  <div id="th-proposal-banner" style="display:none;
+    background:linear-gradient(135deg,#eff6ff 0%,#dbeafe 100%);
+    border:1.5px solid #2563eb;
+    border-radius:10px; padding:14px 18px;
+    align-items:center; gap:14px; margin-bottom:20px; flex-wrap:wrap">
+    <div style="font-size:22px; flex-shrink:0">📄</div>
+    <div style="flex:1; min-width:200px">
+      <div style="font-weight:700; font-size:14.5px; color:#1e3a8a">
+        References ready from your Proposal
+      </div>
+      <div id="th-proposal-banner-sub" style="font-size:13px; color:#1d4ed8; margin-top:2px"></div>
+    </div>
+    <button id="th-proposal-banner-btn" class="th-btn th-btn-primary"
+      style="flex-shrink:0; background:#2563eb; border-color:#2563eb">
+      Import all →
+    </button>
+    <button id="th-proposal-banner-skip" style="
+      background:none; border:none; cursor:pointer; font-size:18px;
+      color:#6b7280; padding:0 4px; line-height:1; flex-shrink:0"
+      title="Dismiss">✕</button>
+  </div>
+
   <div class="th-grid cols-2">
     <!-- Add by DOI -->
     <div class="th-card">
@@ -680,6 +703,46 @@
     const banner = document.getElementById('th-helix-banner');
     const sub    = document.getElementById('th-helix-banner-sub');
     sub.textContent = `${fresh.length} paper${fresh.length > 1 ? 's' : ''} pinned in Helix — click to add them all. Duplicates are skipped automatically.`;
+    banner.style.display = 'flex';
+  })();
+
+  // ---------- Proposal sources banner ----------
+  function _proposalNewRefs() {
+    let generated = null;
+    try {
+      const raw = sessionStorage.getItem('medras.proposal.generated')
+                || localStorage.getItem('medras.proposal.generated');
+      generated = raw ? JSON.parse(raw) : null;
+    } catch (_) {}
+    const sources = (generated && Array.isArray(generated.sources)) ? generated.sources : [];
+    if (!sources.length) return [];
+    const existing = new Set((ThesisState.get().references || []).map((r) => (r.doi || '').toLowerCase()));
+    return sources.filter((s) => !(s.doi && existing.has((s.doi || '').toLowerCase())));
+  }
+
+  function _doProposalImport() {
+    const fresh = _proposalNewRefs();
+    if (!fresh.length) {
+      ThesisState.toast('All proposal references are already in your library.');
+      return;
+    }
+    ThesisState.addReferences(fresh);
+    document.getElementById('th-proposal-banner').style.display = 'none';
+    renderLib();
+    ThesisState.toast(`✓ Imported ${fresh.length} reference${fresh.length > 1 ? 's' : ''} from your proposal.`);
+  }
+
+  document.getElementById('th-proposal-banner-btn').addEventListener('click', _doProposalImport);
+  document.getElementById('th-proposal-banner-skip').addEventListener('click', () => {
+    document.getElementById('th-proposal-banner').style.display = 'none';
+  });
+
+  (function checkProposalOnLoad() {
+    const fresh = _proposalNewRefs();
+    if (!fresh.length) return;
+    const banner = document.getElementById('th-proposal-banner');
+    const sub    = document.getElementById('th-proposal-banner-sub');
+    sub.textContent = `${fresh.length} source${fresh.length > 1 ? 's' : ''} from your Prologue proposal — click to add them all. Duplicates are skipped automatically.`;
     banner.style.display = 'flex';
   })();
 
