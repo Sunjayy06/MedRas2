@@ -371,6 +371,8 @@
       });
       listEl.appendChild(card);
     });
+    // Keep gap-detector in sync whenever cited refs change
+    renderSecAssignPanel();
   }
 
   function _renumberChapters(s, removedNum, totalBefore) {
@@ -711,30 +713,83 @@
     if (!panel) return;
     const secId = CH_TO_SEC[chapterId] || CH_TO_SEC[(chapterId || '').split('_').slice(0,2).join('_')];
     if (!secId) { panel.textContent = 'No section mapping for this chapter.'; return; }
-    const s    = ThesisState.get();
-    const refs = (s.references || []).filter((r) => (r.section_tags || []).includes(secId));
+    const s       = ThesisState.get();
+    const allRefs = s.references || [];
+    const refs    = allRefs.filter((r) => (r.section_tags || []).includes(secId));
     if (!refs.length) {
       panel.innerHTML = '<span style="color:var(--th-text-soft)">No references tagged for <em>' +
-        (SEC_LABELS[secId] || secId) + '</em> yet. Tag them on the <a href="/thesis-module/references.html">References page</a>.</span>';
+        (SEC_LABELS[secId] || secId) + '</em> yet. Tag them on the ' +
+        '<a href="/thesis-module/references.html">References page</a>.</span>';
       return;
     }
-    panel.innerHTML = '<div style="color:var(--th-emerald-d);font-weight:600;margin-bottom:4px">' + refs.length +
+
+    // --- Gap detection: which tagged refs appear in chapter text? ---
+    const chText    = ThesisState.getChapter(chapterId).text || '';
+    const citedNums = new Set();
+    const citeRe    = /\[CITE_(\d+)\]/g;
+    let cM;
+    while ((cM = citeRe.exec(chText)) !== null) citedNums.add(parseInt(cM[1], 10));
+
+    const refsWithNums = refs.map((r) => ({ r, num: allRefs.indexOf(r) + 1 }));
+    const missing      = refsWithNums.filter(({ num }) => !citedNums.has(num));
+    const gap          = missing.length;
+
+    // Build ref-list rows (first 5) with per-ref cited/missing indicator
+    const rowsHtml = refsWithNums.slice(0, 5).map(({ r, num }) => {
+      const isMissing = !citedNums.has(num);
+      const auth = (r.authors || []).length
+        ? (r.authors[0].split(/[\s,]+/).filter(Boolean).reverse()[0] || '?') +
+          ((r.authors.length > 1) ? ' et al.' : '')
+        : '—';
+      const numColor = isMissing ? 'var(--th-amber,#f59e0b)' : 'var(--th-emerald-d)';
+      const action   = isMissing
+        ? '<button class="th-btn th-btn-light th-btn-sm" data-quick-cite="' + num +
+          '" style="font-size:10.5px;padding:1px 6px;flex-shrink:0" title="Insert [CITE_' + num + '] at cursor">→ Cite</button>'
+        : '<span style="font-size:11px;color:var(--th-emerald-d)" title="Already cited in this chapter">✓</span>';
+      return '<div style="padding:3px 0;border-bottom:1px solid var(--th-line);font-size:11.5px;display:flex;align-items:center;gap:4px">' +
+        '<span style="color:' + numColor + ';font-weight:700;flex-shrink:0">[' + num + ']</span>' +
+        '<div style="flex:1;min-width:0;overflow:hidden">' +
+        '<div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' +
+        esc((r.title || 'Untitled').slice(0, 48)) + ((r.title || '').length > 48 ? '…' : '') + '</div>' +
+        '<div style="color:var(--th-text-soft);font-size:11px">' + esc(auth) + ' · ' + esc(String(r.year || 'n.d.')) + '</div>' +
+        '</div>' + action + '</div>';
+    }).join('');
+
+    // Gap summary badge
+    const gapBadge = gap === 0
+      ? '<div style="margin-top:6px;padding:5px 8px;border-radius:6px;font-size:11.5px;' +
+        'background:rgba(16,185,129,.08);color:var(--th-emerald-d)">✓ All ' + refs.length +
+        ' section ref' + (refs.length > 1 ? 's' : '') + ' cited in this chapter</div>'
+      : '<div style="margin-top:6px;padding:5px 8px;border-radius:6px;font-size:11.5px;' +
+        'background:rgba(245,158,11,.07);border:1px solid rgba(245,158,11,.28);color:#92400e">' +
+        '⚠ ' + gap + ' of ' + refs.length + ' section ref' + (refs.length > 1 ? 's' : '') + ' not yet cited' +
+        (missing.length <= 3
+          ? ': ' + missing.map(({ r }) => {
+              const a = (r.authors || []).length
+                ? (r.authors[0].split(/[\s,]+/).filter(Boolean).reverse()[0] || '?') +
+                  ((r.authors.length > 1) ? ' et al.' : '') : 'Unknown';
+              return esc(a) + (r.year ? ' (' + r.year + ')' : '');
+            }).join('; ')
+          : ' — see list above') +
+        '</div>';
+
+    panel.innerHTML =
+      '<div style="color:var(--th-emerald-d);font-weight:600;margin-bottom:4px">' + refs.length +
       ' ref' + (refs.length > 1 ? 's' : '') + ' tagged for <em>' + (SEC_LABELS[secId] || secId) + '</em></div>' +
-      refs.slice(0, 5).map((r) => {
-        const auth = (r.authors || []).length
-          ? (r.authors[0].split(/[\s,]+/).filter(Boolean).reverse()[0] || '?') + ((r.authors.length > 1) ? ' et al.' : '')
-          : '—';
-        return '<div style="padding:3px 0;border-bottom:1px solid var(--th-line);font-size:11.5px">' +
-          '<span style="color:var(--th-emerald-d);font-weight:700;margin-right:4px">[' + (((s.references||[]).indexOf(r))+1) + ']</span>' +
-          esc((r.title || '').slice(0,55)) + (r.title && r.title.length > 55 ? '…' : '') + '<br>' +
-          '<span style="color:var(--th-text-soft)">' + esc(auth) + ' · ' + esc(String(r.year||'n.d.')) + '</span></div>';
-      }).join('') +
-      (refs.length > 5 ? '<div style="font-size:11px;color:var(--th-text-soft);margin-top:4px">+ ' + (refs.length-5) + ' more</div>' : '') +
+      rowsHtml +
+      (refs.length > 5 ? '<div style="font-size:11px;color:var(--th-text-soft);margin-top:3px">+ ' + (refs.length - 5) + ' more</div>' : '') +
+      gapBadge +
       '<button id="th-cite-all-sec" class="th-btn th-btn-primary th-btn-sm" ' +
       'style="margin-top:8px;width:100%;font-size:12px;text-align:center">⌦ Cite all ' + refs.length +
       ' ref' + (refs.length > 1 ? 's' : '') + ' at cursor</button>';
+
     const citeAllBtn = document.getElementById('th-cite-all-sec');
     if (citeAllBtn) citeAllBtn.addEventListener('click', citeAllSectionRefs);
+
+    // Wire per-row quick-cite buttons
+    panel.querySelectorAll('button[data-quick-cite]').forEach((btn) => {
+      btn.addEventListener('click', () => insertCitation(parseInt(btn.dataset.quickCite, 10)));
+    });
   }
 
   function citeAllSectionRefs() {
