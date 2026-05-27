@@ -171,7 +171,8 @@
   let chapter = null;
   let mode = 'write'; // 'write' | 'review'
   let suggestions = [];
-  let pendingDraft = null;   // {text, sources_count} — staged AI draft awaiting researcher's ✓
+  let pendingDraft = null;        // staged AI draft text (with [CITE_n] placeholders)
+  let pendingDraftSources = [];   // sources array from last /draft-section call
   let pendingDraftMeta = null;
   const esc = TrackChanges.escapeHtml;
 
@@ -962,13 +963,15 @@
           btn.addEventListener('click', (ev) => {
             ev.preventDefault();
             if (btn.dataset.pendingAct === 'accept') {
-              const next = baseText ? baseText + '\n\n' + pendingDraft : pendingDraft;
+              const resolved = _resolveDraftCitations(pendingDraft, pendingDraftSources);
+              const next = baseText ? baseText + '\n\n' + resolved : resolved;
               ThesisState.setChapter(chapterId, { text: next, html: null });
-              ThesisState.toast('Draft accepted into your chapter.');
+              const newTotal = (ThesisState.get().references || []).length;
+              ThesisState.toast(`Draft accepted. Citations mapped to your reference library (${newTotal} refs).`);
             } else {
               ThesisState.toast('Draft discarded — your text was not changed.');
             }
-            pendingDraft = null; pendingDraftMeta = null;
+            pendingDraft = null; pendingDraftSources = []; pendingDraftMeta = null;
             mode = 'write';
             renderEditor(); renderSideChapters(); renderSuggestList(); renderChapterRefPanel();
           });
@@ -1149,6 +1152,68 @@
     });
   }
 
+  // ---------- citation resolution on draft acceptance ----------
+  // Maps [CITE_n] placeholders from an AI draft to real reference-library
+  // positions, adding any new sources to the library as needed.
+  // Returns the resolved text with [N] citation markers.
+  function _resolveDraftCitations(draftText, sources) {
+    if (!draftText) return '';
+    if (!sources || !sources.length) {
+      // No source map — strip [CITE_n] to avoid polluting accepted text
+      return draftText.replace(/\[CITE_\d+\]/g, '');
+    }
+    const s = ThesisState.get();
+    const existingRefs = s.references || [];
+    const newRefs = existingRefs.slice(); // copy so we can append
+    const citeMap = Object.create(null); // 'n' → 1-based library position
+
+    const re = /\[CITE_(\d+)\]/g;
+    let m;
+    while ((m = re.exec(draftText)) !== null) {
+      const n = m[1];
+      if (citeMap[n] !== undefined) continue;
+      const srcIdx = parseInt(n, 10) - 1;
+      const src = sources[srcIdx];
+      if (!src) { citeMap[n] = null; continue; }
+
+      // Try to find in existing library by DOI (preferred) or normalised title
+      const srcDoi  = (src.doi || '').toLowerCase().trim();
+      const srcTitle = (src.title || '').toLowerCase().trim();
+      let pos = newRefs.findIndex((r) =>
+        (srcDoi  && r.doi   && r.doi.toLowerCase().trim()   === srcDoi) ||
+        (srcTitle && r.title && r.title.toLowerCase().trim() === srcTitle)
+      );
+      if (pos === -1) {
+        // Add new source to the library
+        newRefs.push({
+          title:    src.title   || 'Unknown title',
+          authors:  Array.isArray(src.authors) ? src.authors
+                    : (src.authors ? [String(src.authors)] : []),
+          year:     src.year    || null,
+          journal:  src.journal || src.source || null,
+          doi:      src.doi     || null,
+          url:      src.doi     ? 'https://doi.org/' + src.doi : null,
+          verified: !!(src.doi),
+          source:   'AI-draft',
+          abstract: src.abstract ? String(src.abstract).slice(0, 500) : null,
+        });
+        pos = newRefs.length - 1;
+      }
+      citeMap[n] = pos + 1; // 1-based for Vancouver style
+    }
+
+    // Persist any newly added references
+    if (newRefs.length > existingRefs.length) {
+      ThesisState.patch({ references: newRefs });
+    }
+
+    // Replace [CITE_n] with [refNum]; strip any that couldn't be mapped
+    return draftText.replace(/\[CITE_(\d+)\]/g, (match, n) => {
+      const refNum = citeMap[n];
+      return refNum != null ? '[' + refNum + ']' : '';
+    });
+  }
+
   // ---------- helper actions ----------
   async function handleHelper(act) {
     const s = ThesisState.get();
@@ -1263,19 +1328,26 @@
 
       status.innerHTML = '<span class="th-loading"></span> Drafting from RAG-grounded evidence…';
       try {
+        // Include ALL references (verified + imported) so Helix/proposal refs ground the draft.
+        // The backend deduplicates and prepends session-library refs before RAG results.
+        const allRefs = (s.references || []).filter((r) => !r.retracted);
+        const wordBudget = chapter.word_budget;   // [min, max] or undefined
+        const wordLimit  = wordBudget ? wordBudget[1] : undefined;
         const res = await ThesisState.api('/draft-section', {
           chapter_id: chapterId,
           topic, citation_style: cite,
           locked_numbers: s.locked_numbers || {},
           domain_hint: setup.domain || undefined,
           extra_context: extraContext,
-          ref_library: (() => { const v = (s.references || []).filter((r) => r.verified); return v.length >= 3 ? v : undefined; })(),
+          ref_library: allRefs.length >= 1 ? allRefs : undefined,
+          word_limit: wordLimit,
           ...styleParams,
         });
         // Researcher-in-control: NEVER auto-insert. Stage the draft and
         // require an explicit ✓ in Review mode.
         pendingDraft = res.text;
-        pendingDraftMeta = { sources_count: (res.sources || []).length };
+        pendingDraftSources = res.sources || [];
+        pendingDraftMeta = { sources_count: pendingDraftSources.length };
         suggestions = [];
         mode = 'review';
         renderEditor(); renderSuggestList();

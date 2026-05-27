@@ -245,6 +245,8 @@ async def draft_section(request: Request, payload: Dict[str, Any]) -> Dict[str, 
     else:
         ref_library = None
     try:
+        word_limit_raw = payload.get("word_limit")
+        word_limit = int(word_limit_raw) if word_limit_raw and str(word_limit_raw).isdigit() else None
         result = await thesis_section_writer.draft_section(
             chapter_id=payload.get("chapter_id") or "",
             topic=payload.get("topic") or "",
@@ -256,6 +258,7 @@ async def draft_section(request: Request, payload: Dict[str, Any]) -> Dict[str, 
             style_choice=payload.get("style_choice") or "indian_formal",
             style_sample=payload.get("style_sample"),
             ref_library=ref_library,
+            word_limit=word_limit,
         )
     except GeneratorError as exc:
         raise HTTPException(status_code=400, detail=str(exc))

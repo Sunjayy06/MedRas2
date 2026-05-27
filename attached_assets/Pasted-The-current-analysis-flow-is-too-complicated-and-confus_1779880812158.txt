@@ -1,0 +1,141 @@
+The current analysis flow is too 
+complicated and confusing users.
+Rebuild it as a simple 7 step flow.
+Read everything before writing code.
+Do not touch plagiarism, proposal 
+writer, or study builder modules.
+Only fix the statistical analysis 
+engine flow.
+
+STEP 1 — START
+Show two options only.
+Option A: Upload your research proposal
+Accepts Word or PDF file.
+System reads it automatically and 
+extracts the study objective.
+
+Option B: Describe your study
+One single open text box.
+User types what they want to study.
+No other questions on this screen.
+
+Nothing else on this screen.
+No dropdowns. No multiple questions.
+Just these two options.
+
+STEP 2 — UPLOAD EXCEL
+Show a clean upload box.
+User drags and drops their Excel file.
+System reads every column automatically.
+No manual variable assignment yet.
+System silently cleans the data:
+Standardise yes and no variations
+Extract numbers from text columns
+Identify and mark ID columns
+Show a simple summary of what 
+was cleaned.
+
+STEP 3 — DATA REVIEW WITH AI CHAT
+Show the cleaned data preview.
+Show a simple table of variables 
+and their detected types.
+Show a chat box on the side.
+The chat box is open for the user 
+to ask for any changes like:
+Recode this variable
+Delete duplicate rows
+Merge these two columns
+Change this variable type
+The user confirms when happy 
+with the data.
+
+STEP 4 — ANALYSIS PLAN PREVIEW
+AI reads the proposal or objective 
+from Step 1 and the Excel columns 
+from Step 2 together.
+AI identifies the outcome variable.
+AI identifies the predictor variables.
+AI decides which tests to run.
+AI decides which graphs to show.
+Normality is checked silently here.
+Do not show normality as a separate 
+step to the user.
+Show the user a simple clean preview:
+
+Study type: [detected type]
+Outcome variable: [column name]
+Tests that will run: [simple list]
+Graphs that will show: [simple list]
+
+Show an open chat box below this.
+User can type any correction like:
+Change the outcome variable to X
+Remove this test
+Add survival analysis
+The system updates the plan and 
+shows the updated preview.
+
+When user is happy they click 
+Run analysis.
+
+If AI is not available the system 
+uses rule based logic to decide 
+tests based on variable types.
+Never show AI service unavailable 
+to the user.
+Always fall back to rule based 
+silently with no error message.
+
+STEP 5 — RUN ANALYSIS
+Show a simple progress screen.
+Show which test is running right now.
+No user input needed here.
+Python runs all tests automatically.
+
+STEP 6 — RESULTS PREVIEW
+Show all results clearly.
+Show graphs with correct types.
+Show a chat box on the side.
+User can ask questions like:
+What does this p value mean
+Change this graph to a pie chart
+Add one more test
+The system makes changes and 
+updates the results.
+
+STEP 7 — DOWNLOAD
+Show three download buttons.
+Word document
+PDF document
+Excel with cleaned data
+User downloads and is done.
+
+IMPORTANT RULES:
+Never show normality as a separate 
+step. Handle it inside the engine 
+silently.
+Never show AI service unavailable 
+to the user. Always fall back to 
+rule based logic silently.
+Every step has a back button.
+Every step is simple enough that 
+a person with no statistics knowledge 
+can complete it without help.
+The chat box is available at steps 
+3, 4, and 6 only.
+The chat box uses OpenAI first then 
+Gemini then rule based fallback.
+
+After building test with srmc1.xlsx 
+and this objective:
+Studying ER expression in thyroid 
+cancer patients to see if ER 
+positivity relates to gender age 
+and tumour type.
+
+All 7 steps must complete without 
+any error shown to the user.
+The download must produce a correct 
+Word document.
+
+Checkpoint and stop when confirmed

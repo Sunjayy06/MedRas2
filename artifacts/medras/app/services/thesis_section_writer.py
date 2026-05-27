@@ -84,19 +84,28 @@ _CHAPTER_BRIEFS: Dict[str, str] = {
         "Write in third person past tense throughout. No [CITE_n] tags in abstract."
     ),
     "introduction": (
-        "Draft Chapter I — Introduction (1500–2200 words). Follow this EXACT paragraph sequence:\n"
-        "Para 1: Global burden of the study condition — epidemiology, WHO or global statistics [CITE_n].\n"
-        "Para 2: Pathophysiology and mechanisms — how the condition causes organ dysfunction or harm.\n"
-        "Para 3: Existing diagnostic/prognostic tools (e.g. SOFA, APACHE) and their limitations.\n"
-        "Para 4: The proposed marker or approach — what it is, why it is promising, its biological rationale.\n"
-        "Para 5–6: International evidence for the proposed marker — 2–3 key studies with [CITE_n].\n"
-        "Para 7: Indian/regional context — Indian burden, gaps in Indian data specifically.\n"
-        "Para 8 (final): Study aim — MUST end: 'The present study, conducted at [setting from context], "
-        "aims to evaluate...'\n\n"
-        "Write in third person passive ('The study was conducted', 'Patients were enrolled'). "
-        "Present perfect for established facts ('has been reported', 'has been demonstrated'). "
-        "Past tense for specific studies ('Cakir et al. [CITE_n] found that...'). "
-        "MEAL paragraph structure. Cite every non-trivial claim."
+        "Draft Chapter I — Introduction following this EXACT paragraph sequence:\n"
+        "Para 1 — Definition & incidence: Define the study condition precisely. Give global and Indian "
+        "incidence/prevalence with statistics [CITE_n]. One sentence on why this matters clinically.\n"
+        "Para 2 — Clinical relevance & patient impact: Effect on patient satisfaction, recovery, "
+        "functional outcomes, quality of life, and healthcare burden [CITE_n].\n"
+        "Para 3 — Pathophysiology: Biological mechanisms underlying the condition — cellular, "
+        "physiological, or pharmacological basis. Cite mechanistic studies [CITE_n].\n"
+        "Para 4 — Assessment tools & current preventive/therapeutic strategies: What grading scales "
+        "or diagnostic criteria exist; what interventions are currently used and their evidence base "
+        "and limitations [CITE_n].\n"
+        "Para 5 — Rationale for the proposed intervention(s): What the study agent(s)/approach is, "
+        "mechanism of action, why it may be beneficial for this condition [CITE_n].\n"
+        "Para 6–7 — Key international evidence: 3–5 randomised or comparative studies examining the "
+        "proposed intervention(s) — summarise each with key outcome numbers and [CITE_n].\n"
+        "Para 8 — Indian evidence gap: What Indian data exist; institutional or regional context; "
+        "why a local study is needed [CITE_n].\n"
+        "Para 9 (final) — Study aim: MUST end exactly: "
+        "'The present study, conducted at [setting from context], aims to evaluate...'\n\n"
+        "Write in third person. Present perfect for established facts. Past tense for specific studies "
+        "('Smith et al. [CITE_n] reported...'). MEAL paragraph structure mandatory. "
+        "Cite every non-trivial claim with [CITE_n]. "
+        "Each paragraph 150–250 words. Do NOT use generic chapter headings as subtitles."
     ),
     "literature_review": (
         "Draft Chapter III — Review of Literature (5500–7500 words). "
@@ -688,6 +697,7 @@ async def draft_section(
     style_choice: str = "indian_formal",
     style_sample: Optional[str] = None,
     ref_library: Optional[List[Dict[str, Any]]] = None,
+    word_limit: Optional[int] = None,
     limit_per_db: int = DEFAULT_LIMIT_PER_DB,
     total_limit: int = DEFAULT_TOTAL_LIMIT,
 ) -> Dict[str, Any]:
@@ -760,10 +770,16 @@ async def draft_section(
     extra_block = f"ADDITIONAL CONTEXT FROM RESEARCHER:\n{extra_context}\n" if extra_context else ""
 
     n_records = len(records)
+    word_hint = (
+        f"TARGET WORD COUNT: {word_limit} words. Write to this length — do not produce a "
+        f"shorter draft. Every paragraph must be substantive.\n"
+        if word_limit else ""
+    )
     user_text = (
         f"THESIS TOPIC: {topic}\n"
         f"CITATION STYLE: {citation_style}\n"
         f"VALID CITATION RANGE: [CITE_1] through [CITE_{n_records}]\n\n"
+        f"{word_hint}"
         f"{locked_block}\n\n"
         f"=== BEGIN UNTRUSTED EVIDENCE ===\n"
         f"{extra_block}"
