@@ -231,6 +231,7 @@
       The first download with a new language may take 20-40 s for translation.
       Subsequent downloads are instant.
     </p>
+    <div id="th-checklist-gate-warn" style="display:none;background:#fff8e1;border:1px solid var(--th-gold);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:13px;gap:12px;align-items:flex-start"></div>
     <div style="display:flex; flex-wrap:wrap; gap:10px">
       <button id="th-dl-docx" class="th-btn th-btn-primary">⬇ Download Word (.docx)</button>
       <button id="th-dl-pdf"  class="th-btn th-btn-primary">⬇ Download PDF</button>
@@ -606,6 +607,41 @@
     bindJournalMeta();
     renderLangGrid();
     renderSummary();
+    checklistGate(s);
+
+    // Gate: checklist completion warning for article mode
+    function checklistGate(state) {
+      var mode = (state.setup && state.setup.mode) || 'thesis';
+      if (mode !== 'article') return;
+      var COUNTS = { consort: 25, strobe: 22, prisma: 29, care: 13 };
+      var DESIGN_MAP = {
+        rct: 'consort',
+        cohort_prospective: 'strobe', cohort_retrospective: 'strobe',
+        case_control: 'strobe', cross_sectional: 'strobe', quasi_experimental: 'strobe',
+      };
+      var ART_MAP = {
+        case_report: 'care', case_series: 'strobe',
+        systematic_review: 'prisma', meta_analysis: 'prisma',
+      };
+      var artType = (state.setup && state.setup.article_type) || 'original_research';
+      var ck = artType === 'original_research'
+        ? (DESIGN_MAP[(state.setup && state.setup.design) || ''] || 'consort')
+        : (ART_MAP[artType] || null);
+      if (!ck || !COUNTS[ck]) return;
+      var saved = (state.checklist && state.checklist[ck]) || {};
+      var total = COUNTS[ck];
+      var done  = Object.values(saved).filter(Boolean).length;
+      var warn = document.getElementById('th-checklist-gate-warn');
+      if (!warn) return;
+      if (done >= total) { warn.style.display = 'none'; return; }
+      warn.style.display = 'flex';
+      warn.innerHTML =
+        '<span style="font-size:18px;flex-shrink:0">☑</span>' +
+        '<div><strong>Reporting checklist incomplete:</strong> ' +
+        done + '&nbsp;/&nbsp;' + total + ' items checked (' + ck.toUpperCase() + '). ' +
+        'Journals require this to accompany the submission. ' +
+        '<a href="/thesis-module/compliance.html" style="color:var(--th-emerald-d)">Complete the checklist →</a></div>';
+    }
 
     // Gate "Convert to article" button — requires 4 core chapters with content
     var cvBtn = document.getElementById('th-convert-btn');

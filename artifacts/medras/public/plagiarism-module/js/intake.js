@@ -160,6 +160,8 @@
       // optional `report` metadata.
       const sections = buildSectionsFromAnalyze(docJson);
       const protectedTerms = collectProtectedTerms(docJson.extracted_text || "");
+      const parsedCount = repJson.parsed_section_count || 0;
+      const llmParsed = !!repJson.llm_parsed;
 
       const payload = {
         sections,
@@ -170,9 +172,28 @@
           software: repJson.software || software,
           flagged_map: repJson.flagged_map || {},
           summary: repJson.summary || null,
-          parsed_section_count: repJson.parsed_section_count || 0,
+          parsed_section_count: parsedCount,
+          llm_parsed: llmParsed,
         },
       };
+
+      // Warn the user if neither regex nor AI could extract section scores —
+      // this usually means the PDF is scanned/image-based or in an unusual
+      // format.  We still proceed (full document will be rewritten).
+      if (parsedCount === 0) {
+        const warn = document.createElement("div");
+        warn.className = "pm-intake-error";
+        warn.style.cssText = "background:rgba(255,200,0,0.12);border-color:#ffc857;color:#ffc857;margin-bottom:12px;";
+        warn.setAttribute("role", "alert");
+        warn.textContent =
+          "We couldn't extract section scores from this report (the format may be " +
+          "image-based or unsupported). Your full document will be rewritten instead " +
+          "— no sections will be skipped.";
+        stepAErr.parentNode.insertBefore(warn, stepAErr);
+        // Give the user a moment to read it, then navigate
+        await new Promise((r) => setTimeout(r, 2200));
+      }
+
       sessionStorage.setItem(INPUT_KEY, JSON.stringify(payload));
       window.location.href = "/plagiarism-module/reduce-results.html";
     } catch (err) {

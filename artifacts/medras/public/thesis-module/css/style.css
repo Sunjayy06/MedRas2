@@ -101,7 +101,8 @@ a:hover { text-decoration: underline; }
 .th-card {
   background: #fff; border: 1px solid var(--th-line);
   border-radius: var(--th-radius); padding: 22px;
-  box-shadow: var(--th-shadow); margin-bottom: 18px;
+  box-shadow: 0 1px 6px rgba(7,20,16,.06), 0 4px 18px rgba(7,20,16,.06);
+  margin-bottom: 18px; transition: box-shadow .15s;
 }
 .th-card.th-flat { box-shadow: none; }
 
@@ -117,18 +118,34 @@ a:hover { text-decoration: underline; }
   appearance: none; border: 0; cursor: pointer;
   padding: 11px 18px; border-radius: 10px;
   font-size: 14px; font-weight: 600;
-  transition: transform .08s, box-shadow .15s;
-  font-family: inherit;
+  transition: transform .08s, box-shadow .15s, background .12s;
+  font-family: inherit; line-height: 1.2;
 }
 .th-btn:active { transform: translateY(1px); }
-.th-btn-primary { background: var(--th-emerald); color: #fff; }
-.th-btn-primary:hover { background: var(--th-emerald-d); }
-.th-btn-ghost { background: transparent; color: var(--th-emerald-d); border: 1px solid var(--th-emerald); }
-.th-btn-ghost:hover { background: rgba(16,185,129,0.08); }
-.th-btn-light { background: var(--th-paper-2); color: var(--th-ink-900); }
-.th-btn-light:hover { background: var(--th-line); }
-.th-btn-sm { padding: 6px 12px; font-size: 12.5px; }
-.th-btn[disabled] { opacity: 0.55; cursor: not-allowed; }
+/* Primary — clearly the dominant action on the page */
+.th-btn-primary {
+  background: linear-gradient(135deg, var(--th-emerald) 0%, var(--th-emerald-d) 100%);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(5, 150, 105, 0.30);
+}
+.th-btn-primary:hover {
+  background: linear-gradient(135deg, #0ea573 0%, var(--th-emerald-d) 100%);
+  box-shadow: 0 4px 14px rgba(5, 150, 105, 0.38);
+}
+/* Ghost — secondary outlined action */
+.th-btn-ghost { background: transparent; color: var(--th-emerald-d); border: 1.5px solid var(--th-emerald); }
+.th-btn-ghost:hover { background: rgba(16,185,129,0.08); border-color: var(--th-emerald-d); }
+/* Light — tertiary / neutral action */
+.th-btn-light {
+  background: var(--th-paper-2); color: var(--th-ink-900);
+  border: 1px solid var(--th-line);
+}
+.th-btn-light:hover { background: var(--th-line); border-color: var(--th-text-soft); }
+/* Danger variant */
+.th-btn-danger { background: #fef2f2; color: var(--th-danger); border: 1px solid #fca5a5; }
+.th-btn-danger:hover { background: #fee2e2; }
+.th-btn-sm { padding: 6px 12px; font-size: 12.5px; border-radius: 8px; }
+.th-btn[disabled] { opacity: 0.45; cursor: not-allowed; pointer-events: none; }
 
 /* --- Form controls --- */
 .th-field { display: block; margin-bottom: 14px; }
@@ -329,9 +346,18 @@ textarea.th-input { resize: vertical; line-height: 1.55; min-height: 68px; }
   margin-bottom: 6px; cursor: pointer; font-size: 13px;
   font-family: inherit; color: var(--th-ink-900); font-weight: 500;
   display: flex; align-items: center; gap: 8px;
+  transition: border-color .12s, background .12s, box-shadow .12s;
 }
-.th-helper-btn:hover { border-color: var(--th-emerald); background: rgba(16,185,129,0.04); }
-.th-helper-btn .th-helper-icon { font-size: 16px; opacity: 0.8; }
+.th-helper-btn:hover {
+  border-color: var(--th-emerald); background: rgba(16,185,129,0.05);
+  box-shadow: 0 1px 4px rgba(5,150,105,0.12);
+}
+.th-helper-btn:first-child {
+  border-color: var(--th-emerald); color: var(--th-emerald-d);
+  background: rgba(16,185,129,0.04);
+}
+.th-helper-btn:first-child:hover { background: rgba(16,185,129,0.10); }
+.th-helper-btn .th-helper-icon { font-size: 15px; opacity: 0.75; flex-shrink: 0; }
 
 /* Toast */
 #th-toast {

@@ -743,6 +743,22 @@ async def parse_report(
             ) from exc
 
     flagged_map = report_parser.parse_report_text(text or "")
+    llm_parsed = False
+
+    # If regex found nothing, try Gemini — covers complex table layouts,
+    # colour-coded PDFs, and vendor-specific formats regex can't handle.
+    if not flagged_map:
+        llm_map = report_parser._parse_with_gemini(text or "", software or "Other")
+        if llm_map:
+            flagged_map = llm_map
+            llm_parsed = True
+            log.info(
+                "parse_report: regex found 0 sections for %s — Gemini fallback "
+                "extracted %d sections.",
+                software,
+                len(flagged_map),
+            )
+
     summary = report_parser.summarise_report(flagged_map)
 
     return {
@@ -751,10 +767,11 @@ async def parse_report(
         "extracted_chars": len(text or ""),
         "flagged_map": flagged_map,
         "summary": summary,
-        # Helpful diagnostic so the UI can warn the user when the
+        # Helpful diagnostics so the UI can warn the user when the
         # report parser couldn't find anything (e.g. they uploaded the
         # original by mistake).
         "parsed_section_count": len(flagged_map),
+        "llm_parsed": llm_parsed,
     }
 
 
