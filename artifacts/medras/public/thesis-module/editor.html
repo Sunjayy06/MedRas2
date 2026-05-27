@@ -138,10 +138,10 @@
     <h4>Chapter tools</h4>
     <div id="th-helper-strip"></div>
 
-    <!-- Introduction section coverage audit — shown only for Chapter I -->
-    <div id="th-intro-audit" style="display:none; margin-top:12px">
+    <!-- Chapter section coverage audit -->
+    <div id="th-chapter-audit" style="display:none; margin-top:12px">
       <h4>Section coverage</h4>
-      <div id="th-intro-audit-list" style="display:flex;flex-direction:column;gap:3px;font-size:12px"></div>
+      <div id="th-chapter-audit-list" style="display:flex;flex-direction:column;gap:3px;font-size:12px"></div>
     </div>
 
     <h4 style="margin-top:16px">Assigned to this section</h4>
@@ -965,37 +965,107 @@
     banner.style.display = 'flex';
   }
 
-  // ---------- Introduction section-coverage audit ----------
-  const _INTRO_AUDIT_SECTIONS = [
-    { label: 'Definition & incidence',          re: /incidence|prevalence|reported.{0,40}range|range.{0,20}\d+.{0,10}%/i },
-    { label: 'Clinical relevance & impact',     re: /patient.{0,40}satisfaction|quality of life|healthcare.{0,25}burden|recovery|functional.{0,25}outcome/i },
-    { label: 'Pathophysiology',                 re: /pathophysiolog|mechanism|cytokine|receptor|molecular|cellular|inflamm/i },
-    { label: 'Assessment & current strategies', re: /assess|grading|visual analog|VAS|treatment|management|intervention|prevent|strateg/i },
-    { label: 'Rationale for intervention',      re: /rationale|mechanism of action|may be beneficial|proposed.{0,25}agent|study.{0,30}agent/i },
-    { label: 'International evidence (RCTs)',   re: /randomis|randomiz|controlled.{0,30}trial|comparative|systematic|meta.?analy/i },
-    { label: 'Indian evidence & gap',           re: /india|indian|institutional|regional|local.{0,20}stud|conducted.{0,20}at/i },
-    { label: 'Study aim statement',             re: /present study.{0,30}aims?|aims?.{0,20}evaluat|aims?.{0,20}assess|aims?.{0,20}determin|aims?.{0,20}compare/i },
-  ];
+  // ---------- Chapter section-coverage audit (all draftable chapters) ----------
+  // Each entry: { label, re } — re tested against the chapter's plain text.
+  const _CHAPTER_AUDIT_CRITERIA = {
+    introduction: {
+      sections: [
+        { label: 'Definition & incidence',          re: /incidence|prevalence|reported.{0,40}range|range.{0,20}\d+.{0,10}%/i },
+        { label: 'Clinical relevance & impact',     re: /patient.{0,40}satisfaction|quality of life|healthcare.{0,25}burden|recovery|functional.{0,25}outcome/i },
+        { label: 'Pathophysiology',                 re: /pathophysiolog|mechanism|cytokine|receptor|molecular|cellular|inflamm/i },
+        { label: 'Assessment & current strategies', re: /assess|grading|visual analog|VAS|treatment|management|intervention|prevent|strateg/i },
+        { label: 'Rationale for intervention',      re: /rationale|mechanism of action|may be beneficial|proposed.{0,25}agent|study.{0,30}agent/i },
+        { label: 'International evidence (RCTs)',   re: /randomis|randomiz|controlled.{0,30}trial|comparative|systematic|meta.?analy/i },
+        { label: 'Indian evidence & gap',           re: /india|indian|institutional|regional|local.{0,20}stud|conducted.{0,20}at/i },
+        { label: 'Study aim statement',             re: /present study.{0,30}aims?|aims?.{0,20}evaluat|aims?.{0,20}assess|aims?.{0,20}determin|aims?.{0,20}compare/i },
+      ],
+    },
+    literature_review: {
+      sections: [
+        { label: 'Thematic sub-sections (bold headings)', re: /\*\*[^\n]{3,60}\*\*|[A-Z][A-Za-z ]{4,50}\n[-–]/i },
+        { label: 'Conceptual / pathophysiological background', re: /pathophysiolog|mechanism|cellular|physiolog|molecular|inflamm|epidemiolog/i },
+        { label: 'Chronological synthesis of studies',  re: /et al|found that|reported|observed|demonstrated|showed|concluded/i },
+        { label: 'Indian studies',                      re: /india|indian|south asia|developing countr/i },
+        { label: 'Research gap statement',              re: /gap|limited data|lack of|no stud|few stud|paucity|insufficient|not been studied/i },
+        { label: 'Link to present study',               re: /present study|current study|hence.{0,30}stud|therefore.{0,30}stud|this study/i },
+      ],
+    },
+    methods: {
+      sections: [
+        { label: 'Study design',                re: /study design|observational|prospective|retrospective|randomis|cross.?sectional|cohort|case.?control/i },
+        { label: 'Inclusion / exclusion criteria', re: /inclusion criteria|exclusion criteria|eligible|enrolled|recruited/i },
+        { label: 'Sample size calculation',     re: /sample size|formula|alpha|power|effect size|calculated|enrolment/i },
+        { label: 'Data collection',             re: /data.{0,20}collect|variables|instrument|questionnaire|proforma|recorded/i },
+        { label: 'Operational definitions',     re: /defined as|operational|operationally|was defined|were defined/i },
+        { label: 'Statistical analysis plan',   re: /statistical|SPSS|R software|Stata|chi.?square|t.?test|ANOVA|regression|Mann.?Whitney/i },
+        { label: 'Ethical considerations',      re: /ethical|IEC|ethics committee|Helsinki|consent|approval|ICMR/i },
+      ],
+    },
+    results: {
+      sections: [
+        { label: 'Demographic profile (Table 1)', re: /demographic|age|sex|gender|Table 1|baseline|mean.{0,20}age/i },
+        { label: 'Primary outcome with p-value',  re: /primary outcome|significant|p\s*[=<>]\s*0\.\d|p.?value|statistically/i },
+        { label: 'Secondary outcomes',            re: /secondary|associated|correlation|comparison|group\s+[AB12]/i },
+        { label: 'Tables / Figures referenced',   re: /Table \d|Figure \d|Fig\.\s*\d/i },
+      ],
+    },
+    discussion: {
+      sections: [
+        { label: 'Summary of key findings',       re: /present study.{0,30}found|present study.{0,30}observed|key finding|principal finding|main finding/i },
+        { label: 'Comparison with prior literature', re: /consistent with|in contrast|compared to|similar to.{0,30}\[|corroborate|agree with/i },
+        { label: 'Mechanistic explanation',        re: /mechanism|explain|may be attributed|pathophysiolog|biolog|physiolog/i },
+        { label: 'Strengths',                      re: /strength|prospective|tertiary|large sample|robust/i },
+        { label: 'Limitations',                    re: /limitation|constraint|small sample|single.?centre|bias|generaliz/i },
+        { label: 'Clinical implications',          re: /clinical implic|clinical practice|recommend|should be|bedside|practitioners/i },
+        { label: 'Future directions',              re: /future.{0,30}stud|further.{0,30}research|larger.{0,30}trial|multicent|future work/i },
+      ],
+    },
+    summary: {
+      sections: [
+        { label: 'Why study was done (gap)',  re: /gap|limited|lack|no stud|conducted to|this study was/i },
+        { label: 'Aims & objectives listed',  re: /aim|objective|to assess|to evaluat|to determin|to compare/i },
+        { label: 'Methods summary',           re: /design|setting|enrolled|prospective|retrospective/i },
+        { label: 'Key results (numbers)',     re: /\d+\s*%|\d+\.\d|p\s*[=<>]\s*0\.\d|mean|median/i },
+        { label: 'Conclusion statement',      re: /conclud|conclude|take-home|demonstrated|established/i },
+      ],
+    },
+    conclusion: {
+      sections: [
+        { label: 'Principal finding stated',      re: /present study conclud|conclude|principal finding|demonstrated|established/i },
+        { label: 'Clinical recommendation',       re: /recommend|clinical practice|should be|can be used|clinician|bedside/i },
+        { label: 'Future research directions',    re: /future.{0,30}stud|further.{0,30}research|multicent|larger|warranted/i },
+        { label: 'Forward-looking final sentence',re: /contribut|field of|advance|pave the way|extend/i },
+      ],
+    },
+  };
 
-  function _renderIntroAudit() {
-    const panel = document.getElementById('th-intro-audit');
-    const list  = document.getElementById('th-intro-audit-list');
+  function _renderChapterAudit() {
+    const panel = document.getElementById('th-chapter-audit');
+    const list  = document.getElementById('th-chapter-audit-list');
     if (!panel || !list) return;
-    if (chapterId !== 'introduction') { panel.style.display = 'none'; return; }
+    const criteria = _CHAPTER_AUDIT_CRITERIA[chapterId];
+    if (!criteria) { panel.style.display = 'none'; return; }
     const text = ThesisState.getChapter(chapterId).text || '';
     if (!text.trim()) { panel.style.display = 'none'; return; }
 
     panel.style.display = 'block';
-    const wc = (text.match(/\b\w+\b/g) || []).length;
-    const budget = chapter.word_budget || [Math.round((chapter.target_words || 1800) * 0.83), Math.round((chapter.target_words || 1800) * 1.22)];
-    const wcOk    = wc >= budget[0];
-    const wcOver  = wc > budget[1];
+    const wc     = (text.match(/\b\w+\b/g) || []).length;
+    const target = chapter.target_words || 1000;
+    const budget = chapter.word_budget || [Math.round(target * 0.83), Math.round(target * 1.22)];
+    const wcOk   = wc >= budget[0];
+    const wcOver = wc > budget[1];
     const wcColor = wcOk && !wcOver ? 'var(--th-emerald-d)' : wcOver ? '#7c3aed' : '#b45309';
     const wcIcon  = wcOk && !wcOver ? '✓' : wcOver ? '↑' : '↗';
     const wcBg    = wcOk && !wcOver ? 'rgba(16,185,129,0.07)' : wcOver ? 'rgba(124,58,237,0.07)' : 'rgba(251,191,36,0.12)';
-    const wcNote  = wcOver ? 'above target' : wcOk ? 'in range' : `${(budget[0] - wc).toLocaleString()} words short`;
+    const wcNote  = wcOver ? 'above target' : wcOk ? 'in range' : `${(budget[0] - wc).toLocaleString()} to go`;
 
-    const sectionRows = _INTRO_AUDIT_SECTIONS.map(sec => {
+    const sections = criteria.sections;
+    const passed   = sections.filter(s => s.re.test(text)).length;
+    const total    = sections.length;
+    const allPass  = passed === total;
+    const barColor = allPass ? 'var(--th-emerald)' : passed / total >= 0.7 ? '#f59e0b' : '#ef4444';
+
+    const sectionRows = sections.map(sec => {
       const found = sec.re.test(text);
       return `<div style="display:flex;align-items:center;gap:6px;padding:3px 7px;border-radius:5px;
                    background:${found ? 'rgba(16,185,129,0.06)' : 'rgba(239,68,68,0.06)'}">
@@ -1005,16 +1075,16 @@
       </div>`;
     }).join('');
 
-    const passed = _INTRO_AUDIT_SECTIONS.filter(s => s.re.test(text)).length;
     list.innerHTML = `
       <div style="padding:5px 8px;border-radius:6px;background:${wcBg};margin-bottom:6px;
                   display:flex;justify-content:space-between;align-items:center">
-        <span style="color:${wcColor};font-weight:600">${wcIcon} ${wc.toLocaleString()} words <span style="font-weight:400;font-size:11px">(${wcNote})</span></span>
+        <span style="color:${wcColor};font-weight:600">${wcIcon} ${wc.toLocaleString()} words
+          <span style="font-weight:400;font-size:11px">(${wcNote})</span></span>
         <span style="color:var(--th-text-soft);font-size:11px">${budget[0].toLocaleString()}–${budget[1].toLocaleString()}</span>
       </div>
-      <div style="padding:4px 8px;margin-bottom:5px;font-size:11px;color:var(--th-text-soft);
-                  border-left:3px solid ${passed===8?'var(--th-emerald)':passed>=5?'#f59e0b':'#ef4444'};padding-left:8px">
-        ${passed}/8 expected subsections detected
+      <div style="padding:4px 0 5px 8px;margin-bottom:5px;font-size:11px;color:var(--th-text-soft);
+                  border-left:3px solid ${barColor}">
+        ${passed}/${total} expected sub-sections detected
       </div>
       ${sectionRows}`;
   }
@@ -1024,8 +1094,8 @@
     const c = ThesisState.getChapter(chapterId);
     // Show the repair banner if the saved chapter text has leftover CITE_n tokens
     _updateRepairBanner(c.text || '');
-    // Show/update section coverage audit for Introduction
-    _renderIntroAudit();
+    // Show/update section coverage audit (all draftable chapters)
+    _renderChapterAudit();
     const canvas = document.getElementById('th-editor-canvas');
     if (mode === 'write') {
       canvas.contentEditable = 'true';
