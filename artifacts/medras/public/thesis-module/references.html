@@ -107,10 +107,20 @@
   </div>
 
   <div class="th-card">
-    <div style="display:flex; align-items:baseline; gap:14px; margin-bottom:10px">
+    <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px; flex-wrap:wrap">
       <h3 class="th-h3" style="margin:0">Your thesis library</h3>
       <span id="th-lib-count" style="color:var(--th-text-soft); font-size:13px"></span>
-      <button id="th-import-saved" class="th-btn th-btn-light th-btn-sm" style="margin-left:auto">
+      <!-- Citation style toggle for the copy button -->
+      <div id="th-cite-fmt-bar" style="display:flex;gap:4px;margin-left:auto;align-items:center">
+        <span style="font-size:11.5px;color:var(--th-text-soft);margin-right:2px">Copy as:</span>
+        <button class="th-btn th-btn-light th-btn-sm th-cite-fmt-btn is-active" data-fmt="vancouver"
+          style="font-size:11px;padding:0 8px;height:26px;border-radius:5px">Vancouver</button>
+        <button class="th-btn th-btn-light th-btn-sm th-cite-fmt-btn" data-fmt="apa"
+          style="font-size:11px;padding:0 8px;height:26px;border-radius:5px">APA</button>
+        <button class="th-btn th-btn-light th-btn-sm th-cite-fmt-btn" data-fmt="harvard"
+          style="font-size:11px;padding:0 8px;height:26px;border-radius:5px">Harvard</button>
+      </div>
+      <button id="th-import-saved" class="th-btn th-btn-light th-btn-sm">
         Import from my saved library
       </button>
     </div>
@@ -135,6 +145,7 @@
 .th-ref-sec-chip{font-size:10.5px;padding:2px 9px;border-radius:999px;border:1.5px solid var(--th-line);background:var(--th-paper-2,#f8faf9);color:var(--th-text-soft);cursor:pointer;transition:background .12s,color .12s,border-color .12s;user-select:none;font-weight:600;letter-spacing:.03em}
 .th-ref-sec-chip:hover{border-color:var(--th-emerald);color:var(--th-emerald-d)}
 .th-ref-sec-chip.is-on{background:var(--th-emerald-d,#047857);color:#fff;border-color:var(--th-emerald-d,#047857)}
+.th-cite-fmt-btn.is-active{background:var(--th-emerald-d,#047857);color:#fff;border-color:var(--th-emerald-d,#047857)}
 </style>
 <script src="/thesis-module/js/thesis-state.js"></script>
 <script src="/thesis-module/js/track-changes.js"></script>
@@ -207,11 +218,105 @@
           </div>
         </div>
         <div class="th-ref-actions">
+          <button class="th-btn th-btn-light th-btn-sm" data-act="copy-cite"
+            title="Copy formatted citation to clipboard">Copy</button>
           <button class="th-btn th-btn-light th-btn-sm" data-act="remove">Remove</button>
         </div>
       </div>`;
   }
 
+  // ── Citation formatters ───────────────────────────────────────────────
+  let _citeFmt = 'vancouver';
+
+  function _fmtAuthorsVancouver(authors) {
+    if (!authors || !authors.length) return '';
+    const list = authors.slice(0, 6).map((a) => {
+      const parts = a.split(/[\s,]+/).filter(Boolean);
+      if (parts.length < 2) return a;
+      const last  = parts[parts.length - 1];
+      const inits = parts.slice(0, -1).map((p) => p[0].toUpperCase()).join('');
+      return last + ' ' + inits;
+    });
+    return list.join(', ') + (authors.length > 6 ? ', et al' : '');
+  }
+
+  function _fmtAuthorsAPA(authors) {
+    if (!authors || !authors.length) return '';
+    const list = authors.slice(0, 20).map((a) => {
+      const parts = a.split(/[\s,]+/).filter(Boolean);
+      if (parts.length < 2) return a;
+      const last  = parts[parts.length - 1];
+      const inits = parts.slice(0, -1).map((p) => p[0].toUpperCase() + '.').join(' ');
+      return last + ', ' + inits;
+    });
+    if (list.length === 1) return list[0];
+    if (list.length <= 20) return list.slice(0, -1).join(', ') + ', & ' + list[list.length - 1];
+    return list.slice(0, 19).join(', ') + ', ... ' + list[list.length - 1];
+  }
+
+  function _fmtAuthorsHarvard(authors) {
+    if (!authors || !authors.length) return '';
+    const list = authors.slice(0, 3).map((a) => {
+      const parts = a.split(/[\s,]+/).filter(Boolean);
+      if (parts.length < 2) return a;
+      const last  = parts[parts.length - 1];
+      const inits = parts.slice(0, -1).map((p) => p[0].toUpperCase() + '.').join(' ');
+      return last + ', ' + inits;
+    });
+    return list.join(', ') + (authors.length > 3 ? ' et al.' : '');
+  }
+
+  function formatCitation(r, fmt) {
+    const year    = r.year || 'n.d.';
+    const title   = r.title || 'Untitled';
+    const journal = r.journal || '';
+    const vol     = r.volume ? String(r.volume) : '';
+    const issue   = r.issue  ? '(' + r.issue + ')' : '';
+    const pages   = r.pages  ? ':' + r.pages  : '';
+    const doi     = r.doi    ? 'doi:' + r.doi  : (r.url ? r.url : '');
+
+    if (fmt === 'vancouver') {
+      const auth = _fmtAuthorsVancouver(r.authors);
+      let cite = (auth ? auth + '. ' : '') + title + '.';
+      if (journal) cite += ' ' + journal + '.';
+      cite += ' ' + year;
+      if (vol)   cite += ';' + vol + issue + pages;
+      if (doi)   cite += '. ' + doi;
+      return cite + '.';
+    }
+    if (fmt === 'apa') {
+      const auth = _fmtAuthorsAPA(r.authors);
+      let cite = (auth ? auth + ' ' : '') + '(' + year + '). ' + title + '.';
+      if (journal) cite += ' ' + journal + ',';
+      if (vol)     cite += ' ' + vol + issue;
+      if (r.pages) cite += ', ' + r.pages;
+      cite += '.';
+      if (r.doi)   cite += ' https://doi.org/' + r.doi;
+      else if (r.url) cite += ' ' + r.url;
+      return cite;
+    }
+    // Harvard
+    const auth = _fmtAuthorsHarvard(r.authors);
+    let cite = (auth ? auth + ' ' : '') + '(' + year + ') \'' + title + '\'';
+    if (journal) cite += ', ' + journal;
+    if (vol)     cite += ', ' + vol + issue;
+    if (r.pages) cite += ', pp. ' + r.pages;
+    cite += '.';
+    if (r.doi)   cite += ' Available at: https://doi.org/' + r.doi + ' (Accessed: ' + new Date().toLocaleDateString('en-GB', {day:'numeric',month:'long',year:'numeric'}) + ').';
+    else if (r.url) cite += ' Available at: ' + r.url;
+    return cite;
+  }
+
+  // Style toggle buttons
+  document.querySelectorAll('.th-cite-fmt-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      _citeFmt = btn.dataset.fmt;
+      document.querySelectorAll('.th-cite-fmt-btn').forEach((b) => b.classList.remove('is-active'));
+      btn.classList.add('is-active');
+    });
+  });
+
+  // ── Library renderer ──────────────────────────────────────────────────
   function renderLib() {
     const s = ThesisState.get();
     const list = document.getElementById('th-lib-list');
@@ -223,6 +328,8 @@
       return;
     }
     list.innerHTML = s.references.map(refRowHtml).join('');
+
+    // Remove buttons
     list.querySelectorAll('button[data-act=remove]').forEach((btn) => {
       btn.addEventListener('click', (e) => {
         const row = e.currentTarget.closest('.th-ref-row');
@@ -232,6 +339,34 @@
           return st;
         });
         renderLib();
+      });
+    });
+
+    // Copy-citation buttons
+    list.querySelectorAll('button[data-act=copy-cite]').forEach((btn) => {
+      btn.addEventListener('click', async (e) => {
+        const row  = e.currentTarget.closest('.th-ref-row');
+        const id   = row.dataset.id;
+        const s2   = ThesisState.get();
+        const ref  = (s2.references || []).find((r) => (r._id || r.doi || '') === id);
+        if (!ref) return;
+        const text = formatCitation(ref, _citeFmt);
+        try {
+          await navigator.clipboard.writeText(text);
+          btn.textContent = '✓ Copied';
+          btn.style.color = 'var(--th-emerald-d)';
+          setTimeout(() => { btn.textContent = 'Copy'; btn.style.color = ''; }, 1800);
+        } catch (_) {
+          // Fallback for non-HTTPS / older browsers
+          const ta = document.createElement('textarea');
+          ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+          document.body.appendChild(ta); ta.select();
+          document.execCommand('copy');
+          ta.remove();
+          btn.textContent = '✓ Copied';
+          btn.style.color = 'var(--th-emerald-d)';
+          setTimeout(() => { btn.textContent = 'Copy'; btn.style.color = ''; }, 1800);
+        }
       });
     });
 
