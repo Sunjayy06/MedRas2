@@ -2465,7 +2465,7 @@ function _issueFixCommand(column, issueType) {
     case "numeric_as_id":    return `Exclude ${column} from analysis`;
     case "low_unique_nominal": return `Exclude ${column} from analysis`;
     case "high_missing":     return `Exclude ${column} from analysis`;
-    case "duplicate_values": return `What should I do with ${column}?`;
+    case "duplicate_values": return `Trim whitespace from ${column}`;
     default: return null;
   }
 }

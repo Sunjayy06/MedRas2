@@ -443,7 +443,7 @@ async def opening_message(kind: str, context: Dict[str, Any]) -> str:
 # (Gemini primary — fast JSON extraction; OpenAI fallback)
 # ---------------------------------------------------------------------------
 
-_VALID_VA_ACTIONS = frozenset({"rename", "recode", "exclude", "include", "set_type"})
+_VALID_VA_ACTIONS = frozenset({"rename", "recode", "exclude", "include", "set_type", "trim_whitespace"})
 
 
 async def parse_variable_intent(
@@ -462,11 +462,13 @@ async def parse_variable_intent(
         f"You parse variable-management instructions for a statistical tool.\n"
         f"Available columns: {', '.join(cols) if cols else '(unknown)'}\n\n"
         f"If the input is an actionable mutation command, return ONLY this JSON:\n"
-        f'{{"action":"rename"|"recode"|"exclude"|"include"|"set_type",'
+        f'{{"action":"rename"|"recode"|"exclude"|"include"|"set_type"|"trim_whitespace",'
         f'"column":"<exact column name from the list above>",'
         f'"new_name":"<str or null>",'
         f'"new_type":"scale"|"ordinal"|"nominal"|"id"|null,'
         f'"recode_map":{{}} }}\n'
+        f"Use \"trim_whitespace\" when the user wants to clean/standardise string values "
+        f"(e.g. remove trailing spaces, fix 'Positive ' vs 'Positive').\n"
         f"If the input is a question or explanation request, return exactly: null\n"
         f"Return ONLY the JSON object or null — no prose, no markdown."
     )

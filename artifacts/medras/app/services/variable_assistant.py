@@ -208,6 +208,19 @@ def parse_intent(message: str, columns: List[str]) -> Dict[str, Any]:
     ):
         return {"action": "strip_prefix", "column": column, "params": {}}
 
+    # trim_whitespace — "trim whitespace from X", "fix spaces in X",
+    # "clean X values", "standardize X" — must run BEFORE the broad
+    # "fix/correct → suggest" fallback so "fix spaces in ER" resolves
+    # to a concrete action rather than a generic AI explanation.
+    if re.search(
+        r"\b(trim|strip|clean|standardize|standardise)\b.{0,30}"
+        r"\b(space|spaces|whitespace|trailing|leading|values?)\b"
+        r"|\bclean\s+(up\s+)?(?:the\s+)?values?\b"
+        r"|\bfix\s+(?:the\s+)?(?:space|spaces|whitespace|trailing|leading)\b",
+        msg_low,
+    ) and column:
+        return {"action": "trim_whitespace", "column": column, "params": {}}
+
     # "fix {col}" / "correct {col}" / "what's wrong with {col}" /
     # "help with {col}" / "i can't proceed" / bare column name alone
     # → surface a targeted suggestion for that column (or globally)
@@ -274,6 +287,27 @@ def parse_intent(message: str, columns: List[str]) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 # Action implementations
 # ---------------------------------------------------------------------------
+
+
+def _trim_whitespace(
+    df: pd.DataFrame, column: str
+) -> Tuple[pd.DataFrame, Dict[str, Any]]:
+    """Strip leading/trailing whitespace (and collapse internal runs) from
+    every string value in ``column``.  Leaves numeric dtypes untouched."""
+    if column not in df.columns:
+        raise ValueError(f"Unknown column '{column}'.")
+    new_df = df.copy()
+    original = new_df[column].copy()
+    if new_df[column].dtype == object:
+        def _clean(v: Any) -> Any:
+            if pd.isna(v):
+                return v
+            s = str(v)
+            return " ".join(s.split())  # strips + collapses internal spaces
+        new_df[column] = new_df[column].map(_clean)
+    changed = int((new_df[column].astype(str) != original.astype(str)).sum())
+    sample = [str(v) for v in new_df[column].dropna().unique()[:3].tolist()]
+    return new_df, {"changed_rows": changed, "sample_after": sample}
 
 
 def _strip_prefix(
@@ -437,6 +471,18 @@ def apply_action(
                 f"Excluded “{column}” from analysis."
             ),
         }
+
+    if action == "trim_whitespace":
+        new_df, meta = _trim_whitespace(df, column)
+        n = meta["changed_rows"]
+        sample = ", ".join(repr(s) for s in meta["sample_after"][:3])
+        msg = (
+            f"Trimmed whitespace from \"{column}\". "
+            f"{n} value(s) standardised. Values now: {sample}."
+            if n else
+            f"\"{column}\" already had no extra whitespace — no changes made."
+        )
+        return new_df, {**meta, "confirmation_message": msg}
 
     if action == "suggest":
         # Informational only. The API layer rebuilds a context-aware message
