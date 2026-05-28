@@ -8,31 +8,37 @@
 <link rel="stylesheet" href="/thesis-module/css/style.css" />
 <link rel="stylesheet" href="/css/medras-nav.css" />
 <style>
-  .th-block { padding:14px 16px; border-radius:10px; background:#fff; border:1px solid var(--th-line); margin-top:12px; }
+  .th-block { padding:16px 18px; border-radius:10px; background:#fff; border:1px solid var(--th-line); margin-top:14px; }
   .th-block h3 { margin:0 0 10px; font-size:14px; color:var(--th-ink-900); }
   .th-grid2 { display:grid; grid-template-columns: repeat(2, 1fr); gap:10px; }
   @media (max-width: 640px) { .th-grid2 { grid-template-columns: 1fr; } }
   .th-field { display:flex; flex-direction:column; gap:4px; }
   .th-field label { font-size:12px; color:var(--th-text-soft); font-weight:600; }
-  .th-field input { padding:7px 9px; border-radius:7px; border:1px solid var(--th-line); font-family:inherit; font-size:14px; background:#fff; }
+  .th-field input { padding:8px 10px; border-radius:7px; border:1px solid var(--th-line); font-family:inherit; font-size:14px; background:#fff; transition: border-color .12s, box-shadow .12s; }
+  .th-field input:focus { outline:2px solid var(--th-emerald); outline-offset:-1px; border-color:transparent; box-shadow:0 0 0 4px rgba(16,185,129,.08); }
   .th-lang-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap:8px; }
-  .th-lang-cb { display:flex; align-items:center; gap:8px; padding:7px 10px; border-radius:8px; background:#fff; border:1px solid var(--th-line); cursor:pointer; user-select:none; font-size:13px; }
-  .th-lang-cb.is-locked { opacity:.85; cursor:default; background: #ecf6ed; border-color: var(--th-emerald); }
+  .th-lang-cb { display:flex; align-items:center; gap:8px; padding:8px 11px; border-radius:8px; background:#fff; border:1px solid var(--th-line); cursor:pointer; user-select:none; font-size:13px; transition: border-color .12s, background .12s; }
+  .th-lang-cb:hover { border-color: var(--th-text-soft); }
+  .th-lang-cb.is-locked { opacity:.9; cursor:default; background: #ecf6ed; border-color: var(--th-emerald); }
   .th-lang-cb-native { font-size:11px; color:var(--th-text-soft); margin-left:auto; }
   .th-radio-row { display:grid; grid-template-columns: 1fr 1fr 1fr; gap:8px; }
   @media (max-width: 720px) { .th-radio-row { grid-template-columns: 1fr; } }
-  .th-radio { display:flex; gap:8px; padding:10px 12px; border-radius:8px; background:#fff; border:1px solid var(--th-line); cursor:pointer; font-size:13px; }
+  .th-radio { display:flex; gap:8px; padding:11px 13px; border-radius:8px; background:#fff; border:1px solid var(--th-line); cursor:pointer; font-size:13px; transition: border-color .12s, background .12s; }
+  .th-radio:hover { border-color: var(--th-text-soft); }
   .th-radio:has(input:checked) { background: #ecf6ed; border-color: var(--th-emerald); }
-  .th-status { margin-top:12px; padding:10px 14px; border-radius:8px; font-size:13px; }
+  .th-status { margin-top:12px; padding:11px 15px; border-radius:8px; font-size:13px; }
   .th-status.ok    { background:#ecf6ed; color:var(--th-emerald-d); border:1px solid var(--th-emerald); }
   .th-status.err   { background:#fdecec; color:#a02; border:1px solid #f5b3b3; }
   .th-status.info  { background:#fff8e1; color:#7a5d00; border:1px solid var(--th-gold); }
   .th-spinner { display:inline-block; width:12px; height:12px; border:2px solid rgba(0,0,0,.15); border-top-color: var(--th-emerald); border-radius:50%; animation: th-spin .8s linear infinite; vertical-align:-2px; margin-right:6px; }
   @keyframes th-spin { to { transform: rotate(360deg); } }
   .th-tile-row { display:grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap:10px; margin-top:6px; }
-  .th-tile { padding:8px 12px; border-radius:8px; background:#fff; border:1px solid var(--th-line); }
+  .th-tile { padding:10px 14px; border-radius:9px; background:#fff; border:1px solid var(--th-line); transition: box-shadow .13s, transform .13s; }
+  .th-tile:hover { transform: translateY(-1px); box-shadow: 0 3px 10px rgba(7,20,16,.08); }
   .th-tile-l { font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--th-text-soft); }
-  .th-tile-v { font-size:16px; font-weight:700; color:var(--th-ink-900); }
+  .th-tile-v { font-size:18px; font-weight:700; color:var(--th-ink-900); margin-top:2px; }
+  /* Checklist gate warning in export */
+  #th-checklist-gate-warn { border-left: 4px solid #ca8a04; }
 </style>
 </head>
 <body data-medras-module="scriptorium" data-medras-module="scriptorium">

@@ -116,17 +116,25 @@
 
   <!-- RIGHT: helper strip + AI suggestions -->
   <aside class="th-pane">
-    <h4>What's next</h4>
-    <div style="display:flex; flex-direction:column; gap:6px; margin-bottom:14px">
-      <a id="th-attach-fig" class="th-btn th-btn-light th-btn-sm" href="/thesis-module/assets.html">📎 Attach figure to this chapter</a>
-      <button id="th-share-guide-btn" class="th-btn th-btn-light th-btn-sm" style="text-align:left">📤 Share this section with Guide</button>
-      <a class="th-btn th-btn-light th-btn-sm" href="/thesis-module/compliance.html">✓ Pre-flight compliance</a>
-      <a class="th-btn th-btn-primary th-btn-sm" href="/thesis-module/compliance.html?then=export">⬇ Continue to Export</a>
+    <!-- Export CTA — visually separated from in-chapter tools -->
+    <div style="margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid var(--th-line)">
+      <a class="th-btn th-btn-success th-btn-sm" href="/thesis-module/compliance.html?then=export"
+         style="width:100%;justify-content:center;margin-bottom:6px">
+        ⬇ Continue to Export
+      </a>
+      <div style="display:flex;gap:5px">
+        <a id="th-attach-fig" class="th-btn th-btn-light th-btn-sm" href="/thesis-module/assets.html"
+           style="flex:1;justify-content:center">📎 Figures</a>
+        <button id="th-share-guide-btn" class="th-btn th-btn-light th-btn-sm"
+                style="flex:1;justify-content:center">📤 Share</button>
+        <a class="th-btn th-btn-light th-btn-sm" href="/thesis-module/compliance.html"
+           style="flex:1;justify-content:center">✓ Check</a>
+      </div>
     </div>
 
     <h4>AI writing</h4>
-    <div style="display:flex; flex-direction:column; gap:6px; margin-bottom:10px">
-      <button id="th-ai-draft-btn" class="th-helper-btn" style="border-color:var(--th-emerald);color:var(--th-emerald-d);background:rgba(16,185,129,0.04)">
+    <div style="display:flex; flex-direction:column; gap:5px; margin-bottom:10px">
+      <button id="th-ai-draft-btn" class="th-helper-btn th-helper-ai-primary">
         <span class="th-helper-icon">✦</span><span>AI: Draft this section</span>
       </button>
       <button id="th-ai-improve-btn" class="th-helper-btn">

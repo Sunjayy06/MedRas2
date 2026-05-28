@@ -37,8 +37,10 @@
   .th-comp-empty { padding:36px; text-align:center; color:var(--th-text-soft); background:#fff; border:1px dashed var(--th-line); border-radius:12px; font-size:14px; }
   .th-spinner { display:inline-block; width:14px; height:14px; border:2px solid rgba(0,0,0,.15); border-top-color: var(--th-emerald); border-radius:50%; animation: th-spin .8s linear infinite; vertical-align:-2px; margin-right:6px; }
   @keyframes th-spin { to { transform: rotate(360deg); } }
-  .th-gate { margin-top:20px; padding:16px 18px; border-radius:12px; background: #fffbeb; border:1px solid var(--th-gold); border-left:4px solid var(--th-gold); display:flex; gap:14px; align-items:center; flex-wrap:wrap; box-shadow: 0 2px 8px rgba(217,119,6,.08); }
-  .th-gate.is-clear { background:#f0fdf4; border-color:var(--th-emerald); border-left-color:var(--th-emerald-d); box-shadow: 0 2px 8px rgba(5,150,105,.08); }
+  .th-gate { margin-top:20px; padding:18px 20px; border-radius:12px; background: #fffbeb; border:1.5px solid var(--th-gold); border-left:4px solid #ca8a04; display:flex; gap:14px; align-items:center; flex-wrap:wrap; box-shadow: 0 2px 12px rgba(217,119,6,.10); }
+  .th-gate.is-clear { background:#f0fdf4; border-color:var(--th-emerald); border-left-color:var(--th-emerald-d); box-shadow: 0 2px 12px rgba(5,150,105,.10); }
+  .th-comp-tile { transition: box-shadow .14s, transform .14s; }
+  .th-comp-tile:hover { transform: translateY(-1px); box-shadow: 0 3px 10px rgba(7,20,16,.09); }
 </style>
 </head>
 <body data-medras-module="scriptorium" data-medras-module="scriptorium">
@@ -69,8 +71,8 @@
     here before you export.
   </p>
 
-  <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px">
-    <button id="th-run" class="th-btn th-btn-primary">▶ Run pre-flight check</button>
+  <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px; align-items:center">
+    <button id="th-run" class="th-btn th-btn-primary th-btn-lg">▶ Run pre-flight check</button>
     <a class="th-btn th-btn-light" href="/thesis-module/dashboard.html">← Dashboard</a>
     <a class="th-btn th-btn-light" href="/thesis-module/assets.html">Manage figures</a>
     <a class="th-btn th-btn-success" href="/thesis-module/export.html" id="th-goto-export"

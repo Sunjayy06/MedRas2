@@ -28,6 +28,7 @@ from app.core.logging import get_logger
 from app.services import (
     ai_bridge as ai_bridge_service,
     ai_chatbox,
+    category_merger,
     chatboxes,
     data_quality,
     dataset_store,
@@ -1342,6 +1343,118 @@ async def run_analysis(payload: RunAnalysisRequest) -> Dict[str, Any]:
     )
     dataset_store.mark_completed(payload.job_id, _title, _var_count)
     return {"job_id": payload.job_id, "results": res}
+
+
+# ---------------------------------------------------------------------------
+# Category near-duplicate detection + merge (Step 3 quality gate)
+# ---------------------------------------------------------------------------
+
+
+class DetectDupesRequest(BaseModel):
+    job_id: str = Field(..., min_length=1, max_length=64)
+
+
+@router.post("/detect-category-dupes")
+async def detect_category_dupes(payload: DetectDupesRequest) -> Dict[str, Any]:
+    """Scan every nominal/ordinal column for near-duplicate category labels."""
+    entry = dataset_store.get(payload.job_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Dataset expired or not found.")
+    classifications = (
+        entry.meta.get("classifications")
+        or variable_classifier.classify_dataframe(entry.df)
+    )
+    entry.meta["classifications"] = classifications
+    result = await asyncio.to_thread(
+        category_merger.detect_all_columns, entry.df, classifications
+    )
+    return {"job_id": payload.job_id, "columns": result}
+
+
+class MergeItem(BaseModel):
+    column: str = Field(..., min_length=1, max_length=200)
+    canonical: str = Field(..., min_length=1, max_length=500)
+    members: List[str] = Field(default_factory=list, max_length=200)
+
+
+class ApplyMergeRequest(BaseModel):
+    job_id: str = Field(..., min_length=1, max_length=64)
+    merges: List[MergeItem] = Field(default_factory=list, max_length=100)
+
+
+@router.post("/apply-category-merge")
+async def apply_category_merge(payload: ApplyMergeRequest) -> Dict[str, Any]:
+    """Apply approved merge decisions to the in-memory dataset."""
+    entry = dataset_store.get(payload.job_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Dataset expired or not found.")
+    if not payload.merges:
+        return {"status": "no_changes", "actions": []}
+    merges_dicts = [m.model_dump() for m in payload.merges]
+    new_df, actions = await asyncio.to_thread(
+        category_merger.apply_merges, entry.df, merges_dicts
+    )
+    entry.df = new_df
+    # Downstream artefacts are now stale
+    _invalidate_downstream(entry, keep_normality=False)
+    # Record merge actions in cleaning log for export
+    existing_cleaning = list(entry.meta.get("cleaning_actions") or [])
+    existing_cleaning.extend(actions)
+    entry.meta["cleaning_actions"] = existing_cleaning
+    return {"status": "applied", "actions": actions, "n_merges": len(actions)}
+
+
+# ---------------------------------------------------------------------------
+# Chapter V — thesis-format export
+# ---------------------------------------------------------------------------
+
+
+@router.get("/export/{job_id}/chapter_v_word")
+async def export_chapter_v_word(job_id: str) -> Response:
+    """Download Chapter V — Results as thesis-format DOCX (TNR 12pt, 1.5 spacing)."""
+    entry = dataset_store.get(job_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Dataset expired or not found.")
+    res = entry.meta.get("results")
+    if not res:
+        raise HTTPException(
+            status_code=400,
+            detail="No results available — run the analysis first.",
+        )
+    payload_bytes = await asyncio.to_thread(
+        export_service.generate_chapter_v_word,
+        entry, res, entry.meta.get("assignment") or {},
+    )
+    filename = f"chapter_v_results_{job_id[:8]}.docx"
+    return Response(
+        content=payload_bytes,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/export/{job_id}/chapter_v_pdf")
+async def export_chapter_v_pdf(job_id: str) -> Response:
+    """Download Chapter V — Results as thesis-format PDF (TNR equivalent, 1.5 spacing)."""
+    entry = dataset_store.get(job_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Dataset expired or not found.")
+    res = entry.meta.get("results")
+    if not res:
+        raise HTTPException(
+            status_code=400,
+            detail="No results available — run the analysis first.",
+        )
+    payload_bytes = await asyncio.to_thread(
+        export_service.generate_chapter_v_pdf,
+        entry, res, entry.meta.get("assignment") or {},
+    )
+    filename = f"chapter_v_results_{job_id[:8]}.pdf"
+    return Response(
+        content=payload_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 # ---------------------------------------------------------------------------

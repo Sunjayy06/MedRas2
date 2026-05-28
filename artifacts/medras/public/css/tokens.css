@@ -133,6 +133,24 @@
   --tk-mod-folio:      #ea580c;  /* Documents      — orange   */
   --tk-mod-compass:    #6b7280;  /* Compass (soon) — slate    */
   --tk-mod-fieldwork:  #6b7280;  /* Fieldwork (soon)          */
+
+  /* ── Semantic state tokens (cross-module) ──────────────────────────
+     Use these for status indicators, banners, and gate panels.
+     ──────────────────────────────────────────────────────────────── */
+  --tk-state-pass:     #059669;  /* green  — all checks clear          */
+  --tk-state-warn:     #d97706;  /* amber  — warnings, review needed   */
+  --tk-state-fail:     #dc2626;  /* red    — failures, action required */
+  --tk-state-info:     #2563eb;  /* blue   — neutral informational     */
+
+  --tk-state-pass-bg:  #f0fdf4;
+  --tk-state-warn-bg:  #fffbeb;
+  --tk-state-fail-bg:  #fef2f2;
+  --tk-state-info-bg:  #eff6ff;
+
+  --tk-state-pass-border: #bbf7d0;
+  --tk-state-warn-border: #fde68a;
+  --tk-state-fail-border: #fecaca;
+  --tk-state-info-border: #bfdbfe;
 }
 
 /* ── Shared button reset ─────────────────────────────────────────────── */

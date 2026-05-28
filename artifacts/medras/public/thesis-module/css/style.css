@@ -120,7 +120,7 @@ a:hover { text-decoration: underline; }
 /* --- Buttons --- */
 .th-btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-  appearance: none; border: 0; cursor: pointer;
+  appearance: none; border: 1px solid transparent; cursor: pointer;
   padding: 10px 18px; border-radius: 10px;
   font-size: 14px; font-weight: 600;
   transition: transform .1s ease-out, box-shadow .15s ease-out, background .12s ease-out,
@@ -131,18 +131,18 @@ a:hover { text-decoration: underline; }
 }
 .th-btn:active:not([disabled]) { transform: translateY(1px) !important; }
 .th-btn:focus-visible {
-  outline: 2.5px solid var(--th-emerald);
-  outline-offset: 2px;
+  outline: 3px solid var(--th-emerald);
+  outline-offset: 3px;
 }
 /* Primary — clearly the dominant action on the page */
 .th-btn-primary {
   background: linear-gradient(135deg, var(--th-emerald) 0%, var(--th-emerald-d) 100%);
-  color: #fff;
-  box-shadow: 0 2px 8px rgba(5, 150, 105, 0.28), 0 1px 2px rgba(0,0,0,.06);
+  color: #fff; border-color: var(--th-emerald-d);
+  box-shadow: 0 2px 8px rgba(5,150,105,0.28), 0 1px 2px rgba(0,0,0,.06);
 }
 .th-btn-primary:hover:not([disabled]) {
   background: linear-gradient(135deg, #0ea573 0%, #048056 100%);
-  box-shadow: 0 4px 14px rgba(5, 150, 105, 0.40), 0 2px 4px rgba(0,0,0,.08);
+  box-shadow: 0 4px 16px rgba(5,150,105,0.40), 0 2px 4px rgba(0,0,0,.08);
   transform: translateY(-1px);
 }
 /* Ghost — secondary outlined action */
@@ -175,17 +175,20 @@ a:hover { text-decoration: underline; }
 /* Danger variant */
 .th-btn-danger { background: #fef2f2; color: var(--th-danger); border: 1px solid #fca5a5; }
 .th-btn-danger:hover:not([disabled]) { background: #fee2e2; transform: translateY(-1px); }
-/* Success variant — confirming positive outcome */
+/* Success variant — confirming positive outcome (full download/export CTAs) */
 .th-btn-success {
   background: linear-gradient(135deg, var(--th-emerald-d) 0%, #036b4e 100%);
-  color: #fff; box-shadow: 0 2px 8px rgba(5,150,105,.28);
+  color: #fff; border-color: #036b4e;
+  box-shadow: 0 2px 8px rgba(5,150,105,.28);
+  letter-spacing: .01em;
 }
 .th-btn-success:hover:not([disabled]) {
-  box-shadow: 0 4px 14px rgba(5,150,105,.40); transform: translateY(-1px);
+  background: linear-gradient(135deg, #048056 0%, #025a40 100%);
+  box-shadow: 0 4px 16px rgba(5,150,105,.42); transform: translateY(-1px);
 }
 /* Small / Large */
 .th-btn-sm { padding: 5px 11px; font-size: 12.5px; border-radius: 8px; }
-.th-btn-lg { padding: 13px 24px; font-size: 15px; border-radius: 12px; }
+.th-btn-lg { padding: 13px 28px; font-size: 15.5px; border-radius: 12px; font-weight: 700; }
 .th-btn[disabled], .th-btn:disabled { opacity: 0.42; cursor: not-allowed; pointer-events: none; }
 
 /* --- Form controls --- */
@@ -447,21 +450,27 @@ textarea.th-input { resize: vertical; line-height: 1.55; min-height: 68px; }
 .th-helper-btn {
   width: 100%; text-align: left; padding: 9px 12px;
   background: #fff; border: 1px solid var(--th-line); border-radius: 8px;
-  margin-bottom: 6px; cursor: pointer; font-size: 13px;
+  margin-bottom: 5px; cursor: pointer; font-size: 13px;
   font-family: inherit; color: var(--th-ink-900); font-weight: 500;
   display: flex; align-items: center; gap: 8px;
-  transition: border-color .12s, background .12s, box-shadow .12s;
+  transition: border-color .12s, background .12s, box-shadow .12s, color .12s;
 }
 .th-helper-btn:hover {
   border-color: var(--th-emerald); background: rgba(16,185,129,0.05);
-  box-shadow: 0 1px 4px rgba(5,150,105,0.12);
+  box-shadow: 0 1px 4px rgba(5,150,105,0.12); color: var(--th-emerald-d);
 }
-.th-helper-btn:first-child {
-  border-color: var(--th-emerald); color: var(--th-emerald-d);
-  background: rgba(16,185,129,0.04);
-}
-.th-helper-btn:first-child:hover { background: rgba(16,185,129,0.10); }
 .th-helper-btn .th-helper-icon { font-size: 15px; opacity: 0.75; flex-shrink: 0; }
+
+/* AI draft button — strongest visual weight in the helper strip */
+.th-helper-btn.th-helper-ai-primary {
+  border-color: var(--th-emerald); color: var(--th-emerald-d);
+  background: rgba(16,185,129,0.06); font-weight: 600;
+  box-shadow: 0 1px 3px rgba(5,150,105,0.10);
+}
+.th-helper-btn.th-helper-ai-primary:hover {
+  background: rgba(16,185,129,0.12);
+  box-shadow: 0 2px 8px rgba(5,150,105,0.20);
+}
 
 /* Toast */
 #th-toast {

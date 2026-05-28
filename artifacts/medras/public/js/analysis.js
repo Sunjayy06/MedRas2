@@ -36,6 +36,10 @@ const state = {
   blankSheets: new Set(), // sheet names we've discovered are blank, so we can pre-uncheck
                           // and grey them out on the next render of the merge list.
 
+  // --- Category duplicate detection ---
+  categoryDupeResults: null,   // {columns: {<col>: {obvious:[], borderline:[], n_dirty}}}
+  setupGroupCol: "",           // grouping variable selected on setup screen
+
   // --- Step 3 (Variables) additions ---
   issues: [],            // [{column, type, severity, message}]
   autoCoding: [],        // [{column, kind, mapping, note, columns?}]
@@ -2417,9 +2421,128 @@ async function loadVariablesData() {
     state.autoCoding = data.auto_coding_plan || [];
     setStatus(status, "");
     renderClassify();
+    // Kick off category duplicate detection in the background (non-blocking)
+    _detectCategoryDupes().catch(() => {});
   } catch (err) {
     setStatus(status, `Could not load variables: ${err.message}`, "error");
   }
+}
+
+// ---------------------------------------------------------------------------
+// Category near-duplicate detection
+// ---------------------------------------------------------------------------
+
+async function _detectCategoryDupes() {
+  if (!state.jobId) return;
+  try {
+    const result = await api("/detect-category-dupes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ job_id: state.jobId }),
+    });
+    state.categoryDupeResults = result;
+    _renderCategoryMergePanel(result);
+  } catch (_) {
+    // Non-critical — fail silently
+  }
+}
+
+function _renderCategoryMergePanel(result) {
+  const panel = document.getElementById("category-merge-panel");
+  const listEl = document.getElementById("merge-proposals-list");
+  const dirtyCount = document.getElementById("merge-dirty-count");
+  if (!panel || !listEl) return;
+
+  const columns = result && result.columns ? result.columns : {};
+  const allObvious = [];
+  const allBorderline = [];
+
+  for (const [col, colResult] of Object.entries(columns)) {
+    for (const p of (colResult.obvious || [])) {
+      allObvious.push({ ...p, column: col });
+    }
+    for (const p of (colResult.borderline || [])) {
+      allBorderline.push({ ...p, column: col });
+    }
+  }
+
+  if (allObvious.length === 0 && allBorderline.length === 0) {
+    panel.style.display = "none";
+    return;
+  }
+
+  const totalDirty = Object.values(columns).reduce((s, r) => s + (r.n_dirty || 0), 0);
+  if (dirtyCount) dirtyCount.textContent = `${totalDirty} dirty value${totalDirty !== 1 ? "s" : ""}`;
+
+  const renderGroup = (proposals, badge, badgeStyle) => proposals.map((p) => {
+    const memberTags = (p.members || []).map((m) => {
+      const count = (p.counts || {})[m] || 0;
+      const isCanon = m === p.canonical;
+      return `<span style="display:inline-flex;align-items:center;gap:3px;padding:1px 7px;border-radius:10px;font-size:0.77rem;
+        background:${isCanon ? "#d1fae5" : "#f3f4f6"};color:${isCanon ? "#065f46" : "#374151"};border:1px solid ${isCanon ? "#6ee7b7" : "#d1d5db"}">
+        ${isCanon ? "✓ " : ""}${escapeHtml(m)}<span style="opacity:0.6;font-size:0.7rem"> n=${count}</span>
+      </span>`;
+    }).join(" ");
+    return `<div style="margin-bottom:0.5rem;padding:0.5rem 0.65rem;background:#fff;border:1px solid #e5e7eb;border-radius:6px;">
+      <span style="font-size:0.75rem;font-weight:700;${badgeStyle};padding:1px 6px;border-radius:8px;margin-right:6px;">${badge}</span>
+      <code style="font-size:0.8rem;color:#374151;">${escapeHtml(p.column)}</code>
+      <span style="font-size:0.78rem;color:#6b7280;margin:0 4px;">→</span>
+      <span style="font-size:0.8rem;">merge to <strong>${escapeHtml(p.canonical)}</strong></span>
+      <div style="margin-top:0.35rem;display:flex;flex-wrap:wrap;gap:4px;">${memberTags}</div>
+    </div>`;
+  }).join("");
+
+  listEl.innerHTML =
+    renderGroup(allObvious, "AUTO", "background:#d1fae5;color:#065f46") +
+    renderGroup(allBorderline, "REVIEW", "background:#fef3c7;color:#92400e");
+
+  panel.style.display = "";
+  _bindMergePanelButtons(allObvious, allBorderline);
+}
+
+function _buildMergePayload(proposals) {
+  return proposals.map((p) => ({
+    column: p.column,
+    canonical: p.canonical,
+    members: p.members || [],
+  }));
+}
+
+function _bindMergePanelButtons(allObvious, allBorderline) {
+  const mergeStatus = document.getElementById("merge-status");
+
+  const applyMerge = async (proposals, label) => {
+    if (!proposals.length) return;
+    setStatus(mergeStatus, `Applying ${label}…`, "loading");
+    try {
+      const res = await api("/apply-category-merge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          job_id: state.jobId,
+          merges: _buildMergePayload(proposals),
+        }),
+      });
+      const n = res.n_merges || 0;
+      setStatus(mergeStatus, `Applied ${n} merge${n !== 1 ? "s" : ""} — re-classifying…`, "success");
+      // Re-run classification to pick up the cleaned data
+      await loadVariablesData();
+      document.getElementById("category-merge-panel").style.display = "none";
+      setTimeout(() => setStatus(mergeStatus, ""), 3000);
+    } catch (err) {
+      setStatus(mergeStatus, `Merge failed: ${err.message}`, "error");
+    }
+  };
+
+  document.getElementById("btn-apply-obvious-merges")?.addEventListener("click", () =>
+    applyMerge(allObvious, "obvious merges"), { once: true });
+
+  document.getElementById("btn-apply-all-merges")?.addEventListener("click", () =>
+    applyMerge([...allObvious, ...allBorderline], "all suggestions"), { once: true });
+
+  document.getElementById("btn-dismiss-merge-panel")?.addEventListener("click", () => {
+    document.getElementById("category-merge-panel").style.display = "none";
+  }, { once: true });
 }
 
 function renderClassify() {
@@ -4488,6 +4611,30 @@ function renderSetupScreen(plan) {
   if (uploadRow) {
     uploadRow.style.display = (state.studyDesc || "").trim() ? "none" : "";
   }
+
+  // Populate grouping-variable dropdown from known columns
+  _populateSetupGroupSelect(plan);
+}
+
+function _populateSetupGroupSelect(plan) {
+  const sel = document.getElementById("setup-group-col");
+  if (!sel) return;
+  const cols = (state.columns || []).map((c) => (typeof c === "string" ? c : c.column));
+  sel.innerHTML = '<option value="">— none (single-group / descriptive) —</option>';
+  cols.forEach((col) => {
+    const opt = document.createElement("option");
+    opt.value = col;
+    opt.textContent = col;
+    // Pre-select from AI plan or previously set state
+    const aiGroup = (plan && plan.group_col) || state.setupGroupCol || "";
+    if (col === aiGroup) opt.selected = true;
+    sel.appendChild(opt);
+  });
+  // Restore from state
+  if (state.setupGroupCol && !sel.value) sel.value = state.setupGroupCol;
+  sel.addEventListener("change", () => {
+    state.setupGroupCol = sel.value || "";
+  });
 }
 
 function bindScreenSetup() {
@@ -4508,6 +4655,9 @@ function bindScreenSetup() {
       state.studyType  = state.aiStudy.study_type  || state.studyType  || "comparison";
       state.outcomeCol = state.aiStudy.outcome_col || state.outcomeCol || null;
     }
+    // Capture grouping var from the setup screen dropdown before leaving
+    const grpSel = document.getElementById("setup-group-col");
+    if (grpSel) state.setupGroupCol = grpSel.value || "";
     showScreen("3");
     await loadVariablesData();
   });
@@ -5554,11 +5704,43 @@ function bindExport() {
   screen.querySelectorAll('[data-action="download"]').forEach((btn) => {
     btn.addEventListener("click", () => downloadExport(btn.dataset.format));
   });
+  // Chapter V thesis-format export buttons
+  screen.querySelectorAll('[data-action="download-chapter-v"]').forEach((btn) => {
+    btn.addEventListener("click", () => downloadChapterV(btn.dataset.format));
+  });
   const back = screen.querySelector('[data-action="back-to-results"]');
   if (back) back.addEventListener("click", () => showScreen("results"));
   const restartBtn = screen.querySelector('[data-action="restart"]');
   if (restartBtn) restartBtn.addEventListener("click", restart);
   bindCorrectionSystem();
+}
+
+async function downloadChapterV(fmt) {
+  if (!state.jobId) return;
+  const statusEl = document.getElementById("chapter-v-status");
+  setStatus(statusEl, "Generating Chapter V…", "loading");
+  const fmtKey = fmt === "pdf" ? "chapter_v_pdf" : "chapter_v_word";
+  try {
+    const res = await fetch(`${API_BASE}/export/${state.jobId}/${fmtKey}`);
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(body.detail || res.statusText);
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const ext = fmt === "pdf" ? "pdf" : "docx";
+    a.href = url;
+    a.download = `chapter_v_results.${ext}`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    setStatus(statusEl, "Downloaded!", "success");
+    setTimeout(() => setStatus(statusEl, ""), 3000);
+  } catch (err) {
+    setStatus(statusEl, `Download failed: ${err.message}`, "error");
+  }
 }
 
 /* ------------------------------------------------------------------ */

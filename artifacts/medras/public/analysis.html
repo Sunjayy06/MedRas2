@@ -652,6 +652,28 @@
         <div class="se-section-label" id="autocode-label" hidden>AUTO-CODING PLAN</div>
         <div class="se-autocode-box" id="autocode-summary" data-testid="autocode-summary" hidden></div>
 
+        <!-- Zone E · Category near-duplicate review panel (rendered dynamically) -->
+        <div id="category-merge-panel" data-testid="category-merge-panel" style="display:none;margin-bottom:1.25rem;">
+          <div class="se-section-label" style="margin-bottom:0.5rem;">CATEGORY LABEL QUALITY</div>
+          <div style="background:#fffbeb;border:1px solid #f59e0b;border-radius:8px;padding:1rem 1.1rem;">
+            <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.6rem;">
+              <span style="font-size:1.05rem;">⚠</span>
+              <strong style="font-size:0.9rem;color:#92400e;">Near-duplicate category labels detected</strong>
+              <span id="merge-dirty-count" style="background:#f59e0b;color:#fff;border-radius:12px;padding:0.1rem 0.55rem;font-size:0.78rem;font-weight:700;"></span>
+            </div>
+            <p style="font-size:0.82rem;color:#78350f;margin:0 0 0.75rem;">
+              Some category values look like the same thing typed differently (e.g. "Male" / "male" / "MALE", or "Positive" / "Positvie"). Auto-merges below are safe to apply silently. Review borderline suggestions before accepting.
+            </p>
+            <div id="merge-proposals-list"></div>
+            <div style="display:flex;align-items:center;gap:0.6rem;margin-top:0.85rem;flex-wrap:wrap;">
+              <button type="button" class="btn btn-primary" id="btn-apply-obvious-merges" data-testid="btn-apply-obvious-merges" style="font-size:0.82rem;padding:0.35rem 0.9rem;">Apply obvious merges</button>
+              <button type="button" class="btn btn-secondary" id="btn-apply-all-merges" data-testid="btn-apply-all-merges" style="font-size:0.82rem;padding:0.35rem 0.9rem;">Accept all suggestions</button>
+              <button type="button" class="btn btn-tertiary" id="btn-dismiss-merge-panel" data-testid="btn-dismiss-merge-panel" style="font-size:0.82rem;">Dismiss</button>
+              <div id="merge-status" class="se-status" role="status" aria-live="polite" style="margin:0;"></div>
+            </div>
+          </div>
+        </div>
+
         <!-- Zone E · Variable Assistant -->
         <div class="se-section-label">VARIABLE ASSISTANT</div>
         <div class="se-assistant-panel" data-testid="assistant-panel">
@@ -1154,6 +1176,25 @@
           </div>
         </div>
 
+        <!-- ── Grouping variable override ── -->
+        <div class="se-plan-section" id="setup-group-section">
+          <div class="se-plan-section-head">
+            <span class="se-plan-section-icon">👥</span>
+            <span class="se-plan-section-title">Grouping variable <span style="font-weight:400;font-size:0.82rem;color:#64748b;">(optional — splits the dataset into comparison groups)</span></span>
+          </div>
+          <div class="se-field-row" style="margin:0.6rem 0 0.25rem;">
+            <label class="se-field" style="max-width:340px;">
+              <span style="font-size:0.82rem;color:#475569;">Select the column that defines your groups:</span>
+              <select id="setup-group-col" data-testid="setup-group-col" style="margin-top:0.35rem;">
+                <option value="">— none (single-group / descriptive) —</option>
+              </select>
+            </label>
+          </div>
+          <p class="se-hint" style="margin:0.35rem 0 0;font-size:0.78rem;">
+            If your study compares e.g. "cases vs controls" or "treatment vs placebo", pick that column here. It pre-fills the grouping variable on Step 6.
+          </p>
+        </div>
+
         <!-- ── Planned test pairs ── -->
         <div class="se-plan-section" id="setup-test-pairs-section">
           <div class="se-plan-section-head">
@@ -1314,6 +1355,17 @@
             <p>One sheet per test plus Table 1 — useful for further work.</p>
             <button type="button" class="btn btn-primary" data-action="download" data-format="excel" data-testid="button-download-excel">Download Excel</button>
           </article>
+        </div>
+
+        <!-- Chapter V thesis-format export -->
+        <div style="margin-top:1.5rem;padding:1.1rem 1.3rem;background:#f0f4ff;border:1px solid #c7d5f5;border-radius:8px;">
+          <h3 style="margin:0 0 0.35rem;font-size:0.97rem;color:#1a2e5a;">Chapter V — Results (Thesis format)</h3>
+          <p style="margin:0 0 0.75rem;font-size:0.82rem;color:#475569;">TNR 12pt, 1.5 line spacing, 1″ margins, numbered tables with n (%) layout — ready to paste directly into your NBEMS / MD / DNB thesis.</p>
+          <div style="display:flex;gap:0.75rem;flex-wrap:wrap;">
+            <button type="button" class="btn btn-primary" data-action="download-chapter-v" data-format="word" data-testid="button-chapter-v-word" style="font-size:0.85rem;">Download Chapter V — Word (.docx)</button>
+            <button type="button" class="btn btn-secondary" data-action="download-chapter-v" data-format="pdf" data-testid="button-chapter-v-pdf" style="font-size:0.85rem;">Download Chapter V — PDF</button>
+          </div>
+          <div id="chapter-v-status" class="se-status" role="status" aria-live="polite" style="margin-top:0.5rem;"></div>
         </div>
 
         <div id="export-status" class="se-status" role="status" aria-live="polite" data-testid="status-export"></div>
