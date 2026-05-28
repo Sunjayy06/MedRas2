@@ -1,0 +1,176 @@
+To produce an output like Dr. Jenie corrected.docx instead of the raw MedRAS results PDF, the module needs to move from a basic statistical summary generator to a cleaned, thesis-ready Chapter V generator.
+
+The problem is not only writing. The main issue is that MedRAS is analysing uncleaned raw categories, so it cannot produce polished results, proper associations, or meaningful interpretations. In the MedRAS output, values like Left, Left :, Right, and Right : are treated as separate categories. Similar spelling/spacing problems occur in ER, PR, HER2, AR, EGFR, Ki-67, molecular subtype, DCIS, LVI, necrosis, and p27 status. Because of this, the MedRAS report states that no primary inferential test ran successfully, whereas the Jenie corrected document gives a full Chapter V with sections, tables, p-values, figures, and interpretations.
+
+What needs to be done
+1. Add a data-cleaning layer before analysis
+
+Before running statistics, the system must standardise all categories.
+
+For example:
+
+Raw MedRAS value	Correct cleaned value
+Left, Left :	Left
+Right, Right :	Right
+Positive, Positive :, Postive	Positive
+Negative, Negative :, Neg	Negative
+Her2neu, Her2neu :, HER2	HER2-enriched
+3+, Positive, Positive :	HER2 Positive
+>=14, >= 14%, >=14%	≥14%
+
+Without this cleaning, the system will keep splitting the same category into multiple rows and the analysis will look wrong.
+
+2. Create a variable dictionary
+
+The module should maintain a fixed variable dictionary for each study.
+
+For this study, it should know:
+
+Variable	Type	Clean categories
+Age	Continuous	Mean ± SD
+Laterality	Nominal	Left / Right
+Tumour size	Ordinal	T1b / T1c / T2 / T3 / T4b
+Histological grade	Ordinal	Grade 1 / Grade 2 / Grade 3
+Nodal status	Ordinal	N0 / N1a / N2a / N3a
+ER / PR / AR / EGFR	Nominal	Positive / Negative
+HER2	Nominal/Ordinal	Negative-low / Equivocal / Positive
+Ki-67	Nominal	<14% / ≥14%
+Molecular subtype	Nominal	Luminal A / Luminal B / HER2-enriched / Triple negative
+p27 status	Main grouping variable	Positive / Negative
+
+This tells the system how to treat each variable during analysis.
+
+3. Define the study outcome before analysis
+
+MedRAS should not simply describe all variables. It must ask:
+
+What is the primary outcome or main grouping variable?
+
+For this study, the main outcome/grouping variable is:
+
+p27 expression status: Positive vs Negative
+
+Then all important clinicopathological and immunohistochemical variables should be compared against p27 expression.
+
+That is why Jenie corrected is better. It does not just describe the dataset; it tests whether p27 expression is associated with tumour grade, ER, PR, AR, molecular subtype, and other prognostic markers.
+
+4. Run proper descriptive statistics first
+
+The system should first generate clean descriptive tables:
+
+Age distribution
+Laterality and tumour quadrant
+Tumour size and pathological T stage
+Histological grade
+Nodal stage and nodal burden
+LVI, ENE, necrosis, DCIS
+ER, PR, HER2 profile
+AR, EGFR, Ki-67 profile
+Molecular subtype
+Overall p27 expression
+p27 localisation
+p27 staining score
+
+This is what makes the corrected Chapter V look structured and thesis-ready.
+
+5. Then run inferential statistics
+
+After descriptives, the module must automatically run association tests between p27 expression and relevant variables.
+
+For example:
+
+Comparison	Test needed
+p27 expression vs age	Welch t-test / independent t-test
+p27 expression vs laterality	Chi-square / Fisher exact
+p27 expression vs tumour size	Chi-square / Fisher exact
+p27 expression vs grade	Chi-square / Fisher exact
+p27 expression vs nodal status	Chi-square / Fisher exact
+p27 expression vs ER/PR/HER2/AR/EGFR/Ki-67	Chi-square / Fisher exact
+p27 expression vs molecular subtype	Chi-square / Fisher exact
+
+The test should not fail silently. If expected cell counts are small, the system should switch to Fisher exact test or combine categories logically.
+
+6. Add automatic p-value interpretation
+
+The module should label results clearly:
+
+p-value	Interpretation
+p < 0.001	Highly significant
+p < 0.05	Significant
+p ≥ 0.05	Not significant
+
+It should also mention the meaning in the interpretation.
+
+Example:
+
+“p27 expression showed a statistically significant association with ER status, with ER positivity being more frequent among p27-positive tumours.”
+
+7. Generate thesis-style tables, not raw software output
+
+MedRAS currently gives raw software-style output. The module needs to convert this into dissertation-style tables.
+
+Instead of this:
+
+“Er n count Positive: 69; Negative: 42; Positive : 3; Postive: 2”
+
+It should produce:
+
+ER status	n	%
+Positive	74	63.8%
+Negative	42	36.2%
+
+This is the key transformation needed.
+
+8. Add interpretation below every table
+
+Every table should have a short interpretation in this format:
+
+Interpretation:
+“The majority of cases showed ER positivity, accounting for 63.8% of the cohort, while ER-negative tumours constituted 36.2%.”
+
+The interpretation should be factual and should not overstate findings.
+
+9. Add figures only where useful
+
+The module should automatically choose the best figure type:
+
+Data type	Best figure
+Two categories	Pie chart or simple bar chart
+Multiple categories	Bar chart
+Comparison between p27 groups	Clustered bar chart
+Continuous mean comparison	Bar chart with mean values
+
+Each figure should include percentages and a proper figure title.
+
+10. Create final statistically significant summary
+
+At the end of Chapter V, the module should create a summary table like Jenie corrected:
+
+Parameter	Key finding	p-value
+Histological grade	Significant association with p27 expression	0.004
+ER expression	p27 positivity associated with ER positivity	<0.001
+PR expression	p27 positivity associated with PR positivity	<0.001
+AR expression	p27 positivity associated with AR positivity	0.002
+Molecular subtype	Triple-negative cases enriched in p27-negative group	<0.001
+
+This helps the discussion and conclusion become evidence-linked.
+
+Final module instruction
+
+The module should follow this process:
+
+Import dataset
+Identify study title, aim, objectives, and primary outcome
+Identify the main grouping variable
+Clean spelling, spacing, symbols, and duplicate categories
+Map variables into correct statistical types
+Generate descriptive tables
+Run appropriate inferential tests
+Select Chi-square, Fisher exact, t-test, or Welch t-test based on data type and assumptions
+Generate thesis-style tables
+Add interpretation below each table
+Generate percentage-labelled figures
+Create a final significant association summary
+Export as a properly formatted Chapter V
+
+In simple terms: MedRAS must first clean and understand the dataset, then analyse according to the study objective, and only then write the Chapter V in a thesis-ready format.
