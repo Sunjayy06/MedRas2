@@ -1866,23 +1866,25 @@ html[data-medras-init="ok"] .se-actions-fallback { display: none; }
 .se-issue-fix-btn {
   flex-shrink: 0;
   margin-left: auto;
-  padding: 1px 8px;
+  padding: 2px 9px;
   font-size: 11px;
   font-weight: 600;
   line-height: 18px;
-  border: 1px solid currentColor;
-  border-radius: 4px;
+  border: 1.5px solid currentColor;
+  border-radius: 5px;
   background: transparent;
   color: inherit;
   cursor: pointer;
   white-space: nowrap;
-  opacity: 0.75;
-  transition: opacity 0.15s, background 0.15s;
+  opacity: 0.82;
+  transition: opacity .13s, background .13s, transform .12s;
 }
 .se-issue-fix-btn:hover {
   opacity: 1;
-  background: rgba(0,0,0,0.06);
+  background: rgba(0,0,0,0.07);
+  transform: translateY(-1px);
 }
+.se-issue-fix-btn:active { transform: translateY(1px); }
 .se-issue-sub.is-blocking .se-issue-fix-btn {
   border-color: #c43838;
   color: #93181a;
@@ -3560,3 +3562,54 @@ td.se-corr-p-sig {
 }
 
 /* ── Step-bar Quality label ──────────────────────────────────── */
+
+/* ── Fix-all bar (shown above classify table when whitespace issues exist) ── */
+#fix-all-bar {
+  display: none;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px 14px;
+  background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+  border: 1.5px solid #6ee7b7;
+  border-radius: 10px;
+  margin-bottom: 12px;
+}
+#fix-all-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 16px;
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(5,150,105,.30);
+  transition: transform .12s, box-shadow .12s;
+  white-space: nowrap;
+  letter-spacing: 0.01em;
+}
+#fix-all-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(5,150,105,.42);
+}
+#fix-all-btn:active { transform: translateY(1px); box-shadow: none; }
+#fix-all-bar .fix-all-cols {
+  font-size: 12.5px;
+  color: #065f46;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+#fix-all-bar .fix-all-cols strong {
+  background: #a7f3d0;
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-weight: 600;
+  color: #064e3b;
+  font-size: 11.5px;
+}

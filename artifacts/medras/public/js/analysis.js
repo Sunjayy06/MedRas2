@@ -246,11 +246,7 @@ async function resumeFromSavedSession(saved) {
       await loadQualityReport();
     } else if (resolved === "3") {
       showScreen("3");
-      if (state.classifications && state.classifications.length > 0) {
-        renderClassify();
-      } else {
-        await loadVariablesData();
-      }
+      await loadVariablesData();
     } else if (resolved === "setup") {
       // Restore the setup screen — rehydrate AI study plan from saved state,
       // or re-call /setup-study with the stored description if state is stale.
@@ -2449,29 +2445,17 @@ function renderFixAllBar() {
     return;
   }
   bar.style.display = "flex";
-  const colList = dupCols.map((c) => `<strong>${escapeHtml(c)}</strong>`).join(", ");
+  const colList = dupCols.map((c) => `<strong>${escapeHtml(c)}</strong>`).join(" ");
   bar.innerHTML = `
-    <button type="button" id="fix-all-btn" data-testid="btn-fix-all"
-      style="display:inline-flex;align-items:center;gap:7px;padding:8px 18px;
-             background:#059669;color:#fff;border:none;border-radius:8px;
-             font-size:13.5px;font-weight:600;cursor:pointer;
-             box-shadow:0 1px 4px rgba(5,150,105,.25);white-space:nowrap;
-             transition:background .12s,transform .08s">
+    <button type="button" id="fix-all-btn" data-testid="btn-fix-all">
       ✦ Fix all whitespace issues
       <span style="background:rgba(255,255,255,.22);border-radius:5px;
                    padding:1px 8px;font-size:12px;font-weight:700">
         ${dupCols.length} column${dupCols.length === 1 ? "" : "s"}
       </span>
     </button>
-    <span style="font-size:12px;color:#6b7280;line-height:1.4">
-      Trims extra spaces from: ${colList}
-    </span>`;
-  const btn = document.getElementById("fix-all-btn");
-  if (btn) {
-    btn.addEventListener("mouseenter", () => { btn.style.background = "#047857"; btn.style.transform = "translateY(-1px)"; });
-    btn.addEventListener("mouseleave", () => { btn.style.background = "#059669"; btn.style.transform = ""; });
-    btn.addEventListener("click", () => trimAllWhitespace(dupCols));
-  }
+    <div class="fix-all-cols">Trims: ${colList}</div>`;
+  document.getElementById("fix-all-btn")?.addEventListener("click", () => trimAllWhitespace(dupCols));
 }
 
 function renderVariableMetrics() {
