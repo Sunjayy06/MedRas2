@@ -1006,6 +1006,81 @@ async def variable_assistant_endpoint(
 
 
 # ---------------------------------------------------------------------------
+# Trim-all whitespace — batch clean all duplicate_values columns at once
+# ---------------------------------------------------------------------------
+
+
+class TrimAllRequest(BaseModel):
+    job_id: str = Field(..., min_length=1, max_length=64)
+
+
+@router.post("/trim-all-whitespace")
+@limiter.limit("30/minute")
+async def trim_all_whitespace_endpoint(
+    request: Request, payload: TrimAllRequest
+) -> Dict[str, Any]:
+    """Trim whitespace from every flagged (duplicate_values) string column
+    in one atomic operation — equivalent to clicking Fix for each column
+    individually, but instant.
+    """
+    entry = dataset_store.get(payload.job_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Dataset expired or not found.")
+
+    classifications = entry.meta.get("classifications") or variable_classifier.classify_dataframe(entry.df)
+    issues = variable_issues.detect_issues(entry.df, classifications)
+
+    # Target only columns with duplicate_values issues; fall back to all strings.
+    dup_cols = [i["column"] for i in issues if i["type"] == "duplicate_values"]
+    target = dup_cols or [col for col in entry.df.columns if entry.df[col].dtype == object]
+
+    new_df, trim_meta = await asyncio.to_thread(
+        variable_assistant.trim_all_whitespace, entry.df, target
+    )
+
+    dataset_store.replace_df(payload.job_id, new_df)
+
+    # Recompute classifications, preserving any manual overrides.
+    classifications = variable_classifier.classify_dataframe(entry.df)
+    stored = entry.meta.get("classifications") or []
+    stored_by_col = {c.get("column"): c for c in stored}
+    for c in classifications:
+        prev = stored_by_col.get(c["column"])
+        if prev and prev.get("reason", "").startswith(("Manually set", "Set by assistant")):
+            c["detected_type"] = prev["detected_type"]
+            c["reason"] = prev["reason"]
+            if c["column"] in entry.df.columns:
+                variable_classifier.reenrich_after_override(
+                    c, entry.df[c["column"]], c["column"],
+                )
+    entry.meta["classifications"] = classifications
+
+    issues = variable_issues.detect_issues(entry.df, classifications)
+    coding = variable_issues.auto_coding_plan(entry.df, classifications)
+    entry.meta["variable_issues"] = issues
+    entry.meta["auto_coding_plan"] = coding
+
+    changed = trim_meta["changed_cols"]
+    total  = trim_meta["total_changed"]
+    if changed:
+        msg = (
+            f"Trimmed whitespace in {len(changed)} column(s): "
+            f"{', '.join(changed)}. {total} cell(s) standardised."
+        )
+    else:
+        msg = "No extra whitespace found — all columns already clean."
+
+    return {
+        "status": "applied",
+        "confirmation_message": msg,
+        "classifications": classifications,
+        "issues": issues,
+        "auto_coding_plan": coding,
+        "blocking_issues": variable_issues.has_blocking_issues(issues),
+    }
+
+
+# ---------------------------------------------------------------------------
 # Chatboxes 2/3/4 — Normality / Plan / Results explainers
 # ---------------------------------------------------------------------------
 

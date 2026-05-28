@@ -2848,12 +2848,64 @@ function renderAssistantChips() {
     });
   }
 
-  out.innerHTML = chips.map(
+  // "Trim all" button — shown when ≥2 columns have duplicate_values issues.
+  const dupCols = [...new Set(
+    (state.issues || []).filter(i => i.type === "duplicate_values").map(i => i.column)
+  )];
+  const trimAllHtml = dupCols.length >= 2
+    ? `<button type="button" class="se-chip se-chip-good" id="chip-trim-all"
+         data-testid="chip-trim-all"
+         title="Remove trailing/leading spaces from ${dupCols.length} columns at once">
+         ✦ Trim all ${dupCols.length} columns
+       </button>`
+    : "";
+
+  out.innerHTML = trimAllHtml + chips.map(
     (c, i) => `<button type="button" class="se-chip" data-chip="${i}" data-testid="chip-${i}">${escapeHtml(c.label)}</button>`
   ).join("");
-  $$(".se-chip", out).forEach((btn, i) => {
+
+  const trimAllBtn = out.querySelector("#chip-trim-all");
+  if (trimAllBtn) trimAllBtn.addEventListener("click", () => trimAllWhitespace(dupCols));
+
+  $$(".se-chip:not(#chip-trim-all)", out).forEach((btn, i) => {
     btn.addEventListener("click", () => sendAssistantMessage(chips[i].text));
   });
+}
+
+async function trimAllWhitespace(dupCols) {
+  const names = dupCols.join(", ");
+  state.assistantThread.push({ role: "user", text: `Trim whitespace from all flagged columns (${names})` });
+  state.assistantThread.push({ role: "typing", text: "" });
+  renderAssistantThread();
+  const input = $("#assistant-input");
+  if (input) input.disabled = true;
+  const clearTyping = () => {
+    state.assistantThread = state.assistantThread.filter(m => m.role !== "typing");
+  };
+  try {
+    const res = await api("/trim-all-whitespace", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ job_id: state.jobId }),
+    });
+    clearTyping();
+    if (res.status === "applied") {
+      state.assistantThread.push({ role: "action", text: "✓ " + (res.confirmation_message || "Done.") });
+      state.classifications = res.classifications || [];
+      state.issues = res.issues || [];
+      state.autoCoding = res.auto_coding_plan || [];
+      renderClassify();
+    } else {
+      state.assistantThread.push({ role: "clarify", text: res.confirmation_message || "No changes needed." });
+      renderAssistantThread();
+    }
+  } catch (err) {
+    clearTyping();
+    state.assistantThread.push({ role: "clarify", text: `Could not trim all: ${err.message}` });
+    renderAssistantThread();
+  } finally {
+    if (input) input.disabled = false;
+  }
 }
 
 async function sendAssistantMessage(message) {

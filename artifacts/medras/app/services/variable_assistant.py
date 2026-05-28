@@ -310,6 +310,45 @@ def _trim_whitespace(
     return new_df, {"changed_rows": changed, "sample_after": sample}
 
 
+def trim_all_whitespace(
+    df: pd.DataFrame, columns: Optional[List[str]] = None
+) -> Tuple[pd.DataFrame, Dict[str, Any]]:
+    """Trim leading/trailing whitespace (and collapse internal runs) from
+    every string cell across all *columns* in a single DataFrame pass.
+
+    Args:
+        df:      Source DataFrame (not mutated).
+        columns: Explicit list of columns to clean.  When ``None`` every
+                 object-dtype column is targeted.
+
+    Returns:
+        ``(new_df, {"changed_cols": [...], "total_changed": int})``
+    """
+    target = columns if columns is not None else [
+        col for col in df.columns if df[col].dtype == object
+    ]
+    new_df = df.copy()
+    changed_cols: List[str] = []
+    total_changed = 0
+
+    def _clean(v: Any) -> Any:
+        if pd.isna(v):
+            return v
+        return " ".join(str(v).split())
+
+    for col in target:
+        if col not in new_df.columns or new_df[col].dtype != object:
+            continue
+        original = new_df[col].copy()
+        new_df[col] = new_df[col].map(_clean)
+        n = int((new_df[col].astype(str) != original.astype(str)).sum())
+        if n > 0:
+            changed_cols.append(col)
+            total_changed += n
+
+    return new_df, {"changed_cols": changed_cols, "total_changed": total_changed}
+
+
 def _strip_prefix(
     df: pd.DataFrame, column: str, prefix: Optional[str]
 ) -> Tuple[pd.DataFrame, Dict[str, Any]]:
