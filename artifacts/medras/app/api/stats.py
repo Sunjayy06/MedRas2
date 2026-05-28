@@ -670,7 +670,7 @@ async def quality_check(job_id: str) -> Dict[str, Any]:
         raise HTTPException(status_code=404, detail="Dataset expired or not found.")
     classifications = entry.meta.get("classifications") or variable_classifier.classify_dataframe(entry.df)
     entry.meta["classifications"] = classifications
-    return await asyncio.to_thread(data_quality.quality_report, entry.df, classifications)
+    return await asyncio.to_thread(data_quality.quality_report, entry.df, classifications=classifications)
 
 
 class QualityAction(BaseModel):
