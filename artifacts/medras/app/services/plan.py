@@ -158,11 +158,16 @@ def generate_plan(
                 "parametric": True,
             })
             tests.append({
-                "id": "tukey_hsd",
+                "id": "pc_tukey_hsd",
                 "title": "Tukey HSD post-hoc",
                 "why": "Pairwise comparisons after a significant ANOVA.",
                 "columns": [outcome, group],
                 "parametric": True,
+                "_phase_b": {
+                    "function": "pc_tukey_hsd",
+                    "test_type": "tukey_hsd",
+                    "args": {"outcome": outcome, "group": group},
+                },
             })
         else:
             tests.append({
