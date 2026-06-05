@@ -3,11 +3,8 @@
 Per spec (Step 5):
 
 * n < 50              → use Shapiro-Wilk
-* 50 ≤ n ≤ 2000       → use Kolmogorov-Smirnov (Lilliefors-corrected idea
-  via comparison against a fitted normal). Spec also explicitly notes
-  Shapiro is acceptable up to ~5000 — we follow the more conservative
-  spec value here so behaviour matches the user-facing copy on screen 5.
-* n > 2000            → SKIP the test; rely on shape thumb rules instead.
+* 50 ≤ n ≤ 2000       → use Lilliefors when available; otherwise Shapiro-Wilk.
+* n > 2000            → SKIP the formal test; do not auto-mark normal.
 * |skew| > 2 OR |kurt| > 7  → flag as non-normal regardless of p-value.
 * If non-normal AND values are strictly positive AND a log transform
   fixes the shape rules, recommend the log-transform.
@@ -70,8 +67,8 @@ def _decision(p_value: Optional[float], skew: Optional[float],
     if kurt is not None and abs(kurt) > _KURT_LIMIT:
         return "non_normal"
     if p_value is None:
-        # Test was skipped (n > 2000 with acceptable shape) — call it normal.
-        return "normal"
+        # Formal test was skipped; do not treat this as confirmed normality.
+        return "skipped"
     return "normal" if p_value > alpha else "non_normal"
 
 
@@ -89,10 +86,14 @@ def _run_test(clean: np.ndarray) -> Dict[str, Any]:
             stat, p = stats.shapiro(clean)
             test_name = "Shapiro-Wilk"
         else:
-            mu = float(np.mean(clean))
-            sd = float(np.std(clean, ddof=1)) or 1.0
-            stat, p = stats.kstest((clean - mu) / sd, "norm")
-            test_name = "Kolmogorov-Smirnov"
+            try:
+                from statsmodels.stats.diagnostic import lilliefors
+
+                stat, p = lilliefors(clean, dist="norm")
+                test_name = "Lilliefors"
+            except Exception:
+                stat, p = stats.shapiro(clean)
+                test_name = "Shapiro-Wilk"
         return {
             "test": test_name,
             "statistic": float(stat),
@@ -154,11 +155,11 @@ def normality_test(values: pd.Series, alpha: float = 0.05,
             log_decision = None
 
     # Build a researcher-readable note that summarises the verdict.
-    if decision == "normal" and base.get("skipped"):
+    if decision == "skipped":
         note = (
-            f"n = {n} > 2000 — formal test skipped (Shapiro/KS over-reject "
-            "at very large samples). Shape (skew, kurtosis) is acceptable, "
-            "treating as approximately normal."
+            f"n = {n} > 2000 - formal normality testing was skipped because "
+            "large-sample tests can over-reject trivial departures. Skewness "
+            "and kurtosis are acceptable, but normality was not confirmed."
         )
     elif decision == "normal":
         note = "Distribution is approximately normal — parametric tests are appropriate."
@@ -178,7 +179,7 @@ def normality_test(values: pd.Series, alpha: float = 0.05,
     return {
         "applicable": True,
         "n": n,
-        "decision": decision,                # normal | non_normal | insufficient
+        "decision": decision,                # normal | non_normal | skipped | insufficient
         "test": base.get("test"),
         "statistic": base.get("statistic"),
         "p_value": base.get("p_value"),
