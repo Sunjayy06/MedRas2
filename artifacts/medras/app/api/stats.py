@@ -721,25 +721,60 @@ async def classify(payload: ClassifyRequest) -> Dict[str, Any]:
     entry = dataset_store.get(payload.job_id)
     if entry is None:
         raise HTTPException(status_code=404, detail="Dataset expired or not found.")
-    # Pre-clean: extract numeric values from text cells like "2mm" /
-    # "Grade 3" / "12 kg" so the classifier sees them as numeric (scale)
-    # per the MedRAS biostatistician spec. The cleaner is idempotent —
-    # already-numeric columns are skipped — so it is safe to invoke on
-    # every classify call. The notes themselves are persisted on the
-    # dataset entry so subsequent reclassifies can still surface them.
-    cleaned_df, fresh_cleanup_notes = variable_classifier.clean_numeric_like_columns(entry.df)
+    # Pre-clean in a reversible, previewable way. Each helper is idempotent;
+    # backups keep the original source columns so /cleanup-undo can restore
+    # them or remove derived columns.
+    source_df = entry.df
+    fresh_cleanup_notes: Dict[str, str] = {}
+    cleanup_suppressed = set(entry.meta.get("cleanup_suppressed") or [])
+
+    def _merge_cleanup_notes(notes: Dict[str, str]) -> None:
+        for col, note in notes.items():
+            if col in fresh_cleanup_notes:
+                fresh_cleanup_notes[col] = f"{fresh_cleanup_notes[col]} {note}"
+            else:
+                fresh_cleanup_notes[col] = note
+
+    cleaned_df, string_notes = variable_classifier.normalize_string_columns(
+        source_df, skip_columns=cleanup_suppressed
+    )
+    _merge_cleanup_notes(string_notes)
+    cleaned_df, node_notes, derived_by_source = variable_classifier.derive_node_fraction_columns(
+        cleaned_df, skip_columns=cleanup_suppressed
+    )
+    _merge_cleanup_notes(node_notes)
+    cleaned_df, numeric_notes = variable_classifier.clean_numeric_like_columns(
+        cleaned_df, skip_columns=cleanup_suppressed
+    )
+    _merge_cleanup_notes(numeric_notes)
+
     if fresh_cleanup_notes:
         # Snapshot the original (pre-cleanup) values so the user can
-        # undo the auto-strip from Step 3 if our heuristic was wrong
-        # (e.g. a column genuinely meant to stay as labels). We store
-        # only the columns that actually changed to keep memory bounded.
+        # undo preprocessing from Step 3 if our heuristic was wrong. We store
+        # only the source columns that changed to keep memory bounded.
         backups = dict(entry.meta.get("cleanup_backups") or {})
         for col in fresh_cleanup_notes:
-            if col in entry.df.columns and col not in backups:
+            derived_cols = list(derived_by_source.get(col) or [])
+            if col in source_df.columns and col not in backups:
                 # Convert the original Series to a list so the backup
                 # survives DataFrame mutations and JSON-serialises
                 # cleanly through dataset_store's pickle round-trip.
-                backups[col] = entry.df[col].tolist()
+                values = source_df[col].tolist()
+                backups[col] = (
+                    {"values": values, "derived_columns": derived_cols}
+                    if derived_cols else values
+                )
+            elif derived_cols and col in backups:
+                existing = backups[col]
+                if isinstance(existing, dict):
+                    prior = list(existing.get("derived_columns") or [])
+                    existing["derived_columns"] = list(dict.fromkeys(prior + derived_cols))
+                    backups[col] = existing
+                else:
+                    backups[col] = {
+                        "values": existing,
+                        "derived_columns": derived_cols,
+                    }
         entry.meta["cleanup_backups"] = backups
         dataset_store.replace_df(payload.job_id, cleaned_df)
         existing_notes = dict(entry.meta.get("cleanup_notes") or {})
@@ -1161,10 +1196,18 @@ async def cleanup_undo(payload: CleanupUndoRequest) -> Dict[str, Any]:
             status_code=404,
             detail=f"Column '{payload.column}' is no longer present in the dataset.",
         )
+    backup = backups[payload.column]
+    if isinstance(backup, dict):
+        values = backup.get("values")
+        derived_columns = list(backup.get("derived_columns") or [])
+    else:
+        values = backup
+        derived_columns = []
     new_df = entry.df.copy()
-    new_df[payload.column] = pd.Series(
-        backups[payload.column], index=new_df.index, dtype="object"
-    )
+    for derived_col in derived_columns:
+        if derived_col in new_df.columns:
+            new_df = new_df.drop(columns=[derived_col])
+    new_df[payload.column] = pd.Series(values, index=new_df.index, dtype="object")
     dataset_store.replace_df(payload.job_id, new_df)
     # Drop the cleanup note + backup so the undo is permanent and the
     # next /classify call doesn't re-strip the same column.
@@ -1174,10 +1217,14 @@ async def cleanup_undo(payload: CleanupUndoRequest) -> Dict[str, Any]:
     new_backups = dict(backups)
     new_backups.pop(payload.column, None)
     entry.meta["cleanup_backups"] = new_backups
+    suppressed = list(entry.meta.get("cleanup_suppressed") or [])
+    if payload.column not in suppressed:
+        suppressed.append(payload.column)
+    entry.meta["cleanup_suppressed"] = suppressed
     # Force a fresh classify so the type badge updates from Scale →
     # whatever the original text values warrant (usually nominal).
     entry.meta.pop("classifications", None)
-    return {"status": "restored", "column": payload.column}
+    return {"status": "restored", "column": payload.column, "removed_columns": derived_columns}
 
 
 # ---------------------------------------------------------------------------

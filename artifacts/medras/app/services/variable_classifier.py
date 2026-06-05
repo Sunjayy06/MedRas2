@@ -186,6 +186,26 @@ _NUMERIC_LABEL_RE = re.compile(
 _NUMERIC_UNIT_RE = re.compile(
     r"^\s*[A-Za-z\s]*[+-]?\d+(?:\.\d+)?\s*([A-Za-z%/°²³µ]+)\s*$"
 )
+_NODE_FRACTION_RE = re.compile(r"^\s*(\d+)\s*/\s*(\d+)\s*$")
+_HER2_NAME_RE = re.compile(r"(?:^|[\W_])(her\s*2|her2|her2neu|her2\s*neu|erbb2)(?:$|[\W_])", re.IGNORECASE)
+_TNM_NAME_RE = re.compile(r"(?:^|[\W_])(pt|tnm|t\s*stage|n\s*stage|nodal\s*status|node\s*stage)(?:$|[\W_])", re.IGNORECASE)
+_GRADE_NAME_RE = re.compile(r"(?:^|[\W_])(grade|grading|nottingham)(?:$|[\W_])", re.IGNORECASE)
+_ROMAN_GRADE_RE = re.compile(r"^(?:grade\s*)?(i|ii|iii|iv|v|1|2|3|4|5)$", re.IGNORECASE)
+_TNM_VALUE_RE = re.compile(r"^(?:[ymrp]?t(?:is|x|0|[1-4][a-d]?|[1-4])|[ymrp]?n(?:x|0|[1-3][a-d]?|[1-3]))$", re.IGNORECASE)
+_MISSING_MARKERS = frozenset({
+    "", ".", "-", "--", "na", "n/a", "nan", "nil", "null", "none",
+    "missing", "not available", "not applicable", "unknown", "unk",
+    "not known", "not recorded", "not done", "not tested", "not assessed",
+})
+_HER2_SCORE_VALUES = frozenset({
+    "0", "0+", "1", "1+", "1.0", "2", "2+", "2.0", "3", "3+", "3.0",
+    "negative", "positive",
+})
+_MILD_MODERATE_SEVERE = frozenset({
+    "mild", "moderate", "severe", "low", "intermediate", "high",
+    "low grade", "intermediate grade", "high grade",
+})
+_TNM_NOT_ASSIGNED = frozenset({"not assigned", "n not assigned", "not assessable", "not assessed"})
 
 
 def _extract_numeric(value: Any) -> float | None:
@@ -232,6 +252,64 @@ def _looks_like_date(series: pd.Series) -> bool:
         parsed = pd.to_datetime(pd.Series(sample), errors="coerce", format="mixed")
         return parsed.notna().mean() >= 0.7
     return False
+
+
+def _clean_text_value(value: Any) -> Any:
+    if pd.isna(value):
+        return value
+    if not isinstance(value, str):
+        return value
+    cleaned = re.sub(r"\s+", " ", value).strip()
+    if cleaned.lower() in _MISSING_MARKERS:
+        return pd.NA
+    return cleaned
+
+
+def _normalised_text_values(series: pd.Series) -> List[str]:
+    values: List[str] = []
+    for value in series.dropna().astype(str).tolist():
+        cleaned = re.sub(r"\s+", " ", value).strip().lower()
+        if cleaned and cleaned not in _MISSING_MARKERS:
+            values.append(cleaned)
+    return values
+
+
+def _mostly(values: List[str], predicate) -> bool:
+    if not values:
+        return False
+    return sum(1 for v in values if predicate(v)) / len(values) >= 0.8
+
+
+def _looks_like_her2_ordinal(series: pd.Series, name: str) -> bool:
+    if not _HER2_NAME_RE.search(str(name or "")):
+        return False
+    values = _normalised_text_values(series)
+    return bool(values) and all(v in _HER2_SCORE_VALUES for v in values)
+
+
+def _looks_like_tnm_ordinal(series: pd.Series, name: str) -> bool:
+    if not _TNM_NAME_RE.search(str(name or "")):
+        return False
+    values = _normalised_text_values(series)
+    if not values:
+        return False
+    return _mostly(values, lambda v: bool(_TNM_VALUE_RE.match(v)) or v in _TNM_NOT_ASSIGNED)
+
+
+def _looks_like_grade_ordinal(series: pd.Series, name: str) -> bool:
+    values = _normalised_text_values(series)
+    if not values:
+        return False
+    if _GRADE_NAME_RE.search(str(name or "")):
+        return _mostly(values, lambda v: bool(_ROMAN_GRADE_RE.match(v)))
+    return all(bool(_ROMAN_GRADE_RE.match(v)) for v in values) and any(
+        re.search(r"[ivx]", v) for v in values
+    )
+
+
+def _looks_like_severity_ordinal(series: pd.Series) -> bool:
+    values = _normalised_text_values(series)
+    return bool(values) and all(v in _MILD_MODERATE_SEVERE for v in values)
 
 
 def classify_column(series: pd.Series, name: str) -> Dict[str, Any]:
@@ -391,6 +469,18 @@ def _classify_core(series: pd.Series, name: str) -> Dict[str, Any]:
     # 5) String / object — non-numeric text. (Numeric-like text such as
     # "2mm" / "Grade 3" should already have been converted to numeric by
     # ``clean_numeric_like_columns`` before classification.)
+    if (
+        _looks_like_her2_ordinal(series, name)
+        or _looks_like_tnm_ordinal(series, name)
+        or _looks_like_grade_ordinal(series, name)
+        or _looks_like_severity_ordinal(series)
+    ):
+        return _record(
+            name, "ordinal",
+            "Ordered clinical/pathology labels — treated as ordinal.",
+            unique_count, sample_values, n_missing, n_total,
+        )
+
     if unique_count <= 20:
         return _record(
             name, "nominal",
@@ -631,8 +721,117 @@ def _reasoning_text(
     return fallback or ""
 
 
+def normalize_string_columns(
+    df: pd.DataFrame,
+    skip_columns: set[str] | None = None,
+) -> tuple[pd.DataFrame, Dict[str, str]]:
+    """Trim/collapse text values and convert common missing markers to NA."""
+    out = df.copy()
+    notes: Dict[str, str] = {}
+    skip_columns = skip_columns or set()
+    for col in df.columns:
+        if col in skip_columns:
+            continue
+        s = df[col]
+        if pd.api.types.is_numeric_dtype(s) or pd.api.types.is_datetime64_any_dtype(s):
+            continue
+        if not (s.dtype == object or pd.api.types.is_string_dtype(s)):
+            continue
+        cleaned = s.map(_clean_text_value)
+        unchanged = (
+            (s.isna() & cleaned.isna())
+            | (s.astype("object") == cleaned.astype("object"))
+        )
+        n_changed = int((~unchanged.fillna(False)).sum())
+        if n_changed <= 0:
+            continue
+        missing_added = int((s.notna() & cleaned.isna()).sum())
+        out[col] = cleaned
+        bits = [f"trimmed/collapsed whitespace in {n_changed} cell(s)"]
+        if missing_added:
+            bits.append(f"normalised {missing_added} missing marker(s)")
+        notes[col] = "String cleanup: " + "; ".join(bits) + "."
+    return out, notes
+
+
+def _safe_derived_name(existing: set, preferred: str, base: str) -> str:
+    if preferred not in existing:
+        existing.add(preferred)
+        return preferred
+    candidate = f"{base}_{preferred}"
+    i = 2
+    while candidate in existing:
+        candidate = f"{base}_{preferred}_{i}"
+        i += 1
+    existing.add(candidate)
+    return candidate
+
+
+def derive_node_fraction_columns(
+    df: pd.DataFrame,
+    skip_columns: set[str] | None = None,
+) -> tuple[pd.DataFrame, Dict[str, str], Dict[str, List[str]]]:
+    """Detect node fractions like 2/18 and derive positive/total/ratio columns."""
+    out = df.copy()
+    notes: Dict[str, str] = {}
+    derived_by_source: Dict[str, List[str]] = {}
+    existing = set(out.columns)
+    skip_columns = skip_columns or set()
+
+    for col in list(df.columns):
+        if col in skip_columns:
+            continue
+        s = df[col]
+        if pd.api.types.is_numeric_dtype(s):
+            continue
+        non_null = s.dropna().astype(str)
+        if len(non_null) < 3:
+            continue
+
+        parsed: Dict[Any, tuple[int, int]] = {}
+        valid = 0
+        for idx, raw in non_null.items():
+            m = _NODE_FRACTION_RE.match(raw)
+            if not m:
+                continue
+            pos, total = int(m.group(1)), int(m.group(2))
+            if total <= 0 or pos > total:
+                continue
+            parsed[idx] = (pos, total)
+            valid += 1
+
+        if valid / len(non_null) < 0.8:
+            continue
+
+        base = re.sub(r"[^A-Za-z0-9]+", "_", str(col)).strip("_").lower() or "node_fraction"
+        pos_col = _safe_derived_name(existing, "positive_nodes", base)
+        total_col = _safe_derived_name(existing, "total_nodes", base)
+        ratio_col = _safe_derived_name(existing, "node_ratio", base)
+
+        pos_values = pd.Series(pd.NA, index=out.index, dtype="Float64")
+        total_values = pd.Series(pd.NA, index=out.index, dtype="Float64")
+        ratio_values = pd.Series(pd.NA, index=out.index, dtype="Float64")
+        for idx, (pos, total) in parsed.items():
+            pos_values.loc[idx] = float(pos)
+            total_values.loc[idx] = float(total)
+            ratio_values.loc[idx] = float(pos) / float(total)
+
+        out[pos_col] = pos_values
+        out[total_col] = total_values
+        out[ratio_col] = ratio_values
+        derived = [pos_col, total_col, ratio_col]
+        derived_by_source[col] = derived
+        notes[col] = (
+            "Derived lymph-node fields from fraction values: "
+            f"{', '.join(derived)}."
+        )
+
+    return out, notes, derived_by_source
+
+
 def clean_numeric_like_columns(
     df: pd.DataFrame,
+    skip_columns: set[str] | None = None,
 ) -> tuple[pd.DataFrame, Dict[str, str]]:
     """Auto-extract numeric values from text columns whose entries are
     numbers with attached unit/category labels (``"2mm"``, ``"12 kg"``,
@@ -652,7 +851,10 @@ def clean_numeric_like_columns(
     """
     notes: Dict[str, str] = {}
     out = df.copy()
+    skip_columns = skip_columns or set()
     for col in df.columns:
+        if col in skip_columns:
+            continue
         s = df[col]
         # Only process object/string columns; numeric columns are
         # already in their analytical form.
