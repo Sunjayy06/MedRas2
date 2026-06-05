@@ -149,17 +149,28 @@ def _two_groups(df, outcome, group) -> Tuple[np.ndarray, np.ndarray, str, str]:
 def _ttest_independent(df, outcome, group) -> Dict[str, Any]:
     a, b, la, lb = _two_groups(df, outcome, group)
     stat, p = stats.ttest_ind(a, b, equal_var=False)
-    pooled_sd = np.sqrt(((len(a) - 1) * np.var(a, ddof=1) + (len(b) - 1) * np.var(b, ddof=1)) / max(len(a) + len(b) - 2, 1))
+    n_a, n_b = len(a), len(b)
+    var_a, var_b = float(np.var(a, ddof=1)), float(np.var(b, ddof=1))
+    pooled_sd = np.sqrt(((n_a - 1) * var_a + (n_b - 1) * var_b) / max(n_a + n_b - 2, 1))
     cohen_d = (np.mean(a) - np.mean(b)) / pooled_sd if pooled_sd else 0.0
     diff = float(np.mean(a) - np.mean(b))
-    se = float(np.sqrt(np.var(a, ddof=1) / len(a) + np.var(b, ddof=1) / len(b)))
-    ci_lo, ci_hi = diff - 1.96 * se, diff + 1.96 * se
+    se_terms = [var_a / n_a, var_b / n_b]
+    se = float(np.sqrt(sum(se_terms)))
+    df_num = sum(se_terms) ** 2
+    df_den = (
+        (se_terms[0] ** 2) / max(n_a - 1, 1)
+        + (se_terms[1] ** 2) / max(n_b - 1, 1)
+    )
+    welch_df = float(df_num / df_den) if df_den else float(n_a + n_b - 2)
+    t_crit = float(stats.t.ppf(0.975, df=welch_df))
+    ci_lo, ci_hi = diff - t_crit * se, diff + t_crit * se
     rows = [
         _row(f"Mean ({la})", float(np.mean(a))),
         _row(f"Mean ({lb})", float(np.mean(b))),
         _row("Mean difference", diff),
         _row("95% CI", f"[{_fmt_num(ci_lo)}, {_fmt_num(ci_hi)}]"),
         _row("t statistic", float(stat)),
+        _row("Welch df", welch_df),
         _row("Cohen's d", cohen_d),
         _row("p-value", _fmt_p(float(p))),
     ]
@@ -168,13 +179,14 @@ def _ttest_independent(df, outcome, group) -> Dict[str, Any]:
         f"{lb}. Mean {outcome} was {_fmt_num(np.mean(a))} (SD {_fmt_num(np.std(a, ddof=1))}) "
         f"in {la} and {_fmt_num(np.mean(b))} (SD {_fmt_num(np.std(b, ddof=1))}) "
         f"in {lb}; mean difference {_fmt_num(diff)}, 95% CI [{_fmt_num(ci_lo)}, "
-        f"{_fmt_num(ci_hi)}], t = {_fmt_num(float(stat))}, {_fmt_p(float(p))}, "
+        f"{_fmt_num(ci_hi)}], t({_fmt_num(welch_df)}) = {_fmt_num(float(stat))}, "
+        f"{_fmt_p(float(p))}, "
         f"Cohen's d = {_fmt_num(cohen_d)}."
     )
     return {
         "rows": rows, "narrative": narrative, "p_value": float(p),
         "effect_size": float(cohen_d), "effect_label": "Cohen's d",
-        "ci_lo": float(ci_lo), "ci_hi": float(ci_hi),
+        "ci_lo": float(ci_lo), "ci_hi": float(ci_hi), "df": welch_df,
     }
 
 
