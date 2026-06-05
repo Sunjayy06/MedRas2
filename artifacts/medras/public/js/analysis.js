@@ -2474,27 +2474,27 @@ function _renderCategoryMergePanel(result) {
   const totalDirty = Object.values(columns).reduce((s, r) => s + (r.n_dirty || 0), 0);
   if (dirtyCount) dirtyCount.textContent = `${totalDirty} dirty value${totalDirty !== 1 ? "s" : ""}`;
 
-  const renderGroup = (proposals, badge, badgeStyle) => proposals.map((p) => {
+  const renderGroup = (proposals, badge) => proposals.map((p) => {
+    const badgeClass = badge === "AUTO" ? "is-auto" : "is-review";
     const memberTags = (p.members || []).map((m) => {
       const count = (p.counts || {})[m] || 0;
       const isCanon = m === p.canonical;
-      return `<span style="display:inline-flex;align-items:center;gap:3px;padding:1px 7px;border-radius:10px;font-size:0.77rem;
-        background:${isCanon ? "#d1fae5" : "#f3f4f6"};color:${isCanon ? "#065f46" : "#374151"};border:1px solid ${isCanon ? "#6ee7b7" : "#d1d5db"}">
-        ${isCanon ? "✓ " : ""}${escapeHtml(m)}<span style="opacity:0.6;font-size:0.7rem"> n=${count}</span>
+      return `<span class="se-merge-member ${isCanon ? "is-canonical" : ""}">
+        ${isCanon ? "✓ " : ""}${escapeHtml(m)}<span class="se-merge-member-count"> n=${count}</span>
       </span>`;
     }).join(" ");
-    return `<div style="margin-bottom:0.5rem;padding:0.5rem 0.65rem;background:#fff;border:1px solid #e5e7eb;border-radius:6px;">
-      <span style="font-size:0.75rem;font-weight:700;${badgeStyle};padding:1px 6px;border-radius:8px;margin-right:6px;">${badge}</span>
-      <code style="font-size:0.8rem;color:#374151;">${escapeHtml(p.column)}</code>
-      <span style="font-size:0.78rem;color:#6b7280;margin:0 4px;">→</span>
-      <span style="font-size:0.8rem;">merge to <strong>${escapeHtml(p.canonical)}</strong></span>
-      <div style="margin-top:0.35rem;display:flex;flex-wrap:wrap;gap:4px;">${memberTags}</div>
+    return `<div class="se-merge-proposal">
+      <span class="se-merge-badge ${badgeClass}">${badge}</span>
+      <code class="se-merge-column">${escapeHtml(p.column)}</code>
+      <span class="se-merge-arrow">→</span>
+      <span class="se-merge-target">merge to <strong>${escapeHtml(p.canonical)}</strong></span>
+      <div class="se-merge-members">${memberTags}</div>
     </div>`;
   }).join("");
 
   listEl.innerHTML =
-    renderGroup(allObvious, "AUTO", "background:#d1fae5;color:#065f46") +
-    renderGroup(allBorderline, "REVIEW", "background:#fef3c7;color:#92400e");
+    renderGroup(allObvious, "AUTO") +
+    renderGroup(allBorderline, "REVIEW");
 
   panel.style.display = "";
   _bindMergePanelButtons(allObvious, allBorderline);
@@ -2572,8 +2572,7 @@ function renderFixAllBar() {
   bar.innerHTML = `
     <button type="button" id="fix-all-btn" data-testid="btn-fix-all">
       ✦ Fix all whitespace issues
-      <span style="background:rgba(255,255,255,.22);border-radius:5px;
-                   padding:1px 8px;font-size:12px;font-weight:700">
+      <span class="fix-all-count">
         ${dupCols.length} column${dupCols.length === 1 ? "" : "s"}
       </span>
     </button>
@@ -5846,16 +5845,16 @@ async function renderCorrectionHistory() {
   if (!versions.length) { histEl.style.display = "none"; return; }
 
   listEl.innerHTML = versions.slice().reverse().map((v) => `
-    <div style="padding:0.5rem 0;border-bottom:1px solid #eaecf4;">
-      <div style="display:flex;align-items:baseline;gap:0.5rem;flex-wrap:wrap;">
-        <span style="font-weight:600;color:#1a2e5a;">V${v.version}</span>
-        <span style="color:#888;">${escapeHtml(v.timestamp)}</span>
-        <button type="button" class="btn btn-tertiary" style="padding:0.1rem 0.5rem;font-size:0.75rem;"
+    <div class="se-correction-history-item">
+      <div class="se-correction-history-head">
+        <span class="se-correction-version">V${v.version}</span>
+        <span class="se-correction-time">${escapeHtml(v.timestamp)}</span>
+        <button type="button" class="btn btn-tertiary se-btn-small"
           onclick="restoreVersion(${v.version})">Restore</button>
       </div>
-      <div style="margin-top:0.2rem;color:#333;">${escapeHtml(v.instructions)}</div>
-      <div style="color:#1a6e3a;font-size:0.78rem;">${v.applied.length} applied</div>
-      ${v.skipped.length ? `<div style="color:#8a5a0a;font-size:0.78rem;">${v.skipped.length} skipped</div>` : ""}
+      <div class="se-correction-instructions">${escapeHtml(v.instructions)}</div>
+      <div class="se-correction-count se-correction-count-applied">${v.applied.length} applied</div>
+      ${v.skipped.length ? `<div class="se-correction-count se-correction-count-skipped">${v.skipped.length} skipped</div>` : ""}
     </div>
   `).join("");
   histEl.style.display = "block";

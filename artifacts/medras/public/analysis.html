@@ -629,7 +629,7 @@
         <!-- Zone B · Classification table -->
         <div class="se-section-label">VARIABLE CLASSIFICATION</div>
         <!-- Fix-all bar — shown by renderFixAllBar() when ≥1 cols have whitespace issues -->
-        <div id="fix-all-bar" style="display:none; margin-bottom:10px; align-items:center; flex-wrap:wrap; gap:8px"></div>
+        <div id="fix-all-bar"></div>
         <div class="se-vars-table-wrap">
           <table class="se-vars-table" id="classify-table" data-testid="table-classify">
             <thead>
@@ -653,23 +653,23 @@
         <div class="se-autocode-box" id="autocode-summary" data-testid="autocode-summary" hidden></div>
 
         <!-- Zone E · Category near-duplicate review panel (rendered dynamically) -->
-        <div id="category-merge-panel" data-testid="category-merge-panel" style="display:none;margin-bottom:1.25rem;">
-          <div class="se-section-label" style="margin-bottom:0.5rem;">CATEGORY LABEL QUALITY</div>
-          <div style="background:#fffbeb;border:1px solid #f59e0b;border-radius:8px;padding:1rem 1.1rem;">
-            <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.6rem;">
-              <span style="font-size:1.05rem;">⚠</span>
-              <strong style="font-size:0.9rem;color:#92400e;">Near-duplicate category labels detected</strong>
-              <span id="merge-dirty-count" style="background:#f59e0b;color:#fff;border-radius:12px;padding:0.1rem 0.55rem;font-size:0.78rem;font-weight:700;"></span>
+        <div id="category-merge-panel" class="se-category-merge-panel" data-testid="category-merge-panel" style="display:none;">
+          <div class="se-section-label se-category-merge-label">CATEGORY LABEL QUALITY</div>
+          <div class="se-category-merge-card">
+            <div class="se-category-merge-head">
+              <span class="se-category-merge-icon">⚠</span>
+              <strong class="se-category-merge-title">Near-duplicate category labels detected</strong>
+              <span id="merge-dirty-count" class="se-category-merge-count"></span>
             </div>
-            <p style="font-size:0.82rem;color:#78350f;margin:0 0 0.75rem;">
+            <p class="se-category-merge-copy">
               Some category values look like the same thing typed differently (e.g. "Male" / "male" / "MALE", or "Positive" / "Positvie"). Auto-merges below are safe to apply silently. Review borderline suggestions before accepting.
             </p>
             <div id="merge-proposals-list"></div>
-            <div style="display:flex;align-items:center;gap:0.6rem;margin-top:0.85rem;flex-wrap:wrap;">
-              <button type="button" class="btn btn-primary" id="btn-apply-obvious-merges" data-testid="btn-apply-obvious-merges" style="font-size:0.82rem;padding:0.35rem 0.9rem;">Apply obvious merges</button>
-              <button type="button" class="btn btn-secondary" id="btn-apply-all-merges" data-testid="btn-apply-all-merges" style="font-size:0.82rem;padding:0.35rem 0.9rem;">Accept all suggestions</button>
-              <button type="button" class="btn btn-tertiary" id="btn-dismiss-merge-panel" data-testid="btn-dismiss-merge-panel" style="font-size:0.82rem;">Dismiss</button>
-              <div id="merge-status" class="se-status" role="status" aria-live="polite" style="margin:0;"></div>
+            <div class="se-category-merge-actions">
+              <button type="button" class="btn btn-primary se-btn-small" id="btn-apply-obvious-merges" data-testid="btn-apply-obvious-merges">Apply obvious merges</button>
+              <button type="button" class="btn btn-secondary se-btn-small" id="btn-apply-all-merges" data-testid="btn-apply-all-merges">Accept all suggestions</button>
+              <button type="button" class="btn btn-tertiary se-btn-small" id="btn-dismiss-merge-panel" data-testid="btn-dismiss-merge-panel">Dismiss</button>
+              <div id="merge-status" class="se-status se-status-inline" role="status" aria-live="polite"></div>
             </div>
           </div>
         </div>
@@ -1023,10 +1023,12 @@
             <span class="se-plan-section-icon">📋</span>
             <span class="se-plan-section-title">Predictors &amp; planned statistical tests</span>
           </div>
-          <table class="se-plan-table">
-            <thead><tr><th>Variable</th><th>Type</th><th>Planned test</th></tr></thead>
-            <tbody id="ai-detail-vars-list"></tbody>
-          </table>
+          <div class="se-table-wrap se-plan-table-wrap">
+            <table class="se-plan-table">
+              <thead><tr><th>Variable</th><th>Type</th><th>Planned test</th></tr></thead>
+              <tbody id="ai-detail-vars-list"></tbody>
+            </table>
+          </div>
         </div>
 
         <!-- hidden compat divs kept for JS backward compat -->
@@ -1038,18 +1040,20 @@
             <span class="se-plan-section-icon">🔬</span>
             <span class="se-plan-section-title">Planned statistical tests</span>
           </div>
-          <table class="se-setup-pairs-table">
-            <thead>
-              <tr>
-                <th>Variable A</th>
-                <th></th>
-                <th>Variable B</th>
-                <th>Test</th>
-                <th>Reason</th>
-              </tr>
-            </thead>
-            <tbody id="ai-confirm-pairs-tbody"></tbody>
-          </table>
+          <div class="se-table-wrap se-plan-table-wrap">
+            <table class="se-setup-pairs-table">
+              <thead>
+                <tr>
+                  <th>Variable A</th>
+                  <th></th>
+                  <th>Variable B</th>
+                  <th>Test</th>
+                  <th>Reason</th>
+                </tr>
+              </thead>
+              <tbody id="ai-confirm-pairs-tbody"></tbody>
+            </table>
+          </div>
         </div>
 
         <!-- ── Primary actions ── -->
@@ -1201,18 +1205,20 @@
             <span class="se-plan-section-icon">📋</span>
             <span class="se-plan-section-title">Planned comparisons</span>
           </div>
-          <table class="se-setup-pairs-table" id="setup-pairs-table">
-            <thead>
-              <tr>
-                <th>Variable A</th>
-                <th></th>
-                <th>Variable B</th>
-                <th>Test</th>
-                <th>Reason</th>
-              </tr>
-            </thead>
-            <tbody id="setup-pairs-tbody"></tbody>
-          </table>
+          <div class="se-table-wrap se-plan-table-wrap">
+            <table class="se-setup-pairs-table" id="setup-pairs-table">
+              <thead>
+                <tr>
+                  <th>Variable A</th>
+                  <th></th>
+                  <th>Variable B</th>
+                  <th>Test</th>
+                  <th>Reason</th>
+                </tr>
+              </thead>
+              <tbody id="setup-pairs-tbody"></tbody>
+            </table>
+          </div>
           <p class="se-hint se-setup-no-pairs-hint is-hidden" id="setup-no-pairs-hint">
             No specific test pairs suggested — proceed to variable classification to build the analysis plan.
           </p>
@@ -1358,32 +1364,32 @@
         </div>
 
         <!-- Chapter V thesis-format export -->
-        <div style="margin-top:1.5rem;padding:1.1rem 1.3rem;background:#f0f4ff;border:1px solid #c7d5f5;border-radius:8px;">
-          <h3 style="margin:0 0 0.35rem;font-size:0.97rem;color:#1a2e5a;">Chapter V — Results (Thesis format)</h3>
-          <p style="margin:0 0 0.75rem;font-size:0.82rem;color:#475569;">TNR 12pt, 1.5 line spacing, 1″ margins, numbered tables with n (%) layout — ready to paste directly into your NBEMS / MD / DNB thesis.</p>
-          <div style="display:flex;gap:0.75rem;flex-wrap:wrap;">
-            <button type="button" class="btn btn-primary" data-action="download-chapter-v" data-format="word" data-testid="button-chapter-v-word" style="font-size:0.85rem;">Download Chapter V — Word (.docx)</button>
-            <button type="button" class="btn btn-secondary" data-action="download-chapter-v" data-format="pdf" data-testid="button-chapter-v-pdf" style="font-size:0.85rem;">Download Chapter V — PDF</button>
+        <div class="se-export-feature">
+          <h3>Chapter V — Results (Thesis format)</h3>
+          <p>TNR 12pt, 1.5 line spacing, 1″ margins, numbered tables with n (%) layout — ready to paste directly into your NBEMS / MD / DNB thesis.</p>
+          <div class="se-export-button-row">
+            <button type="button" class="btn btn-primary se-btn-small" data-action="download-chapter-v" data-format="word" data-testid="button-chapter-v-word">Download Chapter V — Word (.docx)</button>
+            <button type="button" class="btn btn-secondary se-btn-small" data-action="download-chapter-v" data-format="pdf" data-testid="button-chapter-v-pdf">Download Chapter V — PDF</button>
           </div>
-          <div id="chapter-v-status" class="se-status" role="status" aria-live="polite" style="margin-top:0.5rem;"></div>
+          <div id="chapter-v-status" class="se-status" role="status" aria-live="polite"></div>
         </div>
 
         <div id="export-status" class="se-status" role="status" aria-live="polite" data-testid="status-export"></div>
 
         <!-- Task 2 — Plain-English correction system -->
-        <div class="se-correction-section" data-testid="correction-section" style="margin-top:2rem;padding:1.25rem 1.5rem;background:#f8f9fc;border:1px solid #dde3f0;border-radius:8px;">
-          <h3 style="margin:0 0 0.4rem;font-size:1rem;color:#1a2e5a;">Plain-English corrections</h3>
-          <p class="se-hint" style="margin:0 0 0.75rem;font-size:0.82rem;">Describe changes you want applied to the report — rename variables, hide sections, or add notes. Then re-download to get the corrected document.</p>
-          <textarea id="correction-input" rows="3" placeholder="e.g. &quot;Rename hb_pre to Haemoglobin (Pre-op). Hide the Limitations section. Add a note after Primary Analysis: This was a single-centre study.&quot;" style="width:100%;box-sizing:border-box;padding:0.6rem 0.75rem;border:1px solid #c5cde0;border-radius:5px;font-size:0.85rem;font-family:inherit;resize:vertical;" data-testid="input-correction"></textarea>
-          <button type="button" class="btn btn-secondary" id="btn-apply-corrections" style="margin-top:0.6rem;" data-testid="button-apply-corrections">Apply corrections &amp; regenerate</button>
-          <div id="correction-status" class="se-status" role="status" aria-live="polite" data-testid="status-corrections" style="margin-top:0.5rem;"></div>
-          <div id="correction-results" style="display:none;margin-top:0.75rem;" data-testid="correction-results">
-            <div id="correction-applied" style="color:#1a6e3a;font-size:0.82rem;margin-bottom:0.4rem;"></div>
-            <div id="correction-skipped" style="color:#8a5a0a;font-size:0.82rem;"></div>
+        <div class="se-correction-section" data-testid="correction-section">
+          <h3>Plain-English corrections</h3>
+          <p class="se-hint">Describe changes you want applied to the report — rename variables, hide sections, or add notes. Then re-download to get the corrected document.</p>
+          <textarea id="correction-input" class="se-correction-input" rows="3" placeholder="e.g. &quot;Rename hb_pre to Haemoglobin (Pre-op). Hide the Limitations section. Add a note after Primary Analysis: This was a single-centre study.&quot;" data-testid="input-correction"></textarea>
+          <button type="button" class="btn btn-secondary se-btn-small" id="btn-apply-corrections" data-testid="button-apply-corrections">Apply corrections &amp; regenerate</button>
+          <div id="correction-status" class="se-status" role="status" aria-live="polite" data-testid="status-corrections"></div>
+          <div id="correction-results" class="se-correction-results" style="display:none;" data-testid="correction-results">
+            <div id="correction-applied" class="se-correction-applied"></div>
+            <div id="correction-skipped" class="se-correction-skipped"></div>
           </div>
-          <div id="correction-history" style="display:none;margin-top:1.1rem;" data-testid="correction-history">
-            <h4 style="margin:0 0 0.5rem;font-size:0.9rem;color:#1a2e5a;border-top:1px solid #dde3f0;padding-top:0.75rem;">Version history</h4>
-            <div id="correction-history-list" style="font-size:0.82rem;"></div>
+          <div id="correction-history" class="se-correction-history" style="display:none;" data-testid="correction-history">
+            <h4>Version history</h4>
+            <div id="correction-history-list" class="se-correction-history-list"></div>
           </div>
         </div>
 
