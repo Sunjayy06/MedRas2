@@ -1656,18 +1656,97 @@ def run_cox_regression(time_col, event_col, predictors, session, df):
 
 
 # --- TEST 11: ROC + diagnostic accuracy (R4 baked in) ----------------------
-def run_diagnostic_accuracy(disease_col, test_col, session, df, positive_class=1):
+def _normalise_class_label(value) -> str:
+    return str(value).strip().lower().replace("_", " ").replace("-", " ")
+
+
+def _infer_positive_class(values, positive_class=None):
+    labels = list(pd.Series(values).dropna().unique())
+    if len(labels) != 2:
+        raise ValueError("Disease/reference column must contain exactly two classes.")
+    if positive_class is not None and positive_class in labels:
+        return positive_class
+
+    positive_terms = {
+        "1", "true", "t", "yes", "y", "positive", "pos", "+",
+        "disease", "diseased", "case", "present", "abnormal", "detected",
+    }
+    negative_terms = {
+        "0", "false", "f", "no", "n", "negative", "neg", "-",
+        "healthy", "control", "absent", "normal", "not detected",
+    }
+    norm = {_normalise_class_label(label): label for label in labels}
+    positive_hits = [norm[label] for label in norm if label in positive_terms]
+    negative_hits = [norm[label] for label in norm if label in negative_terms]
+
+    if len(positive_hits) == 1 and (len(negative_hits) == 1 or labels[0] != labels[1]):
+        return positive_hits[0]
+    if positive_class is not None:
+        wanted = _normalise_class_label(positive_class)
+        for label in labels:
+            if _normalise_class_label(label) == wanted:
+                return label
+    numeric = pd.to_numeric(pd.Series(labels), errors="coerce")
+    if numeric.notna().all() and set(numeric.astype(float).tolist()) == {0.0, 1.0}:
+        return labels[int(numeric.astype(float).tolist().index(1.0))]
+    if set(norm) == {"false", "true"}:
+        return norm["true"]
+    return sorted(labels, key=lambda x: str(x))[-1]
+
+
+def _bootstrap_auc_ci(y_true, y_score, *, n_boot=1000, seed=42):
+    from sklearn.metrics import roc_auc_score
+
+    y = np.asarray(y_true, dtype=int)
+    score = np.asarray(y_score, dtype=float)
+    pos_idx = np.where(y == 1)[0]
+    neg_idx = np.where(y == 0)[0]
+    if len(pos_idx) == 0 or len(neg_idx) == 0:
+        return (None, None)
+
+    rng = np.random.default_rng(seed)
+    aucs = []
+    for _ in range(n_boot):
+        sample_pos = rng.choice(pos_idx, size=len(pos_idx), replace=True)
+        sample_neg = rng.choice(neg_idx, size=len(neg_idx), replace=True)
+        sample_idx = np.concatenate([sample_pos, sample_neg])
+        try:
+            aucs.append(float(roc_auc_score(y[sample_idx], score[sample_idx])))
+        except ValueError:
+            continue
+    if not aucs:
+        return (None, None)
+    lo, hi = np.percentile(aucs, [2.5, 97.5])
+    return (round(float(lo), 3), round(float(hi), 3))
+
+
+def run_diagnostic_accuracy(disease_col, test_col, session, df, positive_class=None):
     from sklearn.metrics import roc_curve, roc_auc_score
     data = df[[disease_col, test_col]].dropna()
     n = len(data)
     if n < 20:
         return {'error': f'Sample too small (n={n}). Minimum 20 needed.'}
 
-    y_true = (data[disease_col] == positive_class).astype(int)
-    y_score = data[test_col]
+    try:
+        resolved_positive = _infer_positive_class(data[disease_col], positive_class)
+    except ValueError as exc:
+        return {'error': str(exc)}
+    y_true = (data[disease_col] == resolved_positive).astype(int)
+    if int(y_true.sum()) == 0 or int(y_true.sum()) == n:
+        return {'error': 'Disease/reference column must contain both positive and negative cases.'}
+    y_score = pd.to_numeric(data[test_col], errors='coerce')
+    valid_score = y_score.notna()
+    y_true = y_true[valid_score]
+    y_score = y_score[valid_score]
+    n = len(y_score)
+    if n < 20:
+        return {'error': f'Sample too small after removing non-numeric scores (n={n}). Minimum 20 needed.'}
+    if int(y_true.sum()) == 0 or int(y_true.sum()) == n:
+        return {'error': 'Disease/reference column must contain both positive and negative cases after removing non-numeric scores.'}
 
     fpr, tpr, thresholds = roc_curve(y_true, y_score)
     auc = float(roc_auc_score(y_true, y_score))
+    auc_ci = _bootstrap_auc_ci(y_true, y_score)
 
     youden_idx = int(np.argmax(tpr - fpr))
     optimal_threshold = float(thresholds[youden_idx])
@@ -1700,7 +1779,9 @@ def run_diagnostic_accuracy(disease_col, test_col, session, df, positive_class=1
         'test_type': 'diagnostic_accuracy',
         'n': n,
         'auc': round(auc, 3),
-        'auc_ci': wilson_ci(int(auc * n), n),
+        'auc_ci': auc_ci,
+        'auc_ci_method': 'bootstrap_percentile',
+        'positive_class': resolved_positive.item() if hasattr(resolved_positive, "item") else resolved_positive,
         'auc_interpretation': auc_interp,
         'optimal_threshold': round(optimal_threshold, 3),
         'sensitivity': round(sens, 3),
