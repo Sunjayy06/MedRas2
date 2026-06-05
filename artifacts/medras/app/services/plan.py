@@ -218,7 +218,7 @@ def generate_plan(
         })
     if covariates and o_kind == "scale" and not group:
         tests.append({
-            "id": "linear_regression",
+            "id": "pc_linear_regression",
             "title": "Linear regression",
             "why": (
                 f"{outcome} ~ {' + '.join(covariates)} — quantifying each "
@@ -226,16 +226,26 @@ def generate_plan(
             ),
             "columns": [outcome] + covariates,
             "parametric": True,
+            "_phase_b": {
+                "function": "pc_linear_regression",
+                "test_type": "linear_regression",
+                "args": {"outcome": outcome, "predictors": covariates},
+            },
         })
     if covariates and o_kind in ("nominal", "ordinal") and len(_group_levels(df, outcome)) == 2:
         tests.append({
-            "id": "logistic_regression",
+            "id": "pc_binary_logistic",
             "title": "Binary logistic regression",
             "why": (
                 f"Binary outcome {outcome} ~ {' + '.join(covariates)} — odds ratios with 95% CI."
             ),
             "columns": [outcome] + covariates,
             "parametric": True,
+            "_phase_b": {
+                "function": "pc_binary_logistic",
+                "test_type": "logistic_regression",
+                "args": {"outcome": outcome, "predictors": covariates},
+            },
         })
 
     # ---- Graphs ---------------------------------------------------------

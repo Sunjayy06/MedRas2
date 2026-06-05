@@ -2105,6 +2105,56 @@ def _run_kruskal(
         return {"error": str(exc)}
 
 
+def _run_correlation(
+    df: pd.DataFrame, predictor: str, outcome: str, method: str
+) -> Dict[str, Any]:
+    """Pearson/Spearman correlation for two continuous variables."""
+    import scipy.stats as _ss
+
+    sub = df[[predictor, outcome]].apply(pd.to_numeric, errors="coerce").dropna()
+    n = int(len(sub))
+    if n < 3:
+        return {"error": f"Need at least 3 paired numeric values for correlation (n={n})."}
+    try:
+        if method == "pearson":
+            stat, p = _ss.pearsonr(sub[predictor], sub[outcome])
+            test_name = "Pearson correlation"
+            stat_label = "r"
+        else:
+            stat, p = _ss.spearmanr(sub[predictor], sub[outcome])
+            test_name = "Spearman rank correlation"
+            stat_label = "rho"
+        if pd.isna(stat) or pd.isna(p):
+            return {"error": "Correlation could not be calculated; one variable may be constant."}
+        return {
+            "test_name": test_name,
+            "stat": float(stat),
+            "p": float(p),
+            "n": n,
+            "method": method,
+            "stat_label": stat_label,
+        }
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
+def _corr_correlation_table(
+    predictor: str, outcome: str, test_result: Dict[str, Any]
+) -> Dict[str, Any]:
+    label = test_result.get("stat_label") or "r"
+    return {
+        "headers": ["Statistic", "Value"],
+        "rows": [
+            ["Predictor", predictor],
+            ["Outcome", outcome],
+            ["Test", test_result.get("test_name", "")],
+            [label, f"{float(test_result.get('stat', 0.0)):.3f}"],
+            ["p-value", fmt_p(test_result.get("p"))],
+            ["n", str(test_result.get("n", ""))],
+        ],
+    }
+
+
 def _corr_interpretation(
     pair: Dict[str, Any],
     test_result: Dict[str, Any],
@@ -2121,6 +2171,16 @@ def _corr_interpretation(
 
     outcome_levels = sorted(df[outcome].dropna().astype(str).unique().tolist())
     predictor_levels = sorted(df[predictor].dropna().astype(str).unique().tolist())
+
+    if test_result.get("method") in ("pearson", "spearman"):
+        stat = test_result.get("stat")
+        label = test_result.get("stat_label") or "r"
+        stat_text = f"{label} = {stat:.3f}" if stat is not None else f"{label} not available"
+        return (
+            f"Among the {test_result.get('n', n_total)} paired observations analysed, "
+            f"{test_name} assessed the relationship between {predictor} and {outcome}. "
+            f"The association was {sig} ({stat_text}, p = {fmt_p(p)})."
+        )
 
     if pred_type == "scale":
         medians = test_result.get("medians", {})
@@ -2262,6 +2322,10 @@ def run_correlation_plan(
             test_result = _run_mann_whitney(df, predictor, outcome_col)
         elif test_id == "corr_kruskal":
             test_result = _run_kruskal(df, predictor, outcome_col)
+        elif test_id == "corr_pearson":
+            test_result = _run_correlation(df, predictor, outcome_col, "pearson")
+        elif test_id == "corr_spearman":
+            test_result = _run_correlation(df, predictor, outcome_col, "spearman")
         else:
             test_result = _run_chi_or_fisher(df, predictor, outcome_col)
 
@@ -2298,11 +2362,15 @@ def run_correlation_plan(
         # Generate graph
         if graph_type == "boxplot":
             graph_uri = _boxplot(df, predictor, outcome_col)
+        elif graph_type == "scatter":
+            graph_uri = _scatter(df, outcome_col, predictor)
         else:
             graph_uri = _stacked_bar(df, outcome_col, predictor)
 
         # Generate table
-        if pred_type == "scale":
+        if test_result.get("method") in ("pearson", "spearman"):
+            table_data = _corr_correlation_table(predictor, outcome_col, test_result)
+        elif pred_type == "scale":
             table_data = _corr_descriptive_data(df, predictor, outcome_col)
         else:
             table_data = _corr_crosstab_data(df, predictor, outcome_col)
@@ -2361,7 +2429,13 @@ def run_correlation_plan(
         t for t in tests_used if "chi" in t.lower() or "fisher" in t.lower()
     ) or "chi-square or Fisher's exact test"
     _cont_tests = ", ".join(
-        t for t in tests_used if "mann" in t.lower() or "kruskal" in t.lower()
+        t for t in tests_used
+        if (
+            "mann" in t.lower()
+            or "kruskal" in t.lower()
+            or "pearson" in t.lower()
+            or "spearman" in t.lower()
+        )
     ) or "Mann-Whitney U test"
     methods_text = (
         f"All statistical analyses were performed using Python (scipy). "
