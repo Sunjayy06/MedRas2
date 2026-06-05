@@ -579,11 +579,16 @@ def _add_phase_b_triggers(
         if outcome_type is None and outcome:
             outcome_type = ('binary' if _is_binary_outcome(df, outcome)
                             else o_kind)
-        if outcome_type in ('nominal', 'binary'):
+        if outcome_type in ('nominal', 'binary', 'ordinal'):
+            is_ordinal = outcome_type == 'ordinal'
             tests.append({
                 'id': 'pb_kappa',
-                'title': "Cohen's Kappa",
-                'why': 'Two rater columns detected or reliability mentioned in objective.',
+                'title': "Weighted Kappa" if is_ordinal else "Cohen's Kappa",
+                'why': (
+                    'Ordinal ratings from two raters - assessing weighted agreement.'
+                    if is_ordinal
+                    else 'Two rater columns detected or reliability mentioned in objective.'
+                ),
                 'columns': rater_cols[:2],
                 'parametric': False,
                 '_phase_b': {
@@ -591,7 +596,7 @@ def _add_phase_b_triggers(
                     'test_type': 'kappa',
                     'args': {
                         'rater_cols': rater_cols[:2],
-                        'weighted': outcome_type == 'ordinal',
+                        'weighted': is_ordinal,
                     },
                 },
             })
