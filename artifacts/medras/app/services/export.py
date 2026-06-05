@@ -202,6 +202,107 @@ def _set_header_text(cell, text: str) -> None:
             run.bold = True
 
 
+def _export_cell(value: Any) -> str:
+    if value is None:
+        return "—"
+    if isinstance(value, (list, tuple)):
+        return " – ".join(_export_cell(v) for v in value)
+    if isinstance(value, dict):
+        return "; ".join(f"{k}: {_export_cell(v)}" for k, v in value.items())
+    return str(value)
+
+
+def _normalized_tables(result: Dict[str, Any]) -> List[Dict[str, Any]]:
+    out: List[Dict[str, Any]] = []
+    for item in result.get("tables") or []:
+        if not isinstance(item, dict):
+            continue
+        headers = [_export_cell(h) for h in (item.get("headers") or [])]
+        rows: List[List[str]] = []
+        for row in item.get("rows") or []:
+            if isinstance(row, dict):
+                row_headers = headers or [_export_cell(k) for k in row.keys()]
+                lookup = {
+                    str(k).strip().lower().replace(" ", "_").replace("-", "_"): v
+                    for k, v in row.items()
+                }
+                values = [
+                    _export_cell(
+                        row.get(
+                            h,
+                            lookup.get(str(h).strip().lower().replace(" ", "_").replace("-", "_"), ""),
+                        )
+                    )
+                    for h in row_headers
+                ]
+                if not any(values):
+                    values = [_export_cell(v) for v in row.values()]
+                headers = row_headers
+            elif isinstance(row, (list, tuple)):
+                values = [_export_cell(v) for v in row]
+            else:
+                values = [_export_cell(row)]
+            rows.append(values)
+        if headers and rows:
+            out.append({
+                "title": _export_cell(item.get("title") or "Results"),
+                "headers": headers,
+                "rows": rows,
+            })
+    return out
+
+
+def _normalized_figures(result: Dict[str, Any]) -> List[Dict[str, str]]:
+    figures: List[Dict[str, str]] = []
+    for item in result.get("figures") or []:
+        if not isinstance(item, dict):
+            continue
+        uri = item.get("png_data_uri")
+        if uri:
+            figures.append({
+                "title": _export_cell(item.get("title") or "Figure"),
+                "png_data_uri": str(uri),
+            })
+    return figures
+
+
+def _render_normalized_tables_docx(
+    doc: Document, result: Dict[str, Any], table_num: int
+) -> bool:
+    tables = _normalized_tables(result)
+    if not tables:
+        return False
+    for idx, payload in enumerate(tables):
+        headers = payload["headers"]
+        table = doc.add_table(rows=1, cols=len(headers))
+        for i, h in enumerate(headers):
+            _set_header_text(table.rows[0].cells[i], h)
+        for row in payload["rows"]:
+            cells = table.add_row().cells
+            for i, value in enumerate(row[:len(headers)]):
+                cells[i].text = value
+        format_table(table)
+        label = f"Table {table_num}" if idx == 0 else f"Table {table_num}.{idx + 1}"
+        add_caption(doc, f"{label}. {payload['title']}.")
+    return True
+
+
+def _render_normalized_figures_docx(doc: Document, result: Dict[str, Any]) -> None:
+    for idx, fig in enumerate(_normalized_figures(result), 1):
+        try:
+            png = _strip_data_uri(fig["png_data_uri"])
+            if not png:
+                continue
+            doc.add_picture(io.BytesIO(png), width=Inches(5.5))
+            p = doc.add_paragraph(f"Figure {idx}. {fig['title']}")
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            if p.runs:
+                p.runs[0].italic = True
+            doc.add_paragraph()
+        except Exception:
+            doc.add_paragraph(f"[Figure not available: {fig['title']}]")
+
+
 # ---------------------------------------------------------------------------
 # Session adapter — turn (entry, results, assignment) into the spec's session
 # ---------------------------------------------------------------------------
@@ -414,6 +515,12 @@ def build_result_table(doc, result: Dict[str, Any],
 
     test_type = result.get("test_type") or ""
     rows = result.get("rows") or []
+
+    # Normalized Sigma presentation contract. Legacy branches below remain
+    # the fallback for tests that have not yet been adapted.
+    if _render_normalized_tables_docx(doc, result, table_num):
+        _render_normalized_figures_docx(doc, result)
+        return
 
     # Branch 1: diagnostic accuracy
     if test_type == "diagnostic_accuracy" or _detect_diagnostic(result):
@@ -1233,6 +1340,40 @@ def _pdf_table(data: List[List[str]]) -> Table:
     return tbl
 
 
+def _pdf_text(value: Any) -> str:
+    return (
+        _export_cell(value)
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+    )
+
+
+def _pdf_render_normalized_tables(flow, result: Dict[str, Any], body) -> bool:
+    tables = _normalized_tables(result)
+    if not tables:
+        return False
+    for payload in tables:
+        flow.append(Paragraph(f"<b>{_pdf_text(payload['title'])}</b>", body))
+        data = [payload["headers"]] + payload["rows"]
+        flow.append(_pdf_table(data))
+        flow.append(Spacer(1, 6))
+    return True
+
+
+def _pdf_render_normalized_figures(flow, result: Dict[str, Any], body) -> None:
+    for fig in _normalized_figures(result):
+        try:
+            png = _strip_data_uri(fig["png_data_uri"])
+            if not png:
+                continue
+            flow.append(Image(io.BytesIO(png), width=5.5*inch, height=3.5*inch))
+            flow.append(Paragraph(f"<i>{_pdf_text(fig['title'])}</i>", body))
+            flow.append(Spacer(1, 8))
+        except Exception:
+            flow.append(Paragraph(f"[Figure not available: {_pdf_text(fig['title'])}]", body))
+
+
 def _pdf_render_test(flow, result, h2, body, session=None) -> None:
     variables = (session or {}).get("variables", {}) if session else {}
     if result.get("plan_reason"):
@@ -1240,7 +1381,10 @@ def _pdf_render_test(flow, result, h2, body, session=None) -> None:
     rows = result.get("rows") or []
     test_type = result.get("test_type", "")
 
-    if test_type == "diagnostic_accuracy" or _detect_diagnostic(result):
+    rendered_normalized = _pdf_render_normalized_tables(flow, result, body)
+    if rendered_normalized:
+        _pdf_render_normalized_figures(flow, result, body)
+    elif test_type == "diagnostic_accuracy" or _detect_diagnostic(result):
         TP, TN = int(result.get("TP", 0)), int(result.get("TN", 0))
         FP, FN = int(result.get("FP", 0)), int(result.get("FN", 0))
         n = TP + TN + FP + FN
@@ -1296,6 +1440,44 @@ def _pdf_render_test(flow, result, h2, body, session=None) -> None:
     flow.append(Spacer(1, 8))
 
 
+def _xlsx_write_normalized_tables(ws, result: Dict[str, Any]) -> bool:
+    tables = _normalized_tables(result)
+    if not tables:
+        return False
+    for payload in tables:
+        ws.append([payload["title"]])
+        ws.append(payload["headers"])
+        for row in payload["rows"]:
+            ws.append(row)
+        ws.append([])
+    return True
+
+
+def _xlsx_write_normalized_figures(ws, result: Dict[str, Any]) -> None:
+    figures = _normalized_figures(result)
+    if not figures:
+        return
+    ws.append(["Figures"])
+    for fig in figures:
+        ws.append([fig["title"]])
+        try:
+            from openpyxl.drawing.image import Image as ExcelImage
+
+            png = _strip_data_uri(fig["png_data_uri"])
+            if not png:
+                continue
+            image = ExcelImage(io.BytesIO(png))
+            image.width = 480
+            image.height = 300
+            ws.add_image(image, f"A{ws.max_row + 1}")
+            ws.append([])
+            ws.append([])
+            ws.append([])
+        except Exception:
+            ws.append(["Image not embedded in this Excel environment."])
+    ws.append([])
+
+
 def to_xlsx(entry, results: Dict[str, Any], assignment: Dict[str, Any]) -> bytes:
     session = _build_session(entry, results, assignment)
     wb = Workbook()
@@ -1334,10 +1516,12 @@ def to_xlsx(entry, results: Dict[str, Any], assignment: Dict[str, Any]) -> bytes
     for t in session["results"]:
         title = (t.get("plan_name") or t.get("title") or "Test")[:30]
         ws = wb.create_sheet(title)
-        ws.append(["Statistic", "Value"])
-        for r in t.get("rows") or []:
-            if isinstance(r, dict):
-                ws.append([r.get("label", ""), r.get("value", "")])
+        if not _xlsx_write_normalized_tables(ws, t):
+            ws.append(["Statistic", "Value"])
+            for r in t.get("rows") or []:
+                if isinstance(r, dict):
+                    ws.append([r.get("label", ""), r.get("value", "")])
+        _xlsx_write_normalized_figures(ws, t)
         ws.append([])
         ws.append(["Narrative"]); ws.append([t.get("narrative", "")])
 
