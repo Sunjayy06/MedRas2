@@ -287,7 +287,10 @@ def apply_merges(
         if not to_replace:
             continue
         replace_map = {str(v): str(canon) for v in to_replace}
-        new_df[col] = new_df[col].astype(str).replace(replace_map)
+        merged = new_df[col].astype("object").copy()
+        non_missing = merged.notna()
+        merged.loc[non_missing] = merged.loc[non_missing].astype(str).replace(replace_map)
+        new_df[col] = merged
         merged_list = ", ".join(f'"{v}"' for v in to_replace)
         actions.append(
             f'Merged {len(to_replace)} near-duplicate label(s) in "{col}" '
