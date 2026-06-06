@@ -773,6 +773,7 @@ _REGRESSION_TYPES = {
     "ordinal_logistic", "count_regression",
 }
 _CONTINGENCY_TYPES = {"chi_square", "fisher_exact", "crosstab"}
+_DIAGNOSTIC_TYPES = {"diagnostic_accuracy"}
 
 
 def _jsonish_value(value: Any, *, depth: int = 0) -> Any:
@@ -1034,6 +1035,85 @@ def _contingency_tables(raw: Dict[str, Any]) -> List[Dict[str, Any]]:
     return tables
 
 
+def _diagnostic_value(value: Any) -> str:
+    try:
+        numeric = float(value)
+        if np.isposinf(numeric):
+            return "Infinity"
+        if np.isneginf(numeric):
+            return "-Infinity"
+    except (TypeError, ValueError):
+        pass
+    return _display_value(value)
+
+
+def _diagnostic_ci(raw: Dict[str, Any], key: str) -> str:
+    ci = raw.get(key)
+    if isinstance(ci, (list, tuple)) and len(ci) == 2:
+        return f"{_diagnostic_value(ci[0])} to {_diagnostic_value(ci[1])}"
+    return "-"
+
+
+def _diagnostic_tables(raw: Dict[str, Any]) -> List[Dict[str, Any]]:
+    metrics = {
+        "title": "Diagnostic Metrics",
+        "headers": ["Metric", "Estimate", "95% CI"],
+        "rows": [
+            ["AUC", _diagnostic_value(raw.get("auc")), _diagnostic_ci(raw, "auc_ci")],
+            ["Sensitivity", _diagnostic_value(raw.get("sensitivity")), _diagnostic_ci(raw, "sensitivity_ci")],
+            ["Specificity", _diagnostic_value(raw.get("specificity")), _diagnostic_ci(raw, "specificity_ci")],
+            ["PPV", _diagnostic_value(raw.get("ppv")), _diagnostic_ci(raw, "ppv_ci")],
+            ["NPV", _diagnostic_value(raw.get("npv")), _diagnostic_ci(raw, "npv_ci")],
+            ["Accuracy", _diagnostic_value(raw.get("accuracy")), _diagnostic_ci(raw, "accuracy_ci")],
+            ["LR+", _diagnostic_value(raw.get("lr_positive")), "-"],
+            ["LR-", _diagnostic_value(raw.get("lr_negative")), "-"],
+            ["Diagnostic odds ratio", _diagnostic_value(raw.get("dor")), "-"],
+        ],
+    }
+
+    cm = raw.get("confusion_matrix") or {}
+    tp = int(cm.get("TP", raw.get("TP", 0)) or 0)
+    tn = int(cm.get("TN", raw.get("TN", 0)) or 0)
+    fp = int(cm.get("FP", raw.get("FP", 0)) or 0)
+    fn = int(cm.get("FN", raw.get("FN", 0)) or 0)
+    confusion = {
+        "title": "Confusion Matrix",
+        "headers": ["Actual / Predicted", "Predicted positive", "Predicted negative", "Total"],
+        "rows": [
+            ["Actual positive", f"TP: {tp}", f"FN: {fn}", tp + fn],
+            ["Actual negative", f"FP: {fp}", f"TN: {tn}", fp + tn],
+            ["Total", tp + fp, fn + tn, tp + tn + fp + fn],
+        ],
+    }
+    return [metrics, confusion]
+
+
+def _diagnostic_roc_figure(raw: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    roc_data = raw.get("roc_data") or {}
+    fpr = roc_data.get("fpr")
+    tpr = roc_data.get("tpr")
+    if not isinstance(fpr, list) or not isinstance(tpr, list) or len(fpr) != len(tpr) or len(fpr) < 2:
+        return None
+    try:
+        fig, ax = plt.subplots(figsize=(5.5, 4.0))
+        auc = _diagnostic_value(raw.get("auc"))
+        ax.plot(fpr, tpr, color="#2f6fed", linewidth=2, label=f"ROC curve (AUC = {auc})")
+        ax.plot([0, 1], [0, 1], color="#777777", linestyle="--", linewidth=1, label="Chance")
+        ax.set_xlim(0, 1)
+        ax.set_ylim(0, 1.02)
+        ax.set_xlabel("False positive rate")
+        ax.set_ylabel("True positive rate")
+        ax.set_title("Receiver operating characteristic curve")
+        ax.legend(loc="lower right")
+        ax.grid(alpha=0.2)
+        return {
+            "title": "ROC curve",
+            "png_data_uri": _fig_to_data_uri(fig),
+        }
+    except Exception:
+        return None
+
+
 def normalize_result_for_rendering(raw_result: Dict[str, Any]) -> Dict[str, Any]:
     """Add a presentation contract without changing runner-owned raw fields."""
     raw = dict(raw_result or {})
@@ -1063,14 +1143,21 @@ def normalize_result_for_rendering(raw_result: Dict[str, Any]) -> Dict[str, Any]
             tables.append(table)
     elif test_type in _CONTINGENCY_TYPES:
         tables.extend(_contingency_tables(raw))
+    elif test_type in _DIAGNOSTIC_TYPES:
+        tables.extend(_diagnostic_tables(raw))
 
+    figures = list(raw.get("figures") or [])
+    if test_type in _DIAGNOSTIC_TYPES:
+        roc_figure = _diagnostic_roc_figure(raw)
+        if roc_figure:
+            figures.append(roc_figure)
     raw.update({
         "id": raw.get("id"),
         "title": title,
         "test_type": test_type,
         "narrative": narrative,
         "tables": tables,
-        "figures": raw.get("figures") or [],
+        "figures": figures,
         "stats": _presentation_stats(raw),
     })
     return raw
