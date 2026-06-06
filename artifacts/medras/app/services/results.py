@@ -69,6 +69,41 @@ def _classes_lookup(classifications):
     return {c["column"]: c for c in classifications if c.get("column")}
 
 
+def _table_one_is_missing(value: Any) -> bool:
+    if pd.isna(value):
+        return True
+    return isinstance(value, str) and value.strip().lower() == "nan"
+
+
+def _table_one_categorical_cell(series: pd.Series, categories: List[str]) -> str:
+    values = series.map(lambda value: None if _table_one_is_missing(value) else str(value))
+    counts = values.dropna().value_counts()
+    total = int(len(series))
+
+    def count_pct(count: int) -> str:
+        pct = 100.0 * count / total if total else 0.0
+        return f"{count} ({pct:.1f}%)"
+
+    bits = [f"{category}: {count_pct(int(counts.get(category, 0)))}" for category in categories]
+    missing_n = int(values.isna().sum())
+    bits.append(f"Missing: {count_pct(missing_n)}")
+    return "; ".join(bits)
+
+
+def _table_one_scale_cell(series: pd.Series) -> str:
+    numeric = pd.to_numeric(series, errors="coerce")
+    clean = numeric.dropna()
+    total = int(len(series))
+    missing_n = int(numeric.isna().sum())
+    missing_pct = 100.0 * missing_n / total if total else 0.0
+    if not len(clean):
+        return f"—; Missing: {missing_n} ({missing_pct:.1f}%)"
+    return (
+        f"{_fmt_num(clean.mean())} ± {_fmt_num(clean.std(ddof=1))} (n={len(clean)}); "
+        f"Missing: {missing_n} ({missing_pct:.1f}%)"
+    )
+
+
 # ---------------------------------------------------------------------------
 # Table 1 (descriptives)
 # ---------------------------------------------------------------------------
@@ -89,35 +124,33 @@ def build_table_one(df: pd.DataFrame, classifications: List[Dict[str, Any]],
         if c.get("detected_type") in ("id", "exclude", "date"):
             continue
         if c.get("detected_type") == "scale":
-            data = pd.to_numeric(df[col], errors="coerce")
             if group_levels:
                 cells = []
                 for lvl in group_levels:
-                    sub = data[df[group].astype(str) == lvl].dropna()
-                    cells.append(
-                        f"{_fmt_num(sub.mean())} ± {_fmt_num(sub.std(ddof=1))} (n={len(sub)})"
-                    ) if len(sub) else cells.append("—")
+                    sub = df.loc[df[group].astype(str) == lvl, col]
+                    cells.append(_table_one_scale_cell(sub))
                 rows.append({"variable": col, "type": "Mean ± SD", "cells": cells})
             else:
-                clean = data.dropna()
                 rows.append({
                     "variable": col, "type": "Mean ± SD",
-                    "cells": [f"{_fmt_num(clean.mean())} ± {_fmt_num(clean.std(ddof=1))} (n={len(clean)})"],
+                    "cells": [_table_one_scale_cell(df[col])],
                 })
         else:
-            counts = df[col].astype(str).value_counts(dropna=False)
-            top = counts.head(6)
+            categories = [
+                str(value)
+                for value in df[col].dropna().unique()
+                if not _table_one_is_missing(value)
+            ]
             if group_levels:
                 cells = []
                 for lvl in group_levels:
-                    sub = df[df[group].astype(str) == lvl][col].astype(str).value_counts()
-                    bits = [f"{lab}: {sub.get(lab, 0)}" for lab in top.index]
-                    cells.append("; ".join(bits))
-                rows.append({"variable": col, "type": "n (count)", "cells": cells})
+                    sub = df.loc[df[group].astype(str) == lvl, col]
+                    cells.append(_table_one_categorical_cell(sub, categories))
+                rows.append({"variable": col, "type": "n (%)", "cells": cells})
             else:
-                bits = [f"{lab}: {cnt}" for lab, cnt in top.items()]
                 rows.append({
-                    "variable": col, "type": "n (count)", "cells": ["; ".join(bits)],
+                    "variable": col, "type": "n (%)",
+                    "cells": [_table_one_categorical_cell(df[col], categories)],
                 })
 
     return {
