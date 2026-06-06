@@ -280,6 +280,12 @@ def _chi_square(df, outcome, group) -> Dict[str, Any]:
     ]
     if (expected < 5).any():
         rows.append(_row("Note", "Some expected cells < 5; consider Fisher's exact."))
+    min_expected = float(expected.min()) if expected.size else None
+    note = (
+        "Some expected cells < 5; consider Fisher's exact."
+        if min_expected is not None and min_expected < 5
+        else f"Minimum expected count = {_fmt_num(min_expected)}."
+    )
     narrative = (
         f"A chi-square test of independence assessed the association between "
         f"{outcome} and {group} (χ²({int(dof)}, N = {int(n)}) = "
@@ -290,6 +296,16 @@ def _chi_square(df, outcome, group) -> Dict[str, Any]:
         "rows": rows, "narrative": narrative, "p_value": float(p),
         "effect_size": cramers_v, "effect_label": "Cramér's V",
         "ci_lo": None, "ci_hi": None,
+        "test": "Chi-square test",
+        "statistic": float(chi2),
+        "dof": int(dof),
+        "cramers_v": cramers_v,
+        "min_expected": min_expected,
+        "note": note,
+        "observed_table": ct.values.tolist(),
+        "expected_table": expected.tolist(),
+        "row_labels": ct.index.astype(str).tolist(),
+        "col_labels": ct.columns.astype(str).tolist(),
     }
 
 
@@ -710,6 +726,323 @@ _LEGACY_TEST_TYPE = {
 }
 
 
+_PRESENTATION_SKIP_KEYS = {
+    "id", "title", "test", "test_type", "plan_name", "plan_reason",
+    "rows", "tables", "figures", "narrative", "interpretation", "result_text",
+    "warning", "error", "kmf_objects", "roc_data", "graph_uri",
+    "png_data_uri", "desc_graph_uri",
+}
+
+_T_TEST_TYPES = {"t_test_independent", "welch_ttest", "t_test_paired"}
+_ANOVA_TYPES = {"anova_oneway", "rm_anova"}
+_REGRESSION_TYPES = {
+    "linear_regression", "logistic_regression", "multinomial_logistic",
+    "ordinal_logistic", "count_regression",
+}
+_CONTINGENCY_TYPES = {"chi_square", "fisher_exact", "crosstab"}
+
+
+def _jsonish_value(value: Any, *, depth: int = 0) -> Any:
+    """Return a JSON-safe copy for presentation metadata, or None if unsafe."""
+    if depth > 2:
+        return None
+    if value is None or isinstance(value, (str, bool)):
+        return value
+    if isinstance(value, (int, np.integer)):
+        return int(value)
+    if isinstance(value, (float, np.floating)):
+        val = float(value)
+        return val if np.isfinite(val) else None
+    if isinstance(value, (list, tuple)):
+        out = []
+        for item in value:
+            safe = _jsonish_value(item, depth=depth + 1)
+            if safe is not None:
+                out.append(safe)
+        return out
+    if isinstance(value, dict):
+        out = {}
+        for key, item in value.items():
+            safe = _jsonish_value(item, depth=depth + 1)
+            if safe is not None:
+                out[str(key)] = safe
+        return out
+    return None
+
+
+def _presentation_stats(raw: Dict[str, Any]) -> Dict[str, Any]:
+    stats_out: Dict[str, Any] = {}
+    for key, value in raw.items():
+        if key in _PRESENTATION_SKIP_KEYS:
+            continue
+        safe = _jsonish_value(value)
+        if safe is not None:
+            stats_out[key] = safe
+    return stats_out
+
+
+def _display_value(value: Any) -> str:
+    if value is None:
+        return "-"
+    if isinstance(value, (list, tuple)) and len(value) == 2:
+        return f"{_display_value(value[0])} to {_display_value(value[1])}"
+    if isinstance(value, (int, np.integer)):
+        return str(int(value))
+    if isinstance(value, (float, np.floating)):
+        val = float(value)
+        if not np.isfinite(val):
+            return "-"
+        return f"{val:.3f}"
+    return str(value)
+
+
+def _legacy_label_value_table(raw: Dict[str, Any], title: str = "Summary") -> Optional[Dict[str, Any]]:
+    rows = []
+    for row in raw.get("rows") or []:
+        if not isinstance(row, dict):
+            continue
+        if "label" in row and "value" in row:
+            rows.append([row.get("label", ""), row.get("value", "")])
+    if not rows:
+        return None
+    return {"title": title, "headers": ["Statistic", "Value"], "rows": rows}
+
+
+def _ci_from_row(row: Dict[str, Any], prefix: str = "") -> str:
+    tuple_keys = [f"{prefix}_ci", f"{prefix}ci", "ci", "OR_ci", "HR_ci", "TR_ci"]
+    for key in tuple_keys:
+        ci = row.get(key)
+        if isinstance(ci, (list, tuple)) and len(ci) == 2:
+            return _display_value(ci)
+    lo = row.get("CI_lo", row.get("ci_lo", row.get("lower")))
+    hi = row.get("CI_hi", row.get("ci_hi", row.get("upper")))
+    if lo is not None and hi is not None:
+        return _display_value((lo, hi))
+    return "-"
+
+
+def _regression_table(raw: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    source_rows = [r for r in (raw.get("rows") or []) if isinstance(r, dict)]
+    if not source_rows:
+        return None
+
+    has_or = any("OR" in r for r in source_rows)
+    has_hr = any("HR" in r for r in source_rows)
+    has_b = any("B" in r for r in source_rows)
+    has_se = any("SE" in r for r in source_rows)
+    has_t = any("t" in r for r in source_rows)
+    metric_key = "OR" if has_or else "HR" if has_hr else "B" if has_b else "coef"
+    metric_header = "OR" if has_or else "HR" if has_hr else "Estimate"
+
+    headers = ["Variable", metric_header]
+    if has_se:
+        headers.append("SE")
+    if has_t:
+        headers.append("t")
+    headers += ["95% CI", "p-value"]
+
+    rows = []
+    for row in source_rows:
+        label = row.get("variable") or row.get("term") or row.get("predictor") or row.get("label") or ""
+        line = [label, _display_value(row.get(metric_key))]
+        if has_se:
+            line.append(_display_value(row.get("SE")))
+        if has_t:
+            line.append(_display_value(row.get("t")))
+        line.append(_ci_from_row(row, prefix=metric_key))
+        p_val = row.get("p")
+        line.append(row.get("p_display") or (fmt_p(p_val) if p_val is not None else "-"))
+        rows.append(line)
+
+    return {"title": "Coefficient table", "headers": headers, "rows": rows}
+
+
+def _matrix_from_raw(raw: Dict[str, Any], *keys: str) -> List[List[Any]]:
+    for key in keys:
+        value = raw.get(key)
+        if value is None:
+            continue
+        if isinstance(value, pd.DataFrame):
+            return value.values.tolist()
+        if isinstance(value, np.ndarray):
+            return value.tolist()
+        if isinstance(value, list):
+            return value
+    return []
+
+
+def _contingency_labels(raw: Dict[str, Any], matrix: List[List[Any]]) -> Tuple[List[str], List[str]]:
+    row_labels = raw.get("row_labels") or raw.get("rows_labels") or raw.get("index_labels")
+    col_labels = raw.get("col_labels") or raw.get("column_labels") or raw.get("columns")
+    n_rows = len(matrix)
+    n_cols = max((len(r) for r in matrix if isinstance(r, list)), default=0)
+    if not isinstance(row_labels, list) or len(row_labels) != n_rows:
+        row_labels = [f"Row {i + 1}" for i in range(n_rows)]
+    if not isinstance(col_labels, list) or len(col_labels) != n_cols:
+        col_labels = [f"Column {i + 1}" for i in range(n_cols)]
+    return [str(v) for v in row_labels], [str(v) for v in col_labels]
+
+
+def _numeric_matrix(matrix: List[List[Any]]) -> np.ndarray:
+    return np.array(matrix, dtype=float) if matrix else np.empty((0, 0), dtype=float)
+
+
+def _matrix_render_table(
+    title: str,
+    matrix: List[List[Any]],
+    row_labels: List[str],
+    col_labels: List[str],
+    *,
+    digits: int = 0,
+    suffix: str = "",
+    include_totals: bool = False,
+) -> Optional[Dict[str, Any]]:
+    arr = _numeric_matrix(matrix)
+    if arr.size == 0:
+        return None
+    headers = ["Category"] + col_labels + (["Total"] if include_totals else [])
+    rows: List[List[Any]] = []
+    for label, values in zip(row_labels, arr):
+        rendered = [label] + [f"{float(v):.{digits}f}{suffix}" for v in values]
+        if include_totals:
+            rendered.append(f"{float(np.nansum(values)):.{digits}f}{suffix}")
+        rows.append(rendered)
+    if include_totals:
+        col_totals = np.nansum(arr, axis=0)
+        total_row = ["Total"] + [f"{float(v):.{digits}f}{suffix}" for v in col_totals]
+        total_row.append(f"{float(np.nansum(arr)):.{digits}f}{suffix}")
+        rows.append(total_row)
+    return {"title": title, "headers": headers, "rows": rows}
+
+
+def _percentage_tables(observed: List[List[Any]], row_labels: List[str], col_labels: List[str]) -> List[Dict[str, Any]]:
+    arr = _numeric_matrix(observed)
+    if arr.size == 0:
+        return []
+    tables: List[Dict[str, Any]] = []
+    with np.errstate(divide="ignore", invalid="ignore"):
+        row_totals = arr.sum(axis=1, keepdims=True)
+        row_pct = np.divide(arr, row_totals, out=np.zeros_like(arr), where=row_totals != 0) * 100.0
+        col_totals = arr.sum(axis=0, keepdims=True)
+        col_pct = np.divide(arr, col_totals, out=np.zeros_like(arr), where=col_totals != 0) * 100.0
+    row_table = _matrix_render_table(
+        "Row percentages", row_pct.tolist(), row_labels, col_labels, digits=1, suffix="%"
+    )
+    col_table = _matrix_render_table(
+        "Column percentages", col_pct.tolist(), row_labels, col_labels, digits=1, suffix="%"
+    )
+    if row_table:
+        tables.append(row_table)
+    if col_table:
+        tables.append(col_table)
+    return tables
+
+
+def _contingency_summary_table(raw: Dict[str, Any]) -> Dict[str, Any]:
+    test_used = raw.get("test") or raw.get("test_name") or raw.get("title") or raw.get("test_type") or "Categorical association test"
+    stat = _first_non_null(raw, "statistic", "chi2", "odds_ratio")
+    df_val = _first_non_null(raw, "dof", "df")
+    p_val = _first_non_null(raw, "p", "p_value")
+    effect = _first_non_null(raw, "cramers_v", "effect_size")
+    note = raw.get("note") or raw.get("warning") or ""
+    min_expected = _first_non_null(raw, "min_expected")
+    if min_expected is not None and not note:
+        try:
+            if float(min_expected) < 5:
+                note = "Warning: one or more expected counts are below 5."
+        except Exception:
+            pass
+    if min_expected is not None:
+        sparse_text = f"{_display_value(min_expected)}"
+        if note:
+            sparse_text += f"; {note}"
+    else:
+        sparse_text = note or "-"
+    return {
+        "title": "Test summary",
+        "headers": ["Measure", "Value"],
+        "rows": [
+            ["Test used", test_used],
+            ["Statistic", _display_value(stat)],
+            ["df", _display_value(df_val)],
+            ["p-value", _fmt_p(float(p_val)) if p_val is not None else (raw.get("p_display") or "-")],
+            ["Cramer's V / effect size", _display_value(effect)],
+            ["Expected-count / sparse-cell warning", sparse_text],
+        ],
+    }
+
+
+def _first_non_null(raw: Dict[str, Any], *keys: str) -> Any:
+    for key in keys:
+        if key in raw and raw[key] is not None:
+            return raw[key]
+    return None
+
+
+def _contingency_tables(raw: Dict[str, Any]) -> List[Dict[str, Any]]:
+    observed = _matrix_from_raw(raw, "observed_table", "observed")
+    expected = _matrix_from_raw(raw, "expected_table", "expected")
+    if not observed:
+        return [_contingency_summary_table(raw)]
+    row_labels, col_labels = _contingency_labels(raw, observed)
+    tables: List[Dict[str, Any]] = []
+    observed_table = _matrix_render_table(
+        "Observed counts", observed, row_labels, col_labels, digits=0, include_totals=True
+    )
+    if observed_table:
+        tables.append(observed_table)
+    expected_table = _matrix_render_table(
+        "Expected counts", expected, row_labels, col_labels, digits=2
+    )
+    if expected_table:
+        tables.append(expected_table)
+    tables.extend(_percentage_tables(observed, row_labels, col_labels))
+    tables.append(_contingency_summary_table(raw))
+    return tables
+
+
+def normalize_result_for_rendering(raw_result: Dict[str, Any]) -> Dict[str, Any]:
+    """Add a presentation contract without changing runner-owned raw fields."""
+    raw = dict(raw_result or {})
+    test_type = raw.get("test_type") or _LEGACY_TEST_TYPE.get(str(raw.get("id", ""))) or ""
+    title = raw.get("title") or raw.get("plan_name") or raw.get("test") or str(raw.get("id", "Result"))
+    narrative = (
+        raw.get("narrative")
+        or raw.get("interpretation")
+        or raw.get("result_text")
+        or raw.get("warning")
+        or raw.get("error")
+        or ""
+    )
+
+    tables: List[Dict[str, Any]] = []
+    if test_type in _T_TEST_TYPES:
+        table = _legacy_label_value_table(raw, "t-test summary")
+        if table:
+            tables.append(table)
+    elif test_type in _ANOVA_TYPES:
+        table = _legacy_label_value_table(raw, "ANOVA summary")
+        if table:
+            tables.append(table)
+    elif test_type in _REGRESSION_TYPES:
+        table = _regression_table(raw)
+        if table:
+            tables.append(table)
+    elif test_type in _CONTINGENCY_TYPES:
+        tables.extend(_contingency_tables(raw))
+
+    raw.update({
+        "id": raw.get("id"),
+        "title": title,
+        "test_type": test_type,
+        "narrative": narrative,
+        "tables": tables,
+        "figures": raw.get("figures") or [],
+        "stats": _presentation_stats(raw),
+    })
+    return raw
+
+
 def run_plan(
     df: pd.DataFrame,
     classifications: List[Dict[str, Any]],
@@ -919,6 +1252,7 @@ def run_plan(
     test_results, correction_info = apply_correction_if_needed(test_results)
     if session is not None and correction_info is not None:
         session['correction_info'] = correction_info
+    test_results = [normalize_result_for_rendering(r) for r in test_results]
 
     # Run graphs -------------------------------------------------------------
     graph_results: List[Dict[str, Any]] = []
@@ -1321,7 +1655,12 @@ def run_chi_or_fisher(col1, col2, session, df):
             note += ('. Warning: some expected counts below 5. '
                      'Interpret with caution.')
 
-    valid, err = validate_result(test_name, stat, float(p))
+    validation_stat = (
+        0.0
+        if test_type == 'fisher_exact' and math.isinf(stat)
+        else stat
+    )
+    valid, err = validate_result(test_name, validation_stat, float(p))
     if not valid:
         return {'error': err}
 
@@ -1335,7 +1674,11 @@ def run_chi_or_fisher(col1, col2, session, df):
         'test': test_name,
         'test_type': test_type,
         'n': n,
-        'statistic': round(stat, 3),
+        'statistic': (
+            'Infinity' if math.isinf(stat) and stat > 0
+            else '-Infinity' if math.isinf(stat)
+            else round(stat, 3)
+        ),
         'p': float(p),
         'p_display': fmt_p(float(p)),
         'dof': int(dof) if test_name != "Fisher's exact test" else None,
@@ -1344,6 +1687,8 @@ def run_chi_or_fisher(col1, col2, session, df):
         'note': note,
         'expected_table': expected.tolist(),
         'observed_table': table.values.tolist(),
+        'row_labels': table.index.astype(str).tolist(),
+        'col_labels': table.columns.astype(str).tolist(),
         'interpretation': (
             f'{test_name}: statistic = {stat:.3f}, '
             f'p = {fmt_p(float(p))}, '
