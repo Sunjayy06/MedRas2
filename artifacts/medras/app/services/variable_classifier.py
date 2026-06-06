@@ -67,6 +67,7 @@ clinical researchers):
 
 from __future__ import annotations
 
+from datetime import date, datetime
 import re
 from typing import Any, Dict, List
 
@@ -187,6 +188,8 @@ _NUMERIC_UNIT_RE = re.compile(
     r"^\s*[A-Za-z\s]*[+-]?\d+(?:\.\d+)?\s*([A-Za-z%/°²³µ]+)\s*$"
 )
 _NODE_FRACTION_RE = re.compile(r"^\s*(\d+)\s*/\s*(\d+)\s*$")
+_NODE_FRACTION_NAME_RE = re.compile(r"(?:node|nodal|lymph)", re.IGNORECASE)
+_DATE_TEXT_RE = re.compile(r"^\s*\d{4}[-/]\d{1,2}[-/]\d{1,2}(?:\s|$)")
 _HER2_NAME_RE = re.compile(r"(?:^|[\W_])(her\s*2|her2|her2neu|her2\s*neu|erbb2)(?:$|[\W_])", re.IGNORECASE)
 _TNM_NAME_RE = re.compile(r"(?:^|[\W_])(pt|tnm|t\s*stage|n\s*stage|nodal\s*status|node\s*stage)(?:$|[\W_])", re.IGNORECASE)
 _GRADE_NAME_RE = re.compile(r"(?:^|[\W_])(grade|grading|nottingham)(?:$|[\W_])", re.IGNORECASE)
@@ -767,6 +770,19 @@ def _safe_derived_name(existing: set, preferred: str, base: str) -> str:
     return candidate
 
 
+def _looks_like_excel_date_serial(value: Any) -> bool:
+    """Return True for dates or integral values in Excel's modern date range."""
+    if isinstance(value, (date, datetime, pd.Timestamp, np.datetime64)):
+        return not pd.isna(value)
+    if isinstance(value, str) and _DATE_TEXT_RE.match(value):
+        return True
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return False
+    return bool(np.isfinite(numeric) and numeric.is_integer() and 20000 <= numeric <= 60000)
+
+
 def derive_node_fraction_columns(
     df: pd.DataFrame,
     skip_columns: set[str] | None = None,
@@ -782,17 +798,19 @@ def derive_node_fraction_columns(
         if col in skip_columns:
             continue
         s = df[col]
-        if pd.api.types.is_numeric_dtype(s):
-            continue
-        non_null = s.dropna().astype(str)
+        non_null = s.dropna()
         if len(non_null) < 3:
             continue
+        node_named = bool(_NODE_FRACTION_NAME_RE.search(str(col)))
 
         parsed: Dict[Any, tuple[int, int]] = {}
         valid = 0
+        likely_excel_dates = 0
         for idx, raw in non_null.items():
-            m = _NODE_FRACTION_RE.match(raw)
+            m = _NODE_FRACTION_RE.match(str(raw))
             if not m:
+                if node_named and _looks_like_excel_date_serial(raw):
+                    likely_excel_dates += 1
                 continue
             pos, total = int(m.group(1)), int(m.group(2))
             if total <= 0 or pos > total:
@@ -800,7 +818,22 @@ def derive_node_fraction_columns(
             parsed[idx] = (pos, total)
             valid += 1
 
-        if valid / len(non_null) < 0.8:
+        valid_rate = valid / len(non_null)
+        derive_partial_node_column = node_named and valid >= 3
+        if valid_rate < 0.8 and not derive_partial_node_column:
+            if node_named and (valid or likely_excel_dates):
+                notes[col] = (
+                    "Potential lymph-node fraction column detected, but derived fields "
+                    f"were not created safely: {valid}/{len(non_null)} non-missing "
+                    "value(s) were valid fractions"
+                    + (
+                        f"; {likely_excel_dates} value(s) look like Excel-corrupted "
+                        "dates/date serials"
+                        if likely_excel_dates
+                        else ""
+                    )
+                    + ". Review and correct the source values before deriving node fields."
+                )
             continue
 
         base = re.sub(r"[^A-Za-z0-9]+", "_", str(col)).strip("_").lower() or "node_fraction"
@@ -823,8 +856,14 @@ def derive_node_fraction_columns(
         derived_by_source[col] = derived
         notes[col] = (
             "Derived lymph-node fields from fraction values: "
-            f"{', '.join(derived)}."
+            f"{', '.join(derived)}. Parsed {valid}/{len(non_null)} non-missing "
+            "value(s); unparsed or invalid rows were left missing."
         )
+        if likely_excel_dates:
+            notes[col] += (
+                f" Warning: {likely_excel_dates} value(s) look like Excel-corrupted "
+                "dates/date serials and were left missing."
+            )
 
     return out, notes, derived_by_source
 

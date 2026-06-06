@@ -45,6 +45,15 @@ def detect_issues(df: pd.DataFrame, classifications: List[Dict[str, Any]]) -> Li
         kind = c.get("detected_type")
         series = df[col]
 
+        cleanup_note = str(c.get("cleanup_note") or "")
+        if "Excel-corrupted" in cleanup_note or "were not created safely" in cleanup_note:
+            out.append({
+                "column": col,
+                "type": "node_fraction_corruption",
+                "severity": "warning",
+                "message": cleanup_note,
+            })
+
         # 1) text_in_numeric — column expected to be numeric but raw values
         # carry letters that prevent coercion (e.g. "Grade 4", "10 mg").
         if kind in ("scale", "ordinal", "discrete"):
