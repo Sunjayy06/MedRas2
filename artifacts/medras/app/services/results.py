@@ -774,6 +774,7 @@ _REGRESSION_TYPES = {
 }
 _CONTINGENCY_TYPES = {"chi_square", "fisher_exact", "crosstab"}
 _DIAGNOSTIC_TYPES = {"diagnostic_accuracy"}
+_RELIABILITY_TYPES = {"kappa", "icc"}
 
 
 def _jsonish_value(value: Any, *, depth: int = 0) -> Any:
@@ -1114,6 +1115,76 @@ def _diagnostic_roc_figure(raw: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         return None
 
 
+def _reliability_tables(raw: Dict[str, Any]) -> List[Dict[str, Any]]:
+    test_type = raw.get("test_type")
+    if test_type == "kappa":
+        p_value = _first_non_null(raw, "p", "p_value")
+        p_display = _fmt_p(float(p_value)) if p_value is not None else (raw.get("p_display") or "-")
+        return [{
+            "title": "Kappa Reliability",
+            "headers": ["Measure", "Value"],
+            "rows": [
+                ["Method", raw.get("test") or "Kappa"],
+                ["Kappa value", _display_value(raw.get("kappa"))],
+                ["95% CI", _diagnostic_ci(raw, "kappa_ci") if raw.get("kappa_ci") else _diagnostic_ci(raw, "ci")],
+                ["p-value", p_display],
+                ["Interpretation", raw.get("kappa_interpretation") or raw.get("interpretation") or "-"],
+            ],
+        }]
+
+    tables = [{
+        "title": "ICC Reliability",
+        "headers": ["Measure", "Value"],
+        "rows": [
+            ["ICC value", _display_value(raw.get("icc"))],
+            ["95% CI", _diagnostic_ci(raw, "icc_ci")],
+            ["Model used", raw.get("icc_model") or "Not reported"],
+            ["p-value", _fmt_p(float(raw["icc_p"])) if raw.get("icc_p") is not None else (raw.get("icc_p_display") or "-")],
+            ["Interpretation", raw.get("icc_interpretation") or raw.get("interpretation") or "-"],
+        ],
+    }]
+    bland_altman = raw.get("bland_altman") or {}
+    if bland_altman:
+        tables.append({
+            "title": "Bland-Altman Agreement",
+            "headers": ["Measure", "Value"],
+            "rows": [
+                ["Mean bias", _display_value(bland_altman.get("mean_bias"))],
+                ["Lower limit of agreement", _display_value(bland_altman.get("loa_lower"))],
+                ["Upper limit of agreement", _display_value(bland_altman.get("loa_upper"))],
+            ],
+        })
+    return tables
+
+
+def _bland_altman_figure(raw: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    plot_data = raw.get("bland_altman_plot_data") or {}
+    means = plot_data.get("means")
+    differences = plot_data.get("differences")
+    bland_altman = raw.get("bland_altman") or {}
+    if not isinstance(means, list) or not isinstance(differences, list):
+        return None
+    if len(means) != len(differences) or len(means) < 2:
+        return None
+    try:
+        bias = float(bland_altman["mean_bias"])
+        lower = float(bland_altman["loa_lower"])
+        upper = float(bland_altman["loa_upper"])
+        fig, ax = plt.subplots(figsize=(5.5, 4.0))
+        ax.scatter(means, differences, color="#2f6fed", alpha=0.75, edgecolors="none")
+        ax.axhline(bias, color="#222222", linewidth=1.5, label=f"Mean bias = {bias:.3f}")
+        ax.axhline(lower, color="#b42318", linestyle="--", linewidth=1.2, label=f"Lower LoA = {lower:.3f}")
+        ax.axhline(upper, color="#b42318", linestyle="--", linewidth=1.2, label=f"Upper LoA = {upper:.3f}")
+        ax.set_xlabel("Mean of paired measurements")
+        ax.set_ylabel("Difference between paired measurements")
+        ax.set_title("Bland-Altman agreement plot")
+        ax.legend(loc="best")
+        ax.grid(alpha=0.2)
+        return {"title": "Bland-Altman plot", "png_data_uri": _fig_to_data_uri(fig)}
+    except Exception:
+        return None
+
+
 def normalize_result_for_rendering(raw_result: Dict[str, Any]) -> Dict[str, Any]:
     """Add a presentation contract without changing runner-owned raw fields."""
     raw = dict(raw_result or {})
@@ -1145,12 +1216,18 @@ def normalize_result_for_rendering(raw_result: Dict[str, Any]) -> Dict[str, Any]
         tables.extend(_contingency_tables(raw))
     elif test_type in _DIAGNOSTIC_TYPES:
         tables.extend(_diagnostic_tables(raw))
+    elif test_type in _RELIABILITY_TYPES:
+        tables.extend(_reliability_tables(raw))
 
     figures = list(raw.get("figures") or [])
     if test_type in _DIAGNOSTIC_TYPES:
         roc_figure = _diagnostic_roc_figure(raw)
         if roc_figure:
             figures.append(roc_figure)
+    elif test_type == "icc":
+        bland_altman_figure = _bland_altman_figure(raw)
+        if bland_altman_figure:
+            figures.append(bland_altman_figure)
     raw.update({
         "id": raw.get("id"),
         "title": title,
@@ -1935,6 +2012,7 @@ def run_icc_bland_altman(col1, col2, session, df):
                   'excellent')
 
     diffs = data[col1] - data[col2]
+    means = (data[col1] + data[col2]) / 2
     mean_diff = float(diffs.mean())
     sd_diff = float(diffs.std())
     loa_lo = mean_diff - 1.96 * sd_diff
@@ -1952,6 +2030,7 @@ def run_icc_bland_altman(col1, col2, session, df):
         'test_type': 'icc',
         'icc': round(icc_val, 3),
         'icc_ci': (round(icc_lo, 3), round(icc_hi, 3)),
+        'icc_model': str(icc_row['Type'].values[0]),
         'icc_F': round(F_val, 3),
         'icc_p': p_val,
         'icc_p_display': fmt_p(p_val),
@@ -1962,6 +2041,10 @@ def run_icc_bland_altman(col1, col2, session, df):
             'loa_lower': round(loa_lo, 3),
             'loa_upper': round(loa_hi, 3),
             'sd_diff': round(sd_diff, 3),
+        },
+        'bland_altman_plot_data': {
+            'means': means.astype(float).tolist(),
+            'differences': diffs.astype(float).tolist(),
         },
         'n': n,
         'interpretation': (
