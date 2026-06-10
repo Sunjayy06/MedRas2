@@ -73,7 +73,9 @@ def _keyword_fallback(question: str, history: list[dict]) -> dict:
     }
 
 
-async def decompose(question: str, history: list[dict]) -> dict:
+async def decompose(
+    question: str, history: list[dict], external_ai_consent: bool = False
+) -> dict:
     """Decompose *question* with *history* context.
 
     Returns a dict with keys: ``population``, ``intervention``,
@@ -81,7 +83,7 @@ async def decompose(question: str, history: list[dict]) -> dict:
     Never raises — falls back to keyword extraction on any failure.
     """
     from app.services.llm_client import get_gemini_client, gemini_is_configured
-    if not gemini_is_configured():
+    if not external_ai_consent or not gemini_is_configured():
         return _keyword_fallback(question, history)
 
     history_text = (

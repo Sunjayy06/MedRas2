@@ -786,12 +786,20 @@ def _try_openai(kind: str, message: str, context: Dict[str, Any]) -> Optional[Di
     return _msg(text)
 
 
-def reply(kind: str, message: str, context: Dict[str, Any]) -> Dict[str, Any]:
+def reply(
+    kind: str,
+    message: str,
+    context: Dict[str, Any],
+    external_ai_consent: bool = True,
+) -> Dict[str, Any]:
     # Boundary refusal stays at the gate so the LLM cannot violate it.
     if _is_calculation_request(message):
         if kind == "results":
             return _msg(REFUSE_RESULT_CHANGE)
         return _msg(REFUSE_CALCULATION)
+
+    if not external_ai_consent:
+        return _rule_based_reply(kind, message, context)
 
     # OpenAI GPT-4o-mini is primary; Gemini is fallback; rule-based is last resort.
     openai_reply = _try_openai(kind, message, context)

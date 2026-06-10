@@ -292,7 +292,7 @@ import os as _os
 import json as _json
 import httpx as _httpx
 
-from app.services.llm_client import openai_chat_url as _openai_chat_url, openai_auth_header as _openai_auth_header, openai_is_configured as _openai_is_configured, gemini_is_configured as _gemini_is_configured, get_gemini_client as _get_gemini_client
+from app.services.llm_client import openai_chat_url as _openai_chat_url, openai_auth_header as _openai_auth_header, openai_is_configured as _openai_is_configured, gemini_is_configured as _gemini_is_configured, get_gemini_client as _get_gemini_client, provider_status_payload as _provider_status_payload
 _PARSE_TIMEOUT = 25.0
 
 _PARSE_PROMPT = """\
@@ -376,11 +376,14 @@ def _heuristic_extract(text: str) -> dict:
     return {"objective": obj, "outcomes": out, "study_type": study_type, "sample_size": n}
 
 
-async def _ai_extract(text: str) -> dict | None:
+async def _ai_extract(text: str, external_ai_consent: bool = False) -> tuple[dict | None, str | None]:
     """Try Gemini then OpenAI to extract structured fields from proposal text.
 
     Returns parsed dict or None on failure — caller falls back to heuristics.
     """
+    if not external_ai_consent:
+        return None, None
+
     snippet = text[:4000]
     prompt = _PARSE_PROMPT.format(text=snippet)
 
@@ -407,7 +410,7 @@ async def _ai_extract(text: str) -> dict | None:
         try:
             result = await asyncio.to_thread(_gemini_call)
             if result:
-                return result
+                return result, "gemini"
         except Exception:
             pass
 
@@ -431,11 +434,11 @@ async def _ai_extract(text: str) -> dict | None:
                 raw = resp.json()["choices"][0]["message"]["content"].strip()
                 result = _json.loads(raw)
                 if isinstance(result, dict) and "objective" in result:
-                    return result
+                    return result, "openai"
         except Exception:
             pass
 
-    return None
+    return None, None
 
 
 @router.post("/parse-proposal")
@@ -475,7 +478,8 @@ async def parse_proposal(request: Request, file: UploadFile = File(...)) -> Dict
         ) from exc
 
     # Try AI extraction first, fall back to heuristics.
-    ai_result = await _ai_extract(text)
+    external_ai_consent = request.headers.get("X-External-AI-Consent", "").lower() == "true"
+    ai_result, provider = await _ai_extract(text, external_ai_consent)
     if ai_result and isinstance(ai_result, dict) and ai_result.get("objective"):
         sample_size = ai_result.get("sample_size")
         if sample_size is not None:
@@ -492,12 +496,17 @@ async def parse_proposal(request: Request, file: UploadFile = File(...)) -> Dict
             "outcomes": str(ai_result.get("outcomes") or "").strip(),
             "study_type": study_type,
             "sample_size": sample_size,
-            "source": "ai",
+            "source": provider or "ai",
+            **_provider_status_payload(provider or "ai_unavailable", external_ai_consent),
         }
 
     # Heuristic fallback.
     h = _heuristic_extract(text)
-    return {**h, "source": "heuristic"}
+    return {
+        **h,
+        "source": "heuristic",
+        **_provider_status_payload("local_fallback", external_ai_consent),
+    }
 
 
 @router.post("/upload")
@@ -893,9 +902,13 @@ async def variable_assistant_endpoint(
     # 1. AI-powered intent parsing (Gemini 2.5 Flash primary, OpenAI secondary).
     #    parse_variable_intent() returns a structured dict on success or None if
     #    the message is a question / explanation request.
-    ai_intent = await ai_chatbox.parse_variable_intent(
-        payload.message, {"classifications": stored_classifications}
+    external_ai_consent = request.headers.get("X-External-AI-Consent", "").lower() == "true"
+    ai_intent, provider_status = await ai_chatbox.parse_variable_intent(
+        payload.message,
+        {"classifications": stored_classifications},
+        external_ai_consent=external_ai_consent,
     )
+    provider_meta = _provider_status_payload(provider_status, external_ai_consent)
 
     # Normalize the AI action → apply_action() supported names + params shape.
     # apply_action() uses {action, column, params:{}} — NOT top-level new_name/new_type.
@@ -958,6 +971,7 @@ async def variable_assistant_endpoint(
             "issues": stored_issues,
             "auto_coding_plan": entry.meta.get("auto_coding_plan") or [],
             "blocking_issues": variable_issues.has_blocking_issues(stored_issues),
+            **provider_meta,
         }
 
     new_df, meta = variable_assistant.apply_action(entry.df, intent)
@@ -1046,6 +1060,7 @@ async def variable_assistant_endpoint(
         "column": target_col,
         "params": intent.get("params") or {},
         "confirmation_message": meta.get("confirmation_message", ""),
+        **provider_meta,
         "classifications": classifications,
         "issues": issues,
         "auto_coding_plan": coding,
@@ -1167,11 +1182,14 @@ def _chatbox_context(job_id: str, kind: str) -> Dict[str, Any]:
 
 
 @router.get("/chat/{kind}/opening/{job_id}")
-async def chatbox_opening(kind: str, job_id: str) -> Dict[str, Any]:
+async def chatbox_opening(request: Request, kind: str, job_id: str) -> Dict[str, Any]:
     if kind not in _VALID_CHATBOX_KINDS:
         raise HTTPException(status_code=404, detail="Unknown chatbox kind.")
     ctx = _chatbox_context(job_id, kind)
-    return {"role": "system", "text": await ai_chatbox.opening_message(kind, ctx)}
+    external_ai_consent = request.headers.get("X-External-AI-Consent", "").lower() == "true"
+    return await ai_chatbox.opening_message(
+        kind, ctx, external_ai_consent=external_ai_consent
+    )
 
 
 @router.post("/chat/{kind}")
@@ -1182,7 +1200,10 @@ async def chatbox_reply(
     if kind not in _VALID_CHATBOX_KINDS:
         raise HTTPException(status_code=404, detail="Unknown chatbox kind.")
     ctx = _chatbox_context(payload.job_id, kind)
-    return await ai_chatbox.chat(kind, payload.message, ctx)
+    external_ai_consent = request.headers.get("X-External-AI-Consent", "").lower() == "true"
+    return await ai_chatbox.chat(
+        kind, payload.message, ctx, external_ai_consent=external_ai_consent
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1582,6 +1603,7 @@ async def ai_bridge(request: Request, payload: AiBridgeRequest) -> Dict[str, Any
         columns=columns,
         classifications=classifications,
         study_type_hint=payload.study_type_hint or None,
+        external_ai_consent=request.headers.get("X-External-AI-Consent", "").lower() == "true",
     )
     entry.meta["ai_study"] = result
     if payload.description.strip():
@@ -1615,6 +1637,7 @@ async def adjust_analysis(request: Request, payload: AdjustAnalysisRequest) -> D
         columns=columns,
         classifications=classifications,
         study_type_hint=None,  # researcher is explicitly overriding; ignore old hint
+        external_ai_consent=request.headers.get("X-External-AI-Consent", "").lower() == "true",
     )
     entry.meta["ai_study"] = result
     return result
@@ -1840,7 +1863,10 @@ class AiChatRequest(BaseModel):
 async def ai_chat_unified(request: Request, payload: AiChatRequest) -> Dict[str, Any]:
     """Unified AI chatbox endpoint — routes to ai_chatbox.chat() for all four kinds."""
     ctx = _chatbox_context(payload.job_id, payload.kind)
-    return await ai_chatbox.chat(payload.kind, payload.message, ctx)
+    external_ai_consent = request.headers.get("X-External-AI-Consent", "").lower() == "true"
+    return await ai_chatbox.chat(
+        payload.kind, payload.message, ctx, external_ai_consent=external_ai_consent
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1878,6 +1904,7 @@ async def setup_study(request: Request, payload: SetupStudyRequest) -> Dict[str,
         columns=columns,
         classifications=classifications,
         n_rows=n_rows,
+        external_ai_consent=request.headers.get("X-External-AI-Consent", "").lower() == "true",
     )
     # Augment with outcome_hint if provided and AI didn't detect an outcome
     if payload.outcome_hint.strip() and not result.get("outcome_col"):
@@ -1930,6 +1957,7 @@ async def adjust_setup(request: Request, payload: AdjustSetupRequest) -> Dict[st
         columns=columns,
         classifications=classifications,
         n_rows=n_rows,
+        external_ai_consent=request.headers.get("X-External-AI-Consent", "").lower() == "true",
     )
     if payload.outcome_hint.strip() and not result.get("outcome_col"):
         result["outcome_col"] = payload.outcome_hint.strip()

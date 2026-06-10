@@ -88,6 +88,36 @@ def gemini_is_configured() -> bool:
     return bool(_gemini_api_key())
 
 
+def any_external_ai_configured() -> bool:
+    """Return whether at least one supported external AI provider is configured."""
+    return openai_is_configured() or gemini_is_configured()
+
+
+def provider_status_message(provider_status: str, external_ai_consent: bool) -> str:
+    """Return a consistent user-facing explanation of AI provider provenance."""
+    if provider_status == "openai":
+        return "Answered using OpenAI."
+    if provider_status == "gemini":
+        return "Answered using Gemini."
+    if not external_ai_consent:
+        return "External AI is not enabled for this dataset/session. Local fallback was used."
+    if not any_external_ai_configured():
+        return (
+            "External AI is unavailable because no server API key is configured. "
+            "Local fallback was used."
+        )
+    if provider_status == "ai_unavailable":
+        return "External AI was unavailable and no local fallback could complete the request."
+    return "External AI was unavailable. Local fallback was used."
+
+
+def provider_status_payload(provider_status: str, external_ai_consent: bool) -> dict:
+    return {
+        "provider_status": provider_status,
+        "provider_message": provider_status_message(provider_status, external_ai_consent),
+    }
+
+
 def get_gemini_client():
     """Return a fresh google-genai Client.
 

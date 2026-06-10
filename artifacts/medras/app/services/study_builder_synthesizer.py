@@ -431,6 +431,7 @@ async def synthesize(
     papers: list[dict],
     history: list[dict],
     locked_context: dict | None = None,
+    external_ai_consent: bool = False,
 ) -> dict:
     """Full distillation → grading → synthesis pipeline.
 
@@ -487,10 +488,13 @@ async def synthesize(
     # Gemini 2.5 Flash PRIMARY: excels at academic evidence synthesis with
     # long-context reading of distilled excerpts.
     # GPT-4o FALLBACK: strong structured JSON fidelity when Gemini is unavailable.
-    structured = await asyncio.to_thread(_call_gemini_sync, synth_system, question)
+    structured = (
+        await asyncio.to_thread(_call_gemini_sync, synth_system, question)
+        if external_ai_consent else None
+    )
     method = "gemini-2.5-flash"
 
-    if not structured:
+    if not structured and external_ai_consent:
         log.info("Gemini synthesis unavailable — trying GPT-4o fallback")
         structured = await asyncio.to_thread(_call_openai_sync, synth_system, question)
         method = "gpt-4o"

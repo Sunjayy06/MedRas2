@@ -339,10 +339,13 @@
     try {
       const body = { question, session_id: _sessionId };
       if (_lockedCtx) body.locked_context = _lockedCtx;
+      const aiHeaders = window.SigmaExternalAI
+        ? window.SigmaExternalAI.headers({ "Content-Type": "application/json" })
+        : { "Content-Type": "application/json", "X-External-AI-Consent": "false" };
 
       const resp = await fetch(ASK_ENDPOINT, {
         method:  "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: aiHeaders,
         body:    JSON.stringify(body),
       });
 
@@ -352,6 +355,7 @@
       }
 
       const data = await resp.json();
+      window.SigmaExternalAI?.showStatus(data);
       _sessionId = data.session_id || _sessionId;
 
       /* Replace typing placeholder */

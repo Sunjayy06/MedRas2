@@ -31,7 +31,7 @@ import re as _re
 import urllib.parse as _urlparse
 from typing import Optional
 
-from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, Query, Request, UploadFile
 from pydantic import BaseModel, Field
 
 from app.services.plagiarism_analyzer import (
@@ -43,6 +43,7 @@ from app.services.study_builder_search      import multi_source_search
 from app.services.study_builder_synthesizer import synthesize
 from app.services.study_builder_pdf_chunker import chunk_pdf, retrieve_top_chunks
 from app.services import study_builder_session as sessions
+from app.services.llm_client import provider_status_payload
 
 log    = logging.getLogger(__name__)
 router = APIRouter(prefix="/study-builder", tags=["study-builder"])
@@ -108,6 +109,8 @@ class AskResponse(BaseModel):
     # Meta
     synthesis_method:   str
     question_type:      str
+    provider_status:    str
+    provider_message:   str
     pico:               dict
     uploaded_count:     int = 0       # how many papers/PDFs were attached this session
     disclaimer:         str = _DISCLAIMER
@@ -581,15 +584,16 @@ async def format_citations(body: CitationRequest) -> CitationResponse:
 
 
 @router.post("/ask", response_model=AskResponse)
-async def ask(body: AskRequest) -> AskResponse:
+async def ask(request: Request, body: AskRequest) -> AskResponse:
     question = body.question.strip()
+    external_ai_consent = request.headers.get("X-External-AI-Consent", "").lower() == "true"
 
     # 1. Session — get history and any uploaded papers
     session_id, history = sessions.get_or_create(body.session_id)
     uploaded_papers     = sessions.get_uploaded_papers(session_id)
 
     # 2. PICO decomposition (fast single call)
-    pico = await decompose(question, history)
+    pico = await decompose(question, history, external_ai_consent=external_ai_consent)
     log.info(
         "PICO [session=%s] P=%s I=%s C=%s O=%s queries=%s",
         session_id[:8], pico["population"], pico["intervention"],
@@ -631,6 +635,7 @@ async def ask(body: AskRequest) -> AskResponse:
         search_result["papers"],
         history,
         locked_context=body.locked_context,
+        external_ai_consent=external_ai_consent,
     )
 
     # 6. Persist this turn
@@ -640,6 +645,12 @@ async def ask(body: AskRequest) -> AskResponse:
     qtype          = _classify(question)
     uploaded_count = len(uploaded_papers) + (1 if has_pdf else 0)
 
+    method = synth.get("method", "unknown")
+    provider_status = (
+        "gemini" if method.startswith("gemini")
+        else "openai" if method.startswith("gpt")
+        else "local_fallback"
+    )
     return AskResponse(
         answer               = synth["answer"],
         key_findings         = [
@@ -658,8 +669,9 @@ async def ask(body: AskRequest) -> AskResponse:
         total_found          = search_result["total_found"],
         suggested_questions  = synth.get("suggested_questions") or [],
         action_buttons       = _action_buttons(qtype),
-        synthesis_method     = synth.get("method", "unknown"),
+        synthesis_method     = method,
         question_type        = qtype,
         pico                 = pico,
         uploaded_count       = uploaded_count,
+        **provider_status_payload(provider_status, external_ai_consent),
     )

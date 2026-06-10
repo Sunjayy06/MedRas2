@@ -23,7 +23,7 @@ from typing import Any, Dict, List, Optional
 
 import httpx
 
-from app.services.llm_client import openai_chat_url, openai_auth_header, openai_is_configured, gemini_is_configured, get_gemini_client
+from app.services.llm_client import openai_chat_url, openai_auth_header, openai_is_configured, gemini_is_configured, get_gemini_client, provider_status_payload
 
 log = logging.getLogger(__name__)
 _TIMEOUT = 20.0
@@ -687,6 +687,7 @@ def identify_study(
     columns: List[str],
     classifications: Optional[List[Dict[str, Any]]] = None,
     study_type_hint: Optional[str] = None,
+    external_ai_consent: bool = False,
 ) -> Dict[str, Any]:
     """Identify study type and outcome column from free-text description.
 
@@ -713,18 +714,24 @@ def identify_study(
 
     # OpenAI GPT-4o-mini is primary; Gemini is fallback; heuristic is last resort.
     result = None
-    if description.strip() or outcome_hint.strip():
+    provider = None
+    if external_ai_consent and (description.strip() or outcome_hint.strip()):
         result = _call_openai(description, outcome_hint, columns)
+        provider = "openai" if result else None
         log.info(
             "AI bridge OpenAI raw result: %s",
             json.dumps(result) if result else "None",
         )
         if not (result and isinstance(result, dict) and "study_type" in result):
             result = _call_gemini(description, outcome_hint, columns)
+            provider = "gemini" if result else None
             log.info(
                 "AI bridge Gemini raw result: %s",
                 json.dumps(result) if result else "None",
             )
+        if not (result and isinstance(result, dict) and "study_type" in result):
+            result = None
+            provider = None
 
     # If the proposal already told us the study type, trust it over the LLM.
     # We still use the LLM result for outcome_col / confidence / reasoning.
@@ -781,7 +788,7 @@ def identify_study(
                     outcome_col,
                 )
 
-        source = "gemini"
+        source = provider or "ai_unavailable"
         log.info(
             "AI bridge final (LLM path): study_type=%s outcome_col=%s source=%s",
             study_type, outcome_col, source,
@@ -845,4 +852,8 @@ def identify_study(
         "reasoning": reasoning,
         "all_predictors": all_predictors,
         "source": source,
+        **provider_status_payload(
+            provider if result else "local_fallback",
+            external_ai_consent,
+        ),
     }

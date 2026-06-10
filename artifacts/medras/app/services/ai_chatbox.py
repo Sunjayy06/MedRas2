@@ -41,6 +41,7 @@ from .llm_client import (
     openai_is_configured,
     gemini_is_configured,
     get_gemini_client,
+    provider_status_payload,
 )
 
 logger = logging.getLogger(__name__)
@@ -325,7 +326,7 @@ async def _call_llm(
     kind: str,
     system_prompt: str,
     message: str,
-) -> Optional[str]:
+) -> tuple[Optional[str], Optional[str]]:
     """Call the best LLM for this kind; fall back to the other; return None if both fail."""
     tokens = _MAX_TOKENS.get(kind, _DEFAULT_TOKENS)
 
@@ -334,19 +335,23 @@ async def _call_llm(
         raw = await asyncio.to_thread(
             _openai_call_sync, system_prompt, message, tokens, _OPENAI_MODEL_STRONG
         )
+        provider = "openai" if raw is not None else None
         if raw is None:
             logger.info("GPT-4o unavailable for kind=%r — trying Gemini fallback", kind)
             raw = await asyncio.to_thread(_gemini_call_sync, system_prompt, message, tokens)
+            provider = "gemini" if raw is not None else None
     else:
         # Gemini primary → OpenAI gpt-4o-mini fallback
         raw = await asyncio.to_thread(_gemini_call_sync, system_prompt, message, tokens)
+        provider = "gemini" if raw is not None else None
         if raw is None:
             logger.info("Gemini unavailable for kind=%r — trying OpenAI fallback", kind)
             raw = await asyncio.to_thread(
                 _openai_call_sync, system_prompt, message, tokens, _OPENAI_MODEL_STANDARD
             )
+            provider = "openai" if raw is not None else None
 
-    return raw
+    return raw, provider
 
 
 # ---------------------------------------------------------------------------
@@ -357,20 +362,25 @@ async def chat(
     kind: str,
     message: str,
     context: Dict[str, Any],
+    external_ai_consent: bool = False,
 ) -> Dict[str, Any]:
     """Return ``{"role": "ai", "text": str, "action": dict|None}``."""
     system_prompt = _build_system_prompt(kind, context)
 
-    raw = await _call_llm(kind, system_prompt, message)
+    raw, provider = (
+        await _call_llm(kind, system_prompt, message)
+        if external_ai_consent else (None, None)
+    )
 
     # Rule-based engine — last resort (no API key, always available)
     if raw is None:
         logger.warning("Both LLM providers unavailable for kind=%r — rule-based fallback", kind)
-        result = chatboxes.reply(kind, message, context)
+        result = chatboxes.reply(kind, message, context, external_ai_consent=False)
         return {
             "role": result.get("role", "ai"),
             "text": result.get("text", ""),
             "action": None,
+            **provider_status_payload("local_fallback", external_ai_consent),
         }
 
     action = _extract_action(raw, kind)
@@ -386,10 +396,17 @@ async def chat(
         })
         display_text = (prose + "\n\n" + json_embed).strip() if prose else json_embed
 
-    return {"role": "ai", "text": display_text, "action": action}
+    return {
+        "role": "ai",
+        "text": display_text,
+        "action": action,
+        **provider_status_payload(provider or "ai_unavailable", external_ai_consent),
+    }
 
 
-async def opening_message(kind: str, context: Dict[str, Any]) -> str:
+async def opening_message(
+    kind: str, context: Dict[str, Any], external_ai_consent: bool = False
+) -> Dict[str, Any]:
     """AI-powered context-aware opening message for each chatbox screen.
 
     Generates a 1–2 sentence greeting that references specific details from the
@@ -414,28 +431,43 @@ async def opening_message(kind: str, context: Dict[str, Any]) -> str:
     tokens = 160
 
     # Gemini primary for most kinds, OpenAI for results/plan
-    if kind in _OPENAI_PRIMARY_KINDS:
+    provider = None
+    if not external_ai_consent:
+        raw = None
+    elif kind in _OPENAI_PRIMARY_KINDS:
         raw = await asyncio.to_thread(
             _openai_call_sync, system_prompt, user_msg, tokens, _OPENAI_MODEL_STANDARD
         )
+        provider = "openai" if raw is not None else None
         if raw is None:
             raw = await asyncio.to_thread(_gemini_call_sync, system_prompt, user_msg, tokens)
+            provider = "gemini" if raw is not None else None
     else:
         raw = await asyncio.to_thread(_gemini_call_sync, system_prompt, user_msg, tokens)
+        provider = "gemini" if raw is not None else None
         if raw is None:
             raw = await asyncio.to_thread(
                 _openai_call_sync, system_prompt, user_msg, tokens, _OPENAI_MODEL_STANDARD
             )
+            provider = "openai" if raw is not None else None
 
     if raw and len(raw.strip()) > 10:
         # Strip any accidental JSON or markdown the model may have emitted
         text = _strip_action_json(raw.strip())
         text = re.sub(r"^```[^\n]*\n?|```$", "", text, flags=re.MULTILINE).strip()
         if text:
-            return text
+            return {
+                "role": "system",
+                "text": text,
+                **provider_status_payload(provider or "ai_unavailable", external_ai_consent),
+            }
 
     # Rule-based fallback — always available
-    return chatboxes.opening_message(kind, context)
+    return {
+        "role": "system",
+        "text": chatboxes.opening_message(kind, context),
+        **provider_status_payload("local_fallback", external_ai_consent),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -449,7 +481,8 @@ _VALID_VA_ACTIONS = frozenset({"rename", "recode", "exclude", "include", "set_ty
 async def parse_variable_intent(
     message: str,
     context: Dict[str, Any],
-) -> Optional[Dict[str, Any]]:
+    external_ai_consent: bool = False,
+) -> tuple[Optional[Dict[str, Any]], str]:
     """Parse a plain-English variable command into a structured intent dict.
 
     Returns ``{"action", "column", ...}`` on success, or ``None`` when the
@@ -475,17 +508,19 @@ async def parse_variable_intent(
 
     # Gemini primary (fast JSON extraction)
     tokens = _MAX_TOKENS.get("variables", _DEFAULT_TOKENS)
-    raw = await asyncio.to_thread(_gemini_call_sync, system, message, tokens)
-    if raw is None:
+    raw = await asyncio.to_thread(_gemini_call_sync, system, message, tokens) if external_ai_consent else None
+    provider = "gemini" if raw is not None else None
+    if raw is None and external_ai_consent:
         raw = await asyncio.to_thread(
             _openai_call_sync, system, message, tokens, _OPENAI_MODEL_STANDARD
         )
+        provider = "openai" if raw is not None else None
     if not raw:
-        return None
+        return None, "local_fallback"
 
     raw = raw.strip()
     if raw.lower() in ("null", "none", ""):
-        return None
+        return None, "local_fallback"
 
     raw = re.sub(r"^```(?:json)?\s*", "", raw, flags=re.MULTILINE)
     raw = re.sub(r"```\s*$",          "", raw, flags=re.MULTILINE).strip()
@@ -499,10 +534,10 @@ async def parse_variable_intent(
                 "new_name":   obj.get("new_name"),
                 "new_type":   obj.get("new_type"),
                 "recode_map": obj.get("recode_map") or {},
-            }
+            }, provider or "ai_unavailable"
     except (json.JSONDecodeError, ValueError):
         pass
-    return None
+    return None, "local_fallback"
 
 
 # ---------------------------------------------------------------------------
@@ -515,6 +550,7 @@ async def plan_study_setup(
     columns: List[str],
     classifications: List[Dict[str, Any]],
     n_rows: int = 0,
+    external_ai_consent: bool = False,
 ) -> Dict[str, Any]:
     """Generate a rich study plan from a plain-English description.
 
@@ -551,11 +587,13 @@ async def plan_study_setup(
 
     tokens = _MAX_TOKENS.get("setup", _DEFAULT_TOKENS)
     # Gemini primary for planning/routing
-    raw = await asyncio.to_thread(_gemini_call_sync, system, prompt, tokens)
-    if raw is None:
+    raw = await asyncio.to_thread(_gemini_call_sync, system, prompt, tokens) if external_ai_consent else None
+    provider = "gemini" if raw is not None else None
+    if raw is None and external_ai_consent:
         raw = await asyncio.to_thread(
             _openai_call_sync, system, prompt, tokens, _OPENAI_MODEL_STANDARD
         )
+        provider = "openai" if raw is not None else None
 
     if not raw:
         return {
@@ -568,6 +606,7 @@ async def plan_study_setup(
             "reasoning":  "",
             "confidence": 0,
             "source":     "rule_based",
+            **provider_status_payload("local_fallback", external_ai_consent),
         }
 
     clean = raw.strip()
@@ -585,7 +624,8 @@ async def plan_study_setup(
             "test_pairs":  plan.get("test_pairs") or [],
             "reasoning":   plan.get("reasoning", ""),
             "confidence":  0.85,
-            "source":      "ai",
+            "source":      provider or "ai",
+            **provider_status_payload(provider or "ai_unavailable", external_ai_consent),
         }
     except (json.JSONDecodeError, ValueError):
         return {
@@ -598,4 +638,5 @@ async def plan_study_setup(
             "reasoning":   "",
             "confidence":  0,
             "source":      "rule_based",
+            **provider_status_payload("local_fallback", external_ai_consent),
         }

@@ -85,6 +85,61 @@ const state = {
 /* ------------------------------------------------------------------ */
 
 function $(sel, root = document) { return root.querySelector(sel); }
+
+const EXTERNAL_AI_PATHS = [
+  "/variable-assistant", "/chat/", "/ai-chat", "/ai-bridge",
+  "/adjust-analysis", "/setup-study", "/adjust-setup",
+];
+
+function _externalAIConsentKey() {
+  return `medras.sigma.external_ai_consent:${state.jobId || "pre-dataset"}`;
+}
+
+function ensureExternalAIConsent() {
+  const key = _externalAIConsentKey();
+  try {
+    const saved = sessionStorage.getItem(key);
+    if (saved === "granted") return true;
+    if (saved === "denied") return false;
+  } catch (_) {}
+  const granted = window.confirm(
+    "External AI disclosure\n\n"
+    + "Sigma may send your proposal text, study description, column names, "
+    + "statistical summaries, and questions to OpenAI or Gemini. "
+    + "Do not include identifiable patient data.\n\n"
+    + "Allow external AI for this dataset/session?\n"
+    + "Choose Cancel to keep using local fallback only."
+  );
+  try { sessionStorage.setItem(key, granted ? "granted" : "denied"); } catch (_) {}
+  return granted;
+}
+
+function externalAIHeaders(headers = {}) {
+  const out = new Headers(headers);
+  out.set("X-External-AI-Consent", ensureExternalAIConsent() ? "true" : "false");
+  return out;
+}
+
+function showAIProviderStatus(data) {
+  if (!data || !data.provider_message) return;
+  let el = document.getElementById("sigma-ai-provider-status");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "sigma-ai-provider-status";
+    el.className = "se-ai-provider-status";
+    el.setAttribute("role", "status");
+    document.body.appendChild(el);
+  }
+  el.textContent = data.provider_message;
+  el.dataset.provider = data.provider_status || "local_fallback";
+  el.hidden = false;
+}
+
+window.SigmaExternalAI = {
+  ensureConsent: ensureExternalAIConsent,
+  headers: externalAIHeaders,
+  showStatus: showAIProviderStatus,
+};
 function $$(sel, root = document) { return Array.from(root.querySelectorAll(sel)); }
 
 function setStatus(el, message, level = "loading") {
@@ -137,6 +192,9 @@ async function api(path, options = {}) {
   const jobId    = jobEntry ? `sigma${path.replace(/[^a-z0-9]/gi, '')}` : null;
   if (jobId) window.MedrasJobs?.start(jobId, jobEntry[1]);
   try {
+    if (EXTERNAL_AI_PATHS.some((aiPath) => path.includes(aiPath))) {
+      options.headers = externalAIHeaders(options.headers || {});
+    }
     const res = await fetch(`${API_BASE}${path}`, options);
     if (!res.ok) {
       let detail = `${res.status} ${res.statusText}`;
@@ -146,7 +204,9 @@ async function api(path, options = {}) {
       } catch (_e) { /* ignore */ }
       throw new Error(detail);
     }
-    return res.json();
+    const data = await res.json();
+    showAIProviderStatus(data);
+    return data;
   } finally {
     if (jobId) window.MedrasJobs?.finish(jobId);
   }
@@ -612,7 +672,11 @@ function _bindS1ProposalUpload() {
     try {
       const fd = new FormData();
       fd.append("file", file);
-      const r = await fetch(`${API_BASE}/parse-proposal`, { method: "POST", body: fd });
+      const r = await fetch(`${API_BASE}/parse-proposal`, {
+        method: "POST",
+        headers: externalAIHeaders(),
+        body: fd,
+      });
       if (!r.ok) {
         const errText = await r.text();
         let errMsg = errText;
@@ -620,6 +684,7 @@ function _bindS1ProposalUpload() {
         throw new Error(errMsg);
       }
       const data = await r.json();
+      showAIProviderStatus(data);
 
       const descField       = $("#s1-prop-desc");
       const outcomeField    = $("#s1-prop-outcome");
@@ -634,7 +699,7 @@ function _bindS1ProposalUpload() {
 
       // Show AI badge if extraction was AI-powered.
       if (aiBadge) {
-        if (data.source === "ai") {
+        if (["openai", "gemini", "ai"].includes(data.source)) {
           aiBadge.style.display = "flex";
           aiBadge.classList.remove("is-hidden");
         } else {
@@ -649,7 +714,7 @@ function _bindS1ProposalUpload() {
       });
 
       if (fields) fields.classList.remove("is-hidden");
-      const sourceLabel = data.source === "ai" ? "AI extracted" : "parsed";
+      const sourceLabel = ["openai", "gemini", "ai"].includes(data.source) ? "AI extracted" : "parsed";
       if (status) status.textContent = `✓ ${file.name} — ${sourceLabel}`;
     } catch (e) {
       if (fields) fields.classList.remove("is-hidden");
@@ -4723,11 +4788,12 @@ function bindScreenSetup() {
     try {
       const res = await fetch("/api/stats/setup-study", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: externalAIHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ job_id: state.jobId, description: desc, outcome_hint: "" }),
       });
       if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
       const plan = await res.json();
+      showAIProviderStatus(plan);
       state.aiStudy = plan;
       renderSetupScreen(plan);
       setStatus(statusEl, "Plan updated.", "success");
@@ -4782,7 +4848,7 @@ function bindScreenSetup() {
     try {
       const res = await fetch("/api/stats/adjust-setup", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: externalAIHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({
           job_id: state.jobId,
           description: descTa?.value.trim() || "",
@@ -4792,6 +4858,7 @@ function bindScreenSetup() {
       });
       if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
       const plan = await res.json();
+      showAIProviderStatus(plan);
       state.aiStudy = plan;
       renderSetupScreen(plan);
       adjustBox?.classList.add("is-hidden");
