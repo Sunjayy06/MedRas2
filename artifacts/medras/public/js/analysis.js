@@ -5214,23 +5214,32 @@ function renderMissingScreen() {
     const col = c.column || "?";
     const pct = ((c.missing_pct || (c.missing_fraction || 0) * 100) || 0).toFixed(1);
     const slug = col.replace(/[^a-z0-9]/gi, "_");
+    const selected = (state.missingDecisions || {})[col] || "leave";
     return `<div class="se-missing-card" data-testid="missing-card-${slug}">
       <div class="se-missing-card-header">
         <strong>${escapeHtml(col)}</strong>
         <span class="se-missing-pct">${pct}% missing</span>
       </div>
       <div class="se-missing-actions">
-        <label><input type="radio" name="missing-${slug}" value="leave" checked data-missing-col="${escapeAttr(col)}"> Leave as-is</label>
-        <label><input type="radio" name="missing-${slug}" value="impute_mean" data-missing-col="${escapeAttr(col)}"> Fill with mean</label>
-        <label><input type="radio" name="missing-${slug}" value="impute_median" data-missing-col="${escapeAttr(col)}"> Fill with median</label>
-        <label><input type="radio" name="missing-${slug}" value="impute_mode" data-missing-col="${escapeAttr(col)}"> Fill with mode (most frequent)</label>
-        <label><input type="radio" name="missing-${slug}" value="drop_rows" data-missing-col="${escapeAttr(col)}"> Drop rows with missing</label>
+        <label><input type="radio" name="missing-${slug}" value="leave" ${selected === "leave" ? "checked" : ""} data-missing-col="${escapeAttr(col)}"> Leave as-is</label>
+        <label><input type="radio" name="missing-${slug}" value="impute_mean" ${selected === "impute_mean" ? "checked" : ""} data-missing-col="${escapeAttr(col)}"> Fill with mean</label>
+        <label><input type="radio" name="missing-${slug}" value="impute_median" ${selected === "impute_median" ? "checked" : ""} data-missing-col="${escapeAttr(col)}"> Fill with median</label>
+        <label><input type="radio" name="missing-${slug}" value="impute_mode" ${selected === "impute_mode" ? "checked" : ""} data-missing-col="${escapeAttr(col)}"> Fill with mode (most frequent)</label>
+        <label><input type="radio" name="missing-${slug}" value="drop_rows" ${selected === "drop_rows" ? "checked" : ""} data-missing-col="${escapeAttr(col)}"> Drop rows with missing</label>
       </div>
     </div>`;
   }).join("");
 }
 
 function bindScreenMissing() {
+  document.querySelectorAll("[data-missing-col]").forEach((radio) => {
+    radio.addEventListener("change", () => {
+      if (!radio.checked) return;
+      state.missingDecisions = state.missingDecisions || {};
+      state.missingDecisions[radio.dataset.missingCol] = radio.value;
+    });
+  });
+
   // ── Back to screen-4 (quality check) ───────────────────────────────────
   const backBtn = document.querySelector('[data-action="back-to-quality-from-missing"]');
   if (backBtn) backBtn.addEventListener("click", () => showScreen("4"));
@@ -5298,7 +5307,7 @@ function bindScreenMissing() {
           if (!state._missingThread) state._missingThread = [];
           state._missingThread.push({
             role: "ai",
-            text: "I can help you decide how to handle missing data. Ask me about any variable — tell me the column name and I'll suggest the best approach.",
+            text: "I can explain missingness and Sigma's supported choices. I will not apply decisions; select an option for each variable and use Apply decisions.",
           });
           _renderMissingThread();
         }
@@ -5354,7 +5363,12 @@ async function _sendMissingChatMessage() {
     const res = await api("/ai-chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ job_id: state.jobId, kind: "variables", message: msg }),
+      body: JSON.stringify({
+        job_id: state.jobId,
+        kind: "missing",
+        message: msg,
+        selected_decisions: state.missingDecisions || {},
+      }),
     });
     clearTyping();
     state._missingThread.push({ role: res.role || "ai", text: res.text || "" });

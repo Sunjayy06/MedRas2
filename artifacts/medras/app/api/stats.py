@@ -1218,10 +1218,12 @@ class ChatboxRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=600)
 
 
-_VALID_CHATBOX_KINDS = frozenset({"variables", "normality", "plan", "results"})
+_VALID_CHATBOX_KINDS = frozenset({"variables", "missing", "normality", "plan", "results"})
 
 
-def _chatbox_context(job_id: str, kind: str) -> Dict[str, Any]:
+def _chatbox_context(
+    job_id: str, kind: str, selected_decisions: Optional[Dict[str, str]] = None
+) -> Dict[str, Any]:
     entry = dataset_store.get(job_id)
     if entry is None:
         raise HTTPException(status_code=404, detail="Dataset expired or not found.")
@@ -1229,6 +1231,39 @@ def _chatbox_context(job_id: str, kind: str) -> Dict[str, Any]:
         return {
             "classifications": entry.meta.get("classifications") or [],
             "issues": entry.meta.get("variable_issues") or [],
+        }
+    if kind == "missing":
+        classifications = (
+            entry.meta.get("classifications")
+            or variable_classifier.classify_dataframe(entry.df)
+        )
+        by_col = {c.get("column"): c for c in classifications}
+        supported_actions = [
+            "drop_rows", "impute_mean", "impute_median", "impute_mode", "leave",
+        ]
+        decisions = {
+            column: action
+            for column, action in (selected_decisions or {}).items()
+            if action in supported_actions
+        }
+        columns = []
+        total = len(entry.df)
+        for col in entry.df.columns:
+            missing_count = int(entry.df[col].isna().sum())
+            if missing_count <= 0:
+                continue
+            info = by_col.get(col) or {}
+            columns.append({
+                "column": col,
+                "missing_count": missing_count,
+                "missing_pct": (missing_count / total * 100.0) if total else 0.0,
+                "detected_type": info.get("detected_type", "unknown"),
+                "selected_decision": decisions.get(col, "leave"),
+            })
+        return {
+            "columns": columns,
+            "supported_actions": supported_actions,
+            "guidance_only": True,
         }
     if kind == "normality":
         return {"columns": (entry.meta.get("normality") or {}).get("columns") or []}
@@ -1913,15 +1948,16 @@ async def apply_missing_decisions(
 
 class AiChatRequest(BaseModel):
     job_id: str = Field(..., min_length=1, max_length=64)
-    kind: str = Field(..., pattern="^(variables|normality|plan|results)$")
+    kind: str = Field(..., pattern="^(variables|missing|normality|plan|results)$")
     message: str = Field(..., min_length=1, max_length=600)
+    selected_decisions: Dict[str, str] = Field(default_factory=dict)
 
 
 @router.post("/ai-chat")
 @limiter.limit("60/minute")
 async def ai_chat_unified(request: Request, payload: AiChatRequest) -> Dict[str, Any]:
-    """Unified AI chatbox endpoint — routes to ai_chatbox.chat() for all four kinds."""
-    ctx = _chatbox_context(payload.job_id, payload.kind)
+    """Unified AI chatbox endpoint — routes supported assistants to ai_chatbox.chat()."""
+    ctx = _chatbox_context(payload.job_id, payload.kind, payload.selected_decisions)
     external_ai_consent = request.headers.get("X-External-AI-Consent", "").lower() == "true"
     return await ai_chatbox.chat(
         payload.kind, payload.message, ctx, external_ai_consent=external_ai_consent

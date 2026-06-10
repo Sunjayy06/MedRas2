@@ -204,12 +204,38 @@ def _variables_system(context: Dict[str, Any]) -> str:
     )
 
 
+def _missing_system(context: Dict[str, Any]) -> str:
+    columns = (context or {}).get("columns") or []
+    actions = (context or {}).get("supported_actions") or []
+    rows = "\n".join(
+        f"  - {c.get('column','?')}: {c.get('missing_count',0)} missing "
+        f"({c.get('missing_pct',0):.1f}%), type={c.get('detected_type','unknown')}, "
+        f"selected={c.get('selected_decision','leave')}"
+        for c in columns[:30]
+    ) or "  (no columns with missing values)"
+    return (
+        "You are the Missing Data Assistant in MedRAS Sigma.\n"
+        f"Missingness context:\n{rows}\n"
+        f"Supported actions only: {', '.join(actions)}.\n\n"
+        "Give conservative guidance for medical research. Explain how missingness "
+        "can bias estimates and reduce power. Warn against automatic imputation "
+        "without clinical/statistical justification, suggest sensitivity analysis "
+        "when relevant, and recommend reporting high missingness rather than blind "
+        "imputation. Mean/median imputation is only sensible for numeric variables; "
+        "mode may be considered for categorical variables. Dropping rows can bias "
+        "results and reduce sample size. Never suggest an action outside the "
+        "supported list. Never return action JSON or claim a decision was applied. State "
+        "that the researcher must explicitly select and apply a decision in the UI."
+    )
+
+
 def _build_system_prompt(kind: str, context: Dict[str, Any]) -> str:
     builders = {
         "normality": _normality_system,
         "plan":      _plan_system,
         "results":   _results_system,
         "variables": _variables_system,
+        "missing":   _missing_system,
     }
     fn = builders.get(kind)
     return fn(context) if fn else "You are a helpful medical statistics assistant."

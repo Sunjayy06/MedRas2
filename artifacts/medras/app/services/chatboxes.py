@@ -574,6 +574,86 @@ def chatbox4_reply(message: str, context: Dict[str, Any]) -> Dict[str, Any]:
     )
 
 
+# ===========================================================================
+# MISSING DATA ASSISTANT
+# ===========================================================================
+
+
+_MISSING_ACTIONS = "leave, drop_rows, impute_mean, impute_median, impute_mode"
+
+
+def _opening_missing(context: Dict[str, Any]) -> str:
+    columns = (context or {}).get("columns") or []
+    if not columns:
+        return (
+            "No columns with missing values are currently available. I can explain "
+            "Sigma's supported missing-data choices, but I will not apply decisions."
+        )
+    return (
+        f"I found {len(columns)} column(s) with missing values. I can explain their "
+        f"missingness and the supported choices ({_MISSING_ACTIONS}). Missing-data "
+        "decisions are not applied by chat; select each decision and use Apply "
+        "decisions on this screen."
+    )
+
+
+def chatbox_missing_reply(message: str, context: Dict[str, Any]) -> Dict[str, Any]:
+    """Explain live missingness conservatively without mutating analysis state."""
+    if _is_calculation_request(message):
+        return _msg(REFUSE_CALCULATION)
+
+    columns = (context or {}).get("columns") or []
+    low = message.lower()
+    selected = next(
+        (c for c in columns if str(c.get("column", "")).lower() in low),
+        None,
+    )
+    if selected:
+        column = selected.get("column", "?")
+        count = int(selected.get("missing_count") or 0)
+        pct = float(selected.get("missing_pct") or 0)
+        variable_type = selected.get("detected_type") or "unknown"
+        decision = selected.get("selected_decision") or "leave"
+        if variable_type in {"scale", "discrete"}:
+            type_guidance = (
+                "Mean or median imputation is only defensible with a documented "
+                "reason; median is generally less sensitive to skew and outliers."
+            )
+        elif variable_type in {"nominal", "ordinal", "binary"}:
+            type_guidance = (
+                "Mode imputation may be considered for a categorical variable, but "
+                "it can overstate the most common category and should be justified."
+            )
+        else:
+            type_guidance = (
+                "Confirm the variable's classification before choosing an "
+                "imputation method."
+            )
+        high_missingness = (
+            " Because missingness is substantial, report it clearly and consider "
+            "a sensitivity analysis."
+            if pct >= 20
+            else ""
+        )
+        return _msg(
+            f"'{column}' has {count} missing value(s) ({pct:.1f}%), is classified "
+            f"as {variable_type}, and currently has '{decision}' selected. "
+            f"{type_guidance} Dropping rows can reduce power and introduce bias; "
+            f"leaving values missing may be appropriate when imputation is not "
+            f"justified.{high_missingness} Chat will not apply this choice. Select "
+            "and apply the final decision on the Missing Data screen."
+        )
+
+    return _msg(
+        f"Sigma supports only: {_MISSING_ACTIONS}. Missing data can reduce power "
+        "and bias estimates, so do not impute automatically without clinical and "
+        "statistical justification. Report high missingness and consider a "
+        "sensitivity analysis when conclusions may depend on the chosen approach. "
+        "Chat does not apply decisions; explicitly select and apply each choice on "
+        "the Missing Data screen."
+    )
+
+
 # ---------------------------------------------------------------------------
 # Public dispatch
 # ---------------------------------------------------------------------------
@@ -598,6 +678,16 @@ from app.services.llm_client import openai_chat_url, openai_auth_header, openai_
 
 
 _SYSTEM_PROMPTS: Dict[str, str] = {
+    "missing": (
+        "You are a conservative missing-data guidance assistant for a medical "
+        "research platform. Supported choices are only leave, drop_rows, "
+        "impute_mean, impute_median, and impute_mode. Explain missingness impact, "
+        "warn against unjustified automatic imputation, suggest sensitivity "
+        "analysis when relevant, and recommend reporting high missingness. Never "
+        "suggest unsupported actions, return action JSON, or claim to apply a "
+        "decision. State that the researcher must explicitly select and apply "
+        "decisions in the UI. Keep replies under 150 words."
+    ),
     "normality": (
         "You are a normality explanation assistant for a medical research "
         "platform. Explain in plain English only. Never produce any number "
@@ -633,6 +723,22 @@ _SYSTEM_PROMPTS: Dict[str, str] = {
 
 
 def _build_gemini_context(kind: str, context: Dict[str, Any]) -> str:
+    if kind == "missing":
+        columns = context.get("columns") or []
+        rows = [
+            f"{c.get('column', '?')}: {c.get('missing_count', 0)} missing "
+            f"({float(c.get('missing_pct') or 0):.1f}%), "
+            f"type={c.get('detected_type', 'unknown')}, "
+            f"selected={c.get('selected_decision', 'leave')}"
+            for c in columns[:30]
+        ]
+        return (
+            "Missing-data context:\n"
+            + ("\n".join(rows) or "No columns with missing values.")
+            + "\nSupported actions: "
+            + ", ".join(context.get("supported_actions") or [])
+            + ". Guidance only; do not apply decisions."
+        )
     if kind == "normality":
         cols = context.get("columns") or []
         normal = [c.get("column", "") for c in cols if c.get("decision") == "normal"]
@@ -715,6 +821,8 @@ def _try_gemini(kind: str, message: str, context: Dict[str, Any]) -> Optional[Di
 
 
 def opening_message(kind: str, context: Dict[str, Any]) -> str:
+    if kind == "missing":
+        return _opening_missing(context)
     if kind == "normality":
         return _opening_normality(context)
     if kind == "plan":
@@ -725,6 +833,8 @@ def opening_message(kind: str, context: Dict[str, Any]) -> str:
 
 
 def _rule_based_reply(kind: str, message: str, context: Dict[str, Any]) -> Dict[str, Any]:
+    if kind == "missing":
+        return chatbox_missing_reply(message, context)
     if kind == "normality":
         return chatbox2_reply(message, context)
     if kind == "plan":
