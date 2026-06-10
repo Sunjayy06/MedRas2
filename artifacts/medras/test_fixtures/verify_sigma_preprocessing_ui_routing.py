@@ -16,6 +16,13 @@ def verify_frontend_routing() -> None:
     assert "decisions: missingDecisions" in source
     assert "decisions: state.missingDecisions" not in source
     assert "!actionMap[action]" in source
+    assert "overrides: {}" not in source
+    assert "overrides: []" in source
+    assert "reclassify failure is non-fatal" not in source
+    assert source.count("state.missingDecisions = {};") >= 4
+    assert "${escapeHtml(c.cleanup_note)}" in source
+    assert "We stripped text from this column and kept the numbers" not in source
+    assert "c.cleanup_undo_available" in source
 
 
 def verify_backend_invalidation() -> None:
@@ -43,6 +50,10 @@ def verify_backend_invalidation() -> None:
     helper = ast.get_source_segment(source, functions["_invalidate_downstream"]) or ""
     for key in ("normality", "plan", "results", "correlation_plan", "correlation_results"):
         assert key in helper, f"invalidation helper does not clear {key}"
+
+    classify = ast.get_source_segment(source, functions["classify"]) or ""
+    assert "for col in applied_cleanup_cols:" in classify
+    assert 'c["cleanup_undo_available"] = c["column"] in cleanup_backups' in classify
 
 
 def main() -> None:

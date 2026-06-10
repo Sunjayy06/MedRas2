@@ -748,14 +748,18 @@ async def classify(payload: ClassifyRequest) -> Dict[str, Any]:
         cleaned_df, skip_columns=cleanup_suppressed
     )
     _merge_cleanup_notes(numeric_notes)
-    cleanup_changed = not cleaned_df.equals(source_df)
+    applied_cleanup_cols = set(derived_by_source)
+    for col in source_df.columns:
+        if col in cleaned_df.columns and not source_df[col].equals(cleaned_df[col]):
+            applied_cleanup_cols.add(col)
+    cleanup_changed = bool(applied_cleanup_cols)
 
     if fresh_cleanup_notes:
         # Snapshot the original (pre-cleanup) values so the user can
         # undo preprocessing from Step 3 if our heuristic was wrong. We store
         # only the source columns that changed to keep memory bounded.
         backups = dict(entry.meta.get("cleanup_backups") or {})
-        for col in fresh_cleanup_notes:
+        for col in applied_cleanup_cols:
             derived_cols = list(derived_by_source.get(col) or [])
             if col in source_df.columns and col not in backups:
                 # Convert the original Series to a list so the backup
@@ -778,12 +782,13 @@ async def classify(payload: ClassifyRequest) -> Dict[str, Any]:
                         "derived_columns": derived_cols,
                     }
         entry.meta["cleanup_backups"] = backups
-        if cleanup_changed:
-            _invalidate_downstream(entry, keep_normality=False)
-        dataset_store.replace_df(payload.job_id, cleaned_df)
         existing_notes = dict(entry.meta.get("cleanup_notes") or {})
         existing_notes.update(fresh_cleanup_notes)
         entry.meta["cleanup_notes"] = existing_notes
+        if cleanup_changed:
+            _invalidate_downstream(entry, keep_normality=False)
+        if cleanup_changed:
+            dataset_store.replace_df(payload.job_id, cleaned_df)
         # When the underlying df changed, any previously stored
         # classifications are no longer valid (the dtypes shifted) — so
         # force a full re-classify by ignoring the stored copy.
@@ -792,6 +797,7 @@ async def classify(payload: ClassifyRequest) -> Dict[str, Any]:
         entry = dataset_store.get(payload.job_id)
         assert entry is not None
     cleanup_notes: Dict[str, str] = dict(entry.meta.get("cleanup_notes") or {})
+    cleanup_backups = entry.meta.get("cleanup_backups") or {}
     # Reuse a previously stored classification if there are no overrides
     # AND we already have one — this preserves changes made by the
     # variable-assistant (e.g. type promoted to scale after strip_prefix)
@@ -841,6 +847,7 @@ async def classify(payload: ClassifyRequest) -> Dict[str, Any]:
             if not note:
                 continue
             c["cleanup_note"] = note
+            c["cleanup_undo_available"] = c["column"] in cleanup_backups
             existing_reason = c.get("reasoning") or ""
             if note not in existing_reason:
                 c["reasoning"] = (note + " " + existing_reason).strip()

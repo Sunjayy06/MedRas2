@@ -23,6 +23,7 @@ const state = {
   repeated: { any_repeats: false, columns: [] },
   quality: null,
   qualityActions: [],   // {row, variable, action, bound_low, bound_high}
+  missingDecisions: {},
   currentScreen: 1,
   followUp: null,
   practiceTemplate: "anaemia",
@@ -1260,6 +1261,7 @@ function ingestDataset(data) {
     state.autoCoding = [];
     state.assistantThread = [];
     state.recodingChoices = {};
+    state.missingDecisions = {};
     // Also clear all Step 4–7 state so a new dataset starts clean.
     state.assignment = null;
     state.assignmentAutoMatched = false;
@@ -2645,13 +2647,16 @@ function renderClassifyTable() {
     // Per spec Rule 2: surface the auto-strip notice directly on the
     // affected row so users see exactly which column was rewritten and
     // can undo it without hunting through a dataset-level banner.
+    const cleanupUndo = c.cleanup_undo_available
+      ? `<button type="button" class="se-cleanup-undo"
+                   data-cleanup-undo="${escapeHtml(c.column)}"
+                   data-testid="button-cleanup-undo-${escapeHtml(c.column)}">Undo</button>`
+      : "";
     const cleanupHtml = c.cleanup_note
       ? `<div class="se-cleanup-note" data-testid="cleanup-${escapeHtml(c.column)}">
            <span class="se-cleanup-icon">✓</span>
-           <span class="se-cleanup-text">We stripped text from this column and kept the numbers (e.g. ${escapeHtml((c.sample_values || [])[0] || "Grade 4")} → number). Now treated as a numeric scale variable.</span>
-           <button type="button" class="se-cleanup-undo"
-                   data-cleanup-undo="${escapeHtml(c.column)}"
-                   data-testid="button-cleanup-undo-${escapeHtml(c.column)}">Undo</button>
+           <span class="se-cleanup-text">${escapeHtml(c.cleanup_note)}</span>
+           ${cleanupUndo}
          </div>`
       : "";
 
@@ -3453,6 +3458,7 @@ async function _applyQualityHandler() {
           decisions: missingDecisions,
         }),
       });
+      state.missingDecisions = {};
     } catch (err) {
       setStatus(status, `Could not apply missing-data decisions: ${err.message}`, "error");
       return;
@@ -5088,6 +5094,7 @@ function bindScreenMissing() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ job_id: state.jobId, decisions }),
         });
+        state.missingDecisions = {};
         // Reclassify so downstream screens (normality, plan) see the updated
         // imputed/dropped columns rather than stale classification data.
         setStatus(status, "Reclassifying variables…", "loading");
@@ -5095,12 +5102,16 @@ function bindScreenMissing() {
           const reclassData = await api("/classify", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ job_id: state.jobId, overrides: {} }),
+            body: JSON.stringify({ job_id: state.jobId, overrides: [] }),
           });
           if (reclassData && reclassData.classifications) {
             state.classifications = reclassData.classifications;
+          } else {
+            throw new Error("Classification response was incomplete.");
           }
-        } catch (_) { /* reclassify failure is non-fatal — proceed anyway */ }
+        } catch (err) {
+          throw new Error(`Could not reclassify after missing-data cleanup: ${err.message}`);
+        }
         setStatus(status, "");
         showScreen("normality");
         loadNormality();
@@ -5982,6 +5993,7 @@ function restart() {
   state.autoCoding = [];
   state.assistantThread = [];
   state.recodingChoices = {};
+  state.missingDecisions = {};
   state.assignment = null;
   state.normality = null;
   state.plan = null;
