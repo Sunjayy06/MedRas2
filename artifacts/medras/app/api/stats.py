@@ -702,6 +702,7 @@ async def apply_quality(request: Request, payload: ApplyQualityRequest) -> Dict[
             remove_exact_duplicates=payload.remove_exact_duplicates,
         )
     )
+    _invalidate_downstream(entry, keep_normality=False)
     dataset_store.replace_df(payload.job_id, new_df)
     dataset_store.update_meta(
         payload.job_id,
@@ -747,6 +748,7 @@ async def classify(payload: ClassifyRequest) -> Dict[str, Any]:
         cleaned_df, skip_columns=cleanup_suppressed
     )
     _merge_cleanup_notes(numeric_notes)
+    cleanup_changed = not cleaned_df.equals(source_df)
 
     if fresh_cleanup_notes:
         # Snapshot the original (pre-cleanup) values so the user can
@@ -776,6 +778,8 @@ async def classify(payload: ClassifyRequest) -> Dict[str, Any]:
                         "derived_columns": derived_cols,
                     }
         entry.meta["cleanup_backups"] = backups
+        if cleanup_changed:
+            _invalidate_downstream(entry, keep_normality=False)
         dataset_store.replace_df(payload.job_id, cleaned_df)
         existing_notes = dict(entry.meta.get("cleanup_notes") or {})
         existing_notes.update(fresh_cleanup_notes)
@@ -950,6 +954,7 @@ async def variable_assistant_endpoint(
         }
 
     new_df, meta = variable_assistant.apply_action(entry.df, intent)
+    _invalidate_downstream(entry, keep_normality=False)
 
     # Apply DataFrame mutation if the action produced one.
     if new_df is not None:
@@ -1074,6 +1079,8 @@ async def trim_all_whitespace_endpoint(
         variable_assistant.trim_all_whitespace, entry.df, target
     )
 
+    if trim_meta["total_changed"]:
+        _invalidate_downstream(entry, keep_normality=False)
     dataset_store.replace_df(payload.job_id, new_df)
 
     # Recompute classifications, preserving any manual overrides.
@@ -1208,6 +1215,7 @@ async def cleanup_undo(payload: CleanupUndoRequest) -> Dict[str, Any]:
         if derived_col in new_df.columns:
             new_df = new_df.drop(columns=[derived_col])
     new_df[payload.column] = pd.Series(values, index=new_df.index, dtype="object")
+    _invalidate_downstream(entry, keep_normality=False)
     dataset_store.replace_df(payload.job_id, new_df)
     # Drop the cleanup note + backup so the undo is permanent and the
     # next /classify call doesn't re-strip the same column.
@@ -1242,7 +1250,7 @@ class AssignRequest(BaseModel):
 def _invalidate_downstream(entry, *, keep_normality: bool = False) -> None:
     """Drop cached plan/results (and optionally normality) when an upstream
     decision changes, so we never run on stale assumptions."""
-    for k in ("plan", "results"):
+    for k in ("plan", "results", "correlation_plan", "correlation_results"):
         entry.meta.pop(k, None)
     if not keep_normality:
         entry.meta.pop("normality", None)
@@ -1619,6 +1627,7 @@ async def confirm_study(payload: ConfirmStudyRequest) -> Dict[str, Any]:
     # Apply yes/no standardisation whenever a study is confirmed (T004)
     df, yn_notes = variable_classifier.clean_yes_no_columns(entry.df)
     if yn_notes:
+        _invalidate_downstream(entry, keep_normality=False)
         dataset_store.replace_df(payload.job_id, df)
         entry.meta["yesno_cleaning_notes"] = yn_notes
         entry.meta.pop("classifications", None)  # force re-classify on cleaned data
@@ -1793,6 +1802,7 @@ async def apply_missing_decisions(
                     f"Imputed missing {col} with mode ({mode_val.iloc[0]})."
                 )
     if actions_taken:
+        _invalidate_downstream(entry, keep_normality=False)
         dataset_store.replace_df(payload.job_id, df)
         entry.meta.pop("classifications", None)
     # Persist the human-readable action log so the Methods section can include it

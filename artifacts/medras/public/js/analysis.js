@@ -2712,7 +2712,8 @@ function renderClassifyTable() {
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         // Re-classify to refresh the row with the restored text values.
-        await fetchAndRenderClassifications();
+        await loadVariablesData();
+        setStatus($("#classify-status"), `Restored original values for ${col}.`, "success");
       } catch (err) {
         btn.disabled = false;
         btn.textContent = "Undo";
@@ -3421,6 +3422,27 @@ async function _applyQualityHandler() {
   // Step 0 — apply user's missing-data decisions before running quality fixes
   const missingCols = (state.classifications || []).filter((c) => (c.missing_pct || 0) > 5);
   if (missingCols.length > 0 && state.missingDecisions && Object.keys(state.missingDecisions).length > 0) {
+    const allowedColumns = new Set(missingCols.map((c) => c.column));
+    const actionMap = {
+      keep: "leave",
+      impute_mean: "impute_mean",
+      impute_median: "impute_median",
+      impute_mode: "impute_mode",
+      drop_rows: "drop_rows",
+    };
+    const unsupported = Object.entries(state.missingDecisions)
+      .filter(([column, action]) => allowedColumns.has(column) && !actionMap[action]);
+    if (unsupported.length) {
+      setStatus(
+        status,
+        `Unsupported missing-data action for ${unsupported.map(([column]) => column).join(", ")}. Choose Keep or an imputation option.`,
+        "error"
+      );
+      return;
+    }
+    const missingDecisions = Object.entries(state.missingDecisions)
+      .filter(([column, action]) => allowedColumns.has(column) && actionMap[action])
+      .map(([column, action]) => ({ column, action: actionMap[action] }));
     setStatus(status, "Applying missing-data decisions…", "loading");
     try {
       await api("/apply-missing-decisions", {
@@ -3428,7 +3450,7 @@ async function _applyQualityHandler() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           job_id: state.jobId,
-          decisions: state.missingDecisions,
+          decisions: missingDecisions,
         }),
       });
     } catch (err) {
@@ -3883,12 +3905,41 @@ function renderResultsPane(tabId) {
       <p class="se-correction-note"><em>Multiple comparisons correction applied (${escapeHtml(method)}, ${ci.n_tests || ''} tests)</em></p>
     </div>`;
   }
+  const tablesHtml = renderResultTables(test);
+  const figuresHtml = renderResultFigures(test);
   pane.innerHTML = `<h3>${test.title}</h3>
-    ${tableHtml(["Statistic", "Value"], (test.rows || []).map((row) => [row.label, row.value]))}
+    ${tablesHtml}
+    ${figuresHtml}
     ${correctionBlock}
     <p>${escapeHtml(test.narrative || '')}</p>
     <button type="button" class="btn btn-tertiary" data-action="copy-table" data-testid="button-copy-${test.id}">Copy table</button>`;
   bindCopyTable();
+}
+
+function renderResultTables(test) {
+  const tables = Array.isArray(test.tables) ? test.tables.filter((t) =>
+    t && Array.isArray(t.headers) && Array.isArray(t.rows) && t.rows.length
+  ) : [];
+  if (tables.length) {
+    return tables.map((t) => `
+      <section class="se-result-table-block">
+        ${t.title ? `<h4>${escapeHtml(String(t.title))}</h4>` : ""}
+        ${tableHtml(t.headers, t.rows)}
+      </section>
+    `).join("");
+  }
+  const legacyRows = (test.rows || []).filter((row) =>
+    row && Object.prototype.hasOwnProperty.call(row, "label") && Object.prototype.hasOwnProperty.call(row, "value")
+  );
+  if (!legacyRows.length) return "";
+  return tableHtml(["Statistic", "Value"], legacyRows.map((row) => [row.label, row.value]));
+}
+
+function renderResultFigures(test) {
+  const figures = Array.isArray(test.figures) ? test.figures.filter((fig) => fig && fig.png_data_uri) : [];
+  return figures.map((fig) =>
+    `<figure class="se-result-figure"><figcaption>${escapeHtml(String(fig.title || "Figure"))}</figcaption><img src="${escapeHtml(String(fig.png_data_uri))}" alt="${escapeHtml(String(fig.title || "Figure"))}"></figure>`
+  ).join("");
 }
 
 function fmtPValue(p) {
@@ -3909,13 +3960,14 @@ function tableHtml(headers, rows) {
 function bindCopyTable() {
   document.querySelectorAll('[data-action="copy-table"]').forEach((btn) => {
     btn.addEventListener("click", () => {
-      const table = btn.previousElementSibling && btn.previousElementSibling.querySelector
-        ? btn.previousElementSibling.querySelector("table")
-        : null;
-      if (!table) return;
-      const tsv = Array.from(table.querySelectorAll("tr")).map((tr) =>
-        Array.from(tr.querySelectorAll("th,td")).map((c) => c.textContent.trim()).join("\t")
-      ).join("\n");
+      const root = btn.closest("#results-pane") || document;
+      const tables = Array.from(root.querySelectorAll("table"));
+      if (!tables.length) return;
+      const tsv = tables.map((table) =>
+        Array.from(table.querySelectorAll("tr")).map((tr) =>
+          Array.from(tr.querySelectorAll("th,td")).map((c) => c.textContent.trim()).join("\t")
+        ).join("\n")
+      ).join("\n\n");
       navigator.clipboard.writeText(tsv);
       btn.textContent = "Copied ✓";
     });
