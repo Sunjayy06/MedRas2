@@ -885,6 +885,7 @@ async def classify(payload: ClassifyRequest) -> Dict[str, Any]:
 class VariableAssistantRequest(BaseModel):
     job_id: str = Field(..., min_length=1, max_length=64)
     message: str = Field(..., min_length=1, max_length=600)
+    confirmed_action: Optional[Dict[str, Any]] = None
 
 
 @router.post("/variable-assistant")
@@ -899,55 +900,71 @@ async def variable_assistant_endpoint(
     columns = list(entry.df.columns)
     stored_classifications = entry.meta.get("classifications") or []
 
-    # 1. AI-powered intent parsing (Gemini 2.5 Flash primary, OpenAI secondary).
-    #    parse_variable_intent() returns a structured dict on success or None if
-    #    the message is a question / explanation request.
     external_ai_consent = request.headers.get("X-External-AI-Consent", "").lower() == "true"
-    ai_intent, provider_status = await ai_chatbox.parse_variable_intent(
-        payload.message,
-        {"classifications": stored_classifications},
-        external_ai_consent=external_ai_consent,
-    )
-    provider_meta = _provider_status_payload(provider_status, external_ai_consent)
+    provider_meta: Dict[str, Any] = {}
 
-    # Normalize the AI action → apply_action() supported names + params shape.
-    # apply_action() uses {action, column, params:{}} — NOT top-level new_name/new_type.
-    # Unsupported actions (recode, include) fall through to rule-based.
-    _ai_action = (ai_intent or {}).get("action")
-    _ai_col    = (ai_intent or {}).get("column")
-    # Validate: AI must name a column that actually exists in this dataset.
-    # A hallucinated column name would cause a misleading "applied" confirmation
-    # or a runtime error in apply_action, so we fall through to rule-based when
-    # the column is not found.
-    _ai_col_valid = _ai_col and _ai_col in entry.df.columns
-    if ai_intent and _ai_col_valid:
-        if _ai_action == "rename" and ai_intent.get("new_name"):
-            intent = {
-                "action": "rename",
-                "column": _ai_col,
-                "params": {"new_name": ai_intent["new_name"]},
-            }
-        elif _ai_action in ("exclude",):
-            intent = {"action": "exclude_column", "column": _ai_col, "params": {}}
-        elif _ai_action == "set_type" and ai_intent.get("new_type"):
-            intent = {
-                "action": "change_type",
-                "column": _ai_col,
-                "params": {"new_type": ai_intent["new_type"]},
-            }
-        else:
-            # recode / include / unrecognised → rule-based fallback
-            intent = variable_assistant.parse_intent(payload.message, columns)
-    elif ai_intent and _ai_col and not _ai_col_valid:
-        # AI named a column that doesn't exist — log and fall through gracefully
-        logger.warning(
-            "AI variable intent referenced non-existent column %r (dataset has %r) — rule-based fallback",
-            _ai_col, columns[:10],
-        )
-        intent = variable_assistant.parse_intent(payload.message, columns)
+    if payload.confirmed_action is not None:
+        intent = {
+            "action": payload.confirmed_action.get("action"),
+            "column": payload.confirmed_action.get("column"),
+            "params": payload.confirmed_action.get("params") or {},
+        }
+        if entry.meta.get("pending_variable_assistant_action") != intent:
+            raise HTTPException(
+                status_code=409,
+                detail="This assistant action was not previewed or is no longer current.",
+            )
+        allowed = {
+            "rename", "exclude_column", "change_type", "strip_prefix",
+            "add_numeric_column", "trim_whitespace",
+        }
+        if intent["action"] not in allowed or intent["column"] not in entry.df.columns:
+            raise HTTPException(status_code=400, detail="Confirmed assistant action is invalid or stale.")
+        if not isinstance(intent["params"], dict):
+            raise HTTPException(status_code=400, detail="Confirmed assistant action parameters are invalid.")
+        if intent["action"] == "change_type" and intent["params"].get("new_type") not in {
+            "scale", "ordinal", "nominal", "date", "id", "exclude",
+            "scale_discrete", "scale_continuous",
+        }:
+            raise HTTPException(status_code=400, detail="Confirmed variable type is invalid.")
     else:
-        # 2. Rule-based fallback (guaranteed to always produce an intent).
-        intent = variable_assistant.parse_intent(payload.message, columns)
+        # AI may suggest an action, but the endpoint returns a preview before applying it.
+        entry.meta.pop("pending_variable_assistant_action", None)
+        ai_intent, provider_status = await ai_chatbox.parse_variable_intent(
+            payload.message,
+            {"classifications": stored_classifications},
+            external_ai_consent=external_ai_consent,
+        )
+        provider_meta = _provider_status_payload(provider_status, external_ai_consent)
+
+        _ai_action = (ai_intent or {}).get("action")
+        _ai_col = (ai_intent or {}).get("column")
+        _ai_col_valid = _ai_col and _ai_col in entry.df.columns
+        if ai_intent and _ai_col_valid:
+            if _ai_action == "rename" and ai_intent.get("new_name"):
+                intent = {
+                    "action": "rename",
+                    "column": _ai_col,
+                    "params": {"new_name": ai_intent["new_name"]},
+                }
+            elif _ai_action in ("exclude",):
+                intent = {"action": "exclude_column", "column": _ai_col, "params": {}}
+            elif _ai_action == "set_type" and ai_intent.get("new_type"):
+                intent = {
+                    "action": "change_type",
+                    "column": _ai_col,
+                    "params": {"new_type": ai_intent["new_type"]},
+                }
+            else:
+                intent = variable_assistant.parse_intent(payload.message, columns)
+        elif ai_intent and _ai_col and not _ai_col_valid:
+            logger.warning(
+                "AI variable intent referenced non-existent column %r — rule-based fallback",
+                _ai_col,
+            )
+            intent = variable_assistant.parse_intent(payload.message, columns)
+        else:
+            intent = variable_assistant.parse_intent(payload.message, columns)
 
     # Informational intents (no DataFrame mutation): the assistant either
     # gives a tailored suggestion ("what should I do?") or a clarification
@@ -974,7 +991,48 @@ async def variable_assistant_endpoint(
             **provider_meta,
         }
 
+    if payload.confirmed_action is None:
+        column = intent.get("column")
+        params = intent.get("params") or {}
+        current = next(
+            (c.get("detected_type") for c in stored_classifications if c.get("column") == column),
+            "unchanged",
+        )
+        action = intent["action"]
+        before = {
+            "rename": column,
+            "change_type": current,
+            "exclude_column": current,
+            "strip_prefix": current,
+            "add_numeric_column": "no numeric companion column",
+            "trim_whitespace": "original string values",
+        }.get(action, current)
+        after = {
+            "rename": params.get("new_name"),
+            "change_type": params.get("new_type"),
+            "exclude_column": "exclude",
+            "strip_prefix": "numeric values; classification becomes scale",
+            "add_numeric_column": f"new numeric companion column for {column}",
+            "trim_whitespace": "trimmed string values",
+        }.get(action, "updated")
+        entry.meta["pending_variable_assistant_action"] = intent
+        return {
+            "status": "preview",
+            "action": action,
+            "column": column,
+            "params": params,
+            "confirmed_action": intent,
+            "change_preview": {
+                "affected": column,
+                "before": before,
+                "after": after,
+                "summary": f"{action.replace('_', ' ').title()} for '{column}'.",
+            },
+            **provider_meta,
+        }
+
     new_df, meta = variable_assistant.apply_action(entry.df, intent)
+    entry.meta.pop("pending_variable_assistant_action", None)
     _invalidate_downstream(entry, keep_normality=False)
 
     # Apply DataFrame mutation if the action produced one.
@@ -1605,9 +1663,6 @@ async def ai_bridge(request: Request, payload: AiBridgeRequest) -> Dict[str, Any
         study_type_hint=payload.study_type_hint or None,
         external_ai_consent=request.headers.get("X-External-AI-Consent", "").lower() == "true",
     )
-    entry.meta["ai_study"] = result
-    if payload.description.strip():
-        entry.meta.setdefault("study_description", payload.description.strip())
     return result
 
 
@@ -1639,7 +1694,6 @@ async def adjust_analysis(request: Request, payload: AdjustAnalysisRequest) -> D
         study_type_hint=None,  # researcher is explicitly overriding; ignore old hint
         external_ai_consent=request.headers.get("X-External-AI-Consent", "").lower() == "true",
     )
-    entry.meta["ai_study"] = result
     return result
 
 
@@ -1661,6 +1715,11 @@ async def confirm_study(payload: ConfirmStudyRequest) -> Dict[str, Any]:
         )
     entry.meta["confirmed_study_type"] = payload.study_type
     entry.meta["confirmed_outcome_col"] = payload.outcome_col
+    entry.meta["ai_study"] = {
+        "study_type": payload.study_type,
+        "outcome_col": payload.outcome_col,
+        "source": "confirmed",
+    }
     # Apply yes/no standardisation whenever a study is confirmed (T004)
     df, yn_notes = variable_classifier.clean_yes_no_columns(entry.df)
     if yn_notes:
@@ -1909,9 +1968,6 @@ async def setup_study(request: Request, payload: SetupStudyRequest) -> Dict[str,
     # Augment with outcome_hint if provided and AI didn't detect an outcome
     if payload.outcome_hint.strip() and not result.get("outcome_col"):
         result["outcome_col"] = payload.outcome_hint.strip()
-    entry.meta["ai_study"] = result
-    if payload.description.strip():
-        entry.meta["study_description"] = payload.description.strip()
     return result
 
 
@@ -1934,7 +1990,7 @@ async def adjust_setup(request: Request, payload: AdjustSetupRequest) -> Dict[st
 
     Combines the researcher's original description with a correction hint and
     calls ``plan_study_setup`` to return an updated rich plan.  Results are
-    stored back in ``entry.meta["ai_study"]`` so they survive a page refresh.
+    returned as a suggestion; it is persisted only after explicit confirmation.
     """
     entry = dataset_store.get(payload.job_id)
     if entry is None:
@@ -1961,9 +2017,6 @@ async def adjust_setup(request: Request, payload: AdjustSetupRequest) -> Dict[st
     )
     if payload.outcome_hint.strip() and not result.get("outcome_col"):
         result["outcome_col"] = payload.outcome_hint.strip()
-    entry.meta["ai_study"] = result
-    if merged.strip():
-        entry.meta["study_description"] = merged.strip()
     return result
 
 

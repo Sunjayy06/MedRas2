@@ -86,6 +86,32 @@ const state = {
 
 function $(sel, root = document) { return root.querySelector(sel); }
 
+function confirmAIStateChange(title, change) {
+  const lines = [
+    title,
+    "",
+    `Affected: ${change.affected || "analysis state"}`,
+    `Before: ${change.before ?? "not set"}`,
+    `After: ${change.after ?? "not set"}`,
+  ];
+  if (change.details) lines.push("", change.details);
+  lines.push("", "Apply this AI-suggested change?");
+  return window.confirm(lines.join("\n"));
+}
+
+function confirmAIStudyReplacement(suggested, title = "AI suggested a study setup change") {
+  const current = state.aiStudy || {};
+  const before = `${current.study_type || "not set"}; outcome: ${current.outcome_col || "not set"}`;
+  const after = `${suggested.study_type || "not set"}; outcome: ${suggested.outcome_col || "not set"}`;
+  const predictors = (suggested.predictors || suggested.all_predictors || []).join(", ");
+  return confirmAIStateChange(title, {
+    affected: "study type, outcome, predictors, and analysis approach",
+    before,
+    after,
+    details: predictors ? `Suggested predictors: ${predictors}` : "No predictor changes listed.",
+  });
+}
+
 const EXTERNAL_AI_PATHS = [
   "/variable-assistant", "/chat/", "/ai-chat", "/ai-bridge",
   "/adjust-analysis", "/setup-study", "/adjust-setup",
@@ -3140,12 +3166,37 @@ async function sendAssistantMessage(message) {
   };
 
   try {
-    const res = await api("/variable-assistant", {
+    let res = await api("/variable-assistant", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ job_id: state.jobId, message: text }),
     });
     clearTyping();
+    if (res.status === "preview") {
+      const preview = res.change_preview || {};
+      const approved = confirmAIStateChange("Variable Assistant suggested a change", {
+        affected: preview.affected || res.column,
+        before: preview.before,
+        after: preview.after,
+        details: preview.summary || "",
+      });
+      if (!approved) {
+        state.assistantThread.push({ role: "clarify", text: "Cancelled. No variable or preprocessing changes were made." });
+        renderAssistantThread();
+        return;
+      }
+      state.assistantThread.push({ role: "action", text: "Applying confirmed change…" });
+      renderAssistantThread();
+      res = await api("/variable-assistant", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          job_id: state.jobId,
+          message: text,
+          confirmed_action: res.confirmed_action,
+        }),
+      });
+    }
     if (res.status === "applied") {
       state.assistantThread.push({ role: "action", text: "✓ " + (res.confirmation_message || "Done.") });
       await refreshClassifications([], { render: true, detectCategoryDupes: true });
@@ -4268,6 +4319,16 @@ function handlePlanChatResponse(res) {
   const action = parseAIAction(raw);
   if (action && action.action && action.test_id) {
     if (action.action === "add_test") {
+      const approved = confirmAIStateChange("Plan Assistant suggested a change", {
+        affected: `planned test: ${action.test_id}`,
+        before: state.confirmedTests?.has(action.test_id) ? "included" : "not included",
+        after: "included",
+        details: action.reason || "",
+      });
+      if (!approved) {
+        state.chatThreads.plan.push({ role: "clarify", text: "Cancelled. The analysis plan was not changed." });
+        return;
+      }
       addTestToPlanLocal(action.test_id, action.reason || "");
       state.chatThreads.plan.push({
         role: "action",
@@ -4276,6 +4337,16 @@ function handlePlanChatResponse(res) {
       return;
     }
     if (action.action === "remove_test") {
+      const approved = confirmAIStateChange("Plan Assistant suggested a change", {
+        affected: `planned test: ${action.test_id}`,
+        before: state.confirmedTests?.has(action.test_id) ? "included" : "not included",
+        after: "removed",
+        details: action.reason || "",
+      });
+      if (!approved) {
+        state.chatThreads.plan.push({ role: "clarify", text: "Cancelled. The analysis plan was not changed." });
+        return;
+      }
       removeTestFromPlanLocal(action.test_id);
       state.chatThreads.plan.push({
         role: "action",
@@ -4313,6 +4384,19 @@ async function handleResultsChatResponse(res) {
     const proseText = raw.replace(/\{[\s\S]*\}/g, "").trim();
     if (proseText) {
       state.chatThreads.results.push({ role: "ai", text: proseText });
+    }
+    const approved = confirmAIStateChange("Results Assistant suggested a partial re-run", {
+      affected: [...addIds, ...removeIds].join(", ") || "result sections",
+      before: removeIds.length ? `Current sections include: ${removeIds.join(", ")}` : "Current result sections",
+      after: [
+        addIds.length ? `add ${addIds.join(", ")}` : "",
+        removeIds.length ? `remove ${removeIds.join(", ")}` : "",
+      ].filter(Boolean).join("; ") || "re-run selected sections",
+      details: "Only the listed result sections will be changed.",
+    });
+    if (!approved) {
+      state.chatThreads.results.push({ role: "clarify", text: "Cancelled. Results were not re-run or replaced." });
+      return;
     }
     state.chatThreads.results.push({
       role: "action",
@@ -4794,6 +4878,10 @@ function bindScreenSetup() {
       if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
       const plan = await res.json();
       showAIProviderStatus(plan);
+      if (!confirmAIStudyReplacement(plan, "AI suggested replacing the current study plan")) {
+        setStatus(statusEl, "Cancelled. The current study plan was kept.", "info");
+        return;
+      }
       state.aiStudy = plan;
       renderSetupScreen(plan);
       setStatus(statusEl, "Plan updated.", "success");
@@ -4859,6 +4947,10 @@ function bindScreenSetup() {
       if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
       const plan = await res.json();
       showAIProviderStatus(plan);
+      if (!confirmAIStudyReplacement(plan, "AI suggested revising the current study plan")) {
+        setStatus(adjStatusEl, "Cancelled. The current study plan was kept.", "info");
+        return;
+      }
       state.aiStudy = plan;
       renderSetupScreen(plan);
       adjustBox?.classList.add("is-hidden");
@@ -5012,6 +5104,10 @@ function bindAiConfirm() {
             current_outcome_col: (state.aiStudy && state.aiStudy.outcome_col) || null,
           }),
         });
+        if (!confirmAIStudyReplacement(result, "AI suggested changing the analysis setup")) {
+          setStatus(status, "Cancelled. The current analysis setup was kept.", "info");
+          return;
+        }
         state.aiStudy = result;
         if (input) input.value = "";
         if (adjustBox) adjustBox.classList.add("is-hidden");
@@ -5077,6 +5173,10 @@ function bindAiConfirm() {
             outcome_hint: "",
           }),
         });
+        if (!confirmAIStudyReplacement(result, "AI suggested replacing the study setup")) {
+          setStatus(descSts, "Cancelled. The current study setup was kept.", "info");
+          return;
+        }
         state.aiStudy = result;
         setStatus(descSts, "Updated.", "success");
         setTimeout(() => setStatus(descSts, ""), 2500);
@@ -5608,13 +5708,17 @@ function bindSettingsPanel() {
             current_outcome_col: (state.aiStudy && state.aiStudy.outcome_col) || null,
           }),
         });
-        state.aiStudy = result;
         if (input) input.value = "";
         const outCol = result.outcome_col || "";
         if (!outCol) {
           setStatus(status, "Outcome column not detected — please use 'Override manually' to set it.", "error");
           return;
         }
+        if (!confirmAIStudyReplacement(result, "AI suggested changing setup and re-running results")) {
+          setStatus(status, "Cancelled. Setup and results were not changed.", "info");
+          return;
+        }
+        state.aiStudy = result;
         _populateSettingsBar();
         await _rerunFromSettings(result.study_type, outCol);
       } catch (err) {
