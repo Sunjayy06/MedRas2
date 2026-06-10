@@ -125,6 +125,92 @@ def _fmt(v, places=3) -> str:
 # ---------------------------------------------------------------------------
 
 
+def _build_cleaning_log(
+    meta: Dict[str, Any], classifications: List[Dict[str, Any]]
+) -> List[Dict[str, str]]:
+    """Normalize existing preprocessing metadata into export-ready log rows."""
+    rows: List[Dict[str, str]] = []
+    seen = set()
+
+    def add(category: str, scope: Any, details: Any) -> None:
+        if details is None or str(details).strip() == "":
+            return
+        row = {
+            "category": str(category),
+            "scope": str(scope or "Dataset"),
+            "details": str(details),
+        }
+        key = tuple(row.values())
+        if key not in seen:
+            seen.add(key)
+            rows.append(row)
+
+    for column, note in (meta.get("cleanup_notes") or {}).items():
+        text = str(note)
+        lowered = text.lower()
+        if "lymph-node" in lowered and "derived" in lowered:
+            add("Node-fraction derivation", column, text)
+        elif "lymph-node" in lowered or "warning:" in lowered or "review and correct" in lowered:
+            add("Quality warning", column, text)
+        elif "whitespace" in lowered:
+            add("Whitespace cleanup", column, text)
+        else:
+            add("Automatic normalization", column, text)
+
+        if "missing marker" in lowered:
+            add("Automatic normalization", column, text)
+        if "warning:" in lowered or "review and correct" in lowered:
+            add("Quality warning", column, text)
+
+    for action in meta.get("cleaning_actions") or []:
+        lowered = str(action).lower()
+        if "merged" in lowered:
+            category = "Category merge"
+        elif "whitespace" in lowered:
+            category = "Whitespace cleanup"
+        else:
+            category = "Cleaning action"
+        add(category, "Dataset", action)
+
+    for action in meta.get("missing_decision_actions") or []:
+        add("Missing-data decision", "Dataset", action)
+
+    for column, note in (meta.get("yesno_cleaning_notes") or {}).items():
+        add("Yes/no standardization", column, note)
+
+    quality_labels = {
+        "removed_rows": "Rows removed",
+        "capped_values": "Values capped",
+        "kept": "Flagged values kept",
+        "reviewed": "Values marked for review",
+    }
+    for key, value in (meta.get("quality_log") or {}).items():
+        if value:
+            add("Quality review", "Dataset", f"{quality_labels.get(key, key)}: {value}.")
+
+    for issue in meta.get("variable_issues") or []:
+        if not isinstance(issue, dict):
+            continue
+        add(
+            "Quality warning",
+            issue.get("column") or "Dataset",
+            issue.get("message") or issue.get("type"),
+        )
+
+    for c in classifications:
+        if c.get("auto_strip_count"):
+            add(
+                "Automatic normalization",
+                clean_display_name(c.get("column", "")),
+                f"Stripped non-numeric prefixes from {c.get('auto_strip_count')} cell(s).",
+            )
+
+    if meta.get("merged_sheets"):
+        add("Dataset preparation", "Dataset", f"Merged sheets: {', '.join(meta['merged_sheets'])}.")
+
+    return rows
+
+
 def _ensure_child(parent, tag_name):
     """Find or create a child element by tag (replaces get_or_add_*)."""
     elem = parent.find(qn(tag_name))
@@ -308,6 +394,22 @@ def _render_normalized_figures_docx(doc: Document, result: Dict[str, Any]) -> No
 # ---------------------------------------------------------------------------
 
 
+def _render_cleaning_log_docx(doc: Document, cleaning_log: List[Dict[str, str]]) -> None:
+    doc.add_heading("Data Cleaning Log", 2)
+    if not cleaning_log:
+        doc.add_paragraph("No preprocessing actions or quality warnings were recorded.")
+        return
+    table = doc.add_table(rows=1, cols=3)
+    for i, header in enumerate(("Category", "Variable / Scope", "Details")):
+        _set_header_text(table.rows[0].cells[i], header)
+    for item in cleaning_log:
+        cells = table.add_row().cells
+        cells[0].text = item["category"]
+        cells[1].text = item["scope"]
+        cells[2].text = item["details"]
+    format_table(table)
+
+
 def _build_session(entry, results: Dict[str, Any], assignment: Dict[str, Any]) -> Dict[str, Any]:
     df = entry.df
     meta = entry.meta or {}
@@ -388,16 +490,8 @@ def _build_session(entry, results: Dict[str, Any], assignment: Dict[str, Any]) -
         objective = (intake.get("objective") or intake.get("objective_text")
                      or intake.get("text") or "")
 
-    cleaning_actions: List[str] = []
-    for c in classifications:
-        if c.get("auto_strip_count"):
-            cleaning_actions.append(
-                f"Stripped non-numeric prefixes from "
-                f"{clean_display_name(c.get('column',''))} "
-                f"({c['auto_strip_count']} cells cleaned).")
-    if meta.get("merged_sheets"):
-        cleaning_actions.append(
-            f"Merged sheets: {', '.join(meta['merged_sheets'])}.")
+    cleaning_log = _build_cleaning_log(meta, classifications)
+    cleaning_actions = [item["details"] for item in cleaning_log]
 
     # Apply correction overrides: rename display names, pass hidden sections & notes
     overrides: Dict[str, Any] = meta.get("correction_overrides") or {}
@@ -418,6 +512,7 @@ def _build_session(entry, results: Dict[str, Any], assignment: Dict[str, Any]) -
         "covariates": list((assignment or {}).get("covariates") or []),
         "graph_paths": graph_paths,
         "cleaning_actions": cleaning_actions,
+        "cleaning_log": cleaning_log,
         "correction_info": results.get("correction_info"),
         "results": results.get("tests") or [],
         "table_one": results.get("table_one") or {},
@@ -1056,11 +1151,7 @@ def generate_report(session: Dict[str, Any], df: pd.DataFrame) -> Document:
                 c[3].text = f'{info.get("missing_pct", 0):.1f}%'
             format_table(ds_table)
             add_caption(doc, "Table 1a. Variable summary.")
-        cleaning = session.get("cleaning_actions", [])
-        if cleaning:
-            doc.add_heading("Data Cleaning", 2)
-            for action in cleaning:
-                doc.add_paragraph(action, style="List Bullet")
+    _render_cleaning_log_docx(doc, session.get("cleaning_log") or [])
 
     # ── 2b. Baseline Characteristics ───────────────────────────
     doc.add_heading("Baseline Characteristics", 2)
@@ -1236,10 +1327,17 @@ def to_pdf(entry, results: Dict[str, Any], assignment: Dict[str, Any]) -> bytes:
                          str(info.get("missing_n", 0)),
                          f'{info.get("missing_pct", 0):.1f}%'])
         flow.append(_pdf_table(data))
-    if session.get("cleaning_actions"):
-        flow.append(Paragraph("Data Cleaning", h2))
-        for a in session["cleaning_actions"]:
-            flow.append(Paragraph(f"• {a}", body))
+    flow.append(Paragraph("Data Cleaning Log", h2))
+    cleaning_log = session.get("cleaning_log") or []
+    if cleaning_log:
+        data = [["Category", "Variable / Scope", "Details"]]
+        data.extend([
+            [item["category"], item["scope"], item["details"]]
+            for item in cleaning_log
+        ])
+        flow.append(_pdf_table(data))
+    else:
+        flow.append(Paragraph("No preprocessing actions or quality warnings were recorded.", body))
     flow.append(PageBreak())
 
     # 3. Table 1
@@ -1493,6 +1591,16 @@ def to_xlsx(entry, results: Dict[str, Any], assignment: Dict[str, Any]) -> bytes
     for col, info in session["variables"].items():
         ws.append([info.get("display_name", col), info.get("type", ""),
                    info.get("missing_n", 0), f'{info.get("missing_pct", 0):.1f}%'])
+
+    # Data cleaning log
+    ws = wb.create_sheet("Data Cleaning Log")
+    ws.append(["Category", "Variable / Scope", "Details"])
+    cleaning_log = session.get("cleaning_log") or []
+    if cleaning_log:
+        for item in cleaning_log:
+            ws.append([item["category"], item["scope"], item["details"]])
+    else:
+        ws.append(["Information", "Dataset", "No preprocessing actions or quality warnings were recorded."])
 
     # Table 1
     ws = wb.create_sheet("Table 1")
@@ -2162,6 +2270,12 @@ def generate_correlation_chapter_word(
         table_num += 1
 
     # ── Statistical Methods appendix (new page) ───────────────────────────
+    doc.add_page_break()
+
+    _render_cleaning_log_docx(
+        doc,
+        _build_cleaning_log(entry.meta or {}, (entry.meta or {}).get("classifications") or []),
+    )
     doc.add_page_break()
 
     meth_heading = doc.add_paragraph()

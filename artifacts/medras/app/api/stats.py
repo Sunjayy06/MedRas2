@@ -1120,6 +1120,11 @@ async def trim_all_whitespace_endpoint(
     else:
         msg = "No extra whitespace found — all columns already clean."
 
+    if changed:
+        cleaning_actions = list(entry.meta.get("cleaning_actions") or [])
+        cleaning_actions.append(msg)
+        entry.meta["cleaning_actions"] = cleaning_actions
+
     return {
         "status": "applied",
         "confirmation_message": msg,
