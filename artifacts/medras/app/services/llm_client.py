@@ -93,28 +93,53 @@ def any_external_ai_configured() -> bool:
     return openai_is_configured() or gemini_is_configured()
 
 
-def provider_status_message(provider_status: str, external_ai_consent: bool) -> str:
+def provider_status_message(
+    provider_status: str,
+    external_ai_consent: bool,
+    redaction_applied: bool = False,
+    phi_blocked: bool = False,
+) -> str:
     """Return a consistent user-facing explanation of AI provider provenance."""
-    if provider_status == "openai":
-        return "Answered using OpenAI."
-    if provider_status == "gemini":
-        return "Answered using Gemini."
-    if not external_ai_consent:
-        return "External AI is not enabled for this dataset/session. Local fallback was used."
-    if not any_external_ai_configured():
-        return (
+    if phi_blocked:
+        message = (
+            "External AI was blocked because high-risk sensitive identifiers were detected. "
+            "Local fallback was used."
+        )
+    elif provider_status == "openai":
+        message = "Answered using OpenAI."
+    elif provider_status == "gemini":
+        message = "Answered using Gemini."
+    elif not external_ai_consent:
+        message = "External AI is not enabled for this dataset/session. Local fallback was used."
+    elif not any_external_ai_configured():
+        message = (
             "External AI is unavailable because no server API key is configured. "
             "Local fallback was used."
         )
-    if provider_status == "ai_unavailable":
-        return "External AI was unavailable and no local fallback could complete the request."
-    return "External AI was unavailable. Local fallback was used."
+    elif provider_status == "ai_unavailable":
+        message = "External AI was unavailable and no local fallback could complete the request."
+    else:
+        message = "External AI was unavailable. Local fallback was used."
+    if redaction_applied and phi_blocked:
+        message += " Sensitive identifiers were redacted before local processing."
+    elif redaction_applied:
+        message += " Sensitive identifiers were redacted before external AI."
+    return message
 
 
-def provider_status_payload(provider_status: str, external_ai_consent: bool) -> dict:
+def provider_status_payload(
+    provider_status: str,
+    external_ai_consent: bool,
+    redaction_applied: bool = False,
+    phi_blocked: bool = False,
+) -> dict:
     return {
         "provider_status": provider_status,
-        "provider_message": provider_status_message(provider_status, external_ai_consent),
+        "provider_message": provider_status_message(
+            provider_status, external_ai_consent, redaction_applied, phi_blocked
+        ),
+        "redaction_applied": redaction_applied,
+        "phi_blocked": phi_blocked,
     }
 
 

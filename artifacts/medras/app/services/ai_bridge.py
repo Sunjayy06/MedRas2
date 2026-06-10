@@ -24,6 +24,7 @@ from typing import Any, Dict, List, Optional
 import httpx
 
 from app.services.llm_client import openai_chat_url, openai_auth_header, openai_is_configured, gemini_is_configured, get_gemini_client, provider_status_payload
+from app.services.phi_redaction import screen_external_ai_payload
 
 log = logging.getLogger(__name__)
 _TIMEOUT = 20.0
@@ -715,15 +716,26 @@ def identify_study(
     # OpenAI GPT-4o-mini is primary; Gemini is fallback; heuristic is last resort.
     result = None
     provider = None
-    if external_ai_consent and (description.strip() or outcome_hint.strip()):
-        result = _call_openai(description, outcome_hint, columns)
+    screening = screen_external_ai_payload({
+        "description": description,
+        "outcome_hint": outcome_hint,
+        "columns": columns,
+    })
+    external_allowed = external_ai_consent and not screening.blocked
+    screened = screening.value
+    if external_allowed and (description.strip() or outcome_hint.strip()):
+        result = _call_openai(
+            screened["description"], screened["outcome_hint"], screened["columns"]
+        )
         provider = "openai" if result else None
         log.info(
             "AI bridge OpenAI raw result: %s",
             json.dumps(result) if result else "None",
         )
         if not (result and isinstance(result, dict) and "study_type" in result):
-            result = _call_gemini(description, outcome_hint, columns)
+            result = _call_gemini(
+                screened["description"], screened["outcome_hint"], screened["columns"]
+            )
             provider = "gemini" if result else None
             log.info(
                 "AI bridge Gemini raw result: %s",
@@ -855,5 +867,7 @@ def identify_study(
         **provider_status_payload(
             provider if result else "local_fallback",
             external_ai_consent,
+            screening.redaction_applied,
+            screening.blocked,
         ),
     }

@@ -293,6 +293,7 @@ import json as _json
 import httpx as _httpx
 
 from app.services.llm_client import openai_chat_url as _openai_chat_url, openai_auth_header as _openai_auth_header, openai_is_configured as _openai_is_configured, gemini_is_configured as _gemini_is_configured, get_gemini_client as _get_gemini_client, provider_status_payload as _provider_status_payload
+from app.services.phi_redaction import screen_external_ai_payload as _screen_external_ai_payload
 _PARSE_TIMEOUT = 25.0
 
 _PARSE_PROMPT = """\
@@ -376,15 +377,20 @@ def _heuristic_extract(text: str) -> dict:
     return {"objective": obj, "outcomes": out, "study_type": study_type, "sample_size": n}
 
 
-async def _ai_extract(text: str, external_ai_consent: bool = False) -> tuple[dict | None, str | None]:
+async def _ai_extract(text: str, external_ai_consent: bool = False) -> tuple[
+    dict | None, str | None, bool, bool
+]:
     """Try Gemini then OpenAI to extract structured fields from proposal text.
 
     Returns parsed dict or None on failure — caller falls back to heuristics.
     """
     if not external_ai_consent:
-        return None, None
+        return None, None, False, False
 
-    snippet = text[:4000]
+    screening = _screen_external_ai_payload(text[:4000])
+    if screening.blocked:
+        return None, None, screening.redaction_applied, True
+    snippet = screening.value
     prompt = _PARSE_PROMPT.format(text=snippet)
 
     # ── Try Gemini first ────────────────────────────────────────────────────
@@ -410,7 +416,7 @@ async def _ai_extract(text: str, external_ai_consent: bool = False) -> tuple[dic
         try:
             result = await asyncio.to_thread(_gemini_call)
             if result:
-                return result, "gemini"
+                return result, "gemini", screening.redaction_applied, False
         except Exception:
             pass
 
@@ -434,11 +440,11 @@ async def _ai_extract(text: str, external_ai_consent: bool = False) -> tuple[dic
                 raw = resp.json()["choices"][0]["message"]["content"].strip()
                 result = _json.loads(raw)
                 if isinstance(result, dict) and "objective" in result:
-                    return result, "openai"
+                    return result, "openai", screening.redaction_applied, False
         except Exception:
             pass
 
-    return None, None
+    return None, None, screening.redaction_applied, False
 
 
 @router.post("/parse-proposal")
@@ -479,7 +485,9 @@ async def parse_proposal(request: Request, file: UploadFile = File(...)) -> Dict
 
     # Try AI extraction first, fall back to heuristics.
     external_ai_consent = request.headers.get("X-External-AI-Consent", "").lower() == "true"
-    ai_result, provider = await _ai_extract(text, external_ai_consent)
+    ai_result, provider, redaction_applied, phi_blocked = await _ai_extract(
+        text, external_ai_consent
+    )
     if ai_result and isinstance(ai_result, dict) and ai_result.get("objective"):
         sample_size = ai_result.get("sample_size")
         if sample_size is not None:
@@ -497,7 +505,12 @@ async def parse_proposal(request: Request, file: UploadFile = File(...)) -> Dict
             "study_type": study_type,
             "sample_size": sample_size,
             "source": provider or "ai",
-            **_provider_status_payload(provider or "ai_unavailable", external_ai_consent),
+            **_provider_status_payload(
+                provider or "ai_unavailable",
+                external_ai_consent,
+                redaction_applied,
+                phi_blocked,
+            ),
         }
 
     # Heuristic fallback.
@@ -505,7 +518,9 @@ async def parse_proposal(request: Request, file: UploadFile = File(...)) -> Dict
     return {
         **h,
         "source": "heuristic",
-        **_provider_status_payload("local_fallback", external_ai_consent),
+        **_provider_status_payload(
+            "local_fallback", external_ai_consent, redaction_applied, phi_blocked
+        ),
     }
 
 
@@ -930,12 +945,17 @@ async def variable_assistant_endpoint(
     else:
         # AI may suggest an action, but the endpoint returns a preview before applying it.
         entry.meta.pop("pending_variable_assistant_action", None)
-        ai_intent, provider_status = await ai_chatbox.parse_variable_intent(
+        ai_intent, provider_status, screening_meta = await ai_chatbox.parse_variable_intent(
             payload.message,
             {"classifications": stored_classifications},
             external_ai_consent=external_ai_consent,
         )
-        provider_meta = _provider_status_payload(provider_status, external_ai_consent)
+        provider_meta = _provider_status_payload(
+            provider_status,
+            external_ai_consent,
+            screening_meta["redaction_applied"],
+            screening_meta["phi_blocked"],
+        )
 
         _ai_action = (ai_intent or {}).get("action")
         _ai_col = (ai_intent or {}).get("column")

@@ -43,6 +43,7 @@ from .llm_client import (
     get_gemini_client,
     provider_status_payload,
 )
+from .phi_redaction import screen_external_ai_payload
 
 logger = logging.getLogger(__name__)
 
@@ -392,10 +393,16 @@ async def chat(
 ) -> Dict[str, Any]:
     """Return ``{"role": "ai", "text": str, "action": dict|None}``."""
     system_prompt = _build_system_prompt(kind, context)
+    screening = screen_external_ai_payload({
+        "system_prompt": system_prompt,
+        "message": message,
+    })
+    screened = screening.value
+    external_allowed = external_ai_consent and not screening.blocked
 
     raw, provider = (
-        await _call_llm(kind, system_prompt, message)
-        if external_ai_consent else (None, None)
+        await _call_llm(kind, screened["system_prompt"], screened["message"])
+        if external_allowed else (None, None)
     )
 
     # Rule-based engine — last resort (no API key, always available)
@@ -406,7 +413,12 @@ async def chat(
             "role": result.get("role", "ai"),
             "text": result.get("text", ""),
             "action": None,
-            **provider_status_payload("local_fallback", external_ai_consent),
+            **provider_status_payload(
+                "local_fallback",
+                external_ai_consent,
+                screening.redaction_applied,
+                screening.blocked,
+            ),
         }
 
     action = _extract_action(raw, kind)
@@ -426,7 +438,12 @@ async def chat(
         "role": "ai",
         "text": display_text,
         "action": action,
-        **provider_status_payload(provider or "ai_unavailable", external_ai_consent),
+        **provider_status_payload(
+            provider or "ai_unavailable",
+            external_ai_consent,
+            screening.redaction_applied,
+            screening.blocked,
+        ),
     }
 
 
@@ -452,13 +469,20 @@ async def opening_message(
         "ask a question. "
         "Plain prose only — no bullet points, no markdown, no JSON."
     )
+    screening = screen_external_ai_payload({
+        "system_prompt": system_prompt,
+        "message": user_msg,
+    })
+    system_prompt = screening.value["system_prompt"]
+    user_msg = screening.value["message"]
+    external_allowed = external_ai_consent and not screening.blocked
 
     # Small token budget — this is just a brief greeting
     tokens = 160
 
     # Gemini primary for most kinds, OpenAI for results/plan
     provider = None
-    if not external_ai_consent:
+    if not external_allowed:
         raw = None
     elif kind in _OPENAI_PRIMARY_KINDS:
         raw = await asyncio.to_thread(
@@ -485,14 +509,24 @@ async def opening_message(
             return {
                 "role": "system",
                 "text": text,
-                **provider_status_payload(provider or "ai_unavailable", external_ai_consent),
+                **provider_status_payload(
+                    provider or "ai_unavailable",
+                    external_ai_consent,
+                    screening.redaction_applied,
+                    screening.blocked,
+                ),
             }
 
     # Rule-based fallback — always available
     return {
         "role": "system",
         "text": chatboxes.opening_message(kind, context),
-        **provider_status_payload("local_fallback", external_ai_consent),
+        **provider_status_payload(
+            "local_fallback",
+            external_ai_consent,
+            screening.redaction_applied,
+            screening.blocked,
+        ),
     }
 
 
@@ -508,7 +542,7 @@ async def parse_variable_intent(
     message: str,
     context: Dict[str, Any],
     external_ai_consent: bool = False,
-) -> tuple[Optional[Dict[str, Any]], str]:
+) -> tuple[Optional[Dict[str, Any]], str, Dict[str, bool]]:
     """Parse a plain-English variable command into a structured intent dict.
 
     Returns ``{"action", "column", ...}`` on success, or ``None`` when the
@@ -531,22 +565,30 @@ async def parse_variable_intent(
         f"If the input is a question or explanation request, return exactly: null\n"
         f"Return ONLY the JSON object or null — no prose, no markdown."
     )
+    screening = screen_external_ai_payload({"system": system, "message": message})
+    system = screening.value["system"]
+    message = screening.value["message"]
+    external_allowed = external_ai_consent and not screening.blocked
+    screening_meta = {
+        "redaction_applied": screening.redaction_applied,
+        "phi_blocked": screening.blocked,
+    }
 
     # Gemini primary (fast JSON extraction)
     tokens = _MAX_TOKENS.get("variables", _DEFAULT_TOKENS)
-    raw = await asyncio.to_thread(_gemini_call_sync, system, message, tokens) if external_ai_consent else None
+    raw = await asyncio.to_thread(_gemini_call_sync, system, message, tokens) if external_allowed else None
     provider = "gemini" if raw is not None else None
-    if raw is None and external_ai_consent:
+    if raw is None and external_allowed:
         raw = await asyncio.to_thread(
             _openai_call_sync, system, message, tokens, _OPENAI_MODEL_STANDARD
         )
         provider = "openai" if raw is not None else None
     if not raw:
-        return None, "local_fallback"
+        return None, "local_fallback", screening_meta
 
     raw = raw.strip()
     if raw.lower() in ("null", "none", ""):
-        return None, "local_fallback"
+        return None, "local_fallback", screening_meta
 
     raw = re.sub(r"^```(?:json)?\s*", "", raw, flags=re.MULTILINE)
     raw = re.sub(r"```\s*$",          "", raw, flags=re.MULTILINE).strip()
@@ -560,10 +602,10 @@ async def parse_variable_intent(
                 "new_name":   obj.get("new_name"),
                 "new_type":   obj.get("new_type"),
                 "recode_map": obj.get("recode_map") or {},
-            }, provider or "ai_unavailable"
+            }, provider or "ai_unavailable", screening_meta
     except (json.JSONDecodeError, ValueError):
         pass
-    return None, "local_fallback"
+    return None, "local_fallback", screening_meta
 
 
 # ---------------------------------------------------------------------------
@@ -610,12 +652,16 @@ async def plan_study_setup(
     )
 
     prompt = (description or "").strip() or "Suggest an appropriate study plan based on the columns."
+    screening = screen_external_ai_payload({"system": system, "prompt": prompt})
+    system = screening.value["system"]
+    prompt = screening.value["prompt"]
+    external_allowed = external_ai_consent and not screening.blocked
 
     tokens = _MAX_TOKENS.get("setup", _DEFAULT_TOKENS)
     # Gemini primary for planning/routing
-    raw = await asyncio.to_thread(_gemini_call_sync, system, prompt, tokens) if external_ai_consent else None
+    raw = await asyncio.to_thread(_gemini_call_sync, system, prompt, tokens) if external_allowed else None
     provider = "gemini" if raw is not None else None
-    if raw is None and external_ai_consent:
+    if raw is None and external_allowed:
         raw = await asyncio.to_thread(
             _openai_call_sync, system, prompt, tokens, _OPENAI_MODEL_STANDARD
         )
@@ -632,7 +678,10 @@ async def plan_study_setup(
             "reasoning":  "",
             "confidence": 0,
             "source":     "rule_based",
-            **provider_status_payload("local_fallback", external_ai_consent),
+            **provider_status_payload(
+                "local_fallback", external_ai_consent,
+                screening.redaction_applied, screening.blocked,
+            ),
         }
 
     clean = raw.strip()
@@ -651,7 +700,10 @@ async def plan_study_setup(
             "reasoning":   plan.get("reasoning", ""),
             "confidence":  0.85,
             "source":      provider or "ai",
-            **provider_status_payload(provider or "ai_unavailable", external_ai_consent),
+            **provider_status_payload(
+                provider or "ai_unavailable", external_ai_consent,
+                screening.redaction_applied, screening.blocked,
+            ),
         }
     except (json.JSONDecodeError, ValueError):
         return {
@@ -664,5 +716,8 @@ async def plan_study_setup(
             "reasoning":   "",
             "confidence":  0,
             "source":      "rule_based",
-            **provider_status_payload("local_fallback", external_ai_consent),
+            **provider_status_payload(
+                "local_fallback", external_ai_consent,
+                screening.redaction_applied, screening.blocked,
+            ),
         }

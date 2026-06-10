@@ -44,6 +44,7 @@ from app.services.study_builder_synthesizer import synthesize
 from app.services.study_builder_pdf_chunker import chunk_pdf, retrieve_top_chunks
 from app.services import study_builder_session as sessions
 from app.services.llm_client import provider_status_payload
+from app.services.phi_redaction import screen_external_ai_payload
 
 log    = logging.getLogger(__name__)
 router = APIRouter(prefix="/study-builder", tags=["study-builder"])
@@ -111,6 +112,8 @@ class AskResponse(BaseModel):
     question_type:      str
     provider_status:    str
     provider_message:   str
+    redaction_applied:  bool = False
+    phi_blocked:        bool = False
     pico:               dict
     uploaded_count:     int = 0       # how many papers/PDFs were attached this session
     disclaimer:         str = _DISCLAIMER
@@ -593,7 +596,18 @@ async def ask(request: Request, body: AskRequest) -> AskResponse:
     uploaded_papers     = sessions.get_uploaded_papers(session_id)
 
     # 2. PICO decomposition (fast single call)
-    pico = await decompose(question, history, external_ai_consent=external_ai_consent)
+    pico_screening = screen_external_ai_payload({
+        "question": question,
+        "history": history,
+    })
+    external_ai_allowed = external_ai_consent and not pico_screening.blocked
+    screened_question = pico_screening.value["question"]
+    screened_history = pico_screening.value["history"]
+    pico = await decompose(
+        screened_question,
+        screened_history,
+        external_ai_consent=external_ai_allowed,
+    )
     log.info(
         "PICO [session=%s] P=%s I=%s C=%s O=%s queries=%s",
         session_id[:8], pico["population"], pico["intervention"],
@@ -630,12 +644,19 @@ async def ask(request: Request, body: AskRequest) -> AskResponse:
             )
 
     # 5. Distillation + grading + structured synthesis
+    synth_screening = screen_external_ai_payload({
+        "question": question,
+        "papers": search_result["papers"],
+        "history": history,
+        "locked_context": body.locked_context,
+    })
+    external_ai_allowed = external_ai_allowed and not synth_screening.blocked
     synth = await synthesize(
-        question,
-        search_result["papers"],
-        history,
-        locked_context=body.locked_context,
-        external_ai_consent=external_ai_consent,
+        synth_screening.value["question"],
+        synth_screening.value["papers"],
+        synth_screening.value["history"],
+        locked_context=synth_screening.value["locked_context"],
+        external_ai_consent=external_ai_allowed,
     )
 
     # 6. Persist this turn
@@ -651,6 +672,10 @@ async def ask(request: Request, body: AskRequest) -> AskResponse:
         else "openai" if method.startswith("gpt")
         else "local_fallback"
     )
+    redaction_applied = (
+        pico_screening.redaction_applied or synth_screening.redaction_applied
+    )
+    phi_blocked = pico_screening.blocked or synth_screening.blocked
     return AskResponse(
         answer               = synth["answer"],
         key_findings         = [
@@ -673,5 +698,7 @@ async def ask(request: Request, body: AskRequest) -> AskResponse:
         question_type        = qtype,
         pico                 = pico,
         uploaded_count       = uploaded_count,
-        **provider_status_payload(provider_status, external_ai_consent),
+        **provider_status_payload(
+            provider_status, external_ai_consent, redaction_applied, phi_blocked
+        ),
     )
