@@ -4103,7 +4103,7 @@ function bindResults() {
   /* ── Research Assistant trigger ── */
   const raBtn = document.getElementById("btn-ra-open-results");
   if (raBtn) {
-    raBtn.addEventListener("click", () => openRADrawer());
+    raBtn.addEventListener("click", () => openRADrawer(raBtn));
   }
 
   /* ── Take to Folio ─────────────────────────────────────────────── */
@@ -5853,8 +5853,29 @@ function serializeAnalysisContext() {
  * Compose a human-readable prefill question from the analysis context,
  * then open the RA drawer.
  */
-function openRADrawer() {
-  if (typeof window.RADrawer === "undefined") return;
+function _setRADrawerStatus(triggerButton, message = "") {
+  if (!triggerButton) return;
+  let status = triggerButton.parentElement?.querySelector(
+    `[data-ra-status-for="${triggerButton.id}"]`
+  );
+  if (!status && message) {
+    status = document.createElement("div");
+    status.className = "se-status se-status-inline";
+    status.dataset.raStatusFor = triggerButton.id;
+    status.setAttribute("role", "alert");
+    status.setAttribute("aria-live", "assertive");
+    triggerButton.insertAdjacentElement("afterend", status);
+  }
+  setStatus(status, message, message ? "error" : "loading");
+}
+
+function openRADrawer(triggerButton = null) {
+  const unavailableMessage =
+    "Research Assistant is unavailable. Please refresh the page or check server/static assets.";
+  if (!window.RADrawer || typeof window.RADrawer.open !== "function") {
+    _setRADrawerStatus(triggerButton, unavailableMessage);
+    return false;
+  }
 
   const ctx = serializeAnalysisContext();
 
@@ -5885,7 +5906,18 @@ function openRADrawer() {
       `and could my sample size be the limiting factor?`;
   }
 
-  window.RADrawer.open(ctx, prefillQ || null);
+  try {
+    window.RADrawer.open(ctx, prefillQ || null);
+    if (!document.querySelector(".ra-drawer.is-open")) {
+      throw new Error("Research Assistant drawer did not initialize.");
+    }
+    _setRADrawerStatus(triggerButton);
+    return true;
+  } catch (err) {
+    console.error("Research Assistant drawer failed to open.", err);
+    _setRADrawerStatus(triggerButton, unavailableMessage);
+    return false;
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -5901,7 +5933,7 @@ function bindCorrResults() {
   /* ── Research Assistant trigger ── */
   const raBtn = document.getElementById("btn-ra-open-corr");
   if (raBtn) {
-    raBtn.addEventListener("click", () => openRADrawer());
+    raBtn.addEventListener("click", () => openRADrawer(raBtn));
   }
 
   const backBtn = screen.querySelector('[data-action="back-to-ai-confirm"]');
