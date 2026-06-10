@@ -2920,6 +2920,61 @@ def _standalone_descriptive_table(df: pd.DataFrame, col: str) -> Dict[str, Any]:
     }
 
 
+def _correlation_pair_presentation(
+    pair_result: Dict[str, Any], outcome_col: str
+) -> Tuple[Dict[str, Any], List[Dict[str, str]]]:
+    """Build normalized table/figure entries without changing pair results."""
+    predictor = str(pair_result.get("predictor") or "")
+    test_result = pair_result.get("test_result") or {}
+    method = test_result.get("method")
+    if method in ("pearson", "spearman"):
+        coefficient = _display_value(test_result.get("stat"))
+    elif test_result.get("cramers_v") is not None:
+        coefficient = _display_value(test_result.get("cramers_v"))
+    else:
+        coefficient = "-"
+
+    ci = _ci_from_row(test_result)
+    p_value = test_result.get("p")
+    p_display = fmt_p(p_value) if p_value is not None else "-"
+    interpretation = (
+        pair_result.get("interpretation")
+        or test_result.get("interpretation")
+        or test_result.get("error")
+        or "-"
+    )
+    table = {
+        "title": f"{predictor} vs {outcome_col}",
+        "headers": [
+            "Variable 1", "Variable 2", "Test used", "Correlation coefficient",
+            "95% CI", "p-value", "n", "Interpretation / strength",
+        ],
+        "rows": [[
+            predictor,
+            outcome_col,
+            test_result.get("test_name") or "Not completed",
+            coefficient,
+            ci,
+            p_display,
+            _display_value(test_result.get("n")),
+            interpretation,
+        ]],
+    }
+
+    figures: List[Dict[str, str]] = []
+    seen_uris = set()
+    for key, title in (
+        ("graph_uri", f"{predictor} vs {outcome_col}"),
+        ("desc_graph_uri", f"Distribution of {predictor}"),
+        ("png_data_uri", f"{predictor} vs {outcome_col}"),
+    ):
+        uri = pair_result.get(key) or test_result.get(key)
+        if uri and str(uri) not in seen_uris:
+            seen_uris.add(str(uri))
+            figures.append({"title": title, "png_data_uri": str(uri)})
+    return table, figures
+
+
 def run_correlation_plan(
     df: pd.DataFrame,
     classifications: List[Dict[str, Any]],
@@ -2942,6 +2997,8 @@ def run_correlation_plan(
             "predictor": str, "test": str, "stat": str, "p": str, "significant": bool
           }, ...],
           "methods_text": str,
+          "tables": [{title, headers, rows}, ...],
+          "figures": [{title, png_data_uri}, ...],
         }
     """
     outcome_col = correlation_plan.get("outcome_col", "")
@@ -3086,11 +3143,20 @@ def run_correlation_plan(
         "A two-tailed p-value < 0.05 was considered statistically significant."
     )
 
+    normalized_tables: List[Dict[str, Any]] = []
+    normalized_figures: List[Dict[str, str]] = []
+    for pair_result in pair_results:
+        table, figures = _correlation_pair_presentation(pair_result, outcome_col)
+        normalized_tables.append(table)
+        normalized_figures.extend(figures)
+
     return {
         "outcome_col": outcome_col,
         "pairs": pair_results,
         "summary_table": summary_table,
         "methods_text": methods_text,
+        "tables": normalized_tables,
+        "figures": normalized_figures,
     }
 
 
