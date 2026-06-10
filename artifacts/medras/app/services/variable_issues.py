@@ -14,8 +14,8 @@ Five issue types are supported:
   no obvious yes/no / sex coding (often means the column is constant or
   an excluded id slipped through).
 * ``high_missing``       — > 30% missing values.
-* ``duplicate_values``   — case-variant labels in a nominal column
-  (``"Male"`` and ``"male"`` and ``"MALE"``).
+* ``duplicate_values``   — labels in a nominal column that differ only by
+  whitespace (``"Positive"`` and ``" Positive "``).
 * ``numeric_as_id``      — a numeric column whose values are unique enough
   to look like a row identifier even though the name doesn't match the id
   pattern.
@@ -131,15 +131,16 @@ def detect_issues(df: pd.DataFrame, classifications: List[Dict[str, Any]]) -> Li
                     "message": f"{missing_pct:.1f}% of rows are missing.",
                 })
 
-        # 5) duplicate_values — case-variant labels in nominal columns.
+        # 5) duplicate_values — whitespace-only label differences in nominal
+        # columns. Casing differences belong in the category-merge workflow.
         if kind == "nominal" and series.dtype == object:
             non_null = series.dropna().astype(str)
             if len(non_null):
-                lowered = non_null.str.strip().str.lower()
+                whitespace_normalised = non_null.map(lambda v: " ".join(v.split()))
                 groups = (
-                    pd.DataFrame({"orig": non_null.values, "low": lowered.values})
+                    pd.DataFrame({"orig": non_null.values, "normalised": whitespace_normalised.values})
                     .drop_duplicates()
-                    .groupby("low")["orig"]
+                    .groupby("normalised")["orig"]
                     .apply(list)
                 )
                 dup_pairs = [labels for labels in groups if len(labels) > 1]
@@ -149,7 +150,7 @@ def detect_issues(df: pd.DataFrame, classifications: List[Dict[str, Any]]) -> Li
                         "column": col,
                         "type": "duplicate_values",
                         "severity": "warning",
-                        "message": f"Same value spelled differently: {', '.join(repr(s) for s in sample[:3])}.",
+                        "message": f"Same value contains inconsistent whitespace: {', '.join(repr(s) for s in sample[:3])}.",
                     })
     return out
 

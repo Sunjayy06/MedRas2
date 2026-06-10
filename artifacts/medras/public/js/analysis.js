@@ -2406,6 +2406,21 @@ const CHIP_SUGGESTIONS = [
     template: "Exclude {col} from analysis" },
 ];
 
+async function refreshClassifications(overrides = [], { render = true, detectCategoryDupes = false } = {}) {
+  const data = await api("/classify", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ job_id: state.jobId, overrides }),
+  });
+  state.classifications = data.classifications || [];
+  state.issues = data.issues || [];
+  state.autoCoding = data.auto_coding_plan || [];
+  state.columns = state.classifications.map((c) => c.column);
+  if (render) renderClassify();
+  if (detectCategoryDupes) await _detectCategoryDupes();
+  return data;
+}
+
 async function loadVariablesData() {
   // Re-fetch classifications + issues + auto-coding plan from /classify
   // with no overrides. Used on initial entry to Step 3 and after each
@@ -2413,20 +2428,10 @@ async function loadVariablesData() {
   const status = $("#classify-status");
   setStatus(status, "Analysing variables…", "loading");
   try {
-    const data = await api("/classify", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ job_id: state.jobId, overrides: [] }),
-    });
-    state.classifications = data.classifications || [];
-    state.issues = data.issues || [];
-    state.autoCoding = data.auto_coding_plan || [];
+    await refreshClassifications([], { render: true, detectCategoryDupes: true });
     setStatus(status, "");
-    renderClassify();
-    // Kick off category duplicate detection in the background (non-blocking)
-    _detectCategoryDupes().catch(() => {});
   } catch (err) {
-    setStatus(status, `Could not load variables: ${err.message}`, "error");
+    setStatus(status, `Could not fully refresh variables: ${err.message}`, "error");
   }
 }
 
@@ -2436,17 +2441,14 @@ async function loadVariablesData() {
 
 async function _detectCategoryDupes() {
   if (!state.jobId) return;
-  try {
-    const result = await api("/detect-category-dupes", {
+  const result = await api("/detect-category-dupes", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ job_id: state.jobId }),
-    });
-    state.categoryDupeResults = result;
-    _renderCategoryMergePanel(result);
-  } catch (_) {
-    // Non-critical — fail silently
-  }
+  });
+  state.categoryDupeResults = result;
+  _renderCategoryMergePanel(result);
+  return result;
 }
 
 function _renderCategoryMergePanel(result) {
@@ -2515,6 +2517,7 @@ function _bindMergePanelButtons(allObvious, allBorderline) {
 
   const applyMerge = async (proposals, label) => {
     if (!proposals.length) return;
+    let mergeApplied = false;
     setStatus(mergeStatus, `Applying ${label}…`, "loading");
     try {
       const res = await api("/apply-category-merge", {
@@ -2525,14 +2528,17 @@ function _bindMergePanelButtons(allObvious, allBorderline) {
           merges: _buildMergePayload(proposals),
         }),
       });
+      mergeApplied = true;
       const n = res.n_merges || 0;
       setStatus(mergeStatus, `Applied ${n} merge${n !== 1 ? "s" : ""} — re-classifying…`, "success");
       // Re-run classification to pick up the cleaned data
-      await loadVariablesData();
-      document.getElementById("category-merge-panel").style.display = "none";
-      setTimeout(() => setStatus(mergeStatus, ""), 3000);
+      await refreshClassifications([], { render: true, detectCategoryDupes: true });
     } catch (err) {
-      setStatus(mergeStatus, `Merge failed: ${err.message}`, "error");
+      setStatus(
+        mergeStatus,
+        `${mergeApplied ? "Merge applied, but refresh failed" : "Merge failed"}: ${err.message}`,
+        "error"
+      );
     }
   };
 
@@ -2717,7 +2723,7 @@ function renderClassifyTable() {
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         // Re-classify to refresh the row with the restored text values.
-        await loadVariablesData();
+        await refreshClassifications([], { render: true, detectCategoryDupes: true });
         setStatus($("#classify-status"), `Restored original values for ${col}.`, "success");
       } catch (err) {
         btn.disabled = false;
@@ -3041,10 +3047,7 @@ async function trimAllWhitespace(dupCols) {
     clearTyping();
     if (res.status === "applied") {
       state.assistantThread.push({ role: "action", text: "✓ " + (res.confirmation_message || "Done.") });
-      state.classifications = res.classifications || [];
-      state.issues = res.issues || [];
-      state.autoCoding = res.auto_coding_plan || [];
-      renderClassify();
+      await refreshClassifications([], { render: true, detectCategoryDupes: true });
     } else {
       state.assistantThread.push({ role: "clarify", text: res.confirmation_message || "No changes needed." });
       renderAssistantThread();
@@ -3080,10 +3083,7 @@ async function sendAssistantMessage(message) {
     clearTyping();
     if (res.status === "applied") {
       state.assistantThread.push({ role: "action", text: "✓ " + (res.confirmation_message || "Done.") });
-      state.classifications = res.classifications || [];
-      state.issues = res.issues || [];
-      state.autoCoding = res.auto_coding_plan || [];
-      renderClassify();
+      await refreshClassifications([], { render: true, detectCategoryDupes: true });
     } else {
       // Mutation not understood — route to AI chatbox for explanation / guidance
       let aiReplied = false;
@@ -3154,11 +3154,7 @@ function bindScreen3() {
       .filter((c) => /^(Manually set|Set by assistant)/.test(c.reason || ""))
       .map((c) => ({ column: c.column, detected_type: c.detected_type }));
     try {
-      await api("/classify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ job_id: state.jobId, overrides }),
-      });
+      await refreshClassifications(overrides, { render: false, detectCategoryDupes: false });
       setStatus(status, "");
       showScreen("4");
       await loadQualityReport();
@@ -5099,11 +5095,10 @@ function bindScreenMissing() {
         // imputed/dropped columns rather than stale classification data.
         setStatus(status, "Reclassifying variables…", "loading");
         try {
-          const reclassData = await api("/classify", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ job_id: state.jobId, overrides: [] }),
-          });
+          const reclassData = await refreshClassifications(
+            [],
+            { render: false, detectCategoryDupes: false }
+          );
           if (reclassData && reclassData.classifications) {
             state.classifications = reclassData.classifications;
           } else {

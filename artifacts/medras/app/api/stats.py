@@ -1459,6 +1459,8 @@ async def apply_category_merge(payload: ApplyMergeRequest) -> Dict[str, Any]:
     entry.df = new_df
     # Downstream artefacts are now stale
     _invalidate_downstream(entry, keep_normality=False)
+    for key in ("classifications", "variable_issues", "auto_coding_plan"):
+        entry.meta.pop(key, None)
     # Record merge actions in cleaning log for export
     existing_cleaning = list(entry.meta.get("cleaning_actions") or [])
     existing_cleaning.extend(actions)
