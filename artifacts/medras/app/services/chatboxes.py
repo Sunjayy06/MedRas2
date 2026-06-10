@@ -134,24 +134,28 @@ _CB2_TOPICS: List[Tuple[List[str], str]] = [
         ["transform", "log transform", "transformation"],
         "When a positive, right-skewed variable fails normality we try a "
         "log transformation (log of the values). If the transformed values "
-        "pass Shapiro-Wilk we proceed parametrically on the log scale and "
-        "back-transform the means for reporting. If the transform does not "
-        "fix normality we fall back to non-parametric tests on the original "
-        "scale.",
+        "meet the same sample-size-based normality checks, parametric analysis "
+        "on the log scale may be appropriate and estimates can be "
+        "back-transformed for reporting. If the transform does not resolve "
+        "the departure, use an appropriate non-parametric method on the "
+        "original scale.",
     ),
     (
         ["shapiro", "shapiro-wilk", "shapiro wilk"],
-        "Shapiro-Wilk is the gold-standard normality test for samples up to "
-        "about 50. The null hypothesis is 'the data are normal', so a p-value "
-        "below 0.05 means we reject normality.",
+        "Sigma uses Shapiro-Wilk for samples under 50 observations. It is also "
+        "the fallback for samples from 50 to 2000 when the Lilliefors test is "
+        "unavailable. The null hypothesis is 'the data are normal', so a "
+        "p-value below 0.05 is evidence against normality.",
     ),
     (
         ["kolmogorov", "ks test", "k-s test"],
-        "Kolmogorov-Smirnov compares the empirical distribution to the normal "
-        "CDF. We use it for samples between 50 and 2000 because Shapiro-Wilk "
-        "becomes overly sensitive at large n. Above n=2000 we rely on shape "
-        "thumb-rules (skewness and kurtosis) instead because any test will "
-        "flag tiny deviations as significant.",
+        "Sigma does not use a plain Kolmogorov-Smirnov test as its main "
+        "normality rule. For 50 to 2000 observations it uses the "
+        "Lilliefors-corrected test when available, with Shapiro-Wilk as a "
+        "fallback. For more than 2000 observations the formal test is skipped "
+        "and normality is not automatically confirmed; review the QQ plot, "
+        "skewness, kurtosis, clinical context, and statistical judgment before "
+        "confirming the analysis approach.",
     ),
 ]
 
@@ -208,6 +212,13 @@ def chatbox2_reply(message: str, context: Dict[str, Any]) -> Dict[str, Any]:
                 )
             elif c.get("decision") == "normal":
                 base += "That means parametric tests (t-test, ANOVA) are appropriate."
+            elif c.get("decision") == "skipped":
+                base += (
+                    "The formal test was skipped because the sample is very "
+                    "large. This does not confirm normality. Review the QQ plot, "
+                    "skewness, kurtosis, clinical context, and use researcher "
+                    "judgment before confirming a parametric approach."
+                )
             else:
                 base += (
                     "Insufficient data — fewer than ~3 valid observations, so we "
