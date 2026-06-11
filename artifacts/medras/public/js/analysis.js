@@ -3343,12 +3343,19 @@ function renderQuality() {
   // ---- Quality score → colour band (green / amber / red) ----
   const score = Number(s.quality_score ?? 100);
   const band = s.score_band || (score >= 90 ? "green" : score >= 70 ? "amber" : "red");
+  const missingness = s.missingness || {};
 
   // ---- Top metric cards (Fix 10 — colour coded by value) ----
   // Issues / Duplicates: green at 0, amber when > 0
   // Score: green/amber/red bands
   const issueBand = impossible.length === 0 ? "green" : "amber";
   const dupBand = dupCount === 0 ? "green" : "amber";
+  const allClean = impossible.length === 0 && dupCount === 0 && logical.length === 0;
+  const scoreExplanation = allClean && score < 100
+    ? (Object.values(missingness).some((pct) => Number(pct) > 0)
+      ? "Quality score is reduced due to missing data, but no blocking quality issues remain."
+      : "Quality score is reduced by non-blocking quality indicators; no blocking quality issues remain.")
+    : "Score accounts for missingness, outliers, duplicates, and consistency.";
   $("#quality-summary").innerHTML = `
     <div class="se-q-card" data-band="neutral"><div class="se-q-label">Total records</div><div class="se-q-value" data-testid="q-total-records">${s.total_records ?? 0}</div></div>
     <div class="se-q-card" data-band="neutral"><div class="se-q-label">Variables checked</div><div class="se-q-value" data-testid="q-vars-checked">${s.variables_checked ?? 0}</div></div>
@@ -3357,7 +3364,7 @@ function renderQuality() {
     <div class="se-q-card is-score" data-band="${band}">
       <div class="se-q-label">Quality score</div>
       <div class="se-q-value" data-testid="q-score">${score}/100</div>
-      <div class="se-q-note">Score accounts for missingness, outliers, duplicates, and consistency.</div>
+      <div class="se-q-note" data-testid="q-score-explanation">${scoreExplanation}</div>
     </div>
   `;
 
@@ -3365,7 +3372,6 @@ function renderQuality() {
   // When all three Section counts are zero we replace the tables with a
   // single celebratory banner and hide every section / sticky button. The
   // banner keeps its own "Apply and continue" button.
-  const allClean = impossible.length === 0 && dupCount === 0 && logical.length === 0;
   const screen4 = document.getElementById("screen-4");
   if (screen4) screen4.classList.toggle("has-clean-banner", allClean);
 
@@ -3458,6 +3464,7 @@ function renderQuality() {
 
   // ---- Section D — high missing data decisions ----
   renderMissingDecisions();
+  _updateQualityContinueGate();
 
   // ---- Sticky button visibility (Fix 5) ----
   // The two sticky buttons live outside the screen markup so we toggle
@@ -3537,13 +3544,19 @@ function renderMissingDecisions() {
 }
 
 function _updateMissingContinueGate() {
-  const cols       = (state.classifications || []).filter((c) => (c.missing_pct || 0) > 5);
-  const allDecided = cols.every((c) => state.missingDecisions && state.missingDecisions[c.column]);
+  // Missingness is non-blocking on Step 4. Decisions can be applied here or
+  // deferred to the dedicated missing-data screen before normality testing.
+  _updateQualityContinueGate();
+}
+
+function _updateQualityContinueGate() {
+  const validActions = new Set(["keep", "remove", "cap", "review"]);
+  const unresolvedActionable = (state.qualityActions || []).some(
+    (item) => !item || !validActions.has(item.action)
+  );
   $$('[data-action="apply-quality"]').forEach((btn) => {
-    if (cols.length > 0) btn.disabled = !allDecided;
+    btn.disabled = unresolvedActionable;
   });
-  const sticky = document.querySelector('#dq-sticky-actions .se-sticky-continue');
-  if (sticky && cols.length > 0) sticky.disabled = !allDecided;
 }
 
 function _buildMissingDecisionPayload(currentColumns, selectedDecisions = {}) {
