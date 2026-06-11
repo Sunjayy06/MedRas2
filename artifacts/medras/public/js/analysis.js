@@ -3385,7 +3385,7 @@ function renderQuality() {
             <h3>Your dataset is clean</h3>
           </div>
           <p>No outliers, duplicate records, or consistency errors were detected.</p>
-          <button type="button" class="btn btn-primary" data-action="apply-quality" data-testid="button-apply-quality-banner">Apply and continue →</button>
+          <button type="button" class="btn btn-primary" data-action="apply-quality" data-testid="button-apply-quality">Apply and continue →</button>
         </div>
       `;
       banner.classList.remove("is-hidden");

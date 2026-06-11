@@ -21,6 +21,12 @@ def main() -> None:
     assert "Quality score is reduced by non-blocking quality indicators; no blocking quality issues remain." in source
     assert 'data-testid="q-score-explanation"' in source
     assert "_updateQualityContinueGate();" in source
+    assert 'data-testid="button-apply-quality"' in source
+    assert 'data-testid="button-apply-quality-fallback"' in html
+    assert 'data-testid="button-apply-quality"' not in html
+    assert 'button-apply-quality-banner' not in source
+    assert 'banner.querySelector(\'[data-action="apply-quality"]\')' in source
+    assert 'btn.addEventListener("click", _applyQualityHandler)' in source
     assert "All decisions are required" not in html
     assert "defer the decision to the dedicated missing-data screen" in html
 
