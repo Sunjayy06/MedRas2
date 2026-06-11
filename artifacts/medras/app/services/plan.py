@@ -120,6 +120,18 @@ def generate_plan(
     o_normal = _is_normal(outcome, norm)
     levels = _group_levels(df, group) if group else []
     n_levels = len(levels)
+    session = session or {}
+    study_type = str(session.get("study_type") or "").lower()
+    analysis_predictors = [
+        col for col in (session.get("analysis_predictors") or [])
+        if col in df.columns and col != outcome
+    ]
+    pairwise_association = (
+        not group
+        and o_kind in ("nominal", "ordinal")
+        and study_type in ("association", "correlation")
+        and bool(analysis_predictors)
+    )
 
     # ---- Comparison tests ------------------------------------------------
     if group and o_kind == "scale" and n_levels == 2:
@@ -200,7 +212,41 @@ def generate_plan(
         })
 
     # No grouping → descriptive only.
-    if not group:
+    if pairwise_association:
+        outcome_levels = int(df[outcome].dropna().nunique())
+        for index, predictor in enumerate(analysis_predictors):
+            predictor_kind = classes.get(predictor, {}).get("detected_type")
+            test_id = f"association_{index}"
+            if predictor_kind in ("nominal", "ordinal", "discrete"):
+                tests.append({
+                    "id": test_id,
+                    "title": f"{predictor} vs {outcome}: Chi-square / Fisher's exact",
+                    "why": f"Association between categorical {predictor} and categorical outcome {outcome}.",
+                    "columns": [predictor, outcome],
+                    "parametric": False,
+                    "_phase_b": {
+                        "function": "run_chi_or_fisher",
+                        "test_type": "chi_square",
+                        "args": {"col1": predictor, "col2": outcome},
+                    },
+                })
+            elif predictor_kind == "scale":
+                function = "run_pairwise_mann_whitney" if outcome_levels == 2 else "run_pairwise_kruskal"
+                test_name = "Mann-Whitney U" if outcome_levels == 2 else "Kruskal-Wallis H"
+                tests.append({
+                    "id": test_id,
+                    "title": f"{predictor} vs {outcome}: {test_name}",
+                    "why": f"Comparing continuous {predictor} across levels of categorical outcome {outcome}.",
+                    "columns": [predictor, outcome],
+                    "parametric": False,
+                    "_phase_b": {
+                        "function": function,
+                        "test_type": "mann_whitney" if outcome_levels == 2 else "kruskal_wallis",
+                        "args": {"predictor": predictor, "outcome": outcome},
+                    },
+                })
+
+    if not group and not pairwise_association:
         tests.append({
             "id": "descriptive_only",
             "title": "Descriptive summary",
@@ -327,7 +373,7 @@ def generate_plan(
         o_kind=o_kind,
         o_normal=o_normal,
         n_levels=n_levels,
-        session=session or {},
+        session=session,
     )
 
     # Filter to runners we actually implement so users never see a confirmed

@@ -153,6 +153,18 @@ def _build_session_view(entry, classifications, assignment) -> Dict[str, Any]:
                      or intake.get("objective_text")
                      or intake.get("text")
                      or "")
+    ai_study = entry.meta.get("ai_study") or {}
+    intake_study_type = intake.get("study_type") if isinstance(intake, dict) else None
+    analysis_predictors = list(
+        ai_study.get("predictors") or ai_study.get("all_predictors") or []
+    )
+    if not analysis_predictors:
+        outcome = (assignment or {}).get("outcome")
+        analysis_predictors = [
+            c.get("column") for c in (classifications or [])
+            if c.get("column") != outcome
+            and c.get("detected_type") not in ("id", "date", "exclude")
+        ]
     variables = {}
     for c in classifications or []:
         col = c.get("column")
@@ -169,6 +181,12 @@ def _build_session_view(entry, classifications, assignment) -> Dict[str, Any]:
         "outcome_variable": (assignment or {}).get("outcome"),
         "grouping_variable": (assignment or {}).get("group"),
         "covariates": list((assignment or {}).get("covariates") or []),
+        "study_type": (
+            entry.meta.get("confirmed_study_type")
+            or intake_study_type
+            or ai_study.get("study_type")
+        ),
+        "analysis_predictors": analysis_predictors,
         # Future wizard work will populate these:
         "paired": bool(intake.get("paired")) if isinstance(intake, dict) else False,
         "design": intake.get("design") if isinstance(intake, dict) else None,
@@ -1804,6 +1822,7 @@ async def confirm_study(payload: ConfirmStudyRequest) -> Dict[str, Any]:
     entry.meta["confirmed_study_type"] = payload.study_type
     entry.meta["confirmed_outcome_col"] = payload.outcome_col
     entry.meta["ai_study"] = {
+        **(entry.meta.get("ai_study") or {}),
         "study_type": payload.study_type,
         "outcome_col": payload.outcome_col,
         "source": "confirmed",
@@ -2057,6 +2076,7 @@ async def setup_study(request: Request, payload: SetupStudyRequest) -> Dict[str,
     # Augment with outcome_hint if provided and AI didn't detect an outcome
     if payload.outcome_hint.strip() and not result.get("outcome_col"):
         result["outcome_col"] = payload.outcome_hint.strip()
+    entry.meta["ai_study"] = result
     return result
 
 

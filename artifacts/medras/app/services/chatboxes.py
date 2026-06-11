@@ -521,6 +521,11 @@ def _opening_results(context: Dict[str, Any]) -> str:
     r = (context or {}).get("results") or {}
     n_tests = len(r.get("tests") or [])
     n_graphs = len(r.get("graphs") or [])
+    if r.get("plan_mismatch"):
+        return (
+            "The planned analysis did not produce valid inferential results. "
+            "Review the selected variables, category levels, and missing data before rerunning."
+        )
     correction = (r.get("correction_info") or {}).get("method")
     bits = [f"{n_tests} test(s)", f"{n_graphs} graph(s)"]
     if correction:

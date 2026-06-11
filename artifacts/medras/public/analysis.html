@@ -836,7 +836,7 @@
       <section class="se-screen se-screen-narrow is-hidden" id="screen-normality" data-testid="screen-normality">
         <header class="se-screen-head">
           <h2>Step 5 · Check normality</h2>
-          <p>For each scale variable we run Shapiro-Wilk (n &lt; 50) or Kolmogorov-Smirnov (50–2000). Above 2000 we use shape thumb-rules instead. Override the verdict if you have a strong reason.</p>
+          <p>For each scale variable we run Shapiro-Wilk (n &lt; 50) or Lilliefors when available with a Shapiro-Wilk fallback (50–2000). Above 2000, formal testing is skipped and the decision requires cautious review of plots and distribution shape.</p>
         </header>
 
         <div id="normality-status" class="se-status" role="status" aria-live="polite" data-testid="status-normality"></div>

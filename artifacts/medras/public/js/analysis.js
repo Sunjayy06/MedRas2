@@ -1469,7 +1469,10 @@ function autoAssignFromIntake() {
   const groupCols = cls.filter(_isUsableAsGroup);
 
   // Outcome — Q3 free text (e.g. "Time to Union")
-  let outcome = matchColumn(intake.outcomes, outcomeCols);
+  let outcome = matchColumn(
+    state.outcomeCol || (state.aiStudy && state.aiStudy.outcome_col) || intake.outcomes,
+    outcomeCols
+  );
   // Defensive: if matchColumn returns an ID-typed column for any reason,
   // discard it — Rule 5 (no ID as outcome).
   if (outcome) {
@@ -1482,7 +1485,7 @@ function autoAssignFromIntake() {
     extractGroupHint(intake.objective) ||
     extractGroupHint(intake.independents) ||
     (intake.independents || "").split(/[,;]/)[0] || "";
-  let group = matchColumn(hint, groupCols);
+  let group = matchColumn(state.setupGroupCol || hint, groupCols);
   if (group) {
     const row = cls.find((c) => c.column === group);
     if (!row || !_isUsableAsGroup(row)) group = null;

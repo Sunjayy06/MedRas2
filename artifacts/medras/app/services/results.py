@@ -345,6 +345,19 @@ def _chi_square(df, outcome, group) -> Dict[str, Any]:
 def _descriptive(df, outcome, _group) -> Dict[str, Any]:
     s = pd.to_numeric(df[outcome], errors="coerce").dropna()
     if len(s) == 0:
+        categorical = df[outcome].dropna().astype(str)
+        if len(categorical):
+            counts = categorical.value_counts()
+            n = int(counts.sum())
+            return {
+                "rows": [
+                    _row(str(level), f"{int(count)} ({(100 * count / n):.1f}%)")
+                    for level, count in counts.items()
+                ],
+                "narrative": f"{outcome} was summarised categorically across {len(counts)} levels (n = {n}).",
+                "p_value": None, "effect_size": None, "effect_label": "—",
+                "ci_lo": None, "ci_hi": None,
+            }
         return {"rows": [], "narrative": f"{outcome} has no numeric values to summarise.",
                 "p_value": None, "effect_size": None, "effect_label": "—",
                 "ci_lo": None, "ci_hi": None}
@@ -734,7 +747,7 @@ KNOWN_GRAPH_IDS = frozenset(list(_GRAPH_RUNNERS.keys()) + ["forest_plot"])
 
 
 def is_supported_test(test_id: str) -> bool:
-    return test_id in KNOWN_TEST_IDS
+    return test_id in KNOWN_TEST_IDS or test_id.startswith("association_")
 
 
 def is_supported_graph(graph_id: str) -> bool:
@@ -1273,6 +1286,8 @@ def run_plan(
         "run_rm_anova": run_rm_anova,
         "run_friedman": run_friedman,
         "run_chi_or_fisher": run_chi_or_fisher,
+        "run_pairwise_mann_whitney": run_pairwise_mann_whitney,
+        "run_pairwise_kruskal": run_pairwise_kruskal,
         "run_kappa": run_kappa,
         "run_icc_bland_altman": run_icc_bland_altman,
         "run_kaplan_meier": run_kaplan_meier,
@@ -1472,13 +1487,18 @@ def run_plan(
     table_one = build_table_one(df, classifications, group)
 
     # Methods + Results paragraphs ------------------------------------------
-    methods_lines = []
-    methods_lines.append(
-        f"Continuous variables are summarised as mean ± SD; categorical "
-        f"variables as counts. Normality of {outcome} was assessed using "
-        "Shapiro-Wilk (n < 50) or Kolmogorov-Smirnov (50 ≤ n ≤ 2000); for "
-        "n > 2000 we relied on skewness and kurtosis (|skew| ≤ 2, |kurt| ≤ 7)."
-    )
+    methods_lines = [
+        "Continuous variables are summarised as mean ± SD; categorical variables as counts."
+    ]
+    outcome_class = _classes_lookup(classifications).get(outcome, {})
+    if outcome_class.get("detected_type") == "scale":
+        methods_lines.append(
+            f"Normality of {outcome} was assessed using Shapiro-Wilk (n < 50) "
+            "or Lilliefors when available with a Shapiro-Wilk fallback "
+            "(50 ≤ n ≤ 2000). For n > 2000, formal testing was skipped and "
+            "normality was interpreted cautiously using plots, distribution "
+            "shape, and clinical/statistical judgment."
+        )
     if any(t["id"] == "ttest_independent" for t in test_results):
         methods_lines.append("Group means were compared with Welch's t-test.")
     if any(t["id"] == "mann_whitney" for t in test_results):
@@ -1487,14 +1507,31 @@ def run_plan(
         methods_lines.append("Means across more than two groups were compared with one-way ANOVA.")
     if any(t["id"] == "kruskal_wallis" for t in test_results):
         methods_lines.append("Non-parametric multi-group comparisons used the Kruskal-Wallis H test.")
-    if any(t["id"] == "chi_square" for t in test_results):
-        methods_lines.append("Categorical associations were tested with the chi-square test of independence.")
+    if any(t.get("test_type") in ("chi_square", "fisher_exact") for t in test_results):
+        methods_lines.append(
+            "Categorical associations were tested using chi-square or Fisher's exact test as appropriate."
+        )
     methods_lines.append("All tests are two-sided with α = 0.05.")
     methods_md = " ".join(methods_lines)
 
+    planned_inferential = [
+        t for t in (plan.get("tests") or [])
+        if t.get("id") in confirmed_test_ids and t.get("id") != "descriptive_only"
+    ]
+    completed_inferential = [
+        t for t in test_results
+        if t.get("p") is not None or t.get("p_value") is not None
+    ]
+    plan_mismatch = bool(planned_inferential and not completed_inferential)
     results_md = "\n\n".join(t["narrative"] for t in test_results) or (
         "No tests were confirmed for this run."
     )
+    if plan_mismatch:
+        results_md = (
+            "The planned inferential tests did not produce valid statistical results. "
+            "Review the selected variables, category levels, and missing data before rerunning.\n\n"
+            + results_md
+        )
 
     # Only generate a forest plot when the plan actually includes logistic / Cox
     # regression tests.  For all other study types return None so export never
@@ -1509,6 +1546,7 @@ def run_plan(
         "forest_plot": _forest_plot(test_results) if _has_forest_tests else None,
         "methods_md": methods_md,
         "results_md": results_md,
+        "plan_mismatch": plan_mismatch,
         "correction_info": correction_info,
         "summary": {
             "outcome": outcome,
@@ -2744,6 +2782,28 @@ def _run_kruskal(
         return {"test_name": "Kruskal-Wallis H", "stat": float(H), "p": float(p), "n": len(sub)}
     except Exception as exc:
         return {"error": str(exc)}
+
+
+def run_pairwise_mann_whitney(predictor, outcome, session, df):
+    result = _run_mann_whitney(df, predictor, outcome)
+    if "error" in result:
+        return result
+    result["interpretation"] = (
+        f"Mann-Whitney U compared {predictor} across the two levels of {outcome}; "
+        f"U = {result['stat']:.3f}, p = {fmt_p(result['p'])}."
+    )
+    return result
+
+
+def run_pairwise_kruskal(predictor, outcome, session, df):
+    result = _run_kruskal(df, predictor, outcome)
+    if "error" in result:
+        return result
+    result["interpretation"] = (
+        f"Kruskal-Wallis compared {predictor} across levels of {outcome}; "
+        f"H = {result['stat']:.3f}, p = {fmt_p(result['p'])}."
+    )
+    return result
 
 
 def _run_correlation(
