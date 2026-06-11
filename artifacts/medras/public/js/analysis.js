@@ -2702,9 +2702,15 @@ function issuesForColumn(col) {
   return state.issues.filter((i) => i.column === col);
 }
 
+function _isCategoricalClinicalMarkerName(column) {
+  return /(^|[\W_])(her\s*2|her2|her2neu|her2\s*neu|erbb2|er|pr|ar|lvi|ene|necrosis|dcis)($|[\W_])/i
+    .test(String(column || ""));
+}
+
 function _issueFixCommand(column, issueType) {
   switch (issueType) {
-    case "text_in_numeric":  return `Strip the prefix from ${column}`;
+    case "text_in_numeric":
+      return _isCategoricalClinicalMarkerName(column) ? null : `Strip the prefix from ${column}`;
     case "numeric_as_id":    return `Exclude ${column} from analysis`;
     case "low_unique_nominal": return `Exclude ${column} from analysis`;
     case "high_missing":     return `Exclude ${column} from analysis`;
@@ -3221,7 +3227,15 @@ async function sendAssistantMessage(message) {
     }
   } catch (err) {
     clearTyping();
-    state.assistantThread.push({ role: "clarify", text: `Could not run: ${err.message}` });
+    state.assistantThread.push({
+      role: "clarify",
+      text: `Variable Assistant action failed: ${err.message}. No confirmed action remains pending.`,
+    });
+    try {
+      await refreshClassifications([], { render: true, detectCategoryDupes: false });
+    } catch (_) {
+      renderAssistantThread();
+    }
     renderAssistantThread();
   } finally {
     if (input) input.disabled = false;
@@ -3240,6 +3254,7 @@ function validateConfirm() {
   const numericKinds = new Set(["scale", "ordinal", "discrete"]);
   const stillBlocking = state.issues.filter((i) => {
     if (i.severity !== "blocking") return false;
+    if (_isCategoricalClinicalMarkerName(i.column)) return false;
     const c = state.classifications.find((x) => x.column === i.column);
     if (!c) return false;
     return numericKinds.has(c.detected_type);
@@ -3531,6 +3546,24 @@ function _updateMissingContinueGate() {
   if (sticky && cols.length > 0) sticky.disabled = !allDecided;
 }
 
+function _buildMissingDecisionPayload(currentColumns, selectedDecisions = {}) {
+  const allowedColumns = new Set((currentColumns || []).map((c) => c.column));
+  const actionMap = {
+    keep: "leave",
+    leave: "leave",
+    impute_mean: "impute_mean",
+    impute_median: "impute_median",
+    impute_mode: "impute_mode",
+    drop_rows: "drop_rows",
+  };
+  const unsupported = Object.entries(selectedDecisions)
+    .filter(([column, action]) => allowedColumns.has(column) && !actionMap[action]);
+  const missingDecisions = Object.entries(selectedDecisions)
+    .filter(([column, action]) => allowedColumns.has(column) && actionMap[action])
+    .map(([column, action]) => ({ column, action: actionMap[action] }));
+  return { decisions: missingDecisions, unsupported };
+}
+
 // Shared apply-quality logic so it can be wired both to the inline button
 // and to the clean-banner button without duplicating the network code.
 async function _applyQualityHandler() {
@@ -3539,16 +3572,8 @@ async function _applyQualityHandler() {
   // Step 0 — apply user's missing-data decisions before running quality fixes
   const missingCols = (state.classifications || []).filter((c) => (c.missing_pct || 0) > 5);
   if (missingCols.length > 0 && state.missingDecisions && Object.keys(state.missingDecisions).length > 0) {
-    const allowedColumns = new Set(missingCols.map((c) => c.column));
-    const actionMap = {
-      keep: "leave",
-      impute_mean: "impute_mean",
-      impute_median: "impute_median",
-      impute_mode: "impute_mode",
-      drop_rows: "drop_rows",
-    };
-    const unsupported = Object.entries(state.missingDecisions)
-      .filter(([column, action]) => allowedColumns.has(column) && !actionMap[action]);
+    const { decisions: missingDecisions, unsupported } =
+      _buildMissingDecisionPayload(missingCols, state.missingDecisions);
     if (unsupported.length) {
       setStatus(
         status,
@@ -3557,9 +3582,6 @@ async function _applyQualityHandler() {
       );
       return;
     }
-    const missingDecisions = Object.entries(state.missingDecisions)
-      .filter(([column, action]) => allowedColumns.has(column) && actionMap[action])
-      .map(([column, action]) => ({ column, action: actionMap[action] }));
     setStatus(status, "Applying missing-data decisions…", "loading");
     try {
       await api("/apply-missing-decisions", {
@@ -5251,12 +5273,21 @@ function bindScreenMissing() {
       const status = document.getElementById("missing-screen-status");
 
       // Collect all radio decisions
-      const decisions = [];
+      const selectedDecisions = {};
       document.querySelectorAll("[data-missing-col]").forEach((radio) => {
         if (radio.checked) {
-          decisions.push({ column: radio.dataset.missingCol, action: radio.value });
+          selectedDecisions[radio.dataset.missingCol] = radio.value;
         }
       });
+      const currentMissingCols = (state.classifications || []).filter(
+        (c) => (c.missing_pct || c.missing_fraction * 100 || 0) > 5
+      );
+      const { decisions, unsupported } =
+        _buildMissingDecisionPayload(currentMissingCols, selectedDecisions);
+      if (unsupported.length) {
+        setStatus(status, "Unsupported missing-data action. Choose a supported option.", "error");
+        return;
+      }
 
       setStatus(status, "Applying missing-data decisions…", "loading");
       applyBtn.disabled = true;
@@ -5360,6 +5391,7 @@ async function _sendMissingChatMessage() {
     state._missingThread = (state._missingThread || []).filter((m) => m.role !== "typing");
   };
   try {
+    const selectedMissingDecisions = state.missingDecisions || {};
     const res = await api("/ai-chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -5367,7 +5399,7 @@ async function _sendMissingChatMessage() {
         job_id: state.jobId,
         kind: "missing",
         message: msg,
-        selected_decisions: state.missingDecisions || {},
+        selected_decisions: selectedMissingDecisions,
       }),
     });
     clearTyping();

@@ -924,7 +924,8 @@ async def variable_assistant_endpoint(
             "column": payload.confirmed_action.get("column"),
             "params": payload.confirmed_action.get("params") or {},
         }
-        if entry.meta.get("pending_variable_assistant_action") != intent:
+        pending_action = entry.meta.pop("pending_variable_assistant_action", None)
+        if pending_action != intent:
             raise HTTPException(
                 status_code=409,
                 detail="This assistant action was not previewed or is no longer current.",
@@ -985,6 +986,30 @@ async def variable_assistant_endpoint(
             intent = variable_assistant.parse_intent(payload.message, columns)
         else:
             intent = variable_assistant.parse_intent(payload.message, columns)
+
+    if (
+        intent.get("action") == "strip_prefix"
+        and variable_classifier.is_known_categorical_clinical_marker(intent.get("column", ""))
+    ):
+        entry.meta.pop("pending_variable_assistant_action", None)
+        return {
+            "status": "clarify",
+            "action": "clarify",
+            "column": intent.get("column"),
+            "params": {},
+            "confirmation_message": (
+                f"'{intent.get('column')}' is a categorical clinical marker. "
+                "Use Nominal for status labels or Ordinal for HER2 score categories; "
+                "do not strip Positive/Negative text."
+            ),
+            "classifications": stored_classifications,
+            "issues": entry.meta.get("variable_issues") or [],
+            "auto_coding_plan": entry.meta.get("auto_coding_plan") or [],
+            "blocking_issues": variable_issues.has_blocking_issues(
+                entry.meta.get("variable_issues") or []
+            ),
+            **provider_meta,
+        }
 
     # Informational intents (no DataFrame mutation): the assistant either
     # gives a tailored suggestion ("what should I do?") or a clarification
@@ -1051,8 +1076,16 @@ async def variable_assistant_endpoint(
             **provider_meta,
         }
 
-    new_df, meta = variable_assistant.apply_action(entry.df, intent)
+    # Consume the preview before applying so a failed action can never leave
+    # a stale confirmation token behind.
     entry.meta.pop("pending_variable_assistant_action", None)
+    try:
+        new_df, meta = variable_assistant.apply_action(entry.df, intent)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Variable Assistant action failed: {exc}. No changes were applied.",
+        ) from exc
     _invalidate_downstream(entry, keep_normality=False)
 
     # Apply DataFrame mutation if the action produced one.

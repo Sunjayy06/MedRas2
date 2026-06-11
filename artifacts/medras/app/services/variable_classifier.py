@@ -191,6 +191,11 @@ _NODE_FRACTION_RE = re.compile(r"^\s*(\d+)\s*/\s*(\d+)\s*$")
 _NODE_FRACTION_NAME_RE = re.compile(r"(?:node|nodal|lymph)", re.IGNORECASE)
 _DATE_TEXT_RE = re.compile(r"^\s*\d{4}[-/]\d{1,2}[-/]\d{1,2}(?:\s|$)")
 _HER2_NAME_RE = re.compile(r"(?:^|[\W_])(her\s*2|her2|her2neu|her2\s*neu|erbb2)(?:$|[\W_])", re.IGNORECASE)
+_CATEGORICAL_CLINICAL_MARKER_RE = re.compile(
+    r"(?:^|[\W_])(her\s*2|her2|her2neu|her2\s*neu|erbb2|er|pr|ar|"
+    r"lvi|ene|necrosis|dcis)(?:$|[\W_])",
+    re.IGNORECASE,
+)
 _TNM_NAME_RE = re.compile(r"(?:^|[\W_])(pt|tnm|t\s*stage|n\s*stage|nodal\s*status|node\s*stage)(?:$|[\W_])", re.IGNORECASE)
 _GRADE_NAME_RE = re.compile(r"(?:^|[\W_])(grade|grading|nottingham)(?:$|[\W_])", re.IGNORECASE)
 _ROMAN_GRADE_RE = re.compile(r"^(?:grade\s*)?(i|ii|iii|iv|v|1|2|3|4|5)$", re.IGNORECASE)
@@ -202,8 +207,8 @@ _MISSING_MARKERS = frozenset({
 })
 _HER2_SCORE_VALUES = frozenset({
     "0", "0+", "1", "1+", "1.0", "2", "2+", "2.0", "3", "3+", "3.0",
-    "negative", "positive",
 })
+_HER2_STATUS_VALUES = frozenset({"negative", "positive"})
 _MILD_MODERATE_SEVERE = frozenset({
     "mild", "moderate", "severe", "low", "intermediate", "high",
     "low grade", "intermediate grade", "high grade",
@@ -290,6 +295,20 @@ def _looks_like_her2_ordinal(series: pd.Series, name: str) -> bool:
     return bool(values) and all(v in _HER2_SCORE_VALUES for v in values)
 
 
+def _looks_like_her2_status_or_mixed(series: pd.Series, name: str) -> bool:
+    if not _HER2_NAME_RE.search(str(name or "")):
+        return False
+    values = _normalised_text_values(series)
+    return bool(values) and all(
+        v in _HER2_SCORE_VALUES or v in _HER2_STATUS_VALUES for v in values
+    ) and any(v in _HER2_STATUS_VALUES for v in values)
+
+
+def is_known_categorical_clinical_marker(name: str) -> bool:
+    """Return whether a column name denotes a commonly categorical marker."""
+    return bool(_CATEGORICAL_CLINICAL_MARKER_RE.search(str(name or "")))
+
+
 def _looks_like_tnm_ordinal(series: pd.Series, name: str) -> bool:
     if not _TNM_NAME_RE.search(str(name or "")):
         return False
@@ -351,6 +370,22 @@ def _classify_core(series: pd.Series, name: str) -> Dict[str, Any]:
         series.dropna().astype(str).head(5).tolist() if n_present else []
     )
 
+    # HER2 has explicit clinical semantics that must win before generic
+    # degenerate/date/numeric heuristics. Status labels are nominal; pure
+    # IHC score categories are ordinal; mixed status/score labels are nominal.
+    if n_present and _looks_like_her2_status_or_mixed(series, name):
+        return _record(
+            name, "nominal",
+            "HER2 status or mixed status/score labels - treated as nominal.",
+            unique_count, sample_values, n_missing, n_total,
+        )
+    if n_present and _looks_like_her2_ordinal(series, name):
+        return _record(
+            name, "ordinal",
+            "HER2 score categories - treated as ordinal.",
+            unique_count, sample_values, n_missing, n_total,
+        )
+
     # 1) Empty / degenerate.
     if n_present == 0 or unique_count <= 1:
         return _record(
@@ -385,6 +420,15 @@ def _classify_core(series: pd.Series, name: str) -> Dict[str, Any]:
             all_int = False
             min_v = 0.0
             max_v = 0.0
+
+        # HER2 IHC scores are ordered categories, even when imported as
+        # numeric 0/1/2/3 or when the header contains the word "Score".
+        if _looks_like_her2_ordinal(series, name):
+            return _record(
+                name, "ordinal",
+                "HER2 score categories - treated as ordinal.",
+                unique_count, sample_values, n_missing, n_total,
+            )
 
         # 4a) Continuous clinical/demographic measurement by name keeps
         # scale even when cardinality is small (e.g. an Age column with
@@ -472,6 +516,13 @@ def _classify_core(series: pd.Series, name: str) -> Dict[str, Any]:
     # 5) String / object — non-numeric text. (Numeric-like text such as
     # "2mm" / "Grade 3" should already have been converted to numeric by
     # ``clean_numeric_like_columns`` before classification.)
+    if _looks_like_her2_status_or_mixed(series, name):
+        return _record(
+            name, "nominal",
+            "HER2 status or mixed status/score labels - treated as nominal.",
+            unique_count, sample_values, n_missing, n_total,
+        )
+
     if (
         _looks_like_her2_ordinal(series, name)
         or _looks_like_tnm_ordinal(series, name)
@@ -912,6 +963,10 @@ def clean_numeric_like_columns(
         # measurements — extracting the numeric part would just replace
         # nice readable IDs with raw integers.
         if _ID_NAME_RE.search(col):
+            continue
+        # These pathology markers are commonly categorical. Do not turn
+        # status/score labels into scale values through numeric extraction.
+        if is_known_categorical_clinical_marker(col):
             continue
         non_null_str = non_null.astype(str)
         extracted = non_null_str.apply(_extract_numeric)

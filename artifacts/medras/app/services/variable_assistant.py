@@ -30,6 +30,8 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
 
+from app.services import variable_classifier
+
 
 _VALID_TYPES = {
     "scale", "ordinal", "nominal", "discrete", "date", "id", "exclude",
@@ -42,6 +44,7 @@ _LEADING_PREFIX_RE = re.compile(r"^\s*([A-Za-z]+)\s+")
 _TRAILING_NUM_RE = re.compile(r"(-?\d+(?:\.\d+)?)\s*$")
 _ROMAN_RE = re.compile(r"^\s*([A-Za-z]+)\s+([IVXLCDM]+)\s*$", re.IGNORECASE)
 _ROMAN_VALUES = {"I": 1, "V": 5, "X": 10, "L": 50, "C": 100, "D": 500, "M": 1000}
+_ORIGINAL_SUFFIX_RE = re.compile(r"(?:_original)+$", re.IGNORECASE)
 
 
 def _roman_to_int(s: str) -> Optional[int]:
@@ -356,10 +359,19 @@ def _strip_prefix(
     coerce the result to numeric. Keeps original in ``{column}_original``."""
     if column not in df.columns:
         raise ValueError(f"Unknown column '{column}'.")
+    if _ORIGINAL_SUFFIX_RE.search(column):
+        raise ValueError(
+            f"'{column}' is already an original-value backup and cannot be cleaned again."
+        )
+    if variable_classifier.is_known_categorical_clinical_marker(column):
+        raise ValueError(
+            f"'{column}' is a categorical clinical marker; use Nominal or Ordinal "
+            "classification instead of stripping text."
+        )
     new_df = df.copy()
     series = new_df[column].astype(str)
 
-    backup = column + "_original"
+    backup = _ORIGINAL_SUFFIX_RE.sub("", column) + "_original"
     if backup not in new_df.columns:
         new_df[backup] = new_df[column]
 
@@ -580,7 +592,10 @@ def suggest_message(
     for c in classifications or []:
         col = c.get("column")
         col_issues = issues_by_col.get(col, [])
-        if any(i.get("type") == "text_in_numeric" for i in col_issues):
+        if (
+            any(i.get("type") == "text_in_numeric" for i in col_issues)
+            and not variable_classifier.is_known_categorical_clinical_marker(col)
+        ):
             suggestions.append(
                 f"• “{col}” looks numeric but has text in front (e.g. “Grade 4”). "
                 f"Send: “strip the prefix from {col}”. "

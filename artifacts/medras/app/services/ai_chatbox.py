@@ -201,6 +201,9 @@ def _variables_system(context: Dict[str, Any]) -> str:
         f"2. Explain what variable types mean (scale, ordinal, nominal, id).\n"
         f"3. Recommend which variables to exclude or recode.\n"
         f"4. For actionable changes, suggest the exact command for the assistant input.\n"
+        f"Never suggest stripping prefixes or numeric conversion for categorical "
+        f"clinical markers such as HER2, ER, PR, AR, LVI, ENE, Necrosis, or DCIS. "
+        f"HER2 Positive/Negative is nominal; pure 0/1+/2+/3+ HER2 scores are ordinal.\n"
         f"Plain, practical prose (2–4 sentences). No JSON."
     )
 
@@ -562,6 +565,8 @@ async def parse_variable_intent(
         f'"recode_map":{{}} }}\n'
         f"Use \"trim_whitespace\" when the user wants to clean/standardise string values "
         f"(e.g. remove trailing spaces, fix 'Positive ' vs 'Positive').\n"
+        f"Never suggest strip_prefix for categorical clinical markers such as HER2, "
+        f"ER, PR, AR, LVI, ENE, Necrosis, or DCIS.\n"
         f"If the input is a question or explanation request, return exactly: null\n"
         f"Return ONLY the JSON object or null — no prose, no markdown."
     )

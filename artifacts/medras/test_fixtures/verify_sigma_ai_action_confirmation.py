@@ -19,7 +19,8 @@ def verify_variable_assistant_preview_then_apply() -> None:
     assert '"status": "preview"' in section
     assert '"confirmed_action": intent' in section
     assert 'entry.meta["pending_variable_assistant_action"] = intent' in section
-    assert 'entry.meta.get("pending_variable_assistant_action") != intent' in section
+    assert 'pending_action = entry.meta.pop("pending_variable_assistant_action", None)' in section
+    assert "if pending_action != intent:" in section
     assert section.index('"status": "preview"') < section.index(
         "new_df, meta = variable_assistant.apply_action"
     )

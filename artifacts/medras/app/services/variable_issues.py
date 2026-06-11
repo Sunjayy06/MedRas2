@@ -28,6 +28,8 @@ from typing import Any, Dict, List
 
 import pandas as pd
 
+from app.services import variable_classifier
+
 
 _NUMERIC_TOKEN_RE = re.compile(r"-?\d+(?:\.\d+)?")
 _LETTER_RE = re.compile(r"[A-Za-z]")
@@ -56,7 +58,10 @@ def detect_issues(df: pd.DataFrame, classifications: List[Dict[str, Any]]) -> Li
 
         # 1) text_in_numeric — column expected to be numeric but raw values
         # carry letters that prevent coercion (e.g. "Grade 4", "10 mg").
-        if kind in ("scale", "ordinal", "discrete"):
+        if (
+            kind in ("scale", "ordinal", "discrete")
+            and not variable_classifier.is_known_categorical_clinical_marker(col)
+        ):
             if not pd.api.types.is_numeric_dtype(series):
                 non_null = series.dropna().astype(str)
                 if len(non_null):
