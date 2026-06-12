@@ -35,7 +35,11 @@ _NUMERIC_TOKEN_RE = re.compile(r"-?\d+(?:\.\d+)?")
 _LETTER_RE = re.compile(r"[A-Za-z]")
 
 
-def detect_issues(df: pd.DataFrame, classifications: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def detect_issues(
+    df: pd.DataFrame,
+    classifications: List[Dict[str, Any]],
+    profile: str = "generic",
+) -> List[Dict[str, Any]]:
     """Walk every classified column and return a flat list of issues."""
     out: List[Dict[str, Any]] = []
     n_rows = len(df) if df is not None else 0
@@ -60,7 +64,9 @@ def detect_issues(df: pd.DataFrame, classifications: List[Dict[str, Any]]) -> Li
         # carry letters that prevent coercion (e.g. "Grade 4", "10 mg").
         if (
             kind in ("scale", "ordinal", "discrete")
-            and not variable_classifier.is_known_categorical_clinical_marker(col)
+            and not variable_classifier.is_known_categorical_clinical_marker(
+                col, profile=profile
+            )
         ):
             if not pd.api.types.is_numeric_dtype(series):
                 non_null = series.dropna().astype(str)

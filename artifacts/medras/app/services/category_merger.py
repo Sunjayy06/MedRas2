@@ -31,6 +31,8 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 import pandas as pd
 
+from app.services import domain_profiles
+
 _PROTECTED_CLINICAL_GROUPS = (
     frozenset({"luminal a", "luminal b", "her2neu", "her2 enriched", "triple negative"}),
     frozenset({"negative", "positive"}),
@@ -87,13 +89,18 @@ def _is_obvious_dup(a_raw: str, b_raw: str) -> bool:
     return _normalise(a_raw) == _normalise(b_raw)
 
 
-def _is_borderline_dup(a_raw: str, b_raw: str) -> bool:
+def _is_borderline_dup(
+    a_raw: str, b_raw: str, profile: str = domain_profiles.DEFAULT_PROFILE
+) -> bool:
     """True when edit-distance suggests a typo (but not an obvious dup)."""
     if _is_obvious_dup(a_raw, b_raw):
         return False
     a = _normalise(a_raw)
     b = _normalise(b_raw)
-    if any(a in group and b in group and a != b for group in _PROTECTED_CLINICAL_GROUPS):
+    if (
+        domain_profiles.is_breast_pathology(profile)
+        and any(a in group and b in group and a != b for group in _PROTECTED_CLINICAL_GROUPS)
+    ):
         return False
     min_len = min(len(a), len(b))
     if min_len < 4:
@@ -149,6 +156,7 @@ class _UF:
 def detect_category_duplicates(
     series: "pd.Series",
     max_categories: int = 200,
+    profile: str = domain_profiles.DEFAULT_PROFILE,
 ) -> Dict[str, Any]:
     """Detect near-duplicate category labels in a nominal/ordinal column.
 
@@ -193,7 +201,7 @@ def detect_category_duplicates(
             if _is_obvious_dup(a, b):
                 uf_obvious.union(a, b)
                 uf_all.union(a, b)
-            elif _is_borderline_dup(a, b):
+            elif _is_borderline_dup(a, b, profile=profile):
                 uf_all.union(a, b)
 
     obvious_groups = uf_obvious.groups(distinct)
@@ -243,6 +251,7 @@ def detect_category_duplicates(
 def detect_all_columns(
     df: "pd.DataFrame",
     classifications: List[Dict[str, Any]],
+    profile: str = domain_profiles.DEFAULT_PROFILE,
 ) -> Dict[str, Any]:
     """Run duplicate detection on every nominal/ordinal column.
 
@@ -257,7 +266,7 @@ def detect_all_columns(
     }
     out: Dict[str, Any] = {}
     for col in nominal_cols:
-        result = detect_category_duplicates(df[col])
+        result = detect_category_duplicates(df[col], profile=profile)
         if result["obvious"] or result["borderline"]:
             out[col] = result
     return out

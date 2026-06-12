@@ -353,7 +353,10 @@ def trim_all_whitespace(
 
 
 def _strip_prefix(
-    df: pd.DataFrame, column: str, prefix: Optional[str]
+    df: pd.DataFrame,
+    column: str,
+    prefix: Optional[str],
+    profile: str = "generic",
 ) -> Tuple[pd.DataFrame, Dict[str, Any]]:
     """Strip a leading alphabetic token from values in ``column`` and
     coerce the result to numeric. Keeps original in ``{column}_original``."""
@@ -363,7 +366,7 @@ def _strip_prefix(
         raise ValueError(
             f"'{column}' is already an original-value backup and cannot be cleaned again."
         )
-    if variable_classifier.is_known_categorical_clinical_marker(column):
+    if variable_classifier.is_known_categorical_clinical_marker(column, profile=profile):
         raise ValueError(
             f"'{column}' is a categorical clinical marker; use Nominal or Ordinal "
             "classification instead of stripping text."
@@ -453,7 +456,7 @@ def _rename(
 
 
 def apply_action(
-    df: pd.DataFrame, intent: Dict[str, Any]
+    df: pd.DataFrame, intent: Dict[str, Any], profile: str = "generic"
 ) -> Tuple[Optional[pd.DataFrame], Dict[str, Any]]:
     """Run the action and return ``(new_df_or_None, result_meta)``.
 
@@ -465,7 +468,9 @@ def apply_action(
     params = intent.get("params") or {}
 
     if action == "strip_prefix":
-        new_df, meta = _strip_prefix(df, column, params.get("prefix"))
+        new_df, meta = _strip_prefix(
+            df, column, params.get("prefix"), profile=profile
+        )
         return new_df, {
             **meta,
             "type_after": "scale",
@@ -577,6 +582,7 @@ def suggest_message(
     columns: List[str],
     classifications: List[Dict[str, Any]],
     issues: List[Dict[str, Any]],
+    profile: str = "generic",
 ) -> str:
     """Build a concrete, dataset-aware recommendation. The user typed
     something like "what should I do?" or "any suggestions?" — they want a
@@ -594,7 +600,9 @@ def suggest_message(
         col_issues = issues_by_col.get(col, [])
         if (
             any(i.get("type") == "text_in_numeric" for i in col_issues)
-            and not variable_classifier.is_known_categorical_clinical_marker(col)
+            and not variable_classifier.is_known_categorical_clinical_marker(
+                col, profile=profile
+            )
         ):
             suggestions.append(
                 f"• “{col}” looks numeric but has text in front (e.g. “Grade 4”). "

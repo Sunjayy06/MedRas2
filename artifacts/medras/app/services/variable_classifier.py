@@ -74,6 +74,8 @@ from typing import Any, Dict, List
 import numpy as np
 import pandas as pd
 
+from app.services import domain_profiles
+
 
 VarType = str  # one of: id, date, scale, ordinal, nominal, exclude
 
@@ -304,14 +306,20 @@ def _looks_like_her2_status_or_mixed(series: pd.Series, name: str) -> bool:
     ) and any(v in _HER2_STATUS_VALUES for v in values)
 
 
-def is_known_categorical_clinical_marker(name: str) -> bool:
+def is_known_categorical_clinical_marker(
+    name: str, profile: str = domain_profiles.DEFAULT_PROFILE
+) -> bool:
     """Return whether a column name denotes a commonly categorical marker."""
     text = str(name or "")
-    return bool(
-        _CATEGORICAL_CLINICAL_MARKER_RE.search(text)
-        or _TNM_NAME_RE.search(text)
-        or _GRADE_NAME_RE.search(text)
-    )
+    if domain_profiles.is_breast_pathology(profile):
+        return bool(
+            _CATEGORICAL_CLINICAL_MARKER_RE.search(text)
+            or _TNM_NAME_RE.search(text)
+            or _GRADE_NAME_RE.search(text)
+        )
+    if domain_profiles.is_clinical(profile):
+        return bool(_TNM_NAME_RE.search(text) or _GRADE_NAME_RE.search(text))
+    return False
 
 
 def _looks_like_tnm_ordinal(series: pd.Series, name: str) -> bool:
@@ -339,7 +347,9 @@ def _looks_like_severity_ordinal(series: pd.Series) -> bool:
     return bool(values) and all(v in _MILD_MODERATE_SEVERE for v in values)
 
 
-def classify_column(series: pd.Series, name: str) -> Dict[str, Any]:
+def classify_column(
+    series: pd.Series, name: str, profile: str = domain_profiles.DEFAULT_PROFILE
+) -> Dict[str, Any]:
     """Return a classification record for one column.
 
     The record contains both the legacy ``detected_type`` field and the
@@ -348,11 +358,13 @@ def classify_column(series: pd.Series, name: str) -> Dict[str, Any]:
     reasoning). The latter is added by ``_enrich`` so every entry point
     (``classify_column``, ``classify_dataframe``) gets the richer view.
     """
-    record = _classify_core(series, name)
+    record = _classify_core(series, name, profile=profile)
     return _enrich(record, series, name)
 
 
-def _classify_core(series: pd.Series, name: str) -> Dict[str, Any]:
+def _classify_core(
+    series: pd.Series, name: str, profile: str = domain_profiles.DEFAULT_PROFILE
+) -> Dict[str, Any]:
     """Legacy classifier — produces ``detected_type`` + ``reason``.
 
     Per the MedRAS biostatistician spec:
@@ -378,13 +390,14 @@ def _classify_core(series: pd.Series, name: str) -> Dict[str, Any]:
     # HER2 has explicit clinical semantics that must win before generic
     # degenerate/date/numeric heuristics. Status labels are nominal; pure
     # IHC score categories are ordinal; mixed status/score labels are nominal.
-    if n_present and _looks_like_her2_status_or_mixed(series, name):
+    breast_profile = domain_profiles.is_breast_pathology(profile)
+    if breast_profile and n_present and _looks_like_her2_status_or_mixed(series, name):
         return _record(
             name, "nominal",
             "HER2 status or mixed status/score labels - treated as nominal.",
             unique_count, sample_values, n_missing, n_total,
         )
-    if n_present and _looks_like_her2_ordinal(series, name):
+    if breast_profile and n_present and _looks_like_her2_ordinal(series, name):
         return _record(
             name, "ordinal",
             "HER2 score categories - treated as ordinal.",
@@ -428,7 +441,7 @@ def _classify_core(series: pd.Series, name: str) -> Dict[str, Any]:
 
         # HER2 IHC scores are ordered categories, even when imported as
         # numeric 0/1/2/3 or when the header contains the word "Score".
-        if _looks_like_her2_ordinal(series, name):
+        if breast_profile and _looks_like_her2_ordinal(series, name):
             return _record(
                 name, "ordinal",
                 "HER2 score categories - treated as ordinal.",
@@ -521,7 +534,7 @@ def _classify_core(series: pd.Series, name: str) -> Dict[str, Any]:
     # 5) String / object — non-numeric text. (Numeric-like text such as
     # "2mm" / "Grade 3" should already have been converted to numeric by
     # ``clean_numeric_like_columns`` before classification.)
-    if _looks_like_her2_status_or_mixed(series, name):
+    if breast_profile and _looks_like_her2_status_or_mixed(series, name):
         return _record(
             name, "nominal",
             "HER2 status or mixed status/score labels - treated as nominal.",
@@ -529,14 +542,14 @@ def _classify_core(series: pd.Series, name: str) -> Dict[str, Any]:
         )
 
     if (
-        _looks_like_her2_ordinal(series, name)
+        (breast_profile and _looks_like_her2_ordinal(series, name))
         or _looks_like_tnm_ordinal(series, name)
         or _looks_like_grade_ordinal(series, name)
         or _looks_like_severity_ordinal(series)
     ):
         return _record(
             name, "ordinal",
-            "Ordered clinical/pathology labels — treated as ordinal.",
+            "Ordered category labels — treated as ordinal.",
             unique_count, sample_values, n_missing, n_total,
         )
 
@@ -842,8 +855,11 @@ def _looks_like_excel_date_serial(value: Any) -> bool:
 def derive_node_fraction_columns(
     df: pd.DataFrame,
     skip_columns: set[str] | None = None,
+    profile: str = domain_profiles.DEFAULT_PROFILE,
 ) -> tuple[pd.DataFrame, Dict[str, str], Dict[str, List[str]]]:
     """Detect node fractions like 2/18 and derive positive/total/ratio columns."""
+    if not domain_profiles.is_breast_pathology(profile):
+        return df.copy(), {}, {}
     out = df.copy()
     notes: Dict[str, str] = {}
     derived_by_source: Dict[str, List[str]] = {}
@@ -877,7 +893,7 @@ def derive_node_fraction_columns(
         derive_partial_node_column = node_named and valid >= 3
         if valid_rate < 0.8 and not derive_partial_node_column:
             if node_named and (valid or likely_excel_dates):
-                notes[col] = (
+                notes[col] = domain_profiles.provenance(profile, (
                     "Potential lymph-node fraction column detected, but derived fields "
                     f"were not created safely: {valid}/{len(non_null)} non-missing "
                     "value(s) were valid fractions"
@@ -888,7 +904,7 @@ def derive_node_fraction_columns(
                         else ""
                     )
                     + ". Review and correct the source values before deriving node fields."
-                )
+                ))
             continue
 
         base = re.sub(r"[^A-Za-z0-9]+", "_", str(col)).strip("_").lower() or "node_fraction"
@@ -920,11 +936,11 @@ def derive_node_fraction_columns(
         out[ratio_col] = ratio_values
         derived = [pos_col, total_col, ratio_col]
         derived_by_source[col] = derived
-        notes[col] = (
+        notes[col] = domain_profiles.provenance(profile, (
             "Derived lymph-node fields from fraction values: "
             f"{', '.join(derived)}. Parsed {valid}/{len(non_null)} non-missing "
             "value(s); unparsed or invalid rows were left missing."
-        )
+        ))
         if likely_excel_dates:
             notes[col] += (
                 f" Warning: {likely_excel_dates} value(s) look like Excel-corrupted "
@@ -937,6 +953,7 @@ def derive_node_fraction_columns(
 def clean_numeric_like_columns(
     df: pd.DataFrame,
     skip_columns: set[str] | None = None,
+    profile: str = domain_profiles.DEFAULT_PROFILE,
 ) -> tuple[pd.DataFrame, Dict[str, str]]:
     """Auto-extract numeric values from text columns whose entries are
     numbers with attached unit/category labels (``"2mm"``, ``"12 kg"``,
@@ -981,7 +998,7 @@ def clean_numeric_like_columns(
             continue
         # These pathology markers are commonly categorical. Do not turn
         # status/score labels into scale values through numeric extraction.
-        if is_known_categorical_clinical_marker(col):
+        if is_known_categorical_clinical_marker(col, profile=profile):
             continue
         non_null_str = non_null.astype(str)
         extracted = non_null_str.apply(_extract_numeric)
@@ -1058,9 +1075,11 @@ def reenrich_after_override(record: Dict[str, Any], series: pd.Series, name: str
     return _enrich(record, series, name)
 
 
-def classify_dataframe(df: pd.DataFrame) -> List[Dict[str, Any]]:
+def classify_dataframe(
+    df: pd.DataFrame, profile: str = domain_profiles.DEFAULT_PROFILE
+) -> List[Dict[str, Any]]:
     """Classify every column in ``df``."""
-    return [classify_column(df[col], col) for col in df.columns]
+    return [classify_column(df[col], col, profile=profile) for col in df.columns]
 
 
 # ---------------------------------------------------------------------------

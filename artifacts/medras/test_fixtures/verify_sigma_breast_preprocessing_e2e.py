@@ -37,8 +37,12 @@ def _verify(df: pd.DataFrame) -> None:
     df["no_of_nodes_involved_total_nodes_2"] = 99.0
     df["no_of_nodes_involved_node_ratio_2"] = 1.0
     for _ in range(4):
-        df, _, _ = variable_classifier.derive_node_fraction_columns(df)
-        df, _ = variable_classifier.clean_numeric_like_columns(df)
+        df, _, _ = variable_classifier.derive_node_fraction_columns(
+            df, profile="breast_pathology"
+        )
+        df, _ = variable_classifier.clean_numeric_like_columns(
+            df, profile="breast_pathology"
+        )
 
     node_columns = [
         col for col in df.columns
@@ -49,14 +53,18 @@ def _verify(df: pd.DataFrame) -> None:
     ]
     assert node_columns == ["positive_nodes", "total_nodes", "node_ratio"]
 
-    classifications = variable_classifier.classify_dataframe(df)
+    classifications = variable_classifier.classify_dataframe(
+        df, profile="breast_pathology"
+    )
     by_col = {row["column"]: row for row in classifications}
     assert by_col["pT"]["detected_type"] == "ordinal"
     assert by_col["Nodal status"]["detected_type"] == "ordinal"
     assert {"T1c", "T2", "T3", "T4b"} <= set(df["pT"].dropna().astype(str))
     assert {"N0", "N1a", "N2a", "N3a"} <= set(df["Nodal status"].dropna().astype(str))
 
-    proposals = category_merger.detect_all_columns(df, classifications)
+    proposals = category_merger.detect_all_columns(
+        df, classifications, profile="breast_pathology"
+    )
     molecular = proposals.get("Molecular subtype") or {}
     all_groups = list(molecular.get("obvious") or []) + list(molecular.get("borderline") or [])
     assert not any(

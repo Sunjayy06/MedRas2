@@ -115,6 +115,15 @@
             <h2>Tell me about your study</h2>
             <p>Before uploading your data, help me understand your research. Choose one option below.</p>
           </header>
+          <label class="se-field" style="max-width:28rem;margin-bottom:1rem">
+            <span>Analysis domain</span>
+            <select id="s1-domain-profile">
+              <option value="generic" selected>Generic statistical analysis</option>
+              <option value="clinical_general">General clinical research</option>
+              <option value="breast_pathology">Breast pathology</option>
+            </select>
+            <span class="se-hint">Domain profiles add optional interpretation and cleaning suggestions. Generic mode does not apply clinical rules.</span>
+          </label>
 
           <div class="se-study-split">
             <!-- Option A: proposal document -->
@@ -158,8 +167,8 @@
                 </div>
                 <label class="se-field" style="margin-top:0.75rem">
                   <span>Outcome variable <strong>exactly as it appears in your Excel column header</strong></span>
-                  <input type="text" id="s1-prop-outcome" placeholder="e.g. p27 expression, bcl-2 score, ALDH1 status — the primary marker your study examines" style="width:100%" />
-                  <span class="se-hint">This is the <strong>novel/study-specific</strong> variable your study is designed to examine — not the routine clinical markers (ER, PR, HER2, Ki-67) used to group patients. Copy the exact column name from your spreadsheet.</span>
+                  <input type="text" id="s1-prop-outcome" placeholder="e.g. response_score, completion_status, final_grade" style="width:100%" />
+                <span class="se-hint">Copy the exact column name for the primary outcome you want to analyse.</span>
                 </label>
                 <button type="button" class="btn btn-primary" id="s1-proposal-continue-btn" data-action="s1-continue-proposal" style="margin-top:1rem">Continue to upload data →</button>
               </div>
@@ -178,15 +187,15 @@
               </div>
               <label class="se-field">
                 <span>Tell me about your study</span>
-                <textarea id="s1-study-desc" rows="5" placeholder="e.g. I am studying ER expression in 113 thyroid cancer patients. I want to see if ER positivity relates to gender, age, tumour type, lymph node metastasis, and extrathyroidal extension." style="width:100%"></textarea>
+                <textarea id="s1-study-desc" rows="5" placeholder="e.g. I want to examine whether the selected predictors are associated with the primary outcome." style="width:100%"></textarea>
               </label>
               <label class="se-field" style="margin-top:0.75rem">
                 <span>Outcome variable <strong>exactly as it appears in your Excel column header</strong> <small style="font-weight:400;color:#666">(optional — AI will try to detect it)</small></span>
-                <input type="text" id="s1-outcome-hint" placeholder="e.g. p27 expression, bcl-2 score, ALDH1 status — the primary marker your study examines" style="width:100%" />
-                <span class="se-hint">This is the <strong>novel/study-specific</strong> marker your study is designed to examine — not routine clinical markers (ER, PR, HER2, Ki-67). Copy the exact column name from your spreadsheet.</span>
+                <input type="text" id="s1-outcome-hint" placeholder="e.g. response_score, completion_status, final_grade" style="width:100%" />
+                <span class="se-hint">Copy the exact column name for the primary outcome you want to analyse.</span>
               </label>
               <p id="s1-outcome-hint-msg" style="display:none;font-size:0.82rem;color:#92400e;padding:0.4rem 0.7rem;background:#fffbeb;border-left:3px solid #f59e0b;border-radius:4px;margin-top:0.4rem">
-                Tip: enter the primary study marker column name (e.g. "p27 expression") to ensure the AI picks the right variable — not a routine IHC marker like ER or PR.
+                Tip: enter the exact outcome column name to ensure the assistant selects the intended variable.
               </p>
               <button type="button" class="btn btn-primary" id="s1-describe-continue-btn" data-action="s1-continue-describe" style="margin-top:1rem">Continue to upload data →</button>
             </div>

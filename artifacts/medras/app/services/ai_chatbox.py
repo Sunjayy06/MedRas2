@@ -44,6 +44,7 @@ from .llm_client import (
     provider_status_payload,
 )
 from .phi_redaction import screen_external_ai_payload
+from . import domain_profiles
 
 logger = logging.getLogger(__name__)
 
@@ -191,6 +192,13 @@ def _variables_system(context: Dict[str, Any]) -> str:
         f"  ⚠ {i.get('column','?')}: {i.get('message','')}"
         for i in issues[:8]
     ) if issues else "  (no issues)"
+    profile_guidance = ""
+    if domain_profiles.is_breast_pathology((context or {}).get("domain_profile")):
+        profile_guidance = (
+            "Never suggest stripping prefixes or numeric conversion for breast-pathology "
+            "markers such as HER2, ER, PR, AR, LVI, ENE, Necrosis, or DCIS. "
+            "HER2 Positive/Negative is nominal; pure 0/1+/2+/3+ HER2 scores are ordinal.\n"
+        )
 
     return (
         f"You are the Variable Assistant in MedRAS Sigma.\n"
@@ -201,9 +209,7 @@ def _variables_system(context: Dict[str, Any]) -> str:
         f"2. Explain what variable types mean (scale, ordinal, nominal, id).\n"
         f"3. Recommend which variables to exclude or recode.\n"
         f"4. For actionable changes, suggest the exact command for the assistant input.\n"
-        f"Never suggest stripping prefixes or numeric conversion for categorical "
-        f"clinical markers such as HER2, ER, PR, AR, LVI, ENE, Necrosis, or DCIS. "
-        f"HER2 Positive/Negative is nominal; pure 0/1+/2+/3+ HER2 scores are ordinal.\n"
+        f"{profile_guidance}"
         f"Plain, practical prose (2–4 sentences). No JSON."
     )
 
@@ -553,6 +559,12 @@ async def parse_variable_intent(
     """
     classifications = (context or {}).get("classifications") or []
     cols = [c.get("column", "") for c in classifications[:30] if c.get("column")]
+    profile_guidance = ""
+    if domain_profiles.is_breast_pathology((context or {}).get("domain_profile")):
+        profile_guidance = (
+            "Never suggest strip_prefix for breast-pathology markers such as HER2, "
+            "ER, PR, AR, LVI, ENE, Necrosis, or DCIS.\n"
+        )
 
     system = (
         f"You parse variable-management instructions for a statistical tool.\n"
@@ -565,8 +577,7 @@ async def parse_variable_intent(
         f'"recode_map":{{}} }}\n'
         f"Use \"trim_whitespace\" when the user wants to clean/standardise string values "
         f"(e.g. remove trailing spaces, fix 'Positive ' vs 'Positive').\n"
-        f"Never suggest strip_prefix for categorical clinical markers such as HER2, "
-        f"ER, PR, AR, LVI, ENE, Necrosis, or DCIS.\n"
+        f"{profile_guidance}"
         f"If the input is a question or explanation request, return exactly: null\n"
         f"Return ONLY the JSON object or null — no prose, no markdown."
     )
@@ -624,6 +635,7 @@ async def plan_study_setup(
     classifications: List[Dict[str, Any]],
     n_rows: int = 0,
     external_ai_consent: bool = False,
+    profile: str = domain_profiles.DEFAULT_PROFILE,
 ) -> Dict[str, Any]:
     """Generate a rich study plan from a plain-English description.
 
@@ -639,6 +651,13 @@ async def plan_study_setup(
         for c in (classifications or [])[:20]
     ) or ", ".join((columns or [])[:20])
 
+    profile_guidance = ""
+    if domain_profiles.is_breast_pathology(profile):
+        profile_guidance = (
+            "\nBreast-pathology profile: treat HER2, ER, PR, AR, LVI, ENE, DCIS, "
+            "molecular subtype, pT, and nodal status using their clinical meanings. "
+            "Routine markers are usually predictors unless explicitly named as outcomes.\n"
+        )
     system = (
         f"You are a biostatistics planning assistant. Dataset: {n_rows} rows.\n"
         f"Columns: {col_summary}\n\n"
@@ -654,6 +673,7 @@ async def plan_study_setup(
         f'  ],\n'
         f'  "reasoning": "<2–3 sentence explanation>"\n'
         f"}}"
+        + profile_guidance
     )
 
     prompt = (description or "").strip() or "Suggest an appropriate study plan based on the columns."

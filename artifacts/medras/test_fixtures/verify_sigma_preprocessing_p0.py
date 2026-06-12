@@ -25,7 +25,9 @@ def main():
     assert pd.isna(cleaned.loc[3, "Marker status"])
     assert "Marker status" in string_notes
 
-    derived, node_notes, derived_by_source = variable_classifier.derive_node_fraction_columns(cleaned)
+    derived, node_notes, derived_by_source = variable_classifier.derive_node_fraction_columns(
+        cleaned, profile="breast_pathology"
+    )
     assert derived_by_source["No of nodes involved"] == [
         "positive_nodes",
         "total_nodes",
@@ -36,7 +38,9 @@ def main():
     assert float(derived.loc[1, "total_nodes"]) == 18.0
     assert math.isclose(float(derived.loc[1, "node_ratio"]), 2 / 18)
 
-    classes = _by_col(variable_classifier.classify_dataframe(derived))
+    classes = _by_col(
+        variable_classifier.classify_dataframe(derived, profile="breast_pathology")
+    )
     assert classes["Her2Neu"]["detected_type"] == "ordinal"
     assert classes["pT"]["detected_type"] == "ordinal"
     assert classes["Grade"]["detected_type"] == "ordinal"

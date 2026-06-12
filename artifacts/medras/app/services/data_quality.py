@@ -22,6 +22,8 @@ from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 
+from app.services import domain_profiles
+
 
 # -----------------------------------------------------------------------------
 # Clinical bounds — name pattern → (min, max, unit, label).
@@ -443,14 +445,23 @@ def quality_report(
     df: pd.DataFrame,
     *,
     classifications: Optional[List[Dict[str, Any]]] = None,
+    profile: str = domain_profiles.DEFAULT_PROFILE,
 ) -> Dict[str, Any]:
     """Build the full quality report consumed by Screen 4."""
     id_columns: List[str] = []
     if classifications:
         id_columns = [c["column"] for c in classifications if c.get("detected_type") == "id"]
-    impossible = check_impossible_values(df)
+    clinical_checks = domain_profiles.is_clinical(profile)
+    impossible = check_impossible_values(df) if clinical_checks else []
     dups = check_duplicates(df, id_columns=id_columns or None)
-    logical = check_logical_consistency(df)
+    logical = check_logical_consistency(df) if clinical_checks else []
+    if clinical_checks:
+        active_profile = domain_profiles.normalize_profile(profile)
+        for item in impossible + logical:
+            item["domain_profile"] = active_profile
+            item["provenance"] = (
+                f"Suggested by {active_profile} profile: clinical quality check."
+            )
     consistency = check_categorical_consistency(df, classifications=classifications)
     # Section C surfaces both the cross-column logical errors and the
     # categorical-hygiene flags as a single list.
@@ -466,6 +477,7 @@ def quality_report(
         n_consistency=n_consistency,
     )
     return {
+        "domain_profile": domain_profiles.normalize_profile(profile),
         "summary": {
             "total_records": int(df.shape[0]),
             "variables_checked": int(df.shape[1]),

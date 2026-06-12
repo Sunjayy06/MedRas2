@@ -12,27 +12,37 @@ except ModuleNotFoundError:
 
 def verify_her2_classification() -> None:
     status = variable_classifier.classify_column(
-        pd.Series(["Negative", "Positive", "Negative"]), "Her2Neu"
+        pd.Series(["Negative", "Positive", "Negative"]),
+        "Her2Neu",
+        profile="breast_pathology",
     )
     assert status["detected_type"] == "nominal"
 
     constant_status = variable_classifier.classify_column(
-        pd.Series(["Negative", "Negative"]), "HER2"
+        pd.Series(["Negative", "Negative"]),
+        "HER2",
+        profile="breast_pathology",
     )
     assert constant_status["detected_type"] == "nominal"
 
     score = variable_classifier.classify_column(
-        pd.Series(["0", "1+", "2+", "3+"]), "HER2 Score"
+        pd.Series(["0", "1+", "2+", "3+"]),
+        "HER2 Score",
+        profile="breast_pathology",
     )
     assert score["detected_type"] == "ordinal"
 
     numeric_score = variable_classifier.classify_column(
-        pd.Series([0, 1, 2, 3]), "HER2 Score"
+        pd.Series([0, 1, 2, 3]),
+        "HER2 Score",
+        profile="breast_pathology",
     )
     assert numeric_score["detected_type"] == "ordinal"
 
     mixed = variable_classifier.classify_column(
-        pd.Series(["Negative", "Positive", "1+", "2+", "3+"]), "Her2Neu"
+        pd.Series(["Negative", "Positive", "1+", "2+", "3+"]),
+        "Her2Neu",
+        profile="breast_pathology",
     )
     assert mixed["detected_type"] == "nominal"
 
@@ -42,7 +52,9 @@ def verify_no_numeric_cleanup_or_blocking_issue() -> None:
         "Her2Neu": ["Negative", "Positive", "1+", "2+", "3+"],
         "ER": ["Positive", "Negative", "Positive", "Negative", "Positive"],
     })
-    cleaned, notes = variable_classifier.clean_numeric_like_columns(df)
+    cleaned, notes = variable_classifier.clean_numeric_like_columns(
+        df, profile="breast_pathology"
+    )
     assert cleaned.equals(df)
     assert "Her2Neu" not in notes
 
@@ -50,7 +62,9 @@ def verify_no_numeric_cleanup_or_blocking_issue() -> None:
         {"column": "Her2Neu", "detected_type": "scale", "missing_pct": 0},
         {"column": "ER", "detected_type": "scale", "missing_pct": 0},
     ]
-    issues = variable_issues.detect_issues(df, forced_numeric)
+    issues = variable_issues.detect_issues(
+        df, forced_numeric, profile="breast_pathology"
+    )
     assert not any(i["type"] == "text_in_numeric" for i in issues)
 
 
@@ -58,7 +72,9 @@ def verify_assistant_does_not_strip_markers_or_chain_backups() -> None:
     her2 = pd.DataFrame({"Her2Neu": ["Negative", "Positive", "1+"]})
     try:
         variable_assistant.apply_action(
-            her2, {"action": "strip_prefix", "column": "Her2Neu", "params": {}}
+            her2,
+            {"action": "strip_prefix", "column": "Her2Neu", "params": {}},
+            profile="breast_pathology",
         )
     except ValueError as exc:
         assert "categorical clinical marker" in str(exc)
@@ -103,10 +119,10 @@ def verify_static_classification_contract() -> None:
     assert "_HER2_STATUS_VALUES" in classifier
     assert "_looks_like_her2_status_or_mixed" in classifier
     assert "HER2 score categories - treated as ordinal." in classifier
-    assert "is_known_categorical_clinical_marker(col)" in classifier
+    assert "is_known_categorical_clinical_marker(col, profile=profile)" in classifier
     assert "_ORIGINAL_SUFFIX_RE" in assistant
     assert "already an original-value backup" in assistant
-    assert "not variable_classifier.is_known_categorical_clinical_marker(col)" in assistant
+    assert "profile=profile" in assistant
 
 
 def main() -> None:

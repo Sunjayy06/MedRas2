@@ -8,7 +8,9 @@ from app.services import variable_classifier, variable_issues
 
 
 def _quality_issues(df, notes):
-    classifications = variable_classifier.classify_dataframe(df)
+    classifications = variable_classifier.classify_dataframe(
+        df, profile="breast_pathology"
+    )
     for classification in classifications:
         note = notes.get(classification["column"])
         if note:
@@ -34,7 +36,9 @@ def verify_partial_derivation() -> None:
         }
     )
 
-    derived, notes, derived_by_source = variable_classifier.derive_node_fraction_columns(df)
+    derived, notes, derived_by_source = variable_classifier.derive_node_fraction_columns(
+        df, profile="breast_pathology"
+    )
 
     assert derived_by_source["No of nodes involved"] == [
         "positive_nodes",
@@ -65,7 +69,9 @@ def verify_unsafe_partial_column_warns_without_deriving() -> None:
         }
     )
 
-    derived, notes, derived_by_source = variable_classifier.derive_node_fraction_columns(df)
+    derived, notes, derived_by_source = variable_classifier.derive_node_fraction_columns(
+        df, profile="breast_pathology"
+    )
 
     assert list(derived.columns) == ["Positive lymph nodes"]
     assert "Positive lymph nodes" not in derived_by_source

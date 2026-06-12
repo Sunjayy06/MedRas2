@@ -25,6 +25,7 @@ import httpx
 
 from app.services.llm_client import openai_chat_url, openai_auth_header, openai_is_configured, gemini_is_configured, get_gemini_client, provider_status_payload
 from app.services.phi_redaction import screen_external_ai_payload
+from app.services import domain_profiles
 
 log = logging.getLogger(__name__)
 _TIMEOUT = 20.0
@@ -110,7 +111,9 @@ def _detect_study_type_heuristic(description: str) -> str:
     return "correlation"
 
 
-def _is_standard_marker(col: str) -> bool:
+def _is_standard_marker(
+    col: str, profile: str = domain_profiles.DEFAULT_PROFILE
+) -> bool:
     """Return True if a column name maps to a routine clinical / IHC marker.
 
     Uses whole-token matching to avoid false positives like "p27 expression"
@@ -122,6 +125,9 @@ def _is_standard_marker(col: str) -> bool:
          column having a few known qualifier words (status, expression, etc.)
          as the only extras.
     """
+    if not domain_profiles.is_breast_pathology(profile):
+        return False
+
     # Qualifiers that may legitimately follow a marker name in a column header
     _QUALIFIERS = frozenset([
         "status", "positive", "negative", "pos", "neg",
@@ -165,6 +171,7 @@ def _find_novel_marker(
     hint: str,
     description: str,
     columns: List[str],
+    profile: str = domain_profiles.DEFAULT_PROFILE,
 ) -> Optional[str]:
     """Find the best non-standard column that matches the hint or description.
 
@@ -173,7 +180,7 @@ def _find_novel_marker(
     Returns the best candidate only when there is a STRONG match; returns None
     if nothing clearly better is found, so the LLM choice is preserved.
     """
-    non_standard = [c for c in columns if not _is_standard_marker(c)]
+    non_standard = [c for c in columns if not _is_standard_marker(c, profile=profile)]
     if not non_standard:
         return None
 
@@ -242,12 +249,20 @@ def _call_openai(
     description: str,
     outcome_hint: str,
     columns: List[str],
+    profile: str = domain_profiles.DEFAULT_PROFILE,
 ) -> Optional[Dict[str, Any]]:
     """Call OpenAI GPT-4o-mini to identify study type and outcome column."""
     if not openai_is_configured():
         return None
 
     col_list = "\n".join(f"- {c}" for c in columns[:60])
+    profile_rules = ""
+    if domain_profiles.is_breast_pathology(profile):
+        profile_rules = (
+            "- In the breast_pathology profile, routine clinical/IHC markers such as "
+            "ER, PR, HER2, AR, EGFR, Ki-67, p53, and molecular subtype are usually "
+            "predictors unless the user explicitly names one as the outcome.\n"
+        )
     prompt = (
         f"You are a biostatistics assistant. A researcher uploaded an Excel dataset "
         f"with the following column names:\n{col_list}\n\n"
@@ -260,13 +275,9 @@ def _call_openai(
         '"reasoning": "<one plain English sentence explaining your choices>"}\n\n'
         "Rules:\n"
         "- outcome_col must be the EXACT column name string from the list, or null\n"
-        "- The outcome column is the PRIMARY NOVEL marker or variable the study is\n"
-        "  designed to examine (e.g. p27 expression, bcl-2 score, ALDH1 status).\n"
-        "- Standard routine clinical/IHC markers — ER, PR, HER2, AR, EGFR, Ki-67,\n"
-        "  p53, molecular subtype — are PREDICTORS (independent variables), NOT the\n"
-        "  outcome, unless the user explicitly named one as their outcome variable.\n"
-        "- If the outcome hint is blank or generic, choose the most study-specific\n"
-        "  (novel) column — the one that is NOT a routine clinical marker.\n"
+        "- Prefer the user's explicit outcome hint; otherwise choose the column most "
+        "clearly described as the measured outcome.\n"
+        + profile_rules +
         "- Respond ONLY with valid JSON, nothing else."
     )
 
@@ -296,11 +307,18 @@ def _call_gemini(
     description: str,
     outcome_hint: str,
     columns: List[str],
+    profile: str = domain_profiles.DEFAULT_PROFILE,
 ) -> Optional[Dict[str, Any]]:
     if not gemini_is_configured():
         return None
 
     col_list = "\n".join(f"- {c}" for c in columns[:60])
+    profile_rules = ""
+    if domain_profiles.is_breast_pathology(profile):
+        profile_rules = """- In the breast_pathology profile, routine clinical/IHC markers
+  such as ER, PR, HER2, AR, EGFR, Ki-67, p53, and molecular subtype are usually
+  predictors unless the user explicitly names one as the outcome.
+"""
     prompt = f"""You are a biostatistics assistant. A researcher uploaded an Excel dataset 
 with the following column names:
 {col_list}
@@ -323,12 +341,9 @@ Rules:
 - study_type "comparison" = researcher wants to compare groups (RCT, case-control, cohort)
 - outcome_col must be the EXACT column name string from the list, or null
 - If the outcome hint matches a column name closely, pick that column
-- CRITICAL: The outcome_col is the PRIMARY NOVEL marker or variable the study is designed
-  to examine (e.g. p27 expression, bcl-2 score, ALDH1 status, PCNA index).
-- Standard routine clinical/IHC markers (ER, PR, HER2, AR, EGFR, Ki-67, p53, molecular
-  subtype, CD markers, cytokeratin) are PREDICTORS — do NOT pick them as outcome_col
-  unless the outcome hint explicitly names one of them.
-- If the outcome hint is blank or vague, identify the novel/study-specific column.
+- Prefer the user's explicit outcome hint; otherwise choose the column most clearly
+  described as the measured outcome.
+{profile_rules}
 - Respond ONLY with valid JSON, nothing else.
 """
 
@@ -553,6 +568,7 @@ def _validate_study_type(
 def _heuristic_outcome_from_description(
     description: str,
     columns: List[str],
+    profile: str = domain_profiles.DEFAULT_PROFILE,
 ) -> Optional[str]:
     """Scan the description for tokens that appear in non-standard column names.
 
@@ -644,7 +660,7 @@ def _heuristic_outcome_from_description(
         if not non_skip:
             continue
 
-        is_std = _is_standard_marker(col)
+        is_std = _is_standard_marker(col, profile=profile)
 
         # ---- Base score ----
         score = float(len(desc_tokens & ctoks))
@@ -689,6 +705,7 @@ def identify_study(
     classifications: Optional[List[Dict[str, Any]]] = None,
     study_type_hint: Optional[str] = None,
     external_ai_consent: bool = False,
+    profile: str = domain_profiles.DEFAULT_PROFILE,
 ) -> Dict[str, Any]:
     """Identify study type and outcome column from free-text description.
 
@@ -725,7 +742,8 @@ def identify_study(
     screened = screening.value
     if external_allowed and (description.strip() or outcome_hint.strip()):
         result = _call_openai(
-            screened["description"], screened["outcome_hint"], screened["columns"]
+            screened["description"], screened["outcome_hint"], screened["columns"],
+            profile=profile,
         )
         provider = "openai" if result else None
         log.info(
@@ -734,7 +752,8 @@ def identify_study(
         )
         if not (result and isinstance(result, dict) and "study_type" in result):
             result = _call_gemini(
-                screened["description"], screened["outcome_hint"], screened["columns"]
+                screened["description"], screened["outcome_hint"], screened["columns"],
+                profile=profile,
             )
             provider = "gemini" if result else None
             log.info(
@@ -773,7 +792,7 @@ def identify_study(
         # novel/study-specific column instead.  This prevents common mistakes
         # like selecting "PR" instead of "p27 expression" in IHC studies.
         hint_lower = outcome_hint.lower().strip()
-        is_std = outcome_col and _is_standard_marker(outcome_col)
+        is_std = outcome_col and _is_standard_marker(outcome_col, profile=profile)
         hint_names_it = (
             hint_lower
             and outcome_col
@@ -784,7 +803,7 @@ def identify_study(
                 "Override guard: LLM chose standard marker '%s'; searching for novel column",
                 outcome_col,
             )
-            novel = _find_novel_marker(outcome_hint, description, columns)
+            novel = _find_novel_marker(outcome_hint, description, columns, profile=profile)
             if novel and novel != outcome_col:
                 old_col = outcome_col
                 outcome_col = novel
@@ -813,7 +832,9 @@ def identify_study(
         # If no outcome column found yet, try scanning the description
         # against non-standard columns (works even with an empty hint).
         if not outcome_col:
-            outcome_col = _heuristic_outcome_from_description(description, columns)
+            outcome_col = _heuristic_outcome_from_description(
+                description, columns, profile=profile
+            )
 
         confidence = 0.7 if hint_type else (0.6 if outcome_col else 0.4)
         if hint_type:

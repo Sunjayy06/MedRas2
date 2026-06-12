@@ -32,6 +32,7 @@ from app.services import (
     chatboxes,
     data_quality,
     dataset_store,
+    domain_profiles,
     doc_correction,
     dummy_data,
     excel_loader,
@@ -58,6 +59,21 @@ _PROPOSAL_MAX_BYTES = 8 * 1024 * 1024  # 8 MB
 
 log = get_logger(__name__)
 router = APIRouter(prefix="/stats", tags=["stats"])
+DomainProfileLiteral = Literal["generic", "clinical_general", "breast_pathology"]
+
+
+def _domain_profile(entry, requested: Optional[str] = None) -> DomainProfileLiteral:
+    profile = domain_profiles.normalize_profile(
+        requested if requested is not None else entry.meta.get("domain_profile")
+    )
+    entry.meta["domain_profile"] = profile
+    return profile
+
+
+def _classify_entry(entry) -> List[Dict[str, Any]]:
+    return variable_classifier.classify_dataframe(
+        entry.df, profile=_domain_profile(entry)
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -88,6 +104,7 @@ class ClassificationOverride(BaseModel):
 class ClassifyRequest(BaseModel):
     job_id: str = Field(..., min_length=1, max_length=64)
     overrides: List[ClassificationOverride] = Field(default_factory=list, max_length=200)
+    profile: Optional[DomainProfileLiteral] = None
 
 
 class AnalyzeRequest(BaseModel):
@@ -199,7 +216,7 @@ def _build_session_view(entry, classifications, assignment) -> Dict[str, Any]:
 
 
 def _build_response(job_id: str, entry) -> Dict[str, Any]:
-    classifications = entry.meta.get("classifications") or variable_classifier.classify_dataframe(entry.df)
+    classifications = entry.meta.get("classifications") or _classify_entry(entry)
     entry.meta["classifications"] = classifications
     preview = excel_loader.preview_records(entry.df, n=10)
     columns = list(entry.df.columns)
@@ -236,6 +253,7 @@ def _build_response(job_id: str, entry) -> Dict[str, Any]:
         "preview": preview,
         "repeated_ids": repeated_ids,
         "intake": entry.meta.get("intake"),
+        "domain_profile": _domain_profile(entry),
     }
 
 
@@ -712,9 +730,15 @@ async def quality_check(job_id: str) -> Dict[str, Any]:
     entry = dataset_store.get(job_id)
     if entry is None:
         raise HTTPException(status_code=404, detail="Dataset expired or not found.")
-    classifications = entry.meta.get("classifications") or variable_classifier.classify_dataframe(entry.df)
+    profile = _domain_profile(entry)
+    classifications = entry.meta.get("classifications") or _classify_entry(entry)
     entry.meta["classifications"] = classifications
-    return await asyncio.to_thread(data_quality.quality_report, entry.df, classifications=classifications)
+    return await asyncio.to_thread(
+        data_quality.quality_report,
+        entry.df,
+        classifications=classifications,
+        profile=profile,
+    )
 
 
 class QualityAction(BaseModel):
@@ -765,6 +789,7 @@ async def classify(payload: ClassifyRequest) -> Dict[str, Any]:
     entry = dataset_store.get(payload.job_id)
     if entry is None:
         raise HTTPException(status_code=404, detail="Dataset expired or not found.")
+    profile = _domain_profile(entry, payload.profile)
     # Pre-clean in a reversible, previewable way. Each helper is idempotent;
     # backups keep the original source columns so /cleanup-undo can restore
     # them or remove derived columns.
@@ -784,11 +809,11 @@ async def classify(payload: ClassifyRequest) -> Dict[str, Any]:
     )
     _merge_cleanup_notes(string_notes)
     cleaned_df, node_notes, derived_by_source = variable_classifier.derive_node_fraction_columns(
-        cleaned_df, skip_columns=cleanup_suppressed
+        cleaned_df, skip_columns=cleanup_suppressed, profile=profile
     )
     _merge_cleanup_notes(node_notes)
     cleaned_df, numeric_notes = variable_classifier.clean_numeric_like_columns(
-        cleaned_df, skip_columns=cleanup_suppressed
+        cleaned_df, skip_columns=cleanup_suppressed, profile=profile
     )
     _merge_cleanup_notes(numeric_notes)
     applied_cleanup_cols = set(derived_by_source)
@@ -849,7 +874,7 @@ async def classify(payload: ClassifyRequest) -> Dict[str, Any]:
     if stored:
         # Still need to refresh sample_values / missing counts in case the
         # DataFrame was mutated by the assistant.
-        fresh = variable_classifier.classify_dataframe(entry.df)
+        fresh = _classify_entry(entry)
         fresh_by_col = {c["column"]: c for c in fresh}
         classifications: List[Dict[str, Any]] = []
         for c in fresh:
@@ -871,7 +896,7 @@ async def classify(payload: ClassifyRequest) -> Dict[str, Any]:
             if prev["column"] not in fresh_by_col:
                 classifications.append(prev)
     else:
-        classifications = variable_classifier.classify_dataframe(entry.df)
+        classifications = _classify_entry(entry)
         if payload.overrides:
             ov = {o.column: o.detected_type for o in payload.overrides}
             for c in classifications:
@@ -897,13 +922,14 @@ async def classify(payload: ClassifyRequest) -> Dict[str, Any]:
 
     entry.meta["classifications"] = classifications
 
-    issues = variable_issues.detect_issues(entry.df, classifications)
+    issues = variable_issues.detect_issues(entry.df, classifications, profile=profile)
     coding = variable_issues.auto_coding_plan(entry.df, classifications)
     entry.meta["variable_issues"] = issues
     entry.meta["auto_coding_plan"] = coding
 
     return {
         "job_id": payload.job_id,
+        "domain_profile": profile,
         "classifications": classifications,
         "issues": issues,
         "auto_coding_plan": coding,
@@ -967,7 +993,10 @@ async def variable_assistant_endpoint(
         entry.meta.pop("pending_variable_assistant_action", None)
         ai_intent, provider_status, screening_meta = await ai_chatbox.parse_variable_intent(
             payload.message,
-            {"classifications": stored_classifications},
+            {
+                "classifications": stored_classifications,
+                "domain_profile": _domain_profile(entry),
+            },
             external_ai_consent=external_ai_consent,
         )
         provider_meta = _provider_status_payload(
@@ -1008,7 +1037,9 @@ async def variable_assistant_endpoint(
 
     if (
         intent.get("action") == "strip_prefix"
-        and variable_classifier.is_known_categorical_clinical_marker(intent.get("column", ""))
+        and variable_classifier.is_known_categorical_clinical_marker(
+            intent.get("column", ""), profile=_domain_profile(entry)
+        )
     ):
         entry.meta.pop("pending_variable_assistant_action", None)
         return {
@@ -1038,7 +1069,10 @@ async def variable_assistant_endpoint(
         stored_issues = entry.meta.get("variable_issues") or []
         if intent["action"] == "suggest":
             confirmation_message = variable_assistant.suggest_message(
-                columns, stored_classifications, stored_issues,
+                columns,
+                stored_classifications,
+                stored_issues,
+                profile=_domain_profile(entry),
             )
         else:
             confirmation_message = variable_assistant.generic_clarify(columns)
@@ -1099,7 +1133,9 @@ async def variable_assistant_endpoint(
     # a stale confirmation token behind.
     entry.meta.pop("pending_variable_assistant_action", None)
     try:
-        new_df, meta = variable_assistant.apply_action(entry.df, intent)
+        new_df, meta = variable_assistant.apply_action(
+            entry.df, intent, profile=_domain_profile(entry)
+        )
     except ValueError as exc:
         raise HTTPException(
             status_code=400,
@@ -1121,7 +1157,7 @@ async def variable_assistant_endpoint(
                     c["column"] = new
 
     # Recompute classifications, then layer assistant-driven overrides.
-    classifications = variable_classifier.classify_dataframe(entry.df)
+    classifications = _classify_entry(entry)
     stored = entry.meta.get("classifications") or []
     stored_by_col = {c.get("column"): c for c in stored}
 
@@ -1179,7 +1215,9 @@ async def variable_assistant_endpoint(
             break
 
     entry.meta["classifications"] = classifications
-    issues = variable_issues.detect_issues(entry.df, classifications)
+    issues = variable_issues.detect_issues(
+        entry.df, classifications, profile=_domain_profile(entry)
+    )
     coding = variable_issues.auto_coding_plan(entry.df, classifications)
     entry.meta["variable_issues"] = issues
     entry.meta["auto_coding_plan"] = coding
@@ -1220,8 +1258,10 @@ async def trim_all_whitespace_endpoint(
     if entry is None:
         raise HTTPException(status_code=404, detail="Dataset expired or not found.")
 
-    classifications = entry.meta.get("classifications") or variable_classifier.classify_dataframe(entry.df)
-    issues = variable_issues.detect_issues(entry.df, classifications)
+    classifications = entry.meta.get("classifications") or _classify_entry(entry)
+    issues = variable_issues.detect_issues(
+        entry.df, classifications, profile=_domain_profile(entry)
+    )
 
     # Target only columns with duplicate_values issues; fall back to all strings.
     dup_cols = [i["column"] for i in issues if i["type"] == "duplicate_values"]
@@ -1236,7 +1276,7 @@ async def trim_all_whitespace_endpoint(
     dataset_store.replace_df(payload.job_id, new_df)
 
     # Recompute classifications, preserving any manual overrides.
-    classifications = variable_classifier.classify_dataframe(entry.df)
+    classifications = _classify_entry(entry)
     stored = entry.meta.get("classifications") or []
     stored_by_col = {c.get("column"): c for c in stored}
     for c in classifications:
@@ -1250,7 +1290,9 @@ async def trim_all_whitespace_endpoint(
                 )
     entry.meta["classifications"] = classifications
 
-    issues = variable_issues.detect_issues(entry.df, classifications)
+    issues = variable_issues.detect_issues(
+        entry.df, classifications, profile=_domain_profile(entry)
+    )
     coding = variable_issues.auto_coding_plan(entry.df, classifications)
     entry.meta["variable_issues"] = issues
     entry.meta["auto_coding_plan"] = coding
@@ -1303,11 +1345,12 @@ def _chatbox_context(
         return {
             "classifications": entry.meta.get("classifications") or [],
             "issues": entry.meta.get("variable_issues") or [],
+            "domain_profile": _domain_profile(entry),
         }
     if kind == "missing":
         classifications = (
             entry.meta.get("classifications")
-            or variable_classifier.classify_dataframe(entry.df)
+            or _classify_entry(entry)
         )
         by_col = {c.get("column"): c for c in classifications}
         supported_actions = [
@@ -1490,7 +1533,7 @@ async def get_normality(job_id: str) -> Dict[str, Any]:
     entry = dataset_store.get(job_id)
     if entry is None:
         raise HTTPException(status_code=404, detail="Dataset expired or not found.")
-    classifications = entry.meta.get("classifications") or variable_classifier.classify_dataframe(entry.df)
+    classifications = entry.meta.get("classifications") or _classify_entry(entry)
     entry.meta["classifications"] = classifications
     out = await asyncio.to_thread(
         normality_service.normality_for_dataset, entry.df, classifications, True
@@ -1538,7 +1581,7 @@ async def generate_plan(job_id: str) -> Dict[str, Any]:
     entry = dataset_store.get(job_id)
     if entry is None:
         raise HTTPException(status_code=404, detail="Dataset expired or not found.")
-    classifications = entry.meta.get("classifications") or variable_classifier.classify_dataframe(entry.df)
+    classifications = entry.meta.get("classifications") or _classify_entry(entry)
     entry.meta["classifications"] = classifications
     assignment = entry.meta.get("assignment") or {}
     normality_data = entry.meta.get("normality")
@@ -1567,7 +1610,7 @@ async def run_analysis(payload: RunAnalysisRequest) -> Dict[str, Any]:
     entry = dataset_store.get(payload.job_id)
     if entry is None:
         raise HTTPException(status_code=404, detail="Dataset expired or not found.")
-    classifications = entry.meta.get("classifications") or variable_classifier.classify_dataframe(entry.df)
+    classifications = entry.meta.get("classifications") or _classify_entry(entry)
     assignment = entry.meta.get("assignment") or {}
     plan_dict = entry.meta.get("plan")
     if not plan_dict:
@@ -1605,6 +1648,7 @@ async def run_analysis(payload: RunAnalysisRequest) -> Dict[str, Any]:
 
 class DetectDupesRequest(BaseModel):
     job_id: str = Field(..., min_length=1, max_length=64)
+    profile: Optional[DomainProfileLiteral] = None
 
 
 @router.post("/detect-category-dupes")
@@ -1613,13 +1657,14 @@ async def detect_category_dupes(payload: DetectDupesRequest) -> Dict[str, Any]:
     entry = dataset_store.get(payload.job_id)
     if entry is None:
         raise HTTPException(status_code=404, detail="Dataset expired or not found.")
+    profile = _domain_profile(entry, payload.profile)
     classifications = (
         entry.meta.get("classifications")
-        or variable_classifier.classify_dataframe(entry.df)
+        or _classify_entry(entry)
     )
     entry.meta["classifications"] = classifications
     result = await asyncio.to_thread(
-        category_merger.detect_all_columns, entry.df, classifications
+        category_merger.detect_all_columns, entry.df, classifications, profile
     )
     return {"job_id": payload.job_id, "columns": result}
 
@@ -1748,6 +1793,7 @@ class AiBridgeRequest(BaseModel):
     description: str = Field(default="", max_length=2000)
     outcome_hint: str = Field(default="", max_length=200)
     study_type_hint: Optional[str] = Field(default=None, max_length=50)
+    profile: Optional[DomainProfileLiteral] = None
 
 
 @router.post("/ai-bridge")
@@ -1756,9 +1802,10 @@ async def ai_bridge(request: Request, payload: AiBridgeRequest) -> Dict[str, Any
     entry = dataset_store.get(payload.job_id)
     if entry is None:
         raise HTTPException(status_code=404, detail="Dataset expired or not found.")
+    profile = _domain_profile(entry, payload.profile)
     classifications = (
         entry.meta.get("classifications")
-        or variable_classifier.classify_dataframe(entry.df)
+        or _classify_entry(entry)
     )
     entry.meta["classifications"] = classifications
     columns = list(entry.df.columns)
@@ -1769,7 +1816,9 @@ async def ai_bridge(request: Request, payload: AiBridgeRequest) -> Dict[str, Any
         classifications=classifications,
         study_type_hint=payload.study_type_hint or None,
         external_ai_consent=request.headers.get("X-External-AI-Consent", "").lower() == "true",
+        profile=profile,
     )
+    result["domain_profile"] = profile
     return result
 
 
@@ -1789,7 +1838,7 @@ async def adjust_analysis(request: Request, payload: AdjustAnalysisRequest) -> D
         raise HTTPException(status_code=404, detail="Dataset expired or not found.")
     classifications = (
         entry.meta.get("classifications")
-        or variable_classifier.classify_dataframe(entry.df)
+        or _classify_entry(entry)
     )
     entry.meta["classifications"] = classifications
     columns = list(entry.df.columns)
@@ -1800,6 +1849,7 @@ async def adjust_analysis(request: Request, payload: AdjustAnalysisRequest) -> D
         classifications=classifications,
         study_type_hint=None,  # researcher is explicitly overriding; ignore old hint
         external_ai_consent=request.headers.get("X-External-AI-Consent", "").lower() == "true",
+        profile=_domain_profile(entry),
     )
     return result
 
@@ -1868,7 +1918,7 @@ async def run_correlation(
         )
     classifications = (
         entry.meta.get("classifications")
-        or variable_classifier.classify_dataframe(entry.df)
+        or _classify_entry(entry)
     )
     entry.meta["classifications"] = classifications
 
@@ -2046,6 +2096,7 @@ class SetupStudyRequest(BaseModel):
     job_id: str = Field(..., min_length=1, max_length=64)
     description: str = Field(default="", max_length=2000)
     outcome_hint: str = Field(default="", max_length=200)
+    profile: Optional[DomainProfileLiteral] = None
 
 
 @router.post("/setup-study")
@@ -2060,9 +2111,10 @@ async def setup_study(request: Request, payload: SetupStudyRequest) -> Dict[str,
     entry = dataset_store.get(payload.job_id)
     if entry is None:
         raise HTTPException(status_code=404, detail="Dataset expired or not found.")
+    profile = _domain_profile(entry, payload.profile)
     classifications = (
         entry.meta.get("classifications")
-        or variable_classifier.classify_dataframe(entry.df)
+        or _classify_entry(entry)
     )
     entry.meta["classifications"] = classifications
     columns = list(entry.df.columns)
@@ -2073,7 +2125,9 @@ async def setup_study(request: Request, payload: SetupStudyRequest) -> Dict[str,
         classifications=classifications,
         n_rows=n_rows,
         external_ai_consent=request.headers.get("X-External-AI-Consent", "").lower() == "true",
+        profile=profile,
     )
+    result["domain_profile"] = profile
     # Augment with outcome_hint if provided and AI didn't detect an outcome
     if payload.outcome_hint.strip() and not result.get("outcome_col"):
         result["outcome_col"] = payload.outcome_hint.strip()
@@ -2107,7 +2161,7 @@ async def adjust_setup(request: Request, payload: AdjustSetupRequest) -> Dict[st
         raise HTTPException(status_code=404, detail="Dataset expired or not found.")
     classifications = (
         entry.meta.get("classifications")
-        or variable_classifier.classify_dataframe(entry.df)
+        or _classify_entry(entry)
     )
     entry.meta["classifications"] = classifications
     columns = list(entry.df.columns)
@@ -2124,6 +2178,7 @@ async def adjust_setup(request: Request, payload: AdjustSetupRequest) -> Dict[st
         classifications=classifications,
         n_rows=n_rows,
         external_ai_consent=request.headers.get("X-External-AI-Consent", "").lower() == "true",
+        profile=_domain_profile(entry),
     )
     if payload.outcome_hint.strip() and not result.get("outcome_col"):
         result["outcome_col"] = payload.outcome_hint.strip()
@@ -2178,7 +2233,7 @@ async def rerun_partial(request: Request, payload: RerunPartialRequest) -> Dict[
 
     classifications = (
         entry.meta.get("classifications")
-        or variable_classifier.classify_dataframe(entry.df)
+        or _classify_entry(entry)
     )
     assignment = entry.meta.get("assignment") or {}
     plan_dict = entry.meta.get("plan")
@@ -2271,7 +2326,7 @@ async def analyze(request: Request, payload: AnalyzeRequest) -> Dict[str, Any]:
     entry = dataset_store.get(payload.job_id)
     if entry is None:
         raise HTTPException(status_code=404, detail="Dataset expired or not found.")
-    classifications = entry.meta.get("classifications") or variable_classifier.classify_dataframe(entry.df)
+    classifications = entry.meta.get("classifications") or _classify_entry(entry)
     df = variable_classifier.encode_for_analysis(entry.df, classifications)
     try:
         result = await asyncio.to_thread(

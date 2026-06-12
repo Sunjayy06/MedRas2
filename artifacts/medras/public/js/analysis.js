@@ -15,6 +15,7 @@ const API_BASE = "/api/stats";
 /* ------------------------------------------------------------------ */
 
 const state = {
+  domainProfile: "generic",
   jobId: null,
   summary: null,
   columns: [],
@@ -166,6 +167,14 @@ window.SigmaExternalAI = {
   headers: externalAIHeaders,
   showStatus: showAIProviderStatus,
 };
+
+function selectedDomainProfile() {
+  const value = document.getElementById("s1-domain-profile")?.value || state.domainProfile;
+  state.domainProfile = ["generic", "clinical_general", "breast_pathology"].includes(value)
+    ? value
+    : "generic";
+  return state.domainProfile;
+}
 function $$(sel, root = document) { return Array.from(root.querySelectorAll(sel)); }
 
 function setStatus(el, message, level = "loading") {
@@ -361,6 +370,7 @@ async function resumeFromSavedSession(saved) {
               job_id: state.jobId,
               description: savedDesc,
               outcome_hint: "",
+              profile: selectedDomainProfile(),
             }),
           });
           state.aiStudy = plan;
@@ -385,6 +395,7 @@ async function resumeFromSavedSession(saved) {
             description,
             outcome_hint: outcomeHint,
             study_type_hint: (state.intake && state.intake.study_type) || null,
+            profile: selectedDomainProfile(),
           }),
         });
         state.aiStudy = bridgeResult;
@@ -2105,6 +2116,7 @@ function bindPreview() {
             job_id: state.jobId,
             description,
             outcome_hint: outcomeHint,
+            profile: selectedDomainProfile(),
           }),
         });
         state.aiStudy = setupResult;
@@ -2504,7 +2516,11 @@ async function refreshClassifications(overrides = [], { render = true, detectCat
   const data = await api("/classify", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ job_id: state.jobId, overrides }),
+    body: JSON.stringify({
+      job_id: state.jobId,
+      overrides,
+      profile: selectedDomainProfile(),
+    }),
   });
   state.classifications = data.classifications || [];
   state.issues = data.issues || [];
@@ -2544,7 +2560,10 @@ async function _detectCategoryDupes() {
   const result = await api("/detect-category-dupes", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ job_id: state.jobId }),
+      body: JSON.stringify({
+        job_id: state.jobId,
+        profile: selectedDomainProfile(),
+      }),
   });
   state.categoryDupeResults = result;
   _renderCategoryMergePanel(result);
@@ -4917,7 +4936,12 @@ function bindScreenSetup() {
       const res = await fetch("/api/stats/setup-study", {
         method: "POST",
         headers: externalAIHeaders({ "Content-Type": "application/json" }),
-        body: JSON.stringify({ job_id: state.jobId, description: desc, outcome_hint: "" }),
+        body: JSON.stringify({
+          job_id: state.jobId,
+          description: desc,
+          outcome_hint: "",
+          profile: selectedDomainProfile(),
+        }),
       });
       if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
       const plan = await res.json();
@@ -5215,6 +5239,7 @@ function bindAiConfirm() {
             job_id: state.jobId,
             description: desc,
             outcome_hint: "",
+            profile: selectedDomainProfile(),
           }),
         });
         if (!confirmAIStudyReplacement(result, "AI suggested replacing the study setup")) {
