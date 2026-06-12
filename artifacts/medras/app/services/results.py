@@ -1428,8 +1428,16 @@ def run_plan(
             r.setdefault("ci_lo", None)
             r.setdefault("ci_hi", None)
             r["id"] = t["id"]
-            r["title"] = t["title"]
-            r["test_type"] = pb.get("test_type")
+            function_name = pb.get("function")
+            args = pb.get("args") or {}
+            if function_name == "run_chi_or_fisher" and r.get("actual_test_used"):
+                r["title"] = (
+                    f"{args.get('col1')} vs {args.get('col2')}: "
+                    f"{r['actual_test_used']}"
+                )
+            else:
+                r["title"] = t["title"]
+            r["test_type"] = r.get("test_type") or pb.get("test_type")
             r["analysis_family"] = t.get("analysis_family") or (
                 "regression" if pb.get("test_type") in _REGRESSION_TYPES
                 else "correlation" if pb.get("test_type") in ("pearson", "spearman", "kendall_tau")
@@ -1437,6 +1445,26 @@ def run_plan(
             )
             r["plan_name"] = t["title"]
             r["plan_reason"] = t.get("why")
+            figures = list(r.get("figures") or [])
+            if function_name == "run_chi_or_fisher":
+                png = _stacked_bar(df, args.get("col2"), args.get("col1"))
+                if png:
+                    figures.append({
+                        "title": f"{args.get('col2')} by {args.get('col1')} (%)",
+                        "png_data_uri": png,
+                    })
+            elif function_name in {
+                "run_pairwise_welch", "run_pairwise_mann_whitney",
+                "run_pairwise_anova", "run_pairwise_kruskal",
+            }:
+                png = _boxplot(df, args.get("predictor"), args.get("outcome"))
+                if png:
+                    figures.append({
+                        "title": f"{args.get('predictor')} by {args.get('outcome')}",
+                        "png_data_uri": png,
+                    })
+            if figures:
+                r["figures"] = figures
             test_results.append(r)
             continue
 
@@ -2722,6 +2750,7 @@ def _run_chi_or_fisher(
             cramers_v = None
         return {
             "test_name": test_name,
+            "actual_test_used": test_name,
             "stat": stat,
             "p": float(p),
             "df": df_val,

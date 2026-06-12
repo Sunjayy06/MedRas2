@@ -113,6 +113,15 @@ def _is_borderline_dup(
     return False
 
 
+def _contains_protected_distinct_labels(
+    values: List[str], profile: str = domain_profiles.DEFAULT_PROFILE
+) -> bool:
+    if not domain_profiles.is_breast_pathology(profile):
+        return False
+    normalised = {_normalise(value) for value in values}
+    return any(len(normalised.intersection(group)) > 1 for group in _PROTECTED_CLINICAL_GROUPS)
+
+
 def _canonical(values: List[str], freq: Dict[str, int]) -> str:
     """Pick the canonical label: most-frequent clean form, ties → alphabetical."""
     clean_vals = [(_clean_basic(v), v) for v in values]
@@ -216,6 +225,10 @@ def detect_category_duplicates(
     borderline_props: List[Dict[str, Any]] = []
 
     for group in all_groups:
+        # A typo-like intermediary must never bridge two clinically distinct
+        # protected labels into one transitive merge group.
+        if _contains_protected_distinct_labels(group, profile=profile):
+            continue
         canon = _canonical(group, freq)
         counts = {v: freq.get(v, 0) for v in group}
         root = uf_all.find(group[0])
@@ -275,6 +288,7 @@ def detect_all_columns(
 def apply_merges(
     df: "pd.DataFrame",
     merges: List[Dict[str, Any]],
+    profile: str = domain_profiles.DEFAULT_PROFILE,
 ) -> Tuple["pd.DataFrame", List[str]]:
     """Apply a list of merge decisions to the DataFrame.
 
@@ -299,6 +313,11 @@ def apply_merges(
         canon = m.get("canonical", "")
         members = m.get("members") or []
         if not col or col not in new_df.columns or not canon:
+            continue
+        if _contains_protected_distinct_labels(
+            [str(canon)] + [str(value) for value in members],
+            profile=profile,
+        ):
             continue
         to_replace = [v for v in members if str(v) != str(canon)]
         if not to_replace:

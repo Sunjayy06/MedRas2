@@ -133,6 +133,30 @@ def generate_plan(
     association_objective = study_type in ("association", "comparison") or not study_type_confirmed
     correlation_objective = study_type == "correlation"
     regression_objective = study_type in ("regression", "prediction")
+    from . import category_merger
+    outcome_duplicates = category_merger.detect_category_duplicates(
+        df[outcome], profile=session.get("domain_profile")
+    )
+    likely_typo_groups = list(outcome_duplicates["obvious"])
+    for group_item in outcome_duplicates["borderline"]:
+        counts = sorted((group_item.get("counts") or {}).values(), reverse=True)
+        total = sum(counts)
+        if len(counts) >= 2 and counts[-1] <= max(2, int(total * 0.05)):
+            likely_typo_groups.append(group_item)
+    if likely_typo_groups:
+        groups = likely_typo_groups
+        labels = "; ".join(" / ".join(group["members"]) for group in groups)
+        suggestions.append({
+            "id": "outcome_duplicate_labels",
+            "title": f"Resolve likely duplicate labels in outcome {outcome}",
+            "requires_confirmation": True,
+            "blocking": True,
+            "warning": (
+                f"Likely duplicate outcome labels were detected: {labels}. "
+                "Merge or explicitly resolve them before running inferential analyses; "
+                "otherwise group counts and test routing may be invalid."
+            ),
+        })
 
     # ---- Comparison tests ------------------------------------------------
     if group and o_kind == "scale" and n_levels == 2:

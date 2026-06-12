@@ -996,6 +996,11 @@ def clean_numeric_like_columns(
         # nice readable IDs with raw integers.
         if _ID_NAME_RE.search(col):
             continue
+        if domain_profiles.is_breast_pathology(profile) and (
+            _TNM_NAME_RE.search(str(col))
+            or _looks_like_tnm_ordinal(s, str(col))
+        ):
+            continue
         # These pathology markers are commonly categorical. Do not turn
         # status/score labels into scale values through numeric extraction.
         if is_known_categorical_clinical_marker(col, profile=profile):

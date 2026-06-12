@@ -205,6 +205,7 @@ def _build_session_view(entry, classifications, assignment) -> Dict[str, Any]:
         ),
         "study_type_confirmed": bool(entry.meta.get("confirmed_study_type")),
         "analysis_predictors": analysis_predictors,
+        "domain_profile": _domain_profile(entry),
         # Future wizard work will populate these:
         "paired": bool(intake.get("paired")) if isinstance(intake, dict) else False,
         "design": intake.get("design") if isinstance(intake, dict) else None,
@@ -1626,6 +1627,15 @@ async def run_analysis(payload: RunAnalysisRequest) -> Dict[str, Any]:
             entry.df, classifications, assignment, normality_data, session=session_view,
         )
         entry.meta["plan"] = plan_dict
+    blocking = [
+        item for item in (plan_dict.get("suggestions") or [])
+        if item.get("blocking")
+    ]
+    if blocking:
+        raise HTTPException(
+            status_code=409,
+            detail=blocking[0].get("warning") or "Resolve blocking data-quality issues before analysis.",
+        )
     session_view = _build_session_view(entry, classifications, assignment)
     res = await asyncio.to_thread(
         results_service.run_plan,
@@ -1691,9 +1701,10 @@ async def apply_category_merge(payload: ApplyMergeRequest) -> Dict[str, Any]:
         raise HTTPException(status_code=404, detail="Dataset expired or not found.")
     if not payload.merges:
         return {"status": "no_changes", "actions": []}
+    profile = _domain_profile(entry)
     merges_dicts = [m.model_dump() for m in payload.merges]
     new_df, actions = await asyncio.to_thread(
-        category_merger.apply_merges, entry.df, merges_dicts
+        category_merger.apply_merges, entry.df, merges_dicts, profile
     )
     entry.df = new_df
     # Downstream artefacts are now stale

@@ -3969,7 +3969,7 @@ function planSuggestionCard(card) {
   return `<article class="se-plan-card se-plan-card-fixed" data-testid="suggestion-${escapeHtml(card.id || '')}">
     <div class="se-plan-card-header">
       <span class="se-plan-card-title">${escapeHtml(card.title || "Optional analysis")}</span>
-      <span class="se-plan-badge se-plan-badge-nonparam">Requires confirmation</span>
+      <span class="se-plan-badge se-plan-badge-nonparam">${card.blocking ? "Resolve before analysis" : "Requires confirmation"}</span>
     </div>
     <p class="se-plan-card-why">${escapeHtml(card.warning || '')}</p>
   </article>`;
@@ -3977,8 +3977,9 @@ function planSuggestionCard(card) {
 
 function updateRunButton() {
   const allChecked = Array.from(document.querySelectorAll('[data-confirm]')).every((cb) => cb.checked);
+  const hasBlockingSuggestion = (state.plan?.suggestions || []).some((item) => item.blocking);
   const btn = document.querySelector('#screen-plan [data-action="run-analysis"]');
-  if (btn) btn.disabled = !allChecked;
+  if (btn) btn.disabled = !allChecked || hasBlockingSuggestion;
 }
 
 function bindPlan() {
