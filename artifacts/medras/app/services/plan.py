@@ -90,6 +90,7 @@ def generate_plan(
     tests: List[Dict[str, Any]] = []
     graphs: List[Dict[str, Any]] = []
     outputs: List[Dict[str, Any]] = []
+    suggestions: List[Dict[str, Any]] = []
 
     # Always describe the cohort first.
     outputs.append({
@@ -113,6 +114,7 @@ def generate_plan(
             "tests": tests,
             "graphs": graphs,
             "outputs": outputs,
+            "suggestions": suggestions,
             "summary": "Pick an outcome variable on Step 4 to see the full plan.",
         }
 
@@ -126,15 +128,11 @@ def generate_plan(
         col for col in (session.get("analysis_predictors") or [])
         if col in df.columns and col != outcome
     ]
-    pairwise_association = (
-        not group
-        and o_kind in ("nominal", "ordinal")
-        and bool(analysis_predictors)
-        and (
-            study_type in ("association", "correlation")
-            or not session.get("study_type_confirmed")
-        )
-    )
+    outcome_levels = int(df[outcome].dropna().nunique())
+    study_type_confirmed = bool(session.get("study_type_confirmed"))
+    association_objective = study_type in ("association", "comparison") or not study_type_confirmed
+    correlation_objective = study_type == "correlation"
+    regression_objective = study_type in ("regression", "prediction")
 
     # ---- Comparison tests ------------------------------------------------
     if group and o_kind == "scale" and n_levels == 2:
@@ -196,66 +194,180 @@ def generate_plan(
                 "parametric": False,
             })
     elif group and o_kind in ("nominal", "ordinal"):
-        tests.append({
-            "id": "chi_square",
-            "title": "Chi-square test of independence",
-            "why": (
-                f"{outcome} is categorical; testing whether its distribution differs "
-                f"across the {n_levels or '?'} levels of {group}."
-            ),
-            "columns": [outcome, group],
-            "parametric": False,
-        })
-        tests.append({
-            "id": "fisher_exact_if_sparse",
-            "title": "Fisher's exact (fallback if expected cell < 5)",
-            "why": "Used automatically when chi-square assumptions fail.",
-            "columns": [outcome, group],
-            "parametric": False,
-        })
+        # The smart Phase-B entry below chooses Fisher only for sparse 2x2
+        # tables and retains chi-square with a warning for sparse RxC tables.
+        pass
 
-    # No grouping → descriptive only.
-    if pairwise_association:
-        outcome_levels = int(df[outcome].dropna().nunique())
+    # No explicit group: route selected predictors by objective and variable type.
+    if not group and analysis_predictors and association_objective:
         for index, predictor in enumerate(analysis_predictors):
             predictor_kind = classes.get(predictor, {}).get("detected_type")
+            predictor_levels = int(df[predictor].dropna().nunique())
             test_id = f"association_{index}"
-            if predictor_kind in ("nominal", "ordinal", "discrete"):
+
+            if o_kind in ("nominal", "ordinal") and predictor_kind in ("nominal", "ordinal", "discrete"):
                 tests.append({
                     "id": test_id,
                     "title": f"{predictor} vs {outcome}: Chi-square / Fisher's exact",
                     "why": f"Association between categorical {predictor} and categorical outcome {outcome}.",
                     "columns": [predictor, outcome],
                     "parametric": False,
+                    "analysis_family": "bivariate",
                     "_phase_b": {
                         "function": "run_chi_or_fisher",
                         "test_type": "chi_square",
                         "args": {"col1": predictor, "col2": outcome},
                     },
                 })
-            elif predictor_kind == "scale":
-                function = "run_pairwise_mann_whitney" if outcome_levels == 2 else "run_pairwise_kruskal"
-                test_name = "Mann-Whitney U" if outcome_levels == 2 else "Kruskal-Wallis H"
+                continue
+
+            scale_variable = predictor if o_kind in ("nominal", "ordinal") else outcome
+            grouping_variable = outcome if o_kind in ("nominal", "ordinal") else predictor
+            group_count = outcome_levels if grouping_variable == outcome else predictor_levels
+            valid_group_comparison = (
+                predictor_kind == "scale" and o_kind in ("nominal", "ordinal")
+            ) or (
+                o_kind == "scale" and predictor_kind in ("nominal", "ordinal", "discrete")
+            )
+            if not valid_group_comparison or group_count < 2:
+                continue
+
+            scale_normal = _is_normal(scale_variable, norm)
+            if group_count == 2 and scale_normal:
+                function, test_type, test_name, parametric = (
+                    "run_pairwise_welch", "welch_ttest", "Welch's t-test", True
+                )
+            elif group_count == 2:
+                function, test_type, test_name, parametric = (
+                    "run_pairwise_mann_whitney", "mann_whitney", "Mann-Whitney U", False
+                )
+            elif scale_normal:
+                function, test_type, test_name, parametric = (
+                    "run_pairwise_anova", "anova_oneway", "One-way ANOVA", True
+                )
+            else:
+                function, test_type, test_name, parametric = (
+                    "run_pairwise_kruskal", "kruskal_wallis", "Kruskal-Wallis H", False
+                )
+            tests.append({
+                "id": test_id,
+                "title": f"{scale_variable} by {grouping_variable}: {test_name}",
+                "why": f"Comparing scale variable {scale_variable} across levels of {grouping_variable}.",
+                "columns": [scale_variable, grouping_variable],
+                "parametric": parametric,
+                "analysis_family": "bivariate",
+                "_phase_b": {
+                    "function": function,
+                    "test_type": test_type,
+                    "args": {"predictor": scale_variable, "outcome": grouping_variable},
+                },
+            })
+
+    if not group and correlation_objective:
+        for index, predictor in enumerate(analysis_predictors):
+            if o_kind != "scale" or classes.get(predictor, {}).get("detected_type") != "scale":
+                continue
+            normal_pair = o_normal and _is_normal(predictor, norm)
+            function = "pc_pearson" if normal_pair else "pc_spearman"
+            test_type = "pearson" if normal_pair else "spearman"
+            title = "Pearson correlation" if normal_pair else "Spearman rank correlation"
+            tests.append({
+                "id": f"association_{index}",
+                "title": f"{predictor} vs {outcome}: {title}",
+                "why": f"Correlation objective selected for two scale variables ({predictor}, {outcome}).",
+                "columns": [predictor, outcome],
+                "parametric": normal_pair,
+                "analysis_family": "correlation",
+                "_phase_b": {
+                    "function": function,
+                    "test_type": test_type,
+                    "args": {"col1": predictor, "col2": outcome},
+                },
+            })
+
+    if not group and regression_objective:
+        model_predictors = covariates or [
+            c for c in analysis_predictors
+            if classes.get(c, {}).get("detected_type") == "scale"
+        ]
+        model_predictors = list(dict.fromkeys(model_predictors))
+        if o_kind == "scale" and model_predictors:
+            tests.append({
+                "id": "pc_linear_regression",
+                "title": "Multiple linear regression",
+                "why": f"Regression / prediction objective selected for scale outcome {outcome}.",
+                "columns": [outcome] + model_predictors,
+                "parametric": True,
+                "analysis_family": "regression",
+                "_phase_b": {
+                    "function": "pc_linear_regression",
+                    "test_type": "linear_regression",
+                    "args": {"outcome": outcome, "predictors": model_predictors},
+                },
+            })
+        elif o_kind in ("nominal", "ordinal") and outcome_levels == 2 and model_predictors:
+            counts = df[outcome].dropna().value_counts()
+            min_events = int(counts.min()) if len(counts) == 2 else 0
+            recommended_events = max(10, 10 * len(model_predictors))
+            if min_events >= recommended_events:
                 tests.append({
-                    "id": test_id,
-                    "title": f"{predictor} vs {outcome}: {test_name}",
-                    "why": f"Comparing continuous {predictor} across levels of categorical outcome {outcome}.",
-                    "columns": [predictor, outcome],
-                    "parametric": False,
+                    "id": "pc_binary_logistic",
+                    "title": "Binary logistic regression",
+                    "why": f"Regression / prediction objective selected for binary outcome {outcome}.",
+                    "columns": [outcome] + model_predictors,
+                    "parametric": True,
+                    "analysis_family": "regression",
                     "_phase_b": {
-                        "function": function,
-                        "test_type": "mann_whitney" if outcome_levels == 2 else "kruskal_wallis",
-                        "args": {"predictor": predictor, "outcome": outcome},
+                        "function": "pc_binary_logistic",
+                        "test_type": "logistic_regression",
+                        "args": {"outcome": outcome, "predictors": model_predictors},
                     },
                 })
+            else:
+                suggestions.append({
+                    "id": "binary_logistic_sparse_warning",
+                    "title": "Binary logistic regression not added",
+                    "requires_confirmation": True,
+                    "warning": (
+                        f"The smaller outcome group has {min_events} observations; "
+                        f"about {recommended_events} are recommended for {len(model_predictors)} predictors. "
+                        "Sparse events may cause unstable estimates or separation."
+                    ),
+                })
 
-    if not group and not pairwise_association:
+    if (
+        not regression_objective
+        and o_kind in ("nominal", "ordinal")
+        and len(_group_levels(df, outcome)) == 2
+        and analysis_predictors
+    ):
+        suggestions.append({
+            "id": "suggest_binary_logistic",
+            "title": "Optional multivariable binary logistic regression",
+            "requires_confirmation": True,
+            "warning": "Add only after confirming predictors and checking event counts and separation risk.",
+        })
+
+    numeric_predictors = [
+        c for c in analysis_predictors
+        if classes.get(c, {}).get("detected_type") == "scale"
+    ]
+    if not correlation_objective and len(numeric_predictors) >= 2:
+        suggestions.append({
+            "id": "suggest_correlation_matrix",
+            "title": "Optional numeric correlation matrix",
+            "requires_confirmation": True,
+            "warning": "Run separately under the Correlation objective; it is not part of the main outcome association results.",
+        })
+
+    if not group and not tests:
         tests.append({
             "id": "descriptive_only",
             "title": "Descriptive summary",
-            "why": "No grouping variable selected — we'll summarise the outcome alone.",
+            "why": "No valid inferential test matched the selected objective and variable types.",
             "columns": [outcome],
             "parametric": False,
+            "analysis_family": "descriptive",
         })
 
     # ---- Covariate-adjusted analysis ------------------------------------
@@ -270,7 +382,13 @@ def generate_plan(
             "columns": [outcome, group] + covariates,
             "parametric": True,
         })
-    if covariates and o_kind == "scale" and not group:
+    if (
+        covariates
+        and o_kind == "scale"
+        and not group
+        and not regression_objective
+        and session.get("add_multivariable_model")
+    ):
         tests.append({
             "id": "pc_linear_regression",
             "title": "Linear regression",
@@ -286,7 +404,13 @@ def generate_plan(
                 "args": {"outcome": outcome, "predictors": covariates},
             },
         })
-    if covariates and o_kind in ("nominal", "ordinal") and len(_group_levels(df, outcome)) == 2:
+    if (
+        covariates
+        and o_kind in ("nominal", "ordinal")
+        and len(_group_levels(df, outcome)) == 2
+        and not regression_objective
+        and session.get("add_multivariable_model")
+    ):
         tests.append({
             "id": "pc_binary_logistic",
             "title": "Binary logistic regression",
@@ -398,6 +522,7 @@ def generate_plan(
         "tests": tests,
         "graphs": graphs,
         "outputs": outputs,
+        "suggestions": suggestions,
         "summary": summary,
     }
 
@@ -857,14 +982,15 @@ def generate_correlation_plan(
                 graph_type = "scatter"
             pred_kind = "scale"
         elif dtype in ("nominal", "ordinal", "discrete"):
-            if outcome_kind in ("binary", "nominal", "scale"):
-                test_id = "corr_chi_or_fisher"
-                test_title = "Chi-square / Fisher's exact"
-                graph_type = "stacked_bar"
-            else:
-                test_id = "corr_chi_or_fisher"
-                test_title = "Chi-square / Fisher's exact"
-                graph_type = "stacked_bar"
+            if outcome_kind == "scale":
+                excluded.append({
+                    "column": col,
+                    "reason": "categorical predictor excluded from continuous correlation objective",
+                })
+                continue
+            test_id = "corr_chi_or_fisher"
+            test_title = "Chi-square / Fisher's exact"
+            graph_type = "stacked_bar"
             pred_kind = "nominal"
         else:
             excluded.append({"column": col, "reason": f"unsupported type: {dtype}"})

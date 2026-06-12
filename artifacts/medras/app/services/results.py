@@ -1286,7 +1286,9 @@ def run_plan(
         "run_rm_anova": run_rm_anova,
         "run_friedman": run_friedman,
         "run_chi_or_fisher": run_chi_or_fisher,
+        "run_pairwise_welch": run_pairwise_welch,
         "run_pairwise_mann_whitney": run_pairwise_mann_whitney,
+        "run_pairwise_anova": run_pairwise_anova,
         "run_pairwise_kruskal": run_pairwise_kruskal,
         "run_kappa": run_kappa,
         "run_icc_bland_altman": run_icc_bland_altman,
@@ -1428,6 +1430,11 @@ def run_plan(
             r["id"] = t["id"]
             r["title"] = t["title"]
             r["test_type"] = pb.get("test_type")
+            r["analysis_family"] = t.get("analysis_family") or (
+                "regression" if pb.get("test_type") in _REGRESSION_TYPES
+                else "correlation" if pb.get("test_type") in ("pearson", "spearman", "kendall_tau")
+                else "bivariate"
+            )
             r["plan_name"] = t["title"]
             r["plan_reason"] = t.get("why")
             test_results.append(r)
@@ -1455,6 +1462,7 @@ def run_plan(
         r.update({"id": t["id"], "title": t["title"]})
         # Tag with test_type so multiple-testing correction can find it.
         r["test_type"] = _LEGACY_TEST_TYPE.get(t["id"])
+        r["analysis_family"] = t.get("analysis_family", "bivariate")
         # Mirror p_value into 'p' so the correction helper picks it up.
         if r.get("p_value") is not None and r.get("p") is None:
             r["p"] = r.get("p_value")
@@ -1499,13 +1507,13 @@ def run_plan(
             "normality was interpreted cautiously using plots, distribution "
             "shape, and clinical/statistical judgment."
         )
-    if any(t["id"] == "ttest_independent" for t in test_results):
+    if any(t.get("test_type") in ("t_test_independent", "welch_ttest") for t in test_results):
         methods_lines.append("Group means were compared with Welch's t-test.")
-    if any(t["id"] == "mann_whitney" for t in test_results):
+    if any(t.get("test_type") == "mann_whitney" for t in test_results):
         methods_lines.append("Non-parametric two-sample comparisons used the Mann-Whitney U test.")
-    if any(t["id"] == "anova_oneway" for t in test_results):
+    if any(t.get("test_type") == "anova_oneway" for t in test_results):
         methods_lines.append("Means across more than two groups were compared with one-way ANOVA.")
-    if any(t["id"] == "kruskal_wallis" for t in test_results):
+    if any(t.get("test_type") == "kruskal_wallis" for t in test_results):
         methods_lines.append("Non-parametric multi-group comparisons used the Kruskal-Wallis H test.")
     if any(t.get("test_type") in ("chi_square", "fisher_exact") for t in test_results):
         methods_lines.append(
@@ -1908,6 +1916,7 @@ def run_chi_or_fisher(col1, col2, session, df):
     return {
         'test': test_name,
         'test_type': test_type,
+        'actual_test_used': test_name,
         'n': n,
         'statistic': (
             'Infinity' if math.isinf(stat) and stat > 0
@@ -2784,6 +2793,10 @@ def _run_kruskal(
         return {"error": str(exc)}
 
 
+def run_pairwise_welch(predictor, outcome, session, df):
+    return _ttest_independent(df, predictor, outcome)
+
+
 def run_pairwise_mann_whitney(predictor, outcome, session, df):
     result = _run_mann_whitney(df, predictor, outcome)
     if "error" in result:
@@ -2793,6 +2806,10 @@ def run_pairwise_mann_whitney(predictor, outcome, session, df):
         f"U = {result['stat']:.3f}, p = {fmt_p(result['p'])}."
     )
     return result
+
+
+def run_pairwise_anova(predictor, outcome, session, df):
+    return _anova_oneway(df, predictor, outcome)
 
 
 def run_pairwise_kruskal(predictor, outcome, session, df):

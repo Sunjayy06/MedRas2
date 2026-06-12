@@ -345,8 +345,8 @@ If multiple objectives, include all. Empty string if not found.>",
 appear as a column header in an Excel/SPSS spreadsheet. \
 Examples: HbA1c, P/N, Allred Score, OS, SBP. \
 Short, precise. Empty string if not found.>",
-  "study_type": "<One of: comparison | correlation | diagnostic | \
-survival | descriptive. Choose the best fit. Default to correlation.>",
+  "study_type": "<One of: comparison | association | correlation | regression | diagnostic | \
+survival | reliability | descriptive. Choose the best fit. Default to association.>",
   "sample_size": <Integer sample size if stated, or null>
 }}
 
@@ -532,7 +532,10 @@ async def parse_proposal(request: Request, file: UploadFile = File(...)) -> Dict
                 sample_size = int(sample_size)
             except (ValueError, TypeError):
                 sample_size = None
-        valid_types = {"comparison", "correlation", "diagnostic", "survival", "descriptive"}
+        valid_types = {
+            "comparison", "association", "correlation", "regression",
+            "diagnostic", "survival", "reliability", "descriptive",
+        }
         study_type = str(ai_result.get("study_type") or "correlation").strip().lower()
         if study_type not in valid_types:
             study_type = "correlation"

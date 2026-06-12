@@ -3903,7 +3903,10 @@ function renderPlan() {
   }
 
   // ── Analytical tests ──────────────────────────────────────────────
-  tests.innerHTML = (p.tests || []).map((t) => planCard(t, "tests")).join("");
+  tests.innerHTML = [
+    ...(p.tests || []).map((t) => planCard(t, "tests")),
+    ...(p.suggestions || []).map(planSuggestionCard),
+  ].join("");
   graphs.innerHTML = (p.graphs || []).map((g) => planCard(g, "graphs")).join("");
 
   document.querySelectorAll('[data-plan-toggle]').forEach((cb) => {
@@ -3959,6 +3962,16 @@ function planCard(card, kind) {
     </div>
     ${pairHtml}
     <p class="se-plan-card-why">${escapeHtml(card.why || '')}</p>
+  </article>`;
+}
+
+function planSuggestionCard(card) {
+  return `<article class="se-plan-card se-plan-card-fixed" data-testid="suggestion-${escapeHtml(card.id || '')}">
+    <div class="se-plan-card-header">
+      <span class="se-plan-card-title">${escapeHtml(card.title || "Optional analysis")}</span>
+      <span class="se-plan-badge se-plan-badge-nonparam">Requires confirmation</span>
+    </div>
+    <p class="se-plan-card-why">${escapeHtml(card.warning || '')}</p>
   </article>`;
 }
 
@@ -4018,13 +4031,21 @@ function renderResults() {
     pane.innerHTML = "<p>No results yet — run the analysis on Step 6.</p>";
     return;
   }
-  const tabDefs = [
-    { id: "tab-table-one", label: "Table 1" },
-    ...(r.tests || []).map((t) => ({ id: `tab-${t.id}`, label: t.title, payload: t })),
-    ...((r.graphs && r.graphs.length) ? [{ id: "tab-graphs", label: "Graphs" }] : []),
-    ...(r.forest_plot ? [{ id: "tab-forest", label: "Forest plot" }] : []),
-    { id: "tab-narrative", label: "Methods + Results" },
+  const families = [
+    ["bivariate", "Bivariate associations"],
+    ["regression", "Regression models"],
+    ["correlation", "Correlations"],
   ];
+  const tabDefs = [{ id: "tab-table-one", label: "Table 1" }];
+  families.forEach(([family, label]) => {
+    if ((r.tests || []).some((test) => resultFamily(test) === family)) {
+      tabDefs.push({ id: `tab-family-${family}`, label });
+    }
+  });
+  if ((r.tests || []).some((test) => resultFamily(test) === "other")) {
+    tabDefs.push({ id: "tab-family-other", label: "Other analyses" });
+  }
+  tabDefs.push({ id: "tab-narrative", label: "Methods + Results" });
   tabs.innerHTML = tabDefs.map((t, i) =>
     `<button type="button" role="tab" class="se-results-tab ${i === 0 ? 'is-active' : ''}" data-tab="${t.id}" data-testid="${t.id}">${t.label}</button>`
   ).join("");
@@ -4049,16 +4070,26 @@ function renderResultsPane(tabId) {
     bindCopyTable();
     return;
   }
-  if (tabId === "tab-graphs") {
-    pane.innerHTML = (r.graphs || []).map((g) =>
-      `<figure class="se-result-figure"><figcaption>${g.title}</figcaption><img src="${g.png_data_uri}" alt="${g.title}"></figure>`
-    ).join("") || "<p>No graphs generated.</p>";
-    return;
-  }
-  if (tabId === "tab-forest") {
-    pane.innerHTML = r.forest_plot
-      ? `<figure class="se-result-figure"><figcaption>Forest plot — effect sizes</figcaption><img src="${r.forest_plot}" alt="Forest plot"></figure>`
-      : "<p>No effect sizes available.</p>";
+  if (tabId.startsWith("tab-family-")) {
+    const family = tabId.replace("tab-family-", "");
+    const familyTests = (r.tests || []).filter((test) => resultFamily(test) === family);
+    const familyTitle = {
+      bivariate: "Bivariate associations",
+      regression: "Regression models",
+      correlation: "Correlations",
+      other: "Other analyses",
+    }[family] || "Analysis results";
+    let extraFigures = "";
+    if (family === "bivariate") {
+      extraFigures = (r.graphs || []).map((g) =>
+        `<figure class="se-result-figure"><figcaption>${escapeHtml(g.title)}</figcaption><img src="${escapeHtml(g.png_data_uri)}" alt="${escapeHtml(g.title)}"></figure>`
+      ).join("");
+    }
+    if (family === "regression" && r.forest_plot) {
+      extraFigures += `<figure class="se-result-figure"><figcaption>Forest plot — effect sizes</figcaption><img src="${escapeHtml(r.forest_plot)}" alt="Forest plot"></figure>`;
+    }
+    pane.innerHTML = `<h3>${familyTitle}</h3>${familyTests.map(renderResultTestBlock).join("")}${extraFigures}`;
+    bindCopyTable();
     return;
   }
   if (tabId === "tab-narrative") {
@@ -4075,6 +4106,23 @@ function renderResultsPane(tabId) {
   // Per-test tab.
   const test = (r.tests || []).find((t) => `tab-${t.id}` === tabId);
   if (!test) { pane.innerHTML = ""; return; }
+  pane.innerHTML = renderResultTestBlock(test);
+  bindCopyTable();
+}
+
+function resultFamily(test) {
+  if (test && ["bivariate", "regression", "correlation"].includes(test.analysis_family)) {
+    return test.analysis_family;
+  }
+  const type = String((test && test.test_type) || "").toLowerCase();
+  if (type.includes("regression") || type.includes("cox")) return "regression";
+  if (["pearson", "spearman", "kendall_tau", "correlation"].some((name) => type.includes(name))) return "correlation";
+  if (["chi", "fisher", "ttest", "t_test", "mann", "anova", "kruskal", "wilcoxon"].some((name) => type.includes(name))) return "bivariate";
+  return "other";
+}
+
+function renderResultTestBlock(test) {
+  const r = state.results || {};
   let correctionBlock = "";
   if (test.p_corrected !== undefined && test.p_corrected !== null) {
     const origP = (test.p !== undefined && test.p !== null) ? test.p : test.p_value;
@@ -4088,13 +4136,12 @@ function renderResultsPane(tabId) {
   }
   const tablesHtml = renderResultTables(test);
   const figuresHtml = renderResultFigures(test);
-  pane.innerHTML = `<h3>${test.title}</h3>
+  return `<section class="se-result-test-block"><h4>${escapeHtml(test.title)}</h4>
     ${tablesHtml}
     ${figuresHtml}
     ${correctionBlock}
     <p>${escapeHtml(test.narrative || '')}</p>
-    <button type="button" class="btn btn-tertiary" data-action="copy-table" data-testid="button-copy-${test.id}">Copy table</button>`;
-  bindCopyTable();
+    <button type="button" class="btn btn-tertiary" data-action="copy-table" data-testid="button-copy-${test.id}">Copy table</button></section>`;
 }
 
 function renderResultTables(test) {
@@ -4582,8 +4629,10 @@ const _STUDY_TYPE_LABELS = {
   association: "Association study",
   correlation: "Correlation study",
   comparison:  "Comparison study",
+  regression:  "Regression / prediction",
   diagnostic:  "Diagnostic accuracy",
   survival:    "Survival analysis",
+  reliability: "Reliability / agreement",
   descriptive: "Descriptive analysis",
 };
 
@@ -4591,8 +4640,10 @@ const _STUDY_TYPE_DESCRIPTIONS = {
   association: "All variables are categorical. Tests the strength of association between each predictor and the outcome using chi-square, Fisher's exact test, Cramér's V, and odds ratios. Important: 'association' and 'correlation' are often confused by researchers — correlation (Pearson/Spearman) specifically measures continuous variable relationships; association applies to categorical data.",
   correlation: "Continuous measurements. Quantifies the linear (Pearson r) or monotonic (Spearman ρ) relationship between continuous predictors and the outcome.",
   comparison:  "Group differences. Compares the outcome between two or more groups — independent t-test / Mann-Whitney U (two groups) or one-way ANOVA / Kruskal-Wallis (multiple groups).",
+  regression:  "Prediction and adjusted effects. Fits a linear model for scale outcomes or a logistic model for binary outcomes when the sample and event counts are adequate.",
   diagnostic:  "Test performance. Evaluates sensitivity, specificity, PPV, NPV, and area under the ROC curve (AUC) to assess how well a test identifies the condition.",
   survival:    "Time-to-event. Estimates survival probability (Kaplan-Meier), compares groups (log-rank test), and models hazard ratios (Cox proportional hazards regression).",
+  reliability: "Agreement and repeatability. Uses kappa for categorical ratings and ICC / Bland-Altman for continuous measurements.",
   descriptive: "Population profile. Reports frequencies, proportions, means / medians, standard deviations, and 95% confidence intervals for all variables.",
 };
 
@@ -4600,8 +4651,10 @@ const _STUDY_TYPE_ICONS = {
   association: "🔗",
   correlation: "📈",
   comparison:  "⚖️",
+  regression:  "📉",
   diagnostic:  "🔬",
   survival:    "⏱️",
+  reliability: "✓",
   descriptive: "📋",
 };
 
@@ -5708,8 +5761,10 @@ function _populateSettingsBar() {
       association: "Association Analysis Results",
       correlation: "Correlation Analysis Results",
       comparison:  "Comparison Analysis Results",
+      regression:  "Regression / Prediction Results",
       diagnostic:  "Diagnostic Analysis Results",
       survival:    "Survival Analysis Results",
+      reliability: "Reliability / Agreement Results",
       descriptive: "Descriptive Analysis Results",
     };
     heading.textContent = titles[studyType] || "Analysis Results";

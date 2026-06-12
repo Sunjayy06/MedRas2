@@ -663,7 +663,7 @@ async def plan_study_setup(
         f"Columns: {col_summary}\n\n"
         f"Return ONLY this JSON schema — no markdown, no prose:\n"
         f"{{\n"
-        f'  "study_type": "comparison"|"correlation"|"association"|"survival"|"diagnostic"|"descriptive",\n'
+        f'  "study_type": "comparison"|"correlation"|"association"|"regression"|"survival"|"diagnostic"|"reliability"|"descriptive",\n'
         f'  "outcome_col": "<exact column name or null>",\n'
         f'  "predictors": ["<col>", ...],\n'
         f'  "objective": "<one clear plain-English sentence>",\n'

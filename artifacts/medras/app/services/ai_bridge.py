@@ -70,10 +70,12 @@ _TYPE_WORDS: Dict[str, List[str]] = {
         "cramer", "cramér", "categorical association", "cross.tab", "crosstab",
     ],
     "correlation": [
-        "correlat", "pearson", "spearman", "linear model",
+        "correlat", "pearson", "spearman",
         "factor", "predictor", "risk factor",
         "effect of", "influence of", "impact of",
-        "regression", "logistic",
+    ],
+    "regression": [
+        "regression", "logistic", "linear model", "prediction", "predictive model",
     ],
     "comparison": [
         "compar", "difference", " vs ", " versus ", "between group",
@@ -88,6 +90,9 @@ _TYPE_WORDS: Dict[str, List[str]] = {
     "survival": [
         "survival", "mortality", "time to", "kaplan", "death", "recurrence",
         "progression", "disease-free", "event-free",
+    ],
+    "reliability": [
+        "reliability", "agreement", "kappa", "icc", "bland.altman", "bland-altman",
     ],
     "descriptive": [
         "prevalence", "incidence", "frequenc", "distribution", "describe",
@@ -104,7 +109,7 @@ _TYPE_WORDS: Dict[str, List[str]] = {
 
 def _detect_study_type_heuristic(description: str) -> str:
     dl = description.lower()
-    for stype in ("diagnostic", "survival", "comparison", "correlation", "descriptive"):
+    for stype in ("diagnostic", "survival", "reliability", "regression", "comparison", "association", "correlation", "descriptive"):
         for word in _TYPE_WORDS[stype]:
             if word in dl:
                 return stype
@@ -269,7 +274,7 @@ def _call_openai(
         f"They described their study as:\n\"{description}\"\n\n"
         f"They said their outcome column is (approximately): \"{outcome_hint}\"\n\n"
         "Return a JSON object with exactly these keys:\n"
-        '{"study_type": "<one of: correlation | comparison | diagnostic | survival | descriptive>", '
+        '{"study_type": "<one of: comparison | association | correlation | regression | diagnostic | survival | reliability | descriptive>", '
         '"outcome_col": "<exact column name from the list above, or null>", '
         '"confidence": <float 0.0 to 1.0>, '
         '"reasoning": "<one plain English sentence explaining your choices>"}\n\n'
@@ -330,7 +335,7 @@ They said their outcome column is (approximately): "{outcome_hint}"
 
 Your task is to return a JSON object with exactly these keys:
 {{
-  "study_type": "<one of: correlation | comparison | diagnostic | survival | descriptive>",
+  "study_type": "<one of: comparison | association | correlation | regression | diagnostic | survival | reliability | descriptive>",
   "outcome_col": "<exact column name from the list above, or null>",
   "confidence": <float 0.0 to 1.0>,
   "reasoning": "<one plain English sentence explaining your choices>"

@@ -153,10 +153,13 @@
                   <label class="se-field" style="flex:1;min-width:180px">
                     <span>Study type</span>
                     <select id="s1-prop-study-type" style="width:100%">
-                      <option value="correlation">Correlation / Association</option>
-                      <option value="comparison">Comparison / RCT / Case-Control</option>
+                      <option value="comparison">Compare groups</option>
+                      <option value="association">Association between variables</option>
+                      <option value="correlation">Correlation</option>
+                      <option value="regression">Regression / Prediction</option>
                       <option value="diagnostic">Diagnostic Accuracy</option>
                       <option value="survival">Survival / Time-to-Event</option>
+                      <option value="reliability">Reliability / Agreement</option>
                       <option value="descriptive">Descriptive / Prevalence</option>
                     </select>
                   </label>
@@ -1097,8 +1100,10 @@
                 <option value="association">Association — chi-square / Fisher's / Cramér's V (categorical variables)</option>
                 <option value="correlation">Correlation — Pearson r / Spearman ρ (continuous measurements)</option>
                 <option value="comparison">Comparison — t-test / ANOVA / Mann-Whitney (group differences)</option>
+                <option value="regression">Regression / prediction — linear or logistic models</option>
                 <option value="diagnostic">Diagnostic accuracy — sensitivity, specificity, AUC / ROC</option>
                 <option value="survival">Survival — Kaplan-Meier / Cox regression (time-to-event)</option>
+                <option value="reliability">Reliability / agreement — kappa / ICC / Bland-Altman</option>
                 <option value="descriptive">Descriptive — frequencies, proportions, profile</option>
               </select>
             </label>
@@ -1273,8 +1278,10 @@
                     <option value="association">Association — chi-square / Cramér's V (categorical)</option>
                     <option value="correlation">Correlation — Pearson r / Spearman ρ (continuous)</option>
                     <option value="comparison">Comparison — t-test / ANOVA / Mann-Whitney (groups)</option>
+                    <option value="regression">Regression / prediction — linear or logistic models</option>
                     <option value="diagnostic">Diagnostic — AUC / sensitivity / specificity</option>
                     <option value="survival">Survival — Kaplan-Meier / Cox regression</option>
+                    <option value="reliability">Reliability / agreement — kappa / ICC</option>
                     <option value="descriptive">Descriptive — frequencies / profile</option>
                   </select>
                 </label>

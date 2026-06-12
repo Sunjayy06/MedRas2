@@ -70,12 +70,18 @@ def verify_correlation_dispatch() -> None:
 def verify_regression_ids_execute() -> None:
     df = _df()
     classes = _classifications()
+    regression_session = {
+        "study_type": "regression",
+        "study_type_confirmed": True,
+        "variables": {c: {"display_name": c} for c in df.columns},
+    }
 
     linear_plan = plan.generate_plan(
         df,
         classes,
         {"outcome": "score", "group": None, "covariates": ["age"]},
         _normality(),
+        regression_session,
     )
     linear_ids = [t["id"] for t in linear_plan["tests"]]
     assert "pc_linear_regression" in linear_ids
@@ -85,7 +91,7 @@ def verify_regression_ids_execute() -> None:
         classes,
         {"outcome": "score", "group": None, "covariates": ["age"]},
         linear_plan,
-        session={"variables": {c: {"display_name": c} for c in df.columns}},
+        session=regression_session,
     )
     assert any(t["id"] == "pc_linear_regression" for t in linear_results["tests"])
 
@@ -94,6 +100,7 @@ def verify_regression_ids_execute() -> None:
         classes,
         {"outcome": "disease", "group": None, "covariates": ["age"]},
         _normality(),
+        regression_session,
     )
     logistic_ids = [t["id"] for t in logistic_plan["tests"]]
     assert "pc_binary_logistic" in logistic_ids
@@ -103,7 +110,7 @@ def verify_regression_ids_execute() -> None:
         classes,
         {"outcome": "disease", "group": None, "covariates": ["age"]},
         logistic_plan,
-        session={"variables": {c: {"display_name": c} for c in df.columns}},
+        session=regression_session,
     )
     assert any(t["id"] == "pc_binary_logistic" for t in logistic_results["tests"])
 
