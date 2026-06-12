@@ -2523,6 +2523,12 @@ async function loadVariablesData() {
   setStatus(status, "Analysing variables…", "loading");
   try {
     await refreshClassifications([], { render: true, detectCategoryDupes: true });
+    // Setup may identify an outcome after the initial dataset ingest. Carry
+    // that choice into assignment before plan generation.
+    if (!state.assignment || !state.assignment.outcome) {
+      autoAssignFromIntake();
+      renderAssignmentCard();
+    }
     setStatus(status, "");
   } catch (err) {
     setStatus(status, `Could not fully refresh variables: ${err.message}`, "error");

@@ -31,6 +31,12 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 import pandas as pd
 
+_PROTECTED_CLINICAL_GROUPS = (
+    frozenset({"luminal a", "luminal b", "her2neu", "her2 enriched", "triple negative"}),
+    frozenset({"negative", "positive"}),
+    frozenset({"absent", "present"}),
+)
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -87,6 +93,8 @@ def _is_borderline_dup(a_raw: str, b_raw: str) -> bool:
         return False
     a = _normalise(a_raw)
     b = _normalise(b_raw)
+    if any(a in group and b in group and a != b for group in _PROTECTED_CLINICAL_GROUPS):
+        return False
     min_len = min(len(a), len(b))
     if min_len < 4:
         return False

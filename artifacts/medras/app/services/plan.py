@@ -129,8 +129,11 @@ def generate_plan(
     pairwise_association = (
         not group
         and o_kind in ("nominal", "ordinal")
-        and study_type in ("association", "correlation")
         and bool(analysis_predictors)
+        and (
+            study_type in ("association", "correlation")
+            or not session.get("study_type_confirmed")
+        )
     )
 
     # ---- Comparison tests ------------------------------------------------

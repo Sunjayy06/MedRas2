@@ -920,7 +920,11 @@ def build_methods_paragraph(session: Dict[str, Any], results: List[Dict[str, Any
                          for r in results if (r.get("plan_name") or r.get("title"))})
     normal_vars = [v for v, r in norm.items() if r.get("normal", True)]
     non_normal_vars = [v for v, r in norm.items() if not r.get("normal", True)]
-    norm_test = "Shapiro-Wilk" if session.get("n_rows", 0) < 50 else "Kolmogorov-Smirnov"
+    norm_test = (
+        "Shapiro-Wilk"
+        if session.get("n_rows", 0) < 50
+        else "Lilliefors when available, with Shapiro-Wilk fallback"
+    )
     correction = session.get("correction_info")
 
     text = ("All statistical analyses were performed using Python with the "
@@ -1188,7 +1192,7 @@ def generate_report(session: Dict[str, Any], df: pd.DataFrame) -> Document:
             add_caption(doc, "Table 2. Normality assessment results.")
             add_footnote(
                 doc,
-                "SW Shapiro-Wilk; KS Kolmogorov-Smirnov. "
+                "SW Shapiro-Wilk; LF Lilliefors. "
                 "p < 0.05 indicates non-normal distribution.",
             )
             norm_interp = _build_normality_interp(session)
@@ -1198,22 +1202,23 @@ def generate_report(session: Dict[str, Any], df: pd.DataFrame) -> Document:
 
     # ── 2d. Primary Analysis ────────────────────────────────────
     if "primary_analysis" not in hidden:
-        primary = next(
-            (r for r in results if r.get("test_type") in _PRIMARY_TYPES and "error" not in r),
-            None,
-        )
-        if primary:
-            section_label = primary.get("plan_name") or primary.get("title") or "Primary Analysis"
-            doc.add_heading(section_label, 2)
-            build_result_table(doc, primary, session, table_num=3)
-            if graph_q:
-                path, caption = graph_q.pop(0)
-                fig_num[0] = _embed_graph(doc, path, caption, fig_num[0])
-            if primary.get("narrative"):
-                _add_interpretation(
-                    doc,
-                    _sanitize_text(primary["narrative"], variables),
-                )
+        primary_results = [
+            r for r in results
+            if r.get("test_type") in _PRIMARY_TYPES and "error" not in r
+        ]
+        if primary_results:
+            for table_num, primary in enumerate(primary_results, 3):
+                section_label = primary.get("plan_name") or primary.get("title") or "Primary Analysis"
+                doc.add_heading(section_label, 2)
+                build_result_table(doc, primary, session, table_num=table_num)
+                if graph_q:
+                    path, caption = graph_q.pop(0)
+                    fig_num[0] = _embed_graph(doc, path, caption, fig_num[0])
+                if primary.get("narrative"):
+                    _add_interpretation(
+                        doc,
+                        _sanitize_text(primary["narrative"], variables),
+                    )
         else:
             doc.add_paragraph("No primary inferential comparison ran successfully.")
         _add_custom_notes(doc, session, "after_primary_analysis")
@@ -1226,7 +1231,10 @@ def generate_report(session: Dict[str, Any], df: pd.DataFrame) -> Document:
             if r.get("test_type") in _SECONDARY_TYPES and "error" not in r
         ]
         if secondary:
-            table_num = 4
+            table_num = 3 + len([
+                r for r in results
+                if r.get("test_type") in _PRIMARY_TYPES and "error" not in r
+            ])
             for r in secondary:
                 label = r.get("plan_name") or r.get("title") or r.get("test_type", "")
                 doc.add_heading(label, 2)
@@ -1366,10 +1374,14 @@ def to_pdf(entry, results: Dict[str, Any], assignment: Dict[str, Any]) -> bytes:
 
     # 5. Primary
     flow.append(Paragraph("Primary Analysis", h2))
-    primary = next((r for r in session["results"]
-                    if r.get("test_type") in _PRIMARY_TYPES and "error" not in r), None)
-    if primary:
-        _pdf_render_test(flow, primary, h2, body, session)
+    primary_results = [
+        r for r in session["results"]
+        if r.get("test_type") in _PRIMARY_TYPES and "error" not in r
+    ]
+    if primary_results:
+        for primary in primary_results:
+            flow.append(Paragraph(primary.get("plan_name") or primary.get("title", ""), h2))
+            _pdf_render_test(flow, primary, h2, body, session)
     else:
         flow.append(Paragraph("No primary inferential test ran successfully.", body))
     flow.append(PageBreak())

@@ -306,7 +306,12 @@ def _looks_like_her2_status_or_mixed(series: pd.Series, name: str) -> bool:
 
 def is_known_categorical_clinical_marker(name: str) -> bool:
     """Return whether a column name denotes a commonly categorical marker."""
-    return bool(_CATEGORICAL_CLINICAL_MARKER_RE.search(str(name or "")))
+    text = str(name or "")
+    return bool(
+        _CATEGORICAL_CLINICAL_MARKER_RE.search(text)
+        or _TNM_NAME_RE.search(text)
+        or _GRADE_NAME_RE.search(text)
+    )
 
 
 def _looks_like_tnm_ordinal(series: pd.Series, name: str) -> bool:
@@ -842,7 +847,6 @@ def derive_node_fraction_columns(
     out = df.copy()
     notes: Dict[str, str] = {}
     derived_by_source: Dict[str, List[str]] = {}
-    existing = set(out.columns)
     skip_columns = skip_columns or set()
 
     for col in list(df.columns):
@@ -888,9 +892,20 @@ def derive_node_fraction_columns(
             continue
 
         base = re.sub(r"[^A-Za-z0-9]+", "_", str(col)).strip("_").lower() or "node_fraction"
-        pos_col = _safe_derived_name(existing, "positive_nodes", base)
-        total_col = _safe_derived_name(existing, "total_nodes", base)
-        ratio_col = _safe_derived_name(existing, "node_ratio", base)
+        # Node fractions have one canonical derived triplet. Older builds
+        # repeatedly created source-prefixed and numbered copies on every
+        # classify refresh; remove only those generated aliases and refresh
+        # the canonical columns in place.
+        generated_alias = re.compile(
+            rf"^{re.escape(base)}_(?:positive_nodes|total_nodes|node_ratio)(?:_\d+)?$",
+            re.IGNORECASE,
+        )
+        aliases = [name for name in out.columns if generated_alias.match(str(name))]
+        if aliases:
+            out = out.drop(columns=aliases)
+        pos_col = "positive_nodes"
+        total_col = "total_nodes"
+        ratio_col = "node_ratio"
 
         pos_values = pd.Series(pd.NA, index=out.index, dtype="Float64")
         total_values = pd.Series(pd.NA, index=out.index, dtype="Float64")

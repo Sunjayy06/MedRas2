@@ -186,6 +186,7 @@ def _build_session_view(entry, classifications, assignment) -> Dict[str, Any]:
             or intake_study_type
             or ai_study.get("study_type")
         ),
+        "study_type_confirmed": bool(entry.meta.get("confirmed_study_type")),
         "analysis_predictors": analysis_predictors,
         # Future wizard work will populate these:
         "paired": bool(intake.get("paired")) if isinstance(intake, dict) else False,
