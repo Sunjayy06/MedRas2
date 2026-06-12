@@ -12,6 +12,7 @@ import datetime
 import io
 import math
 import os
+import re
 import tempfile
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -53,6 +54,30 @@ _SECONDARY_TYPES = {
     "diagnostic_accuracy", "kappa", "icc",
     "ordinal_logistic", "count_regression",
 }
+
+
+def _is_valid_result(result: Dict[str, Any]) -> bool:
+    if not isinstance(result, dict) or result.get("error"):
+        return False
+    if result.get("id") == "descriptive_only" or result.get("analysis_family") == "descriptive":
+        return False
+    return bool(
+        result.get("test_type")
+        or result.get("tables")
+        or result.get("p") is not None
+        or result.get("p_value") is not None
+    )
+
+
+def _is_primary_result(result: Dict[str, Any]) -> bool:
+    return _is_valid_result(result) and (
+        result.get("test_type") in _PRIMARY_TYPES
+        or result.get("analysis_family") == "bivariate"
+    )
+
+
+def _is_secondary_result(result: Dict[str, Any]) -> bool:
+    return _is_valid_result(result) and not _is_primary_result(result)
 
 
 # ---------------------------------------------------------------------------
@@ -650,6 +675,7 @@ def build_result_table(doc, result: Dict[str, Any],
         note_bits.append("AUC area under the ROC curve")
     note_bits.append("Bold p-values indicate p < 0.05")
     add_footnote(doc, "; ".join(note_bits) + ".")
+    _render_normalized_figures_docx(doc, result)
 
 
 def _render_inferential_table(doc, result: Dict[str, Any]) -> None:
@@ -852,8 +878,7 @@ def build_results_narrative(session: Dict[str, Any], results: List[Dict[str, Any
                  f'{"was" if len(non_normal) == 1 else "were"} not normally distributed; '
                  f'non-parametric tests were used where appropriate. ')
 
-    primary = next((r for r in results
-                    if r.get("test_type") in _PRIMARY_TYPES and "error" not in r), None)
+    primary = next((r for r in results if _is_primary_result(r)), None)
     if primary:
         test_name = primary.get("plan_name") or primary.get("title", "the primary test")
         stat = _first_present(primary, "statistic", "t", "U", "F", "z", "chi2", "W")
@@ -1202,10 +1227,7 @@ def generate_report(session: Dict[str, Any], df: pd.DataFrame) -> Document:
 
     # ── 2d. Primary Analysis ────────────────────────────────────
     if "primary_analysis" not in hidden:
-        primary_results = [
-            r for r in results
-            if r.get("test_type") in _PRIMARY_TYPES and "error" not in r
-        ]
+        primary_results = [r for r in results if _is_primary_result(r)]
         if primary_results:
             for table_num, primary in enumerate(primary_results, 3):
                 section_label = primary.get("plan_name") or primary.get("title") or "Primary Analysis"
@@ -1226,14 +1248,10 @@ def generate_report(session: Dict[str, Any], df: pd.DataFrame) -> Document:
 
     # ── 2e. Secondary Analyses ──────────────────────────────────
     if "secondary_analyses" not in hidden:
-        secondary = [
-            r for r in results
-            if r.get("test_type") in _SECONDARY_TYPES and "error" not in r
-        ]
+        secondary = [r for r in results if _is_secondary_result(r)]
         if secondary:
             table_num = 3 + len([
-                r for r in results
-                if r.get("test_type") in _PRIMARY_TYPES and "error" not in r
+                r for r in results if _is_primary_result(r)
             ])
             for r in secondary:
                 label = r.get("plan_name") or r.get("title") or r.get("test_type", "")
@@ -1374,10 +1392,7 @@ def to_pdf(entry, results: Dict[str, Any], assignment: Dict[str, Any]) -> bytes:
 
     # 5. Primary
     flow.append(Paragraph("Primary Analysis", h2))
-    primary_results = [
-        r for r in session["results"]
-        if r.get("test_type") in _PRIMARY_TYPES and "error" not in r
-    ]
+    primary_results = [r for r in session["results"] if _is_primary_result(r)]
     if primary_results:
         for primary in primary_results:
             flow.append(Paragraph(primary.get("plan_name") or primary.get("title", ""), h2))
@@ -1387,8 +1402,7 @@ def to_pdf(entry, results: Dict[str, Any], assignment: Dict[str, Any]) -> bytes:
     flow.append(PageBreak())
 
     # 6. Secondary
-    secondary = [r for r in session["results"]
-                 if r.get("test_type") in _SECONDARY_TYPES and "error" not in r]
+    secondary = [r for r in session["results"] if _is_secondary_result(r)]
     if secondary:
         flow.append(Paragraph("Secondary Analyses", h2))
         for r in secondary:
@@ -1433,6 +1447,16 @@ def to_pdf(entry, results: Dict[str, Any], assignment: Dict[str, Any]) -> bytes:
 
     pdf.build(flow)
     return out.getvalue()
+
+
+def generate_chapter_v_word(entry, results: Dict[str, Any], assignment: Dict[str, Any]) -> bytes:
+    """Generate Chapter V from the same normalized Step 7 result state."""
+    return to_docx(entry, results, assignment)
+
+
+def generate_chapter_v_pdf(entry, results: Dict[str, Any], assignment: Dict[str, Any]) -> bytes:
+    """Generate Chapter V PDF from the same normalized Step 7 result state."""
+    return to_pdf(entry, results, assignment)
 
 
 def _pdf_table(data: List[List[str]]) -> Table:
@@ -1486,6 +1510,8 @@ def _pdf_render_normalized_figures(flow, result: Dict[str, Any], body) -> None:
 
 def _pdf_render_test(flow, result, h2, body, session=None) -> None:
     variables = (session or {}).get("variables", {}) if session else {}
+    if result.get("warning"):
+        flow.append(Paragraph(f"<b>Warning:</b> {_pdf_text(result['warning'])}", body))
     if result.get("plan_reason"):
         flow.append(Paragraph(f"<i>Why this test: {result['plan_reason']}</i>", body))
     rows = result.get("rows") or []
@@ -1547,6 +1573,8 @@ def _pdf_render_test(flow, result, h2, body, session=None) -> None:
     if result.get("narrative"):
         flow.append(Spacer(1, 4))
         flow.append(Paragraph(_sanitize_text(result["narrative"], variables), body))
+    if not rendered_normalized:
+        _pdf_render_normalized_figures(flow, result, body)
     flow.append(Spacer(1, 8))
 
 
@@ -1586,6 +1614,19 @@ def _xlsx_write_normalized_figures(ws, result: Dict[str, Any]) -> None:
         except Exception:
             ws.append(["Image not embedded in this Excel environment."])
     ws.append([])
+
+
+def _safe_sheet_title(wb: Workbook, raw_title: Any) -> str:
+    title = re.sub(r'[\[\]:*?/\\]', " ", str(raw_title or "Result"))
+    title = re.sub(r"\s+", " ", title).strip().strip("'") or "Result"
+    base = title[:31]
+    candidate = base
+    suffix = 2
+    while candidate in wb.sheetnames:
+        marker = f" {suffix}"
+        candidate = f"{base[:31 - len(marker)]}{marker}"
+        suffix += 1
+    return candidate
 
 
 def to_xlsx(entry, results: Dict[str, Any], assignment: Dict[str, Any]) -> bytes:
@@ -1632,18 +1673,35 @@ def to_xlsx(entry, results: Dict[str, Any], assignment: Dict[str, Any]) -> bytes
             dname = session["variables"].get(v, {}).get("display_name") or clean_display_name(v)
             ws.append([dname, r.get("test", ""), r.get("stat"), r.get("p"), r.get("decision", "")])
 
-    # Each test on its own sheet
+    # Each normalized result table gets its own sheet. The first table keeps
+    # the result title for backward compatibility; later tables use subtitles.
     for t in session["results"]:
-        title = (t.get("plan_name") or t.get("title") or "Test")[:30]
-        ws = wb.create_sheet(title)
-        if not _xlsx_write_normalized_tables(ws, t):
-            ws.append(["Statistic", "Value"])
-            for r in t.get("rows") or []:
-                if isinstance(r, dict):
-                    ws.append([r.get("label", ""), r.get("value", "")])
-        _xlsx_write_normalized_figures(ws, t)
-        ws.append([])
-        ws.append(["Narrative"]); ws.append([t.get("narrative", "")])
+        result_title = t.get("title") or t.get("plan_name") or "Test"
+        normalized_tables = _normalized_tables(t)
+        table_payloads = normalized_tables or [None]
+        for index, payload in enumerate(table_payloads):
+            raw_title = result_title if index == 0 else f"{result_title} {payload['title']}"
+            ws = wb.create_sheet(_safe_sheet_title(wb, raw_title))
+            ws.append(["Result", result_title])
+            ws.append(["Test used", t.get("actual_test_used") or t.get("test") or t.get("test_type", "")])
+            if t.get("warning"):
+                ws.append(["Warning", t.get("warning")])
+            ws.append([])
+            if payload:
+                ws.append([payload["title"]])
+                ws.append(payload["headers"])
+                for row in payload["rows"]:
+                    ws.append(row)
+            else:
+                ws.append(["Statistic", "Value"])
+                for r in t.get("rows") or []:
+                    if isinstance(r, dict):
+                        ws.append([r.get("label", ""), r.get("value", "")])
+            if index == 0:
+                _xlsx_write_normalized_figures(ws, t)
+            ws.append([])
+            ws.append(["Narrative"])
+            ws.append([t.get("narrative", "")])
 
     # Narrative & methods sheet
     ws = wb.create_sheet("Narrative")

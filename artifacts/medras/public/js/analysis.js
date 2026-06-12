@@ -6111,11 +6111,11 @@ function bindExport() {
   const screen = document.getElementById("screen-export");
   if (!screen) return;
   screen.querySelectorAll('[data-action="download"]').forEach((btn) => {
-    btn.addEventListener("click", () => downloadExport(btn.dataset.format));
+    btn.addEventListener("click", () => downloadExport(btn.dataset.format, btn));
   });
   // Chapter V thesis-format export buttons
   screen.querySelectorAll('[data-action="download-chapter-v"]').forEach((btn) => {
-    btn.addEventListener("click", () => downloadChapterV(btn.dataset.format));
+    btn.addEventListener("click", () => downloadChapterV(btn.dataset.format, btn));
   });
   const back = screen.querySelector('[data-action="back-to-results"]');
   if (back) back.addEventListener("click", () => showScreen("results"));
@@ -6124,31 +6124,51 @@ function bindExport() {
   bindCorrectionSystem();
 }
 
-async function downloadChapterV(fmt) {
-  if (!state.jobId) return;
+async function exportErrorMessage(res) {
+  const text = await res.text();
+  try {
+    const payload = JSON.parse(text);
+    return payload.detail || payload.message || text || `HTTP ${res.status}`;
+  } catch (_) {
+    return text || res.statusText || `HTTP ${res.status}`;
+  }
+}
+
+function downloadBlob(blob, filename) {
+  if (!blob || !blob.size) throw new Error("The server returned an empty export file.");
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+async function downloadChapterV(fmt, button) {
   const statusEl = document.getElementById("chapter-v-status");
+  if (!state.jobId) {
+    setStatus(statusEl, "No active analysis session. Run the analysis before exporting.", "error");
+    return;
+  }
+  if (button) button.disabled = true;
   setStatus(statusEl, "Generating Chapter V…", "loading");
   const fmtKey = fmt === "pdf" ? "chapter_v_pdf" : "chapter_v_word";
   try {
     const res = await fetch(`${API_BASE}/export/${state.jobId}/${fmtKey}`);
     if (!res.ok) {
-      const body = await res.json().catch(() => ({ detail: res.statusText }));
-      throw new Error(body.detail || res.statusText);
+      throw new Error(await exportErrorMessage(res));
     }
     const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
     const ext = fmt === "pdf" ? "pdf" : "docx";
-    a.href = url;
-    a.download = `chapter_v_results.${ext}`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    downloadBlob(blob, `chapter_v_results.${ext}`);
     setStatus(statusEl, "Downloaded!", "success");
     setTimeout(() => setStatus(statusEl, ""), 3000);
   } catch (err) {
     setStatus(statusEl, `Download failed: ${err.message}`, "error");
+  } finally {
+    if (button) button.disabled = false;
   }
 }
 
@@ -6288,27 +6308,28 @@ async function restoreVersion(versionNum) {
   }
 }
 
-async function downloadExport(format) {
+async function downloadExport(format, button) {
   const status = document.getElementById("export-status");
+  if (!state.jobId) {
+    setStatus(status, "No active analysis session. Run the analysis before exporting.", "error");
+    return;
+  }
+  if (button) button.disabled = true;
   setStatus(status, `Building ${format.toUpperCase()} file…`, "loading");
   try {
     const url = `${API_BASE}/export/${state.jobId}/${format}`;
     const res = await fetch(url);
     if (!res.ok) {
-      const txt = await res.text();
-      throw new Error(txt || `HTTP ${res.status}`);
+      throw new Error(await exportErrorMessage(res));
     }
     const blob = await res.blob();
     const ext = format === "word" ? "docx" : (format === "excel" ? "xlsx" : "pdf");
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `medras_results.${ext}`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
+    downloadBlob(blob, `medras_results.${ext}`);
     setStatus(status, `${format.toUpperCase()} downloaded.`, "success");
   } catch (err) {
     setStatus(status, `Download failed: ${err.message}`, "error");
+  } finally {
+    if (button) button.disabled = false;
   }
 }
 

@@ -1735,10 +1735,16 @@ async def export_chapter_v_word(job_id: str) -> Response:
             status_code=400,
             detail="No results available — run the analysis first.",
         )
-    payload_bytes = await asyncio.to_thread(
-        export_service.generate_chapter_v_word,
-        entry, res, entry.meta.get("assignment") or {},
-    )
+    try:
+        payload_bytes = await asyncio.to_thread(
+            export_service.generate_chapter_v_word,
+            entry, res, entry.meta.get("assignment") or {},
+        )
+    except Exception as exc:
+        log.exception("Chapter V Word export failed for job %s", job_id)
+        raise HTTPException(status_code=500, detail=f"Chapter V Word export failed: {exc}") from exc
+    if not payload_bytes:
+        raise HTTPException(status_code=500, detail="Chapter V Word export produced an empty file.")
     filename = f"chapter_v_results_{job_id[:8]}.docx"
     return Response(
         content=payload_bytes,
@@ -1759,10 +1765,16 @@ async def export_chapter_v_pdf(job_id: str) -> Response:
             status_code=400,
             detail="No results available — run the analysis first.",
         )
-    payload_bytes = await asyncio.to_thread(
-        export_service.generate_chapter_v_pdf,
-        entry, res, entry.meta.get("assignment") or {},
-    )
+    try:
+        payload_bytes = await asyncio.to_thread(
+            export_service.generate_chapter_v_pdf,
+            entry, res, entry.meta.get("assignment") or {},
+        )
+    except Exception as exc:
+        log.exception("Chapter V PDF export failed for job %s", job_id)
+        raise HTTPException(status_code=500, detail=f"Chapter V PDF export failed: {exc}") from exc
+    if not payload_bytes:
+        raise HTTPException(status_code=500, detail="Chapter V PDF export produced an empty file.")
     filename = f"chapter_v_results_{job_id[:8]}.pdf"
     return Response(
         content=payload_bytes,
@@ -1788,7 +1800,15 @@ async def export(job_id: str, fmt: str) -> Response:
     if not res:
         raise HTTPException(status_code=400, detail="No results available — run the analysis on Step 7 first.")
     fn, mime, ext = exporter
-    payload_bytes = fn(entry, res, entry.meta.get("assignment") or {})
+    try:
+        payload_bytes = await asyncio.to_thread(
+            fn, entry, res, entry.meta.get("assignment") or {}
+        )
+    except Exception as exc:
+        log.exception("%s export failed for job %s", fmt, job_id)
+        raise HTTPException(status_code=500, detail=f"{fmt.title()} export failed: {exc}") from exc
+    if not payload_bytes:
+        raise HTTPException(status_code=500, detail=f"{fmt.title()} export produced an empty file.")
     filename = f"medras_results_{job_id[:8]}.{ext}"
     return Response(
         content=payload_bytes,
