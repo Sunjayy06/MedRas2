@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import base64
 import io
+import textwrap
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
@@ -474,45 +475,78 @@ def _histogram(df, outcome, _group=None) -> Optional[str]:
         return None
 
 
+def _categorical_graph_uses_horizontal_layout(labels: List[str]) -> bool:
+    return len(labels) > 6 or max((len(str(label)) for label in labels), default=0) > 18
+
+
 def _stacked_bar(df, outcome, group) -> Optional[str]:
     """Grouped percentage bar chart — % of each outcome level per group category."""
     try:
-        ct = pd.crosstab(df[group].astype(str), df[outcome].astype(str))
+        plot_df = df[[group, outcome]].dropna().copy()
+        for col in (group, outcome):
+            plot_df[col] = plot_df[col].astype(str).str.strip()
+            plot_df = plot_df.loc[
+                ~plot_df[col].str.lower().isin({"", "nan", "none", "null", "missing"})
+            ]
+        ct = pd.crosstab(plot_df[group], plot_df[outcome])
+        if ct.empty:
+            return None
         pct = ct.div(ct.sum(axis=1), axis=0) * 100  # row-wise % (sum per group = 100)
         n_groups = len(pct.index)
         n_cats   = len(pct.columns)
-        fig, ax = plt.subplots(figsize=(max(5.0, n_groups * 0.9 + 1.5), 4.0))
-        x = np.arange(n_groups)
+        labels = [str(label) for label in pct.index]
+        horizontal = _categorical_graph_uses_horizontal_layout(labels)
+        fig, ax = plt.subplots(
+            figsize=(7.0, max(4.0, n_groups * 0.48 + 1.5)) if horizontal
+            else (max(5.0, n_groups * 0.9 + 1.5), 4.0)
+        )
+        positions = np.arange(n_groups)
         width = 0.65 / max(n_cats, 1)
         colours = ["#2f6fed", "#c43838", "#f59e0b", "#10b981", "#8b5cf6"]
         for j, col in enumerate(pct.columns):
             offset = (j - (n_cats - 1) / 2) * width
-            bars = ax.bar(
-                x + offset, pct[col], width * 0.92,
-                label=str(col),
-                color=colours[j % len(colours)],
-                edgecolor="white",
-                linewidth=0.6,
+            style = {
+                "label": str(col), "color": colours[j % len(colours)],
+                "edgecolor": "white", "linewidth": 0.6,
+            }
+            bars = (
+                ax.barh(positions + offset, pct[col], width * 0.92, **style)
+                if horizontal
+                else ax.bar(positions + offset, pct[col], width * 0.92, **style)
             )
-            # Percentage labels on bars ≥ 8 %
             for bar in bars:
-                h = bar.get_height()
-                if h >= 8:
+                value = bar.get_width() if horizontal else bar.get_height()
+                if value >= 8:
                     ax.text(
-                        bar.get_x() + bar.get_width() / 2, h + 1.2,
-                        f"{h:.0f}%", ha="center", va="bottom", fontsize=7.5,
+                        value + 1.0 if horizontal else bar.get_x() + bar.get_width() / 2,
+                        bar.get_y() + bar.get_height() / 2 if horizontal else value + 1.2,
+                        f"{value:.0f}%",
+                        ha="left" if horizontal else "center",
+                        va="center" if horizontal else "bottom",
+                        fontsize=7.5,
                     )
-        ax.set_xticks(x)
-        ax.set_xticklabels(pct.index, fontsize=9, rotation=20 if n_groups > 4 else 0, ha="right")
-        ax.set_ylabel("Percentage (%)", fontsize=10)
-        ax.set_xlabel(clean_display_name(group), fontsize=10)
-        ax.set_ylim(0, 115)
+        if horizontal:
+            ax.set_yticks(positions)
+            ax.set_yticklabels(
+                ["\n".join(textwrap.wrap(label, width=28)) for label in labels],
+                fontsize=8.5,
+            )
+            ax.set_xlabel("Percentage (%)", fontsize=10)
+            ax.set_ylabel(clean_display_name(group), fontsize=10)
+            ax.set_xlim(0, 115)
+            ax.grid(axis="x", alpha=0.3, linestyle="--")
+        else:
+            ax.set_xticks(positions)
+            ax.set_xticklabels(labels, fontsize=9, rotation=0)
+            ax.set_ylabel("Percentage (%)", fontsize=10)
+            ax.set_xlabel(clean_display_name(group), fontsize=10)
+            ax.set_ylim(0, 115)
+            ax.grid(axis="y", alpha=0.3, linestyle="--")
         ax.set_title(
             f"{clean_display_name(outcome)} distribution by {clean_display_name(group)}",
             fontsize=11, fontweight="bold",
         )
         ax.legend(title=clean_display_name(outcome), fontsize=8, framealpha=0.8)
-        ax.grid(axis="y", alpha=0.3, linestyle="--")
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
         fig.tight_layout()
@@ -1431,10 +1465,20 @@ def run_plan(
             function_name = pb.get("function")
             args = pb.get("args") or {}
             if function_name == "run_chi_or_fisher" and r.get("actual_test_used"):
+                actual_name = str(r["actual_test_used"])
+                if actual_name.lower() == "chi-square":
+                    actual_name = "Chi-square test"
+                elif actual_name.lower() in {"fisher's exact", "fisher exact"}:
+                    actual_name = "Fisher's exact test"
+                warning_text = str(r.get("note") or r.get("warning") or "").lower()
+                sparse = "sparse" in warning_text or "expected counts below" in warning_text
+                if sparse and "chi-square" in actual_name.lower():
+                    actual_name = "Chi-square test with sparse-cell warning"
                 r["title"] = (
                     f"{args.get('col1')} vs {args.get('col2')}: "
-                    f"{r['actual_test_used']}"
+                    f"{actual_name}"
                 )
+                r["plan_name"] = r["title"]
             else:
                 r["title"] = t["title"]
             r["test_type"] = r.get("test_type") or pb.get("test_type")
@@ -1443,7 +1487,7 @@ def run_plan(
                 else "correlation" if pb.get("test_type") in ("pearson", "spearman", "kendall_tau")
                 else "bivariate"
             )
-            r["plan_name"] = t["title"]
+            r.setdefault("plan_name", t["title"])
             r["plan_reason"] = t.get("why")
             figures = list(r.get("figures") or [])
             if function_name == "run_chi_or_fisher":

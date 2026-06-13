@@ -173,6 +173,13 @@ def _build_cleaning_log(
     for column, note in (meta.get("cleanup_notes") or {}).items():
         text = str(note)
         lowered = text.lower()
+        if (
+            meta.get("domain_profile") == "breast_pathology"
+            and "auto-extracted numeric values from text" in lowered
+        ):
+            from app.services import variable_classifier
+            if variable_classifier.is_breast_stage_column(column):
+                continue
         if "lymph-node" in lowered and "derived" in lowered:
             add("Node-fraction derivation", column, text)
         elif "lymph-node" in lowered or "warning:" in lowered or "review and correct" in lowered:
@@ -221,6 +228,13 @@ def _build_cleaning_log(
             issue.get("column") or "Dataset",
             issue.get("message") or issue.get("type"),
         )
+
+    for suggestion in (meta.get("plan") or {}).get("suggestions") or []:
+        if suggestion.get("blocking") or not str(suggestion.get("id", "")).startswith(
+            "predictor_duplicate_labels_"
+        ):
+            continue
+        add("Quality warning", "Predictor categories", suggestion.get("warning"))
 
     for c in classifications:
         if c.get("auto_strip_count"):

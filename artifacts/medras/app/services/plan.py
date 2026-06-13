@@ -158,6 +158,33 @@ def generate_plan(
             ),
         })
 
+    for predictor in analysis_predictors:
+        if predictor == outcome or predictor not in df.columns:
+            continue
+        predictor_duplicates = category_merger.detect_category_duplicates(
+            df[predictor], profile=session.get("domain_profile")
+        )
+        predictor_typo_groups = list(predictor_duplicates["obvious"])
+        for group_item in predictor_duplicates["borderline"]:
+            counts = sorted((group_item.get("counts") or {}).values(), reverse=True)
+            total = sum(counts)
+            if len(counts) >= 2 and counts[-1] <= max(2, int(total * 0.05)):
+                predictor_typo_groups.append(group_item)
+        if predictor_typo_groups:
+            labels = "; ".join(
+                " / ".join(group_item["members"]) for group_item in predictor_typo_groups
+            )
+            suggestions.append({
+                "id": f"predictor_duplicate_labels_{predictor}",
+                "title": f"Review likely duplicate labels in predictor {predictor}",
+                "requires_confirmation": True,
+                "blocking": False,
+                "warning": (
+                    f"Likely duplicate predictor labels were detected: {labels}. "
+                    "Analysis can continue, but split categories may affect estimates and should be reviewed."
+                ),
+            })
+
     # ---- Comparison tests ------------------------------------------------
     if group and o_kind == "scale" and n_levels == 2:
         if o_normal:
