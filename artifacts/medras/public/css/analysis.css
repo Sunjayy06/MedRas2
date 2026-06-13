@@ -3873,6 +3873,12 @@ td.se-corr-p-sig {
   flex-wrap: wrap;
   gap: 4px;
 }
+
+.se-merge-review-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-left: auto;
+}
 .se-merge-member {
   display: inline-flex;
   align-items: center;

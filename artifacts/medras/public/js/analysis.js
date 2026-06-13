@@ -40,6 +40,7 @@ const state = {
 
   // --- Category duplicate detection ---
   categoryDupeResults: null,   // {columns: {<col>: {obvious:[], borderline:[], n_dirty}}}
+  rejectedMergeSuggestions: new Set(),
   setupGroupCol: "",           // grouping variable selected on setup screen
 
   // --- Step 3 (Variables) additions ---
@@ -174,6 +175,11 @@ function selectedDomainProfile() {
     ? value
     : "generic";
   return state.domainProfile;
+}
+
+function _mergeSuggestionKey(proposal) {
+  const members = [...(proposal.members || [])].map(String).sort();
+  return `${proposal.column || ""}::${proposal.canonical || ""}::${members.join("|")}`;
 }
 function $$(sel, root = document) { return Array.from(root.querySelectorAll(sel)); }
 
@@ -1054,6 +1060,7 @@ async function handleUpload(file) {
   setStatus(status, `Uploading ${file.name}…`, "loading");
   const form = new FormData();
   form.append("file", file);
+  form.append("profile", selectedDomainProfile());
   try {
     const data = await api("/upload", { method: "POST", body: form });
     state.dataSource = "upload";
@@ -1364,6 +1371,8 @@ function ingestDataset(data) {
     state.assistantThread = [];
     state.recodingChoices = {};
     state.missingDecisions = {};
+    state.categoryDupeResults = null;
+    state.rejectedMergeSuggestions = new Set();
     // Also clear all Step 4–7 state so a new dataset starts clean.
     state.assignment = null;
     state.assignmentAutoMatched = false;
@@ -2585,7 +2594,10 @@ function _renderCategoryMergePanel(result) {
       allObvious.push({ ...p, column: col });
     }
     for (const p of (colResult.borderline || [])) {
-      allBorderline.push({ ...p, column: col });
+      const proposal = { ...p, column: col };
+      if (!state.rejectedMergeSuggestions.has(_mergeSuggestionKey(proposal))) {
+        allBorderline.push(proposal);
+      }
     }
   }
 
@@ -2599,6 +2611,7 @@ function _renderCategoryMergePanel(result) {
 
   const renderGroup = (proposals, badge) => proposals.map((p) => {
     const badgeClass = badge === "AUTO" ? "is-auto" : "is-review";
+    const key = _mergeSuggestionKey(p);
     const memberTags = (p.members || []).map((m) => {
       const count = (p.counts || {})[m] || 0;
       const isCanon = m === p.canonical;
@@ -2612,6 +2625,10 @@ function _renderCategoryMergePanel(result) {
       <span class="se-merge-arrow">→</span>
       <span class="se-merge-target">merge to <strong>${escapeHtml(p.canonical)}</strong></span>
       <div class="se-merge-members">${memberTags}</div>
+      ${badge === "REVIEW" ? `<div class="se-merge-review-actions">
+        <button type="button" class="btn btn-secondary se-btn-small" data-merge-accept="${escapeHtml(key)}">Accept</button>
+        <button type="button" class="btn btn-ghost se-btn-small" data-merge-reject="${escapeHtml(key)}">Reject</button>
+      </div>` : ""}
     </div>`;
   }).join("");
 
@@ -2633,6 +2650,7 @@ function _buildMergePayload(proposals) {
 
 function _bindMergePanelButtons(allObvious, allBorderline) {
   const mergeStatus = document.getElementById("merge-status");
+  const reviewByKey = new Map(allBorderline.map((proposal) => [_mergeSuggestionKey(proposal), proposal]));
 
   const applyMerge = async (proposals, label) => {
     if (!proposals.length) return;
@@ -2666,6 +2684,24 @@ function _bindMergePanelButtons(allObvious, allBorderline) {
 
   document.getElementById("btn-apply-all-merges")?.addEventListener("click", () =>
     applyMerge([...allObvious, ...allBorderline], "all suggestions"), { once: true });
+
+  $$("[data-merge-accept]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const proposal = reviewByKey.get(button.dataset.mergeAccept);
+      if (proposal) applyMerge([proposal], `${proposal.column} label merge`);
+    }, { once: true });
+  });
+
+  $$("[data-merge-reject]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.rejectedMergeSuggestions.add(button.dataset.mergeReject);
+      button.closest(".se-merge-proposal")?.remove();
+      setStatus(mergeStatus, "Suggestion rejected. No data were changed.", "success");
+      if (!document.querySelector("#merge-proposals-list .se-merge-proposal")) {
+        document.getElementById("category-merge-panel").style.display = "none";
+      }
+    }, { once: true });
+  });
 
   document.getElementById("btn-dismiss-merge-panel")?.addEventListener("click", () => {
     document.getElementById("category-merge-panel").style.display = "none";
@@ -6362,6 +6398,8 @@ function restart() {
   state.assistantThread = [];
   state.recodingChoices = {};
   state.missingDecisions = {};
+  state.categoryDupeResults = null;
+  state.rejectedMergeSuggestions = new Set();
   state.assignment = null;
   state.normality = null;
   state.plan = null;

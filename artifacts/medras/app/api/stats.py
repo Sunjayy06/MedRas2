@@ -20,7 +20,7 @@ import asyncio
 import io
 from typing import Any, Dict, List, Literal, Optional
 
-from fastapi import APIRouter, File, HTTPException, Query, Request, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, Query, Request, UploadFile
 from pydantic import BaseModel, Field
 
 from app.core.limiter import limiter
@@ -567,12 +567,17 @@ async def parse_proposal(request: Request, file: UploadFile = File(...)) -> Dict
 
 @router.post("/upload")
 @limiter.limit("20/minute")
-async def upload_dataset(request: Request, file: UploadFile = File(...)) -> Dict[str, Any]:
+async def upload_dataset(
+    request: Request,
+    file: UploadFile = File(...),
+    profile: DomainProfileLiteral = Form("generic"),
+) -> Dict[str, Any]:
     raw = await file.read()
     try:
         df, meta = excel_loader.parse_upload(filename=file.filename or "upload", raw=raw)
     except excel_loader.UploadError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    meta["domain_profile"] = domain_profiles.normalize_profile(profile)
     job_id = dataset_store.put(df, meta)
     entry = dataset_store.get(job_id)
     return _build_response(job_id, entry)
@@ -794,6 +799,29 @@ async def classify(payload: ClassifyRequest) -> Dict[str, Any]:
     if entry is None:
         raise HTTPException(status_code=404, detail="Dataset expired or not found.")
     profile = _domain_profile(entry, payload.profile)
+    if domain_profiles.is_breast_pathology(profile):
+        cleanup_notes_meta = dict(entry.meta.get("cleanup_notes") or {})
+        cleanup_backups_meta = dict(entry.meta.get("cleanup_backups") or {})
+        restored_stage_columns: List[str] = []
+        for col, note in list(cleanup_notes_meta.items()):
+            if (
+                not variable_classifier.is_breast_stage_column(col)
+                or "Auto-extracted numeric values from text" not in str(note)
+            ):
+                continue
+            backup = cleanup_backups_meta.get(col)
+            values = backup.get("values") if isinstance(backup, dict) else backup
+            if col in entry.df.columns and isinstance(values, list) and len(values) == len(entry.df):
+                entry.df[col] = values
+                cleanup_notes_meta.pop(col, None)
+                cleanup_backups_meta.pop(col, None)
+                restored_stage_columns.append(col)
+        if restored_stage_columns:
+            entry.meta["cleanup_notes"] = cleanup_notes_meta
+            entry.meta["cleanup_backups"] = cleanup_backups_meta
+            _invalidate_downstream(entry, keep_normality=False)
+            entry.meta.pop("classifications", None)
+
     # Pre-clean in a reversible, previewable way. Each helper is idempotent;
     # backups keep the original source columns so /cleanup-undo can restore
     # them or remove derived columns.
@@ -1703,6 +1731,17 @@ async def apply_category_merge(payload: ApplyMergeRequest) -> Dict[str, Any]:
         return {"status": "no_changes", "actions": []}
     profile = _domain_profile(entry)
     merges_dicts = [m.model_dump() for m in payload.merges]
+    protected = [
+        merge for merge in merges_dicts
+        if category_merger.is_protected_merge(
+            merge.get("canonical", ""), merge.get("members") or [], profile=profile
+        )
+    ]
+    if protected:
+        raise HTTPException(
+            status_code=400,
+            detail="Protected clinical categories cannot be merged in breast_pathology mode.",
+        )
     new_df, actions = await asyncio.to_thread(
         category_merger.apply_merges, entry.df, merges_dicts, profile
     )

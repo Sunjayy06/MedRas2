@@ -322,6 +322,11 @@ def is_known_categorical_clinical_marker(
     return False
 
 
+def is_breast_stage_column(name: str) -> bool:
+    """Return whether a column name denotes a breast-pathology TNM/stage field."""
+    return bool(_TNM_NAME_RE.search(str(name or "")))
+
+
 def _looks_like_tnm_ordinal(series: pd.Series, name: str) -> bool:
     if not _TNM_NAME_RE.search(str(name or "")):
         return False

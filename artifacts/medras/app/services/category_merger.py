@@ -122,6 +122,18 @@ def _contains_protected_distinct_labels(
     return any(len(normalised.intersection(group)) > 1 for group in _PROTECTED_CLINICAL_GROUPS)
 
 
+def is_protected_merge(
+    canonical: str,
+    members: List[str],
+    profile: str = domain_profiles.DEFAULT_PROFILE,
+) -> bool:
+    """Return True when a proposed merge combines distinct protected labels."""
+    return _contains_protected_distinct_labels(
+        [str(canonical)] + [str(value) for value in members],
+        profile=profile,
+    )
+
+
 def _canonical(values: List[str], freq: Dict[str, int]) -> str:
     """Pick the canonical label: most-frequent clean form, ties → alphabetical."""
     clean_vals = [(_clean_basic(v), v) for v in values]
@@ -314,10 +326,7 @@ def apply_merges(
         members = m.get("members") or []
         if not col or col not in new_df.columns or not canon:
             continue
-        if _contains_protected_distinct_labels(
-            [str(canon)] + [str(value) for value in members],
-            profile=profile,
-        ):
+        if is_protected_merge(str(canon), [str(value) for value in members], profile=profile):
             continue
         to_replace = [v for v in members if str(v) != str(canon)]
         if not to_replace:
