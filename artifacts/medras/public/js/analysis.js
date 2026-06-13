@@ -181,6 +181,14 @@ function _mergeSuggestionKey(proposal) {
   const members = [...(proposal.members || [])].map(String).sort();
   return `${proposal.column || ""}::${proposal.canonical || ""}::${members.join("|")}`;
 }
+
+function _isProtectedBreastMerge(proposal) {
+  if (selectedDomainProfile() !== "breast_pathology") return false;
+  const labels = new Set([proposal.canonical, ...(proposal.members || [])].map((value) =>
+    String(value || "").trim().toLowerCase().replace(/[^\w]+/g, " ")
+  ));
+  return labels.has("luminal a") && labels.has("luminal b");
+}
 function $$(sel, root = document) { return Array.from(root.querySelectorAll(sel)); }
 
 function setStatus(el, message, level = "loading") {
@@ -1387,6 +1395,11 @@ function ingestDataset(data) {
     try { sessionStorage.removeItem('medras.nav.returnHint'); } catch (_) {}
   }
   state.jobId = data.job_id;
+  if (data.domain_profile) {
+    state.domainProfile = data.domain_profile;
+    const profileSelect = document.getElementById("s1-domain-profile");
+    if (profileSelect) profileSelect.value = data.domain_profile;
+  }
   state.summary = data.summary;
   state.columns = data.columns;
   // Surface the practice banner whenever the backend marks the dataset
@@ -2591,11 +2604,15 @@ function _renderCategoryMergePanel(result) {
 
   for (const [col, colResult] of Object.entries(columns)) {
     for (const p of (colResult.obvious || [])) {
-      allObvious.push({ ...p, column: col });
+      const proposal = { ...p, column: col };
+      if (!_isProtectedBreastMerge(proposal)) allObvious.push(proposal);
     }
     for (const p of (colResult.borderline || [])) {
       const proposal = { ...p, column: col };
-      if (!state.rejectedMergeSuggestions.has(_mergeSuggestionKey(proposal))) {
+      if (
+        !_isProtectedBreastMerge(proposal)
+        && !state.rejectedMergeSuggestions.has(_mergeSuggestionKey(proposal))
+      ) {
         allBorderline.push(proposal);
       }
     }
@@ -2663,6 +2680,7 @@ function _bindMergePanelButtons(allObvious, allBorderline) {
         body: JSON.stringify({
           job_id: state.jobId,
           merges: _buildMergePayload(proposals),
+          profile: selectedDomainProfile(),
         }),
       });
       mergeApplied = true;
@@ -2670,6 +2688,13 @@ function _bindMergePanelButtons(allObvious, allBorderline) {
       setStatus(mergeStatus, `Applied ${n} merge${n !== 1 ? "s" : ""} — re-classifying…`, "success");
       // Re-run classification to pick up the cleaned data
       await refreshClassifications([], { render: true, detectCategoryDupes: true });
+      state.normality = null;
+      state.plan = null;
+      state.confirmedTests = null;
+      state.confirmedGraphs = null;
+      state.results = null;
+      state.corrResults = null;
+      if (state.currentScreen === "plan") await loadPlan();
     } catch (err) {
       setStatus(
         mergeStatus,

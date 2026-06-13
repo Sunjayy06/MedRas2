@@ -63,9 +63,13 @@ DomainProfileLiteral = Literal["generic", "clinical_general", "breast_pathology"
 
 
 def _domain_profile(entry, requested: Optional[str] = None) -> DomainProfileLiteral:
-    profile = domain_profiles.normalize_profile(
-        requested if requested is not None else entry.meta.get("domain_profile")
-    )
+    stored = entry.meta.get("domain_profile")
+    if entry.meta.get("domain_profile_locked") and stored is not None:
+        profile = domain_profiles.normalize_profile(stored)
+    else:
+        profile = domain_profiles.normalize_profile(
+            requested if requested is not None else stored
+        )
     entry.meta["domain_profile"] = profile
     return profile
 
@@ -578,6 +582,7 @@ async def upload_dataset(
     except excel_loader.UploadError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     meta["domain_profile"] = domain_profiles.normalize_profile(profile)
+    meta["domain_profile_locked"] = True
     job_id = dataset_store.put(df, meta)
     entry = dataset_store.get(job_id)
     return _build_response(job_id, entry)
@@ -1719,6 +1724,7 @@ class MergeItem(BaseModel):
 class ApplyMergeRequest(BaseModel):
     job_id: str = Field(..., min_length=1, max_length=64)
     merges: List[MergeItem] = Field(default_factory=list, max_length=100)
+    profile: Optional[DomainProfileLiteral] = None
 
 
 @router.post("/apply-category-merge")
@@ -1729,7 +1735,7 @@ async def apply_category_merge(payload: ApplyMergeRequest) -> Dict[str, Any]:
         raise HTTPException(status_code=404, detail="Dataset expired or not found.")
     if not payload.merges:
         return {"status": "no_changes", "actions": []}
-    profile = _domain_profile(entry)
+    profile = _domain_profile(entry, payload.profile)
     merges_dicts = [m.model_dump() for m in payload.merges]
     protected = [
         merge for merge in merges_dicts

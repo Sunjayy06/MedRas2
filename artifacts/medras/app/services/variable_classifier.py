@@ -199,6 +199,10 @@ _CATEGORICAL_CLINICAL_MARKER_RE = re.compile(
     re.IGNORECASE,
 )
 _TNM_NAME_RE = re.compile(r"(?:^|[\W_])(pt|tnm|t\s*stage|n\s*stage|nodal\s*status|node\s*stage)(?:$|[\W_])", re.IGNORECASE)
+_BREAST_STAGE_NAME_RE = re.compile(
+    r"(?:^|[\W_])(pt|tnm|stage|t\s*stage|n\s*stage|nodal\s*status|node\s*stage)(?:$|[\W_])",
+    re.IGNORECASE,
+)
 _GRADE_NAME_RE = re.compile(r"(?:^|[\W_])(grade|grading|nottingham)(?:$|[\W_])", re.IGNORECASE)
 _ROMAN_GRADE_RE = re.compile(r"^(?:grade\s*)?(i|ii|iii|iv|v|1|2|3|4|5)$", re.IGNORECASE)
 _TNM_VALUE_RE = re.compile(r"^(?:[ymrp]?t(?:is|x|0|[1-4][a-d]?|[1-4])|[ymrp]?n(?:x|0|[1-3][a-d]?|[1-3]))$", re.IGNORECASE)
@@ -324,7 +328,7 @@ def is_known_categorical_clinical_marker(
 
 def is_breast_stage_column(name: str) -> bool:
     """Return whether a column name denotes a breast-pathology TNM/stage field."""
-    return bool(_TNM_NAME_RE.search(str(name or "")))
+    return bool(_BREAST_STAGE_NAME_RE.search(str(name or "")))
 
 
 def _looks_like_tnm_ordinal(series: pd.Series, name: str) -> bool:
@@ -1002,7 +1006,7 @@ def clean_numeric_like_columns(
         if _ID_NAME_RE.search(col):
             continue
         if domain_profiles.is_breast_pathology(profile) and (
-            _TNM_NAME_RE.search(str(col))
+            is_breast_stage_column(str(col))
             or _looks_like_tnm_ordinal(s, str(col))
         ):
             continue
