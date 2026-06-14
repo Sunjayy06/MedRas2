@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pandas as pd
 from docx import Document
+from fastapi import HTTPException
 from openpyxl import load_workbook
 
 from app.api import stats
@@ -35,7 +36,6 @@ class FakeEntry:
             ],
             "cleanup_notes": {"PR": "Whitespace normalized."},
             "quality_log": {"reviewed": 1},
-            "results": _results(),
         }
 
 
@@ -82,6 +82,21 @@ async def _verify_endpoints():
     original_get = stats.dataset_store.get
     stats.dataset_store.get = lambda job_id: entry
     try:
+        published = stats._publish_results(entry, "runtime-job", _results())
+        result_id = published["export_metadata"]["result_id"]
+
+        for missing_or_stale_id in (None, "stale-result-id"):
+            try:
+                await stats.export("runtime-job", "pdf", result_id=missing_or_stale_id)
+                raise AssertionError("Missing/stale result_id should block export.")
+            except HTTPException as exc:
+                assert exc.status_code == 409
+                detail = str(exc.detail).lower()
+                if missing_or_stale_id is None:
+                    assert "result_id" in detail
+                else:
+                    assert "stale" in detail
+
         cases = [
             ("word", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
             ("pdf", "application/pdf"),
@@ -89,14 +104,14 @@ async def _verify_endpoints():
         ]
         responses = {}
         for fmt, media_type in cases:
-            response = await stats.export("runtime-job", fmt)
+            response = await stats.export("runtime-job", fmt, result_id=result_id)
             assert response.media_type == media_type
             assert response.body
             assert "attachment;" in response.headers["content-disposition"]
             responses[fmt] = response.body
 
-        chapter_word = await stats.export_chapter_v_word("runtime-job")
-        chapter_pdf = await stats.export_chapter_v_pdf("runtime-job")
+        chapter_word = await stats.export_chapter_v_word("runtime-job", result_id=result_id)
+        chapter_pdf = await stats.export_chapter_v_pdf("runtime-job", result_id=result_id)
         assert chapter_word.body and chapter_word.media_type.endswith("wordprocessingml.document")
         assert chapter_pdf.body.startswith(b"%PDF")
 

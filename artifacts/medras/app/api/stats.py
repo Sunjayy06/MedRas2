@@ -17,7 +17,9 @@ swapped for a shared cache when we move to a multi-worker deployment.
 from __future__ import annotations
 
 import asyncio
+import datetime
 import io
+import uuid
 from typing import Any, Dict, List, Literal, Optional
 
 from fastapi import APIRouter, File, Form, HTTPException, Query, Request, UploadFile
@@ -1530,8 +1532,80 @@ def _invalidate_downstream(entry, *, keep_normality: bool = False) -> None:
     decision changes, so we never run on stale assumptions."""
     for k in ("plan", "results", "correlation_plan", "correlation_results"):
         entry.meta.pop(k, None)
+    entry.meta["data_version"] = int(entry.meta.get("data_version") or 0) + 1
+    for k in ("result_id", "result_data_version", "result_generated_at"):
+        entry.meta.pop(k, None)
     if not keep_normality:
         entry.meta.pop("normality", None)
+
+
+def _publish_results(entry, job_id: str, res: Dict[str, Any]) -> Dict[str, Any]:
+    result_id = uuid.uuid4().hex
+    generated_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    analysis_version = int(entry.meta.get("analysis_version") or 0) + 1
+    metadata = {
+        "dataset_id": job_id,
+        "result_id": result_id,
+        "analysis_version": analysis_version,
+        "generated_at": generated_at,
+        "domain_profile": _domain_profile(entry),
+    }
+    published = dict(res)
+    published["export_metadata"] = metadata
+    entry.meta["results"] = published
+    entry.meta["result_id"] = result_id
+    entry.meta["analysis_version"] = analysis_version
+    entry.meta["result_generated_at"] = generated_at
+    entry.meta["result_data_version"] = int(entry.meta.get("data_version") or 0)
+    return published
+
+
+def _current_export_state(entry, job_id: str, expected_result_id: Optional[str]) -> Dict[str, Any]:
+    res = entry.meta.get("results")
+    if not res:
+        raise HTTPException(status_code=409, detail="Export is unavailable because the latest analysis has not completed.")
+    result_id = entry.meta.get("result_id")
+    if not expected_result_id:
+        raise HTTPException(
+            status_code=409,
+            detail="Export requires the latest result_id. Run the analysis again before exporting.",
+        )
+    if expected_result_id != result_id:
+        raise HTTPException(
+            status_code=409,
+            detail="Export state is stale. Reopen Step 7 or rerun the latest analysis before exporting.",
+        )
+    result_data_version = entry.meta.get("result_data_version")
+    if result_data_version is None or int(result_data_version) != int(entry.meta.get("data_version") or 0):
+        raise HTTPException(
+            status_code=409,
+            detail="Export state is stale because the dataset changed after analysis. Rerun analysis first.",
+        )
+    classifications = entry.meta.get("classifications") or _classify_entry(entry)
+    current = dict(res)
+    current["table_one"] = results_service.build_table_one(
+        entry.df, classifications, (entry.meta.get("assignment") or {}).get("group")
+    )
+    current["export_metadata"] = {
+        "dataset_id": job_id,
+        "result_id": result_id,
+        "analysis_version": int(entry.meta.get("analysis_version") or 0),
+        "generated_at": entry.meta.get("result_generated_at"),
+        "domain_profile": _domain_profile(entry),
+    }
+    entry.meta["results"] = current
+    return current
+
+
+def _export_headers(entry, filename: str) -> Dict[str, str]:
+    return {
+        "Content-Disposition": f'attachment; filename="{filename}"',
+        "X-MedRAS-Dataset-ID": str(entry.meta.get("results", {}).get("export_metadata", {}).get("dataset_id", "")),
+        "X-MedRAS-Result-ID": str(entry.meta.get("result_id") or ""),
+        "X-MedRAS-Analysis-Version": str(entry.meta.get("analysis_version") or ""),
+        "X-MedRAS-Generated-At": str(entry.meta.get("result_generated_at") or ""),
+        "X-MedRAS-Domain-Profile": str(entry.meta.get("domain_profile") or "generic"),
+    }
 
 
 @router.post("/assign")
@@ -1677,14 +1751,14 @@ async def run_analysis(payload: RunAnalysisRequest) -> Dict[str, Any]:
         confirmed_graph_ids=payload.confirmed_graph_ids or None,
         session=session_view,
     )
-    entry.meta["results"] = res
+    res = _publish_results(entry, payload.job_id, res)
     _title = (entry.meta.get("study_description") or "").strip() or "Untitled analysis"
     _var_count = sum(
         1 for c in (entry.meta.get("classifications") or [])
         if c.get("detected_type") not in ("id",)
     )
     dataset_store.mark_completed(payload.job_id, _title, _var_count)
-    return {"job_id": payload.job_id, "results": res}
+    return {"job_id": payload.job_id, "result_id": res["export_metadata"]["result_id"], "results": res}
 
 
 # ---------------------------------------------------------------------------
@@ -1769,17 +1843,14 @@ async def apply_category_merge(payload: ApplyMergeRequest) -> Dict[str, Any]:
 
 
 @router.get("/export/{job_id}/chapter_v_word")
-async def export_chapter_v_word(job_id: str) -> Response:
+async def export_chapter_v_word(
+    job_id: str, result_id: Optional[str] = Query(default=None)
+) -> Response:
     """Download Chapter V — Results as thesis-format DOCX (TNR 12pt, 1.5 spacing)."""
     entry = dataset_store.get(job_id)
     if entry is None:
         raise HTTPException(status_code=404, detail="Dataset expired or not found.")
-    res = entry.meta.get("results")
-    if not res:
-        raise HTTPException(
-            status_code=400,
-            detail="No results available — run the analysis first.",
-        )
+    res = _current_export_state(entry, job_id, result_id)
     try:
         payload_bytes = await asyncio.to_thread(
             export_service.generate_chapter_v_word,
@@ -1794,22 +1865,19 @@ async def export_chapter_v_word(job_id: str) -> Response:
     return Response(
         content=payload_bytes,
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers=_export_headers(entry, filename),
     )
 
 
 @router.get("/export/{job_id}/chapter_v_pdf")
-async def export_chapter_v_pdf(job_id: str) -> Response:
+async def export_chapter_v_pdf(
+    job_id: str, result_id: Optional[str] = Query(default=None)
+) -> Response:
     """Download Chapter V — Results as thesis-format PDF (TNR equivalent, 1.5 spacing)."""
     entry = dataset_store.get(job_id)
     if entry is None:
         raise HTTPException(status_code=404, detail="Dataset expired or not found.")
-    res = entry.meta.get("results")
-    if not res:
-        raise HTTPException(
-            status_code=400,
-            detail="No results available — run the analysis first.",
-        )
+    res = _current_export_state(entry, job_id, result_id)
     try:
         payload_bytes = await asyncio.to_thread(
             export_service.generate_chapter_v_pdf,
@@ -1824,7 +1892,7 @@ async def export_chapter_v_pdf(job_id: str) -> Response:
     return Response(
         content=payload_bytes,
         media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers=_export_headers(entry, filename),
     )
 
 
@@ -1834,16 +1902,16 @@ async def export_chapter_v_pdf(job_id: str) -> Response:
 
 
 @router.get("/export/{job_id}/{fmt}")
-async def export(job_id: str, fmt: str) -> Response:
+async def export(
+    job_id: str, fmt: str, result_id: Optional[str] = Query(default=None)
+) -> Response:
     entry = dataset_store.get(job_id)
     if entry is None:
         raise HTTPException(status_code=404, detail="Dataset expired or not found.")
     exporter = export_service.EXPORTERS.get(fmt.lower())
     if not exporter:
         raise HTTPException(status_code=400, detail=f"Unsupported format: {fmt}. Use word/pdf/excel.")
-    res = entry.meta.get("results")
-    if not res:
-        raise HTTPException(status_code=400, detail="No results available — run the analysis on Step 7 first.")
+    res = _current_export_state(entry, job_id, result_id)
     fn, mime, ext = exporter
     try:
         payload_bytes = await asyncio.to_thread(
@@ -1858,7 +1926,7 @@ async def export(job_id: str, fmt: str) -> Response:
     return Response(
         content=payload_bytes,
         media_type=mime,
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers=_export_headers(entry, filename),
     )
 
 
@@ -2385,7 +2453,7 @@ async def rerun_partial(request: Request, payload: RerunPartialRequest) -> Dict[
     # Build and store the merged results dict.
     merged_results = dict(existing_results)
     merged_results["tests"] = list(existing_tests_by_id.values())
-    entry.meta["results"] = merged_results
+    merged_results = _publish_results(entry, payload.job_id, merged_results)
 
     # Keep the stored plan in sync (add new entries, drop removed ones).
     updated_plan = dict(plan_dict)
@@ -2396,7 +2464,11 @@ async def rerun_partial(request: Request, payload: RerunPartialRequest) -> Dict[
     updated_plan["tests"] = plan_tests
     entry.meta["plan"] = updated_plan
 
-    return {"job_id": payload.job_id, "results": merged_results}
+    return {
+        "job_id": payload.job_id,
+        "result_id": merged_results["export_metadata"]["result_id"],
+        "results": merged_results,
+    }
 
 
 @router.post("/analyze")

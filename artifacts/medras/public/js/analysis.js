@@ -56,6 +56,8 @@ const state = {
   confirmedTests: null,    // Set<string>
   confirmedGraphs: null,   // Set<string>
   results: null,           // results-payload from /run-analysis
+  resultId: null,
+  analysisVersion: null,
 
   // --- Correlation study (new) ---
   aiStudy: null,           // result from /ai-bridge
@@ -118,6 +120,24 @@ const EXTERNAL_AI_PATHS = [
   "/variable-assistant", "/chat/", "/ai-chat", "/ai-bridge",
   "/adjust-analysis", "/setup-study", "/adjust-setup",
 ];
+
+const ANALYSIS_INVALIDATING_PATHS = [
+  "/classify", "/assign", "/apply-category-merge", "/apply-quality",
+  "/cleanup-undo", "/trim-all-whitespace", "/apply-missing-decisions",
+  "/standardize-yes-no", "/handle-missing", "/normality/override",
+];
+
+function invalidateClientAnalysisState() {
+  state.normality = null;
+  state.plan = null;
+  state.confirmedTests = null;
+  state.confirmedGraphs = null;
+  state.results = null;
+  state.resultId = null;
+  state.analysisVersion = null;
+  state.corrResults = null;
+  updateExportAvailability();
+}
 
 function _externalAIConsentKey() {
   return `medras.sigma.external_ai_consent:${state.jobId || "pre-dataset"}`;
@@ -254,6 +274,9 @@ async function api(path, options = {}) {
       throw new Error(detail);
     }
     const data = await res.json();
+    if (ANALYSIS_INVALIDATING_PATHS.some((mutatingPath) => path.includes(mutatingPath))) {
+      invalidateClientAnalysisState();
+    }
     showAIProviderStatus(data);
     return data;
   } finally {
@@ -544,6 +567,7 @@ function showScreen(id) {
     const el = document.getElementById(`screen-${s}`);
     if (el) el.classList.toggle("is-hidden", s !== id);
   });
+  if (id === "export") updateExportAvailability();
   // The step navigator has three explicit states per circle:
   //   is-done    → completed, clickable to go back, green check
   //   is-active  → current, blue with halo
@@ -1390,6 +1414,8 @@ function ingestDataset(data) {
     state.confirmedTests = null;
     state.confirmedGraphs = null;
     state.results = null;
+    state.resultId = null;
+    state.analysisVersion = null;
     state.chatThreads = { normality: [], plan: [], results: [] };
     state.chatOpened  = { normality: false, plan: false, results: false };
     try { sessionStorage.removeItem('medras.nav.returnHint'); } catch (_) {}
@@ -2693,6 +2719,8 @@ function _bindMergePanelButtons(allObvious, allBorderline) {
       state.confirmedTests = null;
       state.confirmedGraphs = null;
       state.results = null;
+      state.resultId = null;
+      state.analysisVersion = null;
       state.corrResults = null;
       if (state.currentScreen === "plan") await loadPlan();
     } catch (err) {
@@ -4070,6 +4098,8 @@ async function runAnalysis() {
       }),
     });
     state.results = data.results;
+    state.resultId = data.result_id || data.results?.export_metadata?.result_id || null;
+    state.analysisVersion = data.results?.export_metadata?.analysis_version || null;
     setStatus(status, "Done.", "success");
     showScreen("results");
     renderResults();
@@ -4624,6 +4654,8 @@ async function handleResultsChatResponse(res) {
           }
         }
       }
+      state.resultId = rerunRes.result_id || incoming?.export_metadata?.result_id || null;
+      state.analysisVersion = incoming?.export_metadata?.analysis_version || null;
       state.chatThreads.results.push({
         role: "action",
         text: "Analysis updated. Affected result panels have been patched.",
@@ -6183,6 +6215,18 @@ function bindExport() {
   const restartBtn = screen.querySelector('[data-action="restart"]');
   if (restartBtn) restartBtn.addEventListener("click", restart);
   bindCorrectionSystem();
+  updateExportAvailability();
+}
+
+function updateExportAvailability(message = "") {
+  const ready = Boolean(state.jobId && state.results && state.resultId);
+  document.querySelectorAll('#screen-export [data-action="download"], #screen-export [data-action="download-chapter-v"]')
+    .forEach((button) => { button.disabled = !ready; });
+  if (!ready && message) {
+    setStatus(document.getElementById("export-status"), message, "error");
+    setStatus(document.getElementById("chapter-v-status"), message, "error");
+  }
+  return ready;
 }
 
 async function exportErrorMessage(res) {
@@ -6209,15 +6253,15 @@ function downloadBlob(blob, filename) {
 
 async function downloadChapterV(fmt, button) {
   const statusEl = document.getElementById("chapter-v-status");
-  if (!state.jobId) {
-    setStatus(statusEl, "No active analysis session. Run the analysis before exporting.", "error");
+  if (!updateExportAvailability("Export state is stale or missing. Run the latest analysis before exporting.")) {
     return;
   }
   if (button) button.disabled = true;
   setStatus(statusEl, "Generating Chapter V…", "loading");
   const fmtKey = fmt === "pdf" ? "chapter_v_pdf" : "chapter_v_word";
   try {
-    const res = await fetch(`${API_BASE}/export/${state.jobId}/${fmtKey}`);
+    const resultId = encodeURIComponent(state.resultId);
+    const res = await fetch(`${API_BASE}/export/${state.jobId}/${fmtKey}?result_id=${resultId}`);
     if (!res.ok) {
       throw new Error(await exportErrorMessage(res));
     }
@@ -6371,14 +6415,14 @@ async function restoreVersion(versionNum) {
 
 async function downloadExport(format, button) {
   const status = document.getElementById("export-status");
-  if (!state.jobId) {
-    setStatus(status, "No active analysis session. Run the analysis before exporting.", "error");
+  if (!updateExportAvailability("Export state is stale or missing. Run the latest analysis before exporting.")) {
     return;
   }
   if (button) button.disabled = true;
   setStatus(status, `Building ${format.toUpperCase()} file…`, "loading");
   try {
-    const url = `${API_BASE}/export/${state.jobId}/${format}`;
+    const resultId = encodeURIComponent(state.resultId);
+    const url = `${API_BASE}/export/${state.jobId}/${format}?result_id=${resultId}`;
     const res = await fetch(url);
     if (!res.ok) {
       throw new Error(await exportErrorMessage(res));
@@ -6431,6 +6475,8 @@ function restart() {
   state.confirmedTests = null;
   state.confirmedGraphs = null;
   state.results = null;
+  state.resultId = null;
+  state.analysisVersion = null;
   state.aiStudy = null;
   state.corrResults = null;
   state.correctionVersions = [];
