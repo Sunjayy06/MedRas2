@@ -51,14 +51,29 @@ def verify_current_export_state() -> None:
         uploaded = client.post(
             "/api/stats/upload",
             files={"file": ("breast.xlsx", buf.getvalue(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
-            data={"profile": PROFILE},
+            data={"profile": "generic"},
         ).json()
         job_id = uploaded["job_id"]
+        generic_classified = client.post(
+            "/api/stats/classify",
+            json={"job_id": job_id, "overrides": [], "profile": "generic"},
+        )
+        assert generic_classified.status_code == 200
         classified = client.post(
             "/api/stats/classify",
             json={"job_id": job_id, "overrides": [], "profile": PROFILE},
         )
         assert classified.status_code == 200
+        assert classified.json()["domain_profile"] == PROFILE
+        entry = dataset_store.get(job_id)
+        assert entry.meta["domain_profile"] == PROFILE
+        assert {"T1c", "T4b"} <= set(entry.df["pT"].dropna().astype(str))
+        assert {"N0", "N3a"} <= set(entry.df["Nodal status"].dropna().astype(str))
+        assert not any(
+            "auto-extracted numeric values" in str(note).lower()
+            for column, note in (entry.meta.get("cleanup_notes") or {}).items()
+            if column in {"pT", "Nodal status"}
+        )
         dupes = client.post(
             "/api/stats/detect-category-dupes",
             json={"job_id": job_id, "profile": PROFILE},
@@ -95,6 +110,7 @@ def verify_current_export_state() -> None:
         first_id = first["result_id"]
         first_meta = first["results"]["export_metadata"]
         assert first_meta["analysis_version"] == 1
+        assert first_meta["domain_profile"] == PROFILE
 
         # Simulate stale historical notes lingering in metadata; export must not show them.
         entry = dataset_store.get(job_id)
@@ -123,6 +139,7 @@ def verify_current_export_state() -> None:
             _xlsx_text(exported["excel"].content),
         ):
             assert first_id in text
+            assert PROFILE in text
             assert "T1c" in text and "T4b" in text
             assert "N0" in text and "N3a" in text
             assert "Auto-extracted numeric values from text" not in text

@@ -66,13 +66,33 @@ DomainProfileLiteral = Literal["generic", "clinical_general", "breast_pathology"
 
 def _domain_profile(entry, requested: Optional[str] = None) -> DomainProfileLiteral:
     stored = entry.meta.get("domain_profile")
-    if entry.meta.get("domain_profile_locked") and stored is not None:
-        profile = domain_profiles.normalize_profile(stored)
-    else:
-        profile = domain_profiles.normalize_profile(
-            requested if requested is not None else stored
+    stored_profile = domain_profiles.normalize_profile(stored)
+    requested_profile = (
+        domain_profiles.normalize_profile(requested) if requested is not None else None
+    )
+    if (
+        entry.meta.get("domain_profile_locked")
+        and stored is not None
+        and not (
+            stored_profile == "generic"
+            and requested_profile in ("clinical_general", "breast_pathology")
         )
+    ):
+        profile = stored_profile
+    else:
+        profile = requested_profile or stored_profile
+    if profile != stored_profile:
+        # An explicit generic -> domain-profile promotion changes classification
+        # and preprocessing semantics. Invalidate any analysis published under
+        # the old profile while retaining protection from accidental downgrade.
+        for key in ("plan", "results", "correlation_plan", "correlation_results"):
+            entry.meta.pop(key, None)
+        entry.meta["data_version"] = int(entry.meta.get("data_version") or 0) + 1
+        for key in ("result_id", "result_data_version", "result_generated_at"):
+            entry.meta.pop(key, None)
+        entry.meta.pop("normality", None)
     entry.meta["domain_profile"] = profile
+    entry.meta["domain_profile_locked"] = True
     return profile
 
 

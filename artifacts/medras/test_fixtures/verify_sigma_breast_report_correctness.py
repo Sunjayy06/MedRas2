@@ -64,6 +64,10 @@ def verify_report_presentation() -> None:
     )
     assert predictor_warning["blocking"] is False
     assert "Postive" in predictor_warning["warning"]
+    assert not any(
+        item["id"] == "predictor_duplicate_labels_Age"
+        for item in plan_dict["suggestions"]
+    )
 
     output = results.run_plan(
         df, classes, assignment, plan_dict, session=session,

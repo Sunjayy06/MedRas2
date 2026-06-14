@@ -161,6 +161,8 @@ def generate_plan(
     for predictor in analysis_predictors:
         if predictor == outcome or predictor not in df.columns:
             continue
+        if classes.get(predictor, {}).get("detected_type") not in ("nominal", "ordinal"):
+            continue
         predictor_duplicates = category_merger.detect_category_duplicates(
             df[predictor], profile=session.get("domain_profile")
         )
