@@ -25,6 +25,7 @@ async def readyz() -> dict:
         "integrations": {
             "openai": settings.has_openai,
             "gemini": settings.has_gemini,
+            "openrouter_available": settings.has_openrouter,
             "copyleaks": settings.has_copyleaks,
         },
     }

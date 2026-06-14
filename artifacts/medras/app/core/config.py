@@ -33,6 +33,33 @@ class Settings:
     gemini_api_key: str | None = field(default_factory=lambda: (
         os.environ.get("AI_INTEGRATIONS_GEMINI_API_KEY") or os.environ.get("GEMINI_API_KEY")
     ))
+    openrouter_api_key: str | None = field(default_factory=lambda: os.environ.get("OPENROUTER_API_KEY"))
+    openrouter_base_url: str = field(
+        default_factory=lambda: os.environ.get("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
+    )
+    openrouter_default_model: str = field(
+        default_factory=lambda: os.environ.get("OPENROUTER_DEFAULT_MODEL", "openai/gpt-oss-120b:free")
+    )
+    openrouter_proposal_model: str = field(
+        default_factory=lambda: os.environ.get("OPENROUTER_PROPOSAL_MODEL", "openai/gpt-oss-120b:free")
+    )
+    openrouter_reasoning_model: str = field(
+        default_factory=lambda: os.environ.get(
+            "OPENROUTER_REASONING_MODEL", "nvidia/nemotron-3-ultra-550b-a55b:free"
+        )
+    )
+    openrouter_writing_model: str = field(
+        default_factory=lambda: os.environ.get("OPENROUTER_WRITING_MODEL", "openai/gpt-oss-120b:free")
+    )
+    openrouter_coding_model: str = field(
+        default_factory=lambda: os.environ.get("OPENROUTER_CODING_MODEL", "poolside/laguna-m.1:free")
+    )
+    openrouter_vision_model: str = field(
+        default_factory=lambda: os.environ.get("OPENROUTER_VISION_MODEL", "google/gemma-4-31b-it:free")
+    )
+    openrouter_fallback_model: str = field(
+        default_factory=lambda: os.environ.get("OPENROUTER_FALLBACK_MODEL", "openrouter/free")
+    )
     copyleaks_email: str | None = field(default_factory=lambda: os.environ.get("COPYLEAKS_EMAIL"))
     copyleaks_api_key: str | None = field(default_factory=lambda: os.environ.get("COPYLEAKS_API_KEY"))
     cors_allow_origins: List[str] = field(
@@ -51,6 +78,10 @@ class Settings:
     @property
     def has_gemini(self) -> bool:
         return bool(self.gemini_api_key)
+
+    @property
+    def has_openrouter(self) -> bool:
+        return bool(self.openrouter_api_key)
 
     @property
     def has_copyleaks(self) -> bool:
