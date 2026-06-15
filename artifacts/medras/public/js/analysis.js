@@ -3964,6 +3964,8 @@ function renderPlan() {
   const summary = document.getElementById("plan-summary");
   const descriptive = document.getElementById("plan-descriptive");
   const tests = document.getElementById("plan-tests");
+  const multivariate = document.getElementById("plan-multivariate");
+  const unavailable = document.getElementById("plan-unavailable");
   const graphs = document.getElementById("plan-graphs");
   if (!summary || !tests || !graphs) return;
   const p = state.plan || { tests: [], graphs: [], outputs: [], summary: "" };
@@ -3992,10 +3994,30 @@ function renderPlan() {
   }
 
   // ── Analytical tests ──────────────────────────────────────────────
-  tests.innerHTML = [
-    ...(p.tests || []).map((t) => planCard(t, "tests")),
-    ...(p.suggestions || []).map(planSuggestionCard),
-  ].join("");
+  const layers = p.analysis_layers || {};
+  const bivariateTests = layers.bivariate || (p.tests || []).filter((t) => t.analysis_family !== "regression");
+  const multivariateTests = layers.multivariate || (p.tests || []).filter((t) => t.analysis_family === "regression");
+  const bivariateHeading = document.querySelector('[data-testid="plan-tests-section"] .se-plan-section-heading');
+  if (bivariateHeading) bivariateHeading.textContent = "Bivariate analysis";
+  tests.innerHTML = bivariateTests.map((t) => planCard(t, "tests")).join("");
+  if (multivariate) {
+    multivariate.innerHTML = multivariateTests.map((item) =>
+      item.execution_status === "recommended_only"
+        ? planSuggestionCard({ ...item, warning: item.why || "Requires researcher confirmation." })
+        : planCard(item, "tests")
+    ).join("");
+  }
+  if (unavailable) {
+    unavailable.innerHTML = [
+      ...(p.unavailable_tests || []).map((item) =>
+        planSuggestionCard({ ...item, warning: item.reason || item.warning || "" })
+      ),
+      ...(p.suggestions || []).map(planSuggestionCard),
+      ...(p.warnings || []).map((warning, index) =>
+        planSuggestionCard({ id: `layer-warning-${index}`, title: "Planning warning", warning })
+      ),
+    ].join("");
+  }
   graphs.innerHTML = (p.graphs || []).map((g) => planCard(g, "graphs")).join("");
 
   document.querySelectorAll('[data-plan-toggle]').forEach((cb) => {

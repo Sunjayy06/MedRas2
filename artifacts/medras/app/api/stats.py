@@ -239,6 +239,13 @@ def _build_session_view(entry, classifications, assignment) -> Dict[str, Any]:
         "time_variable": intake.get("time_variable") if isinstance(intake, dict) else None,
         "event_variable": intake.get("event_variable") if isinstance(intake, dict) else None,
         "outcome_type": intake.get("outcome_type") if isinstance(intake, dict) else None,
+        "disease_col": intake.get("disease_col") if isinstance(intake, dict) else None,
+        "test_result_col": intake.get("test_result_col") if isinstance(intake, dict) else None,
+        "subject_col": intake.get("subject_col") if isinstance(intake, dict) else None,
+        "within_factor": intake.get("within_factor") if isinstance(intake, dict) else None,
+        "add_multivariable_model": bool(
+            intake.get("add_multivariable_model")
+        ) if isinstance(intake, dict) else False,
     }
 
 

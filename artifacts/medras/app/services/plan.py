@@ -57,6 +57,288 @@ def _group_levels(df: pd.DataFrame, col: Optional[str]) -> List[str]:
     return [str(v) for v in sorted(s.unique().tolist(), key=lambda x: str(x))]
 
 
+def _included_analysis_variables(
+    classifications: List[Dict[str, Any]],
+    assignment: Dict[str, Any],
+    session: Dict[str, Any],
+) -> List[str]:
+    preferred = [
+        (assignment or {}).get("outcome"),
+        (assignment or {}).get("group"),
+        *((assignment or {}).get("covariates") or []),
+        *(session.get("analysis_predictors") or []),
+    ]
+    included = [
+        c.get("column") for c in classifications
+        if c.get("column") and c.get("detected_type") not in ("id", "date", "exclude")
+    ]
+    ordered = [c for c in preferred if c in included]
+    return list(dict.fromkeys(ordered + included))
+
+
+def _descriptive_layer(
+    df: pd.DataFrame,
+    classifications: List[Dict[str, Any]],
+    assignment: Dict[str, Any],
+    session: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    classes = _classification_lookup(classifications)
+    rows: List[Dict[str, Any]] = []
+    for col in _included_analysis_variables(classifications, assignment, session):
+        detected = classes.get(col, {}).get("detected_type", "nominal")
+        n_levels = int(df[col].dropna().nunique()) if col in df.columns else 0
+        if detected == "scale":
+            statistics = ["n", "missing", "mean", "sd", "median", "iqr", "min", "max"]
+        elif detected == "ordinal":
+            statistics = ["n", "percent", "missing", "median", "iqr"]
+        else:
+            statistics = ["n", "percent", "missing"]
+        rows.append({
+            "id": f"describe_{col}",
+            "variable": col,
+            "variable_type": "binary" if n_levels == 2 and detected != "scale" else detected,
+            "statistics": statistics,
+            "analysis_family": "descriptive",
+            "always_included": True,
+        })
+    return rows
+
+
+def _study_design(session: Dict[str, Any]) -> str:
+    explicit = str(session.get("design") or "").strip().lower()
+    study_type = str(session.get("study_type") or "").strip().lower()
+    objective = _objective_text(session)
+    joined = " ".join((explicit, study_type, objective))
+    if any(term in joined for term in ("diagnostic", "sensitivity", "specificity", "roc", "auc")):
+        return "diagnostic_accuracy"
+    if any(term in joined for term in ("survival", "time-to-event", "time to event", "cox", "mortality")):
+        return "survival_time_to_event"
+    if any(term in joined for term in ("repeated", "longitudinal", "timepoint", "time point", "over time")):
+        return "repeated_measures"
+    if any(term in joined for term in ("randomized", "randomised", "interventional", "trial", "rct")):
+        return "randomized_interventional"
+    if "case-control" in joined or "case control" in joined:
+        return "case_control"
+    if any(term in joined for term in ("cohort", "prognostic", "risk factor")):
+        return "cohort_prognostic"
+    if any(term in joined for term in ("cross-sectional", "cross sectional", "association", "correlation")):
+        return "cross_sectional_association"
+    if "descriptive" in joined:
+        return "descriptive_observational"
+    return "generic_unknown"
+
+
+def _is_multivariable_objective(session: Dict[str, Any]) -> bool:
+    objective = _objective_text(session)
+    study_type = str(session.get("study_type") or "").lower()
+    terms = (
+        "prediction", "predict", "risk factor", "prognostic", "adjust",
+        "independent association", "multivariable", "multivariate", "regression",
+    )
+    return study_type in ("regression", "prediction") or any(term in objective for term in terms)
+
+
+def _analysis_family(test: Dict[str, Any]) -> str:
+    family = test.get("analysis_family")
+    if family:
+        return "multivariate" if str(family) == "regression" else str(family)
+    test_id = str(test.get("id") or "")
+    test_type = str((test.get("_phase_b") or {}).get("test_type") or "")
+    if "regression" in test_id or "regression" in test_type or test_id in ("ancova", "pb_cox"):
+        return "multivariate"
+    if test_id == "descriptive_only":
+        return "descriptive"
+    return "bivariate"
+
+
+def _layered_contract(
+    df: pd.DataFrame,
+    classifications: List[Dict[str, Any]],
+    assignment: Dict[str, Any],
+    session: Dict[str, Any],
+    tests: List[Dict[str, Any]],
+    suggestions: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    classes = _classification_lookup(classifications)
+    outcome = (assignment or {}).get("outcome")
+    predictors = [
+        c for c in (session.get("analysis_predictors") or [])
+        if c in df.columns and c != outcome
+    ]
+    covariates = [
+        c for c in (assignment or {}).get("covariates", [])
+        if c in df.columns and c != outcome
+    ]
+    candidate_predictors = list(dict.fromkeys(covariates + predictors))
+    eligible_predictors = list(candidate_predictors)
+    descriptive = _descriptive_layer(df, classifications, assignment, session)
+    bivariate = [dict(t, analysis_family="bivariate") for t in tests if _analysis_family(t) == "bivariate"]
+    multivariate = [
+        dict(t, analysis_family="multivariate", execution_status="confirmed")
+        for t in tests if _analysis_family(t) == "multivariate"
+    ]
+    eligibility_notes: List[str] = []
+    warnings: List[str] = []
+    unavailable: List[Dict[str, Any]] = []
+    requires_confirmation = not bool(outcome)
+    objective = _objective_text(session)
+    design = _study_design(session)
+
+    assumption_checks = [
+        {"id": "missingness", "title": "Missing-data review", "status": "required"},
+        {"id": "normality", "title": "Normality review for scale variables", "status": "required"},
+        {"id": "sparse_cells", "title": "Expected-count review for categorical tables", "status": "required"},
+    ]
+
+    if not outcome:
+        eligibility_notes.append(
+            "No main outcome has been confirmed; only descriptive analysis is planned."
+        )
+        warnings.append("Confirm the main outcome before generating bivariate or multivariate analyses.")
+    else:
+        outcome_kind = _outcome_kind(outcome, classes)
+        outcome_levels = int(df[outcome].dropna().nunique())
+        eligibility_notes.append(
+            f"Confirmed main outcome: {outcome} ({'binary' if outcome_levels == 2 and outcome_kind != 'scale' else outcome_kind})."
+        )
+        if candidate_predictors and _is_multivariable_objective(session):
+            model_columns = [outcome] + candidate_predictors
+            complete_n = int(df[model_columns].dropna().shape[0])
+            complete_fraction = complete_n / max(len(df), 1)
+            eligibility_notes.append(
+                f"Adjusted-model complete cases: {complete_n}/{len(df)} ({complete_fraction:.1%})."
+            )
+            if complete_fraction < 0.70:
+                warnings.append(
+                    "Adjusted-model missingness is substantial; confirm the missing-data strategy "
+                    "and perform sensitivity analysis before interpretation."
+                )
+                requires_confirmation = True
+
+        if outcome_levels == 2 and outcome_kind != "scale":
+            counts = df[outcome].dropna().value_counts()
+            smaller_events = int(counts.min()) if len(counts) == 2 else 0
+            max_predictors = smaller_events // 10
+            eligibility_notes.append(
+                f"Smaller outcome class has {smaller_events} events; conservative EPV permits at most {max_predictors} predictor(s)."
+            )
+            if _is_multivariable_objective(session) and candidate_predictors:
+                if max_predictors < 1:
+                    eligible_predictors = []
+                    unavailable.append({
+                        "id": "logistic_regression_low_events",
+                        "title": "Binary logistic regression",
+                        "reason": "Too few events in the smaller outcome class for a stable adjusted model.",
+                    })
+                    warnings.append(
+                        f"Only {smaller_events} events are available in the smaller outcome class; "
+                        "a multivariable logistic model is not eligible."
+                    )
+                elif len(candidate_predictors) > max_predictors:
+                    eligible_predictors = candidate_predictors[:max_predictors]
+                    warnings.append(
+                        f"Only {smaller_events} events are available in the smaller outcome class; "
+                        f"multivariate model limited to {max_predictors} predictor(s)."
+                    )
+                    requires_confirmation = True
+
+        if _is_multivariable_objective(session) and not multivariate:
+            model = (
+                "Binary logistic regression" if outcome_levels == 2 and outcome_kind != "scale"
+                else "Multiple linear regression" if outcome_kind == "scale"
+                else "Adjusted model"
+            )
+            multivariate.append({
+                "id": "recommended_multivariable_model",
+                "title": model,
+                "columns": [outcome] + eligible_predictors,
+                "analysis_family": "multivariate",
+                "execution_status": "recommended_only",
+                "requires_confirmation": True,
+                "why": "Candidate predictors require researcher confirmation before an adjusted model runs.",
+            })
+            requires_confirmation = True
+
+    if design == "diagnostic_accuracy" and not any(
+        (t.get("_phase_b") or {}).get("test_type") == "diagnostic_accuracy" for t in tests
+    ):
+        unavailable.append({
+            "id": "diagnostic_accuracy_inputs",
+            "title": "Diagnostic accuracy",
+            "reason": "A binary reference and test result/score must be confirmed.",
+        })
+        warnings.append("Diagnostic objective detected, but diagnostic inputs are incomplete.")
+        requires_confirmation = True
+
+    if design == "repeated_measures" and not any(
+        (t.get("_phase_b") or {}).get("test_type") in ("rm_anova", "friedman") for t in tests
+    ):
+        unavailable.append({
+            "id": "repeated_measures_unavailable",
+            "title": "Repeated-measures analysis",
+            "reason": "Repeated timepoints or subject/within-factor metadata are incomplete.",
+        })
+        warnings.append("Repeated-measures objective detected; no repeated-measures test was fabricated.")
+
+    if design == "survival_time_to_event" and not any(
+        (t.get("_phase_b") or {}).get("test_type") in ("log_rank", "cox_regression") for t in tests
+    ):
+        unavailable.append({
+            "id": "survival_inputs_unavailable",
+            "title": "Survival analysis",
+            "reason": "A time-to-event variable and binary event indicator must be confirmed.",
+        })
+        warnings.append("Survival objective detected; no survival result will be fabricated.")
+
+    if any(t.get("id") == "descriptive_only" for t in tests):
+        unavailable.append({
+            "id": "no_inferential_match",
+            "title": "Primary inferential analysis",
+            "reason": "No executable inferential test matched the confirmed objective and variable types.",
+        })
+
+    if outcome and _outcome_kind(outcome, classes) in ("nominal", "ordinal"):
+        ordinal_predictors = [
+            predictor for predictor in predictors
+            if classes.get(predictor, {}).get("detected_type") == "ordinal"
+        ]
+        if ordinal_predictors:
+            eligibility_notes.append(
+                "Ordinal predictors use categorical association fallback; a dedicated trend test is not implemented."
+            )
+            unavailable.append({
+                "id": "ordinal_trend_test_unavailable",
+                "title": "Dedicated ordinal trend test",
+                "reason": "Not implemented; ordinal predictors are routed through the supported categorical association test.",
+            })
+
+    for suggestion in suggestions:
+        if suggestion.get("blocking"):
+            warnings.append(str(suggestion.get("warning") or suggestion.get("title") or "Blocking issue"))
+            requires_confirmation = True
+
+    return {
+        "analysis_layers": {
+            "descriptive": descriptive,
+            "bivariate": bivariate,
+            "multivariate": multivariate,
+        },
+        "study_design": design,
+        "main_outcome": outcome,
+        "predictors": predictors,
+        "covariates": covariates,
+        "confounders": covariates,
+        "descriptive_plan": descriptive,
+        "bivariate_plan": bivariate,
+        "multivariate_plan": multivariate,
+        "assumption_checks": assumption_checks,
+        "eligibility_notes": eligibility_notes,
+        "warnings": list(dict.fromkeys(warnings)),
+        "unavailable_tests": unavailable,
+        "requires_confirmation": requires_confirmation,
+    }
+
+
 def generate_plan(
     df: pd.DataFrame,
     classifications: List[Dict[str, Any]],
@@ -81,6 +363,7 @@ def generate_plan(
     """
     classes = _classification_lookup(classifications)
     norm = _norm_lookup(normality)
+    session = session or {}
 
     outcome = (assignment or {}).get("outcome")
     group = (assignment or {}).get("group")
@@ -110,19 +393,22 @@ def generate_plan(
     })
 
     if not outcome:
-        return {
+        plan = {
             "tests": tests,
             "graphs": graphs,
             "outputs": outputs,
             "suggestions": suggestions,
             "summary": "Pick an outcome variable on Step 4 to see the full plan.",
         }
+        plan.update(_layered_contract(
+            df, classifications, assignment, session, tests, suggestions
+        ))
+        return plan
 
     o_kind = _outcome_kind(outcome, classes)
     o_normal = _is_normal(outcome, norm)
     levels = _group_levels(df, group) if group else []
     n_levels = len(levels)
-    session = session or {}
     study_type = str(session.get("study_type") or "").lower()
     analysis_predictors = [
         col for col in (session.get("analysis_predictors") or [])
@@ -571,13 +857,17 @@ def generate_plan(
     else:
         summary = "No tests will run with the current selection."
 
-    return {
+    plan = {
         "tests": tests,
         "graphs": graphs,
         "outputs": outputs,
         "suggestions": suggestions,
         "summary": summary,
     }
+    plan.update(_layered_contract(
+        df, classifications, assignment, session, tests, suggestions
+    ))
+    return plan
 
 
 # ---------------------------------------------------------------------------
@@ -601,8 +891,12 @@ _RM_WORDS = ('repeated measures', 'longitudinal', 'over time',
 
 
 def _objective_text(session: Dict[str, Any]) -> str:
-    s = session.get('objective') or session.get('objective_text') or ''
-    return str(s).lower()
+    parts = [
+        session.get('objective') or session.get('objective_text') or '',
+        session.get('study_type') or '',
+        session.get('design') or '',
+    ]
+    return ' '.join(str(part) for part in parts if part).lower()
 
 
 def _detect_rater_cols(df: pd.DataFrame) -> List[str]:
