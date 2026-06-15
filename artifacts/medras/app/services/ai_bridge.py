@@ -21,14 +21,11 @@ import os
 import re
 from typing import Any, Dict, List, Optional
 
-import httpx
-
-from app.services.llm_client import openai_chat_url, openai_auth_header, openai_is_configured, gemini_is_configured, get_gemini_client, provider_status_payload
+from app.services.llm_client import openrouter_chat, openrouter_is_configured, provider_status_payload
 from app.services.phi_redaction import screen_external_ai_payload
 from app.services import domain_profiles
 
 log = logging.getLogger(__name__)
-_TIMEOUT = 20.0
 
 # Study-type keyword heuristics (used as fallback without Gemini)
 # ---------------------------------------------------------------------------
@@ -256,8 +253,8 @@ def _call_openai(
     columns: List[str],
     profile: str = domain_profiles.DEFAULT_PROFILE,
 ) -> Optional[Dict[str, Any]]:
-    """Call OpenAI GPT-4o-mini to identify study type and outcome column."""
-    if not openai_is_configured():
+    """Call OpenRouter to identify study type and outcome column."""
+    if not openrouter_is_configured():
         return None
 
     col_list = "\n".join(f"- {c}" for c in columns[:60])
@@ -286,23 +283,15 @@ def _call_openai(
         "- Respond ONLY with valid JSON, nothing else."
     )
 
-    payload = {
-        "model": "gpt-4o-mini",
-        "messages": [{"role": "user", "content": prompt}],
-        "max_tokens": 256,
-        "temperature": 0.1,
-        "response_format": {"type": "json_object"},
-    }
     try:
-        resp = httpx.post(
-            openai_chat_url(),
-            json=payload,
-            headers={"Authorization": openai_auth_header()},
-            timeout=_TIMEOUT,
+        text = openrouter_chat(
+            task="study_setup",
+            system="Return only valid JSON for the requested study setup.",
+            user=prompt,
+            max_tokens=256,
+            temperature=0.1,
+            json_mode=True,
         )
-        resp.raise_for_status()
-        data = resp.json()
-        text = data["choices"][0]["message"]["content"].strip()
         return json.loads(text)
     except Exception:
         return None
@@ -314,63 +303,7 @@ def _call_gemini(
     columns: List[str],
     profile: str = domain_profiles.DEFAULT_PROFILE,
 ) -> Optional[Dict[str, Any]]:
-    if not gemini_is_configured():
-        return None
-
-    col_list = "\n".join(f"- {c}" for c in columns[:60])
-    profile_rules = ""
-    if domain_profiles.is_breast_pathology(profile):
-        profile_rules = """- In the breast_pathology profile, routine clinical/IHC markers
-  such as ER, PR, HER2, AR, EGFR, Ki-67, p53, and molecular subtype are usually
-  predictors unless the user explicitly names one as the outcome.
-"""
-    prompt = f"""You are a biostatistics assistant. A researcher uploaded an Excel dataset 
-with the following column names:
-{col_list}
-
-They described their study as:
-"{description}"
-
-They said their outcome column is (approximately): "{outcome_hint}"
-
-Your task is to return a JSON object with exactly these keys:
-{{
-  "study_type": "<one of: comparison | association | correlation | regression | diagnostic | survival | reliability | descriptive>",
-  "outcome_col": "<exact column name from the list above, or null>",
-  "confidence": <float 0.0 to 1.0>,
-  "reasoning": "<one plain English sentence explaining your choices>"
-}}
-
-Rules:
-- study_type "correlation" = researcher wants to find which variables are associated with the outcome
-- study_type "comparison" = researcher wants to compare groups (RCT, case-control, cohort)
-- outcome_col must be the EXACT column name string from the list, or null
-- If the outcome hint matches a column name closely, pick that column
-- Prefer the user's explicit outcome hint; otherwise choose the column most clearly
-  described as the measured outcome.
-{profile_rules}
-- Respond ONLY with valid JSON, nothing else.
-"""
-
-    try:
-        from google.genai import types as gtypes
-        client = get_gemini_client()
-        resp = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt,
-            config=gtypes.GenerateContentConfig(
-                temperature=0.1,
-                max_output_tokens=256,
-                response_mime_type="application/json",
-            ),
-        )
-        text = (resp.text or "").strip()
-        # Strip markdown code fences if present
-        text = re.sub(r"^```(?:json)?\s*", "", text, flags=re.IGNORECASE)
-        text = re.sub(r"\s*```$", "", text.strip())
-        return json.loads(text)
-    except Exception:
-        return None
+    return _call_openai(description, outcome_hint, columns, profile=profile)
 
 
 # ---------------------------------------------------------------------------
@@ -725,7 +658,7 @@ def identify_study(
         "confidence":   float,
         "reasoning":    str,
         "all_predictors": [str, ...],   # non-id/non-excluded columns minus outcome
-        "source":       "gemini" | "heuristic" | "proposal",
+        "source":       "openrouter" | "heuristic" | "proposal",
       }
     """
     # Normalise and validate the hint coming from the proposal parser.
@@ -735,7 +668,7 @@ def identify_study(
         if candidate in _TYPE_WORDS:
             hint_type = candidate
 
-    # OpenAI GPT-4o-mini is primary; Gemini is fallback; heuristic is last resort.
+    # OpenRouter is the only external provider; heuristic is the local fallback.
     result = None
     provider = None
     screening = screen_external_ai_payload({
@@ -750,21 +683,7 @@ def identify_study(
             screened["description"], screened["outcome_hint"], screened["columns"],
             profile=profile,
         )
-        provider = "openai" if result else None
-        log.info(
-            "AI bridge OpenAI raw result: %s",
-            json.dumps(result) if result else "None",
-        )
-        if not (result and isinstance(result, dict) and "study_type" in result):
-            result = _call_gemini(
-                screened["description"], screened["outcome_hint"], screened["columns"],
-                profile=profile,
-            )
-            provider = "gemini" if result else None
-            log.info(
-                "AI bridge Gemini raw result: %s",
-                json.dumps(result) if result else "None",
-            )
+        provider = "openrouter" if result else None
         if not (result and isinstance(result, dict) and "study_type" in result):
             result = None
             provider = None

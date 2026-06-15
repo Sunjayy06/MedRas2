@@ -54,7 +54,7 @@ async def verify_chat_redacts_and_blocks_before_provider() -> None:
 
     async def fake_call(kind: str, system: str, message: str):
         captured.update(kind=kind, system=system, message=message)
-        return "Safe provider answer", "openai"
+        return "Safe provider answer", "openrouter"
 
     async def must_not_call(*_args, **_kwargs):
         raise AssertionError("External provider called for blocked PHI")
@@ -68,7 +68,7 @@ async def verify_chat_redacts_and_blocks_before_provider() -> None:
             external_ai_consent=True,
         )
         assert "patient@example.com" not in captured["message"]
-        assert reply["provider_status"] == "openai"
+        assert reply["provider_status"] == "openrouter"
         assert reply["redaction_applied"] is True
         assert "redacted before external AI" in reply["provider_message"]
 

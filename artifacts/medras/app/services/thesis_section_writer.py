@@ -622,30 +622,19 @@ def _system_prompt_for(
 
 def _call_openai_json(system: str, user: str,
                       max_tokens: int = OPENAI_MAX_TOKENS_IMPROVE) -> Dict[str, Any]:
-    """Call OpenAI GPT-4o with JSON mode.
-
-    GPT-4o is the primary provider for ``improve_section``: it excels at
-    precise sentence-level inline diffs (exact verbatim substring matching,
-    structured suggestions) thanks to its strong instruction-following.
-    Falls back to a ``GeneratorError`` on failure so the caller can try
-    Gemini as a secondary provider.
-    """
-    from app.services.llm_client import get_openai_client, openai_is_configured
-    if not openai_is_configured():
-        raise GeneratorError("OpenAI is not configured.")
+    """Call OpenRouter's thesis-writing model with JSON mode."""
+    from app.services.llm_client import openrouter_chat, openrouter_is_configured
+    if not openrouter_is_configured():
+        raise GeneratorError("External AI is not configured.")
     try:
-        client = get_openai_client()
-        resp = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user",   "content": user},
-            ],
-            response_format={"type": "json_object"},
+        raw = _strip_fences(openrouter_chat(
+            task="thesis_writing",
+            system=system,
+            user=user,
             max_tokens=max_tokens,
             temperature=0.2,
-        )
-        raw = _strip_fences(resp.choices[0].message.content or "")
+            json_mode=True,
+        ))
         data = json.loads(raw)
     except GeneratorError:
         raise
@@ -662,37 +651,8 @@ def _call_openai_json(system: str, user: str,
 def _call_gemini_json(system: str, user: str,
                       max_tokens: int = GEMINI_MAX_TOKENS,
                       timeout: float = GEMINI_TIMEOUT_S) -> Dict[str, Any]:
-    from google.genai import types
-    try:
-        client = _pa._get_gemini()
-    except RuntimeError as exc:
-        raise GeneratorError(str(exc))
-    contents = f"{system}\n\n--- INPUTS ---\n{user}"
-    try:
-        resp = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=contents,
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-                max_output_tokens=max_tokens,
-                temperature=0.3,
-                http_options=types.HttpOptions(timeout=int(timeout * 1000)),
-            ),
-        )
-    except Exception as exc:  # noqa: BLE001
-        msg = _pa.sanitize_error_message(str(exc))
-        if "quota" in msg.lower() or "rate" in msg.lower():
-            raise GeneratorError("AI service is over its quota. Please try again later.")
-        raise GeneratorError(f"AI generation failed: {msg}")
-    text = _strip_fences(resp.text or "")
-    try:
-        data = json.loads(text)
-    except json.JSONDecodeError:
-        log.warning("thesis_section_writer: non-JSON: %s", text[:200])
-        raise GeneratorError("AI returned a malformed response. Please retry.")
-    if not isinstance(data, dict):
-        raise GeneratorError("AI returned an unexpected response shape.")
-    return data
+    """Compatibility wrapper routed exclusively through OpenRouter."""
+    return _call_openai_json(system, user, max_tokens=max_tokens)
 
 
 # ---------------------------------------------------------------------------

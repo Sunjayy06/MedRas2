@@ -45,8 +45,14 @@ def verify_plan_and_result_actions_require_confirmation() -> None:
 
 def verify_setup_suggestions_are_not_persisted_before_confirmation() -> None:
     assert 'entry.meta["ai_study"] = result' not in STATS
+    setup = _section(STATS, "async def setup_study", "# Adjust setup")
+    assert 'entry.meta["pending_ai_study"] = result' in setup
+    assert "return result" in setup
+
     confirm = _section(STATS, "async def confirm_study", "# Run Correlation")
     assert 'entry.meta["ai_study"] = {' in confirm
+    assert 'entry.meta.get("pending_ai_study")' in confirm
+    assert 'entry.meta.pop("pending_ai_study", None)' in confirm
     assert '"source": "confirmed"' in confirm
 
     for label in (

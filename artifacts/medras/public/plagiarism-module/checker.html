@@ -26,8 +26,8 @@
       <span class="pm-eyebrow" data-testid="text-mode-eyebrow">Plagiarism checker</span>
       <h1 class="pm-h1" data-testid="text-mode-title">Check your text in seconds.</h1>
       <p class="pm-lede" data-testid="text-mode-lede">
-        Paste a passage or upload a document. We'll send it to OpenAI (with
-        Gemini as a fallback) and return an originality score, an
+        Paste a passage or upload a document. We'll send it through OpenRouter
+        and return an originality score, an
         AI-likelihood score, and the specific passages that look risky.
       </p>
 
@@ -121,9 +121,7 @@
           <span style="margin-left:auto; font-size:13px; color: var(--pm-text-soft);">
             Engine:
             <select id="pm-provider" data-testid="select-pm-provider" style="margin-left:6px; padding:5px 8px; border-radius:6px; border:1px solid var(--pm-border); background:#fff; font: inherit;">
-              <option value="auto" selected>Auto (OpenAI → Gemini)</option>
-              <option value="openai">OpenAI only</option>
-              <option value="gemini">Gemini only</option>
+              <option value="auto" selected>OpenRouter</option>
             </select>
           </span>
         </div>

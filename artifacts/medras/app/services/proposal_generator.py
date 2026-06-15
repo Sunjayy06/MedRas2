@@ -182,27 +182,19 @@ def _strip_fences(s: str) -> str:
 
 def _call_openai_json(system_prompt: str, user_text: str,
                       max_tokens: int = GEMINI_MAX_TOKENS) -> Dict[str, Any]:
-    """Call OpenAI GPT-4o with JSON mode.
-
-    Fallback for when Gemini is unavailable. GPT-4o handles large structured
-    JSON responses reliably and can draft all seven sections in one call.
-    """
-    from app.services.llm_client import get_openai_client, openai_is_configured
-    if not openai_is_configured():
-        raise GeneratorError("OpenAI is not configured.")
+    """Compatibility wrapper for OpenRouter proposal-generation JSON."""
+    from app.services.llm_client import openrouter_chat, openrouter_is_configured
+    if not openrouter_is_configured():
+        raise GeneratorError("External AI is not configured.")
     try:
-        client = get_openai_client()
-        resp = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user",   "content": user_text},
-            ],
-            response_format={"type": "json_object"},
+        raw = _strip_fences(openrouter_chat(
+            task="proposal_generation",
+            system=system_prompt,
+            user=user_text,
             max_tokens=max_tokens,
             temperature=0.3,
-        )
-        raw = _strip_fences(resp.choices[0].message.content or "")
+            json_mode=True,
+        ))
     except GeneratorError:
         raise
     except Exception as exc:  # noqa: BLE001
@@ -213,7 +205,7 @@ def _call_openai_json(system_prompt: str, user_text: str,
     try:
         data = json.loads(raw)
     except json.JSONDecodeError:
-        log.warning("proposal_generator: OpenAI returned non-JSON: %s", raw[:200])
+        log.warning("proposal_generator: external AI returned non-JSON")
         raise GeneratorError("AI returned a malformed response. Please retry.")
     if not isinstance(data, dict):
         raise GeneratorError("AI returned an unexpected response shape.")
@@ -223,40 +215,8 @@ def _call_openai_json(system_prompt: str, user_text: str,
 def _call_gemini_json(system_prompt: str, user_text: str,
                       max_tokens: int = GEMINI_MAX_TOKENS,
                       timeout: float = GEMINI_TIMEOUT_S) -> Dict[str, Any]:
-    """Call Gemini with JSON response MIME type. Raises ``GeneratorError`` on
-    quota exhaustion or unparseable JSON.
-    """
-    from google.genai import types
-    try:
-        client = _pa._get_gemini()
-    except RuntimeError as exc:
-        raise GeneratorError(str(exc))
-    contents = f"{system_prompt}\n\n--- INPUTS ---\n{user_text}"
-    try:
-        resp = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=contents,
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-                max_output_tokens=max_tokens,
-                temperature=0.3,
-                http_options=types.HttpOptions(timeout=int(timeout * 1000)),
-            ),
-        )
-    except Exception as exc:  # noqa: BLE001 — surface a clean message
-        msg = _pa.sanitize_error_message(str(exc))
-        if "quota" in msg.lower() or "rate" in msg.lower():
-            raise GeneratorError("AI service is temporarily over its quota. Please try again later.")
-        raise GeneratorError(f"AI generation failed: {msg}")
-    text = _strip_fences(resp.text or "")
-    try:
-        data = json.loads(text)
-    except json.JSONDecodeError:
-        log.warning("proposal_generator: Gemini returned non-JSON: %s", text[:200])
-        raise GeneratorError("AI returned a malformed response. Please retry.")
-    if not isinstance(data, dict):
-        raise GeneratorError("AI returned an unexpected response shape.")
-    return data
+    """Compatibility wrapper routed exclusively through OpenRouter."""
+    return _call_openai_json(system_prompt, user_text, max_tokens=max_tokens)
 
 
 async def generate_rag_sections(

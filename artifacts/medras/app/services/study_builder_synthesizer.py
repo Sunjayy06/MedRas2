@@ -310,53 +310,28 @@ def _build_answer_text(structured: dict, papers: list[dict]) -> str:
 
 
 def _call_gemini_sync(system: str, user: str) -> dict | None:
-    """Synchronous Gemini call — must be run via asyncio.to_thread."""
+    """Compatibility wrapper routed exclusively through OpenRouter."""
     try:
-        from app.services.llm_client import get_gemini_client
-        from google.genai import types as gtypes
-
-        gc   = get_gemini_client()
-        resp = gc.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=f"{system}\n\nQuestion: {user}",
-            config=gtypes.GenerateContentConfig(
-                max_output_tokens=2000,
-                temperature=0.1,
-            ),
+        from app.services.llm_client import openrouter_chat
+        raw = openrouter_chat(
+            task="reasoning",
+            system=system,
+            user=f"Question: {user}",
+            max_tokens=2000,
+            temperature=0.1,
+            json_mode=True,
         )
-        raw = (resp.text or "").strip()
         raw = re.sub(r"^```(?:json)?\s*", "", raw)
         raw = re.sub(r"\s*```\s*$",        "", raw)
         return json.loads(raw)
     except Exception as exc:
-        log.warning("Gemini synthesis failed: %s", exc)
+        log.warning("OpenRouter synthesis failed: %s", exc)
         return None
 
 
 def _call_openai_sync(system: str, user: str) -> dict | None:
-    """Synchronous OpenAI call — must be run via asyncio.to_thread.
-
-    Uses GPT-4o for high-quality academic synthesis.
-    """
-    try:
-        from app.services.llm_client import get_openai_client
-
-        oai  = get_openai_client()
-        resp = oai.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user",   "content": f"Question: {user}"},
-            ],
-            max_tokens=2000,
-            temperature=0.1,
-            response_format={"type": "json_object"},
-        )
-        raw = (resp.choices[0].message.content or "").strip()
-        return json.loads(raw)
-    except Exception as exc:
-        log.warning("OpenAI synthesis failed: %s", exc)
-        return None
+    """Compatibility wrapper routed exclusively through OpenRouter."""
+    return _call_gemini_sync(system, user)
 
 
 # ── Locked-context block builder ─────────────────────────────────────────────
@@ -487,17 +462,11 @@ async def synthesize(
     # Step 4 — structured AI synthesis
     # Gemini 2.5 Flash PRIMARY: excels at academic evidence synthesis with
     # long-context reading of distilled excerpts.
-    # GPT-4o FALLBACK: strong structured JSON fidelity when Gemini is unavailable.
     structured = (
         await asyncio.to_thread(_call_gemini_sync, synth_system, question)
         if external_ai_consent else None
     )
-    method = "gemini-2.5-flash"
-
-    if not structured and external_ai_consent:
-        log.info("Gemini synthesis unavailable — trying GPT-4o fallback")
-        structured = await asyncio.to_thread(_call_openai_sync, synth_system, question)
-        method = "gpt-4o"
+    method = "openrouter"
 
     if not structured:
         # Both providers failed — return raw sources

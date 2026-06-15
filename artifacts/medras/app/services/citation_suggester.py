@@ -30,7 +30,7 @@ responsible for rendering DOI links — we deliberately don't fabricate a
 ``https://doi.org/`` URL here so the front-end can degrade gracefully
 when only ``url`` is present (e.g. arXiv, Europe PMC full-text).
 
-If ``GEMINI_API_KEY`` is missing, the service falls back to a simple
+If OpenRouter is unavailable, the service falls back to a simple
 sentence-based heuristic that splits the passage into the longest
 information-bearing sentences and uses each as its own query — better
 than an empty response.

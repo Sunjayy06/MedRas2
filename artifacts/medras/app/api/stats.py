@@ -352,11 +352,13 @@ async def upload_proposal(request: Request, file: UploadFile = File(...)) -> Dic
 
 
 import re as _re
-import os as _os
 import json as _json
-import httpx as _httpx
 
-from app.services.llm_client import openai_chat_url as _openai_chat_url, openai_auth_header as _openai_auth_header, openai_is_configured as _openai_is_configured, gemini_is_configured as _gemini_is_configured, get_gemini_client as _get_gemini_client, provider_status_payload as _provider_status_payload
+from app.services.llm_client import (
+    openrouter_chat as _openrouter_chat,
+    openrouter_is_configured as _openrouter_is_configured,
+    provider_status_payload as _provider_status_payload,
+)
 from app.services.phi_redaction import screen_external_ai_payload as _screen_external_ai_payload
 _PARSE_TIMEOUT = 25.0
 
@@ -444,67 +446,27 @@ def _heuristic_extract(text: str) -> dict:
 async def _ai_extract(text: str, external_ai_consent: bool = False) -> tuple[
     dict | None, str | None, bool, bool
 ]:
-    """Try Gemini then OpenAI to extract structured fields from proposal text.
-
-    Returns parsed dict or None on failure — caller falls back to heuristics.
-    """
+    """Use OpenRouter to extract structured fields; fall back locally on failure."""
     if not external_ai_consent:
         return None, None, False, False
 
     screening = _screen_external_ai_payload(text[:4000])
     if screening.blocked:
         return None, None, screening.redaction_applied, True
-    snippet = screening.value
-    prompt = _PARSE_PROMPT.format(text=snippet)
-
-    # ── Try Gemini first ────────────────────────────────────────────────────
-    if _gemini_is_configured():
-        def _gemini_call() -> dict | None:
-            from google.genai import types as _gtypes
-            gc = _get_gemini_client()
-            resp = gc.models.generate_content(
-                model="gemini-2.5-flash",
-                contents=prompt,
-                config=_gtypes.GenerateContentConfig(
-                    temperature=0.1,
-                    max_output_tokens=512,
-                    response_mime_type="application/json",
-                ),
+    if _openrouter_is_configured():
+        try:
+            raw = await asyncio.to_thread(
+                _openrouter_chat,
+                task="proposal_parse",
+                system="Extract proposal metadata and return only valid JSON.",
+                user=_PARSE_PROMPT.format(text=screening.value),
+                max_tokens=512,
+                temperature=0.1,
+                json_mode=True,
             )
-            raw = (resp.text or "").strip()
-            raw = _re.sub(r"^```(?:json)?\s*", "", raw, flags=_re.IGNORECASE)
-            raw = _re.sub(r"\s*```$", "", raw.strip())
             result = _json.loads(raw)
-            return result if isinstance(result, dict) and "objective" in result else None
-
-        try:
-            result = await asyncio.to_thread(_gemini_call)
-            if result:
-                return result, "gemini", screening.redaction_applied, False
-        except Exception:
-            pass
-
-    # ── Fall back to OpenAI ─────────────────────────────────────────────────
-    if _openai_is_configured():
-        payload = {
-            "model": "gpt-4o-mini",
-            "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": 512,
-            "temperature": 0.1,
-            "response_format": {"type": "json_object"},
-        }
-        try:
-            async with _httpx.AsyncClient(timeout=_PARSE_TIMEOUT) as client:
-                resp = await client.post(
-                    _openai_chat_url(),
-                    json=payload,
-                    headers={"Authorization": _openai_auth_header()},
-                )
-            if resp.status_code == 200:
-                raw = resp.json()["choices"][0]["message"]["content"].strip()
-                result = _json.loads(raw)
-                if isinstance(result, dict) and "objective" in result:
-                    return result, "openai", screening.redaction_applied, False
+            if isinstance(result, dict) and "objective" in result:
+                return result, "openrouter", screening.redaction_applied, False
         except Exception:
             pass
 
@@ -517,7 +479,7 @@ async def parse_proposal(request: Request, file: UploadFile = File(...)) -> Dict
     """Parse a study-proposal document and extract structured study details.
 
     Accepts PDF / DOCX / PPTX / TXT / MD / RTF.
-    Uses Gemini → OpenAI → regex heuristic fallback chain.
+    Uses OpenRouter with a regex heuristic fallback.
     Returns ``{objective, outcomes, study_type, sample_size, source}``.
     """
     filename = file.filename or "proposal"
@@ -2040,11 +2002,12 @@ async def confirm_study(payload: ConfirmStudyRequest) -> Dict[str, Any]:
     entry.meta["confirmed_study_type"] = payload.study_type
     entry.meta["confirmed_outcome_col"] = payload.outcome_col
     entry.meta["ai_study"] = {
-        **(entry.meta.get("ai_study") or {}),
+        **(entry.meta.get("pending_ai_study") or entry.meta.get("ai_study") or {}),
         "study_type": payload.study_type,
         "outcome_col": payload.outcome_col,
         "source": "confirmed",
     }
+    entry.meta.pop("pending_ai_study", None)
     # Apply yes/no standardisation whenever a study is confirmed (T004)
     df, yn_notes = variable_classifier.clean_yes_no_columns(entry.df)
     if yn_notes:
@@ -2271,7 +2234,7 @@ class SetupStudyRequest(BaseModel):
 async def setup_study(request: Request, payload: SetupStudyRequest) -> Dict[str, Any]:
     """AI reads a plain-English study description and identifies study type + outcome.
 
-    Returns the same shape as ``/ai-bridge`` and stores the result in the session.
+    Returns the same shape as ``/ai-bridge`` and stores it as a pending suggestion.
     Use in place of or alongside ``/ai-bridge`` when the researcher has typed a
     description on the AI-confirm / setup screen.
     """
@@ -2298,7 +2261,7 @@ async def setup_study(request: Request, payload: SetupStudyRequest) -> Dict[str,
     # Augment with outcome_hint if provided and AI didn't detect an outcome
     if payload.outcome_hint.strip() and not result.get("outcome_col"):
         result["outcome_col"] = payload.outcome_hint.strip()
-    entry.meta["ai_study"] = result
+    entry.meta["pending_ai_study"] = result
     return result
 
 

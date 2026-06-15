@@ -670,7 +670,7 @@ def chatbox_missing_reply(message: str, context: Dict[str, Any]) -> Dict[str, An
 # Behaviour:
 # * Calculation requests are still refused at the gate BEFORE any LLM call,
 #   so the boundary holds even if Gemini misbehaves.
-# * If GEMINI_API_KEY is set we try Gemini 1.5 Flash with a screen-specific
+# * If OpenRouter is configured we try its configured model with a screen-specific
 #   system prompt + a short context summary built from the live session.
 # * For chatbox 3 we look for an action JSON in the response and convert it
 #   to the same `_action_msg` shape the rule-based path emits.

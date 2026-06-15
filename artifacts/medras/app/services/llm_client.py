@@ -1,96 +1,181 @@
-"""Central LLM client factory for MedRAS.
+"""OpenRouter-only external LLM gateway for MedRAS.
 
-Automatically uses the Replit AI Integration proxy when managed env vars
-(AI_INTEGRATIONS_OPENAI_BASE_URL / AI_INTEGRATIONS_GEMINI_BASE_URL) are
-present, falling back to the user-supplied OPENAI_API_KEY / GEMINI_API_KEY.
-
-IMPORTANT: Never cache the returned client objects — integration proxy
-tokens can expire between requests.
+All external LLM traffic must pass through this module. Legacy OpenAI/Gemini
+factory names remain as compatibility adapters, but they use only OpenRouter
+configuration and never read direct-provider API keys.
 """
 
 from __future__ import annotations
 
-import os
-from typing import Optional
+from types import SimpleNamespace
+from typing import Any
+
+from app.core.config import settings
+
+
+_TASK_MODEL_FIELDS = {
+    "proposal_parse": "openrouter_proposal_model",
+    "study_setup": "openrouter_reasoning_model",
+    "variable_mapping": "openrouter_reasoning_model",
+    "cleanup_suggestions": "openrouter_reasoning_model",
+    "reasoning": "openrouter_reasoning_model",
+    "report_writing": "openrouter_writing_model",
+    "thesis_writing": "openrouter_writing_model",
+    "proposal_generation": "openrouter_writing_model",
+    "chat": "openrouter_default_model",
+    "coding": "openrouter_coding_model",
+    "vision": "openrouter_vision_model",
+    "fallback": "openrouter_fallback_model",
+}
+
+
+def openrouter_is_configured() -> bool:
+    return settings.has_openrouter
+
+
+def openrouter_model_for_task(task: str) -> str:
+    field = _TASK_MODEL_FIELDS.get(task, "openrouter_default_model")
+    return str(getattr(settings, field))
+
+
+def openrouter_chat_url() -> str:
+    return f"{settings.openrouter_base_url.rstrip('/')}/chat/completions"
+
+
+def openrouter_auth_header() -> str:
+    return f"Bearer {settings.openrouter_api_key or ''}"
+
+
+def get_openrouter_client(*, async_client: bool = False):
+    """Return a fresh OpenAI-compatible client configured for OpenRouter."""
+    if not openrouter_is_configured():
+        raise RuntimeError("OpenRouter is not configured. Set OPENROUTER_API_KEY.")
+    if async_client:
+        from openai import AsyncOpenAI
+
+        return AsyncOpenAI(
+            api_key=settings.openrouter_api_key,
+            base_url=settings.openrouter_base_url,
+        )
+    from openai import OpenAI
+
+    return OpenAI(
+        api_key=settings.openrouter_api_key,
+        base_url=settings.openrouter_base_url,
+    )
+
+
+def openrouter_chat(
+    *,
+    task: str,
+    system: str,
+    user: str,
+    max_tokens: int = 1000,
+    temperature: float = 0.2,
+    json_mode: bool = False,
+) -> str:
+    """Run one synchronous OpenRouter chat-completions request."""
+    client = get_openrouter_client()
+    kwargs: dict[str, Any] = {
+        "model": openrouter_model_for_task(task),
+        "messages": [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+        "max_tokens": max_tokens,
+        "temperature": temperature,
+    }
+    if json_mode:
+        kwargs["response_format"] = {"type": "json_object"}
+    response = client.chat.completions.create(**kwargs)
+    return response.choices[0].message.content or ""
 
 
 # ---------------------------------------------------------------------------
-# OpenAI
+# Deprecated compatibility adapters
 # ---------------------------------------------------------------------------
 
-def _openai_base_url() -> str:
-    return os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL") or "https://api.openai.com/v1"
+class _CompletionsAdapter:
+    def __init__(self, completions):
+        self._completions = completions
+
+    def create(self, **kwargs):
+        kwargs["model"] = openrouter_model_for_task("fallback")
+        return self._completions.create(**kwargs)
 
 
-def _openai_api_key() -> str:
-    return (
-        os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY")
-        or os.environ.get("OPENAI_API_KEY", "")
+class _AsyncCompletionsAdapter:
+    def __init__(self, completions):
+        self._completions = completions
+
+    async def create(self, **kwargs):
+        kwargs["model"] = openrouter_model_for_task("fallback")
+        return await self._completions.create(**kwargs)
+
+
+def get_openai_client():
+    """Deprecated compatibility adapter backed exclusively by OpenRouter."""
+    client = get_openrouter_client()
+    return SimpleNamespace(
+        chat=SimpleNamespace(completions=_CompletionsAdapter(client.chat.completions))
+    )
+
+
+def get_async_openai_client():
+    """Deprecated async compatibility adapter backed exclusively by OpenRouter."""
+    client = get_openrouter_client(async_client=True)
+    return SimpleNamespace(
+        chat=SimpleNamespace(completions=_AsyncCompletionsAdapter(client.chat.completions))
     )
 
 
 def openai_is_configured() -> bool:
-    return bool(_openai_api_key())
-
-
-def get_openai_client():
-    """Return a fresh synchronous OpenAI SDK client."""
-    from openai import OpenAI
-
-    key = _openai_api_key()
-    if not key:
-        raise RuntimeError(
-            "OpenAI is not configured. "
-            "Set OPENAI_API_KEY or provision the AI Integrations for OpenAI."
-        )
-    return OpenAI(api_key=key, base_url=_openai_base_url())
-
-
-def get_async_openai_client():
-    """Return a fresh asynchronous AsyncOpenAI SDK client."""
-    from openai import AsyncOpenAI
-
-    key = _openai_api_key()
-    if not key:
-        raise RuntimeError(
-            "OpenAI is not configured. "
-            "Set OPENAI_API_KEY or provision the AI Integrations for OpenAI."
-        )
-    return AsyncOpenAI(api_key=key, base_url=_openai_base_url())
+    return openrouter_is_configured()
 
 
 def openai_chat_url() -> str:
-    """Full URL for the chat/completions endpoint (for raw httpx/urllib callers)."""
-    return f"{_openai_base_url()}/chat/completions"
+    return openrouter_chat_url()
 
 
 def openai_auth_header() -> str:
-    """Authorization header value for raw httpx/urllib callers."""
-    return f"Bearer {_openai_api_key()}"
+    return openrouter_auth_header()
 
 
-# ---------------------------------------------------------------------------
-# Gemini
-# ---------------------------------------------------------------------------
+class _GeminiModelsAdapter:
+    def generate_content(self, *, model: str, contents: Any, config: Any = None):
+        del model
+        max_tokens = int(getattr(config, "max_output_tokens", 1000) or 1000)
+        temperature = float(getattr(config, "temperature", 0.2) or 0.2)
+        mime = str(getattr(config, "response_mime_type", "") or "")
+        text = openrouter_chat(
+            task="fallback",
+            system="Follow the user's instructions accurately.",
+            user=str(contents),
+            max_tokens=max_tokens,
+            temperature=temperature,
+            json_mode=mime == "application/json",
+        )
+        return SimpleNamespace(text=text)
 
-def _gemini_api_key() -> str:
-    return (
-        os.environ.get("AI_INTEGRATIONS_GEMINI_API_KEY")
-        or os.environ.get("GEMINI_API_KEY", "")
-    )
+
+class _GeminiCompatibilityAdapter:
+    def __init__(self):
+        self.models = _GeminiModelsAdapter()
 
 
-def _gemini_base_url() -> Optional[str]:
-    return os.environ.get("AI_INTEGRATIONS_GEMINI_BASE_URL") or None
+def get_gemini_client():
+    """Deprecated Gemini-shaped adapter backed exclusively by OpenRouter."""
+    if not openrouter_is_configured():
+        raise RuntimeError("OpenRouter is not configured. Set OPENROUTER_API_KEY.")
+    return _GeminiCompatibilityAdapter()
 
 
 def gemini_is_configured() -> bool:
-    return bool(_gemini_api_key())
+    return openrouter_is_configured()
 
 
 def any_external_ai_configured() -> bool:
-    """Return whether at least one supported external AI provider is configured."""
-    return openai_is_configured() or gemini_is_configured()
+    return openrouter_is_configured()
 
 
 def provider_status_message(
@@ -99,16 +184,13 @@ def provider_status_message(
     redaction_applied: bool = False,
     phi_blocked: bool = False,
 ) -> str:
-    """Return a consistent user-facing explanation of AI provider provenance."""
     if phi_blocked:
         message = (
             "External AI was blocked because high-risk sensitive identifiers were detected. "
             "Local fallback was used."
         )
-    elif provider_status == "openai":
-        message = "Answered using OpenAI."
-    elif provider_status == "gemini":
-        message = "Answered using Gemini."
+    elif provider_status in {"openrouter", "openai", "gemini"}:
+        message = "Answered using OpenRouter."
     elif not external_ai_consent:
         message = "External AI is not enabled for this dataset/session. Local fallback was used."
     elif not any_external_ai_configured():
@@ -133,33 +215,12 @@ def provider_status_payload(
     redaction_applied: bool = False,
     phi_blocked: bool = False,
 ) -> dict:
+    normalized = "openrouter" if provider_status in {"openrouter", "openai", "gemini"} else provider_status
     return {
-        "provider_status": provider_status,
+        "provider_status": normalized,
         "provider_message": provider_status_message(
-            provider_status, external_ai_consent, redaction_applied, phi_blocked
+            normalized, external_ai_consent, redaction_applied, phi_blocked
         ),
         "redaction_applied": redaction_applied,
         "phi_blocked": phi_blocked,
     }
-
-
-def get_gemini_client():
-    """Return a fresh google-genai Client.
-
-    Uses the Replit AI Integration proxy (AI_INTEGRATIONS_GEMINI_BASE_URL +
-    AI_INTEGRATIONS_GEMINI_API_KEY) when available, otherwise falls back to
-    the direct Gemini API with GEMINI_API_KEY.
-    """
-    from google import genai
-
-    key = _gemini_api_key()
-    if not key:
-        raise RuntimeError(
-            "Gemini is not configured. "
-            "Set GEMINI_API_KEY or provision the AI Integrations for Gemini."
-        )
-    base_url = _gemini_base_url()
-    if base_url:
-        # Replit AI Integration proxy requires v1 (not the SDK default v1beta).
-        return genai.Client(api_key=key, http_options={"api_version": "v1", "base_url": base_url})
-    return genai.Client(api_key=key)

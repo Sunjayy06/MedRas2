@@ -667,11 +667,7 @@ async def ask(request: Request, body: AskRequest) -> AskResponse:
     uploaded_count = len(uploaded_papers) + (1 if has_pdf else 0)
 
     method = synth.get("method", "unknown")
-    provider_status = (
-        "gemini" if method.startswith("gemini")
-        else "openai" if method.startswith("gpt")
-        else "local_fallback"
-    )
+    provider_status = "openrouter" if method == "openrouter" else "local_fallback"
     redaction_applied = (
         pico_screening.redaction_applied or synth_screening.redaction_applied
     )

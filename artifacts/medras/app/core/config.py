@@ -27,12 +27,6 @@ def _split_csv(value: str | None, default: List[str]) -> List[str]:
 class Settings:
     """Application settings loaded from environment variables."""
 
-    openai_api_key: str | None = field(default_factory=lambda: (
-        os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
-    ))
-    gemini_api_key: str | None = field(default_factory=lambda: (
-        os.environ.get("AI_INTEGRATIONS_GEMINI_API_KEY") or os.environ.get("GEMINI_API_KEY")
-    ))
     openrouter_api_key: str | None = field(default_factory=lambda: os.environ.get("OPENROUTER_API_KEY"))
     openrouter_base_url: str = field(
         default_factory=lambda: os.environ.get("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
@@ -73,11 +67,13 @@ class Settings:
 
     @property
     def has_openai(self) -> bool:
-        return bool(self.openai_api_key)
+        """Deprecated compatibility alias. External AI is OpenRouter-only."""
+        return self.has_openrouter
 
     @property
     def has_gemini(self) -> bool:
-        return bool(self.gemini_api_key)
+        """Deprecated compatibility alias. External AI is OpenRouter-only."""
+        return self.has_openrouter
 
     @property
     def has_openrouter(self) -> bool:

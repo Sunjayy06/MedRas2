@@ -153,7 +153,7 @@ function ensureExternalAIConsent() {
   const granted = window.confirm(
     "External AI disclosure\n\n"
     + "Sigma may send your proposal text, study description, column names, "
-    + "statistical summaries, and questions to OpenAI or Gemini. "
+    + "statistical summaries, and questions to OpenRouter. "
     + "Do not include identifiable patient data.\n\n"
     + "Allow external AI for this dataset/session?\n"
     + "Choose Cancel to keep using local fallback only."
@@ -774,7 +774,7 @@ function _bindS1ProposalUpload() {
 
       // Show AI badge if extraction was AI-powered.
       if (aiBadge) {
-        if (["openai", "gemini", "ai"].includes(data.source)) {
+        if (["openrouter", "ai"].includes(data.source)) {
           aiBadge.style.display = "flex";
           aiBadge.classList.remove("is-hidden");
         } else {
@@ -789,7 +789,7 @@ function _bindS1ProposalUpload() {
       });
 
       if (fields) fields.classList.remove("is-hidden");
-      const sourceLabel = ["openai", "gemini", "ai"].includes(data.source) ? "AI extracted" : "parsed";
+      const sourceLabel = ["openrouter", "ai"].includes(data.source) ? "AI extracted" : "parsed";
       if (status) status.textContent = `✓ ${file.name} — ${sourceLabel}`;
     } catch (e) {
       if (fields) fields.classList.remove("is-hidden");

@@ -66,7 +66,7 @@ ANALYZE_TEXT_CHARS = 1_000_000  # 1 MB of UTF-8 text — plenty for a thesis
 
 class CheckRequest(BaseModel):
     text: str = Field(..., min_length=1)
-    provider: Literal["openai", "gemini", "auto"] = "auto"
+    provider: Literal["openrouter", "auto"] = "openrouter"
 
 
 class PipelineSectionIn(BaseModel):
@@ -82,7 +82,7 @@ class PipelineSectionIn(BaseModel):
 
 class ReduceRequest(BaseModel):
     text: str = Field(..., min_length=1)
-    provider: Literal["openai", "gemini", "auto"] = "auto"
+    provider: Literal["openrouter", "auto"] = "openrouter"
     # Strings that MUST appear unchanged in the rewrite. Usually populated
     # from the output of /analyze-file's protected_terms list.
     protected_terms: Optional[List[str]] = None
@@ -145,10 +145,9 @@ def _safe_extract(filename: str, content: bytes) -> str:
         ) from exc
 
 
-def _normalise_provider(value: str | None) -> Literal["openai", "gemini", "auto"]:
-    if value not in ("openai", "gemini", "auto"):
-        return "auto"
-    return value  # type: ignore[return-value]
+def _normalise_provider(value: str | None) -> Literal["auto"]:
+    del value
+    return "auto"
 
 
 # ---------------------------------------------------------------------------
@@ -167,7 +166,7 @@ async def check_text(request: Request, payload: CheckRequest) -> dict:
             detail=f"Text is too long ({len(text):,} chars). Maximum is {MAX_TEXT_CHARS:,}.",
         )
     try:
-        result = plagiarism_analyzer.check_originality(text, provider=payload.provider)
+        result = plagiarism_analyzer.check_originality(text, provider="auto")
     except RuntimeError as exc:
         # Missing API key — surface as 503 so the UI can show a helpful note.
         raise HTTPException(status_code=503, detail=plagiarism_analyzer.sanitize_error_message(exc)) from exc
@@ -363,7 +362,7 @@ async def reduce_text(request: Request, payload: ReduceRequest) -> dict:
     try:
         result = plagiarism_analyzer.reduce_plagiarism(
             text,
-            provider=payload.provider,
+            provider="auto",
             protected_terms=payload.protected_terms,
         )
     except RuntimeError as exc:

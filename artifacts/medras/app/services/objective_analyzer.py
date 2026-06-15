@@ -6,7 +6,7 @@ Two paths:
    that is good enough for clear-cut objectives ("compare A and B", "estimate
    the prevalence of …", "compare three treatments …").
 
-2. **LLM-assisted (optional).** When ``OPENAI_API_KEY`` is configured, we ask
+2. **LLM-assisted (optional).** When OpenRouter is configured, we ask
    the model to return a strict JSON object with the same shape as the
    heuristic. The result is validated before being returned to the frontend so
    a malformed model response can never break the calculator.

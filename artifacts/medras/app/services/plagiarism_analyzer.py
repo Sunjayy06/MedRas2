@@ -396,20 +396,20 @@ def check_originality(text: str, *, provider: ProviderChoice = "auto") -> Dict[s
 
     if provider == "openai":
         parsed = _call_openai_json(CHECK_SYSTEM_PROMPT, text)
-        return _normalise_check_result(parsed, fallback_word_count=word_count, model_used="openai")
+        return _normalise_check_result(parsed, fallback_word_count=word_count, model_used="openrouter")
 
     if provider == "gemini":
         parsed = _call_gemini_json(CHECK_SYSTEM_PROMPT, text)
-        return _normalise_check_result(parsed, fallback_word_count=word_count, model_used="gemini")
+        return _normalise_check_result(parsed, fallback_word_count=word_count, model_used="openrouter")
 
     # auto — OpenAI first, Gemini fallback
     try:
         parsed = _call_openai_json(CHECK_SYSTEM_PROMPT, text)
-        return _normalise_check_result(parsed, fallback_word_count=word_count, model_used="openai")
+        return _normalise_check_result(parsed, fallback_word_count=word_count, model_used="openrouter")
     except Exception as exc:  # noqa: BLE001
         log.warning("plagiarism.check openai failed, falling back to gemini: %s", exc)
         parsed = _call_gemini_json(CHECK_SYSTEM_PROMPT, text)
-        return _normalise_check_result(parsed, fallback_word_count=word_count, model_used="gemini")
+        return _normalise_check_result(parsed, fallback_word_count=word_count, model_used="openrouter")
 
 
 def reduce_plagiarism(
@@ -468,14 +468,14 @@ def reduce_plagiarism(
         }
 
     if provider == "openai":
-        return _normalise(_call_openai_json(system_prompt, text, max_tokens=4096), model_used="openai")
+        return _normalise(_call_openai_json(system_prompt, text, max_tokens=4096), model_used="openrouter")
     if provider == "gemini":
-        return _normalise(_call_gemini_json(system_prompt, text, max_tokens=8192), model_used="gemini")
+        return _normalise(_call_gemini_json(system_prompt, text, max_tokens=8192), model_used="openrouter")
     try:
-        return _normalise(_call_openai_json(system_prompt, text, max_tokens=4096), model_used="openai")
+        return _normalise(_call_openai_json(system_prompt, text, max_tokens=4096), model_used="openrouter")
     except Exception as exc:  # noqa: BLE001
         log.warning("plagiarism.reduce openai failed, falling back to gemini: %s", exc)
-        return _normalise(_call_gemini_json(system_prompt, text, max_tokens=8192), model_used="gemini")
+        return _normalise(_call_gemini_json(system_prompt, text, max_tokens=8192), model_used="openrouter")
 
 
 # ---------------------------------------------------------------------------
@@ -1406,14 +1406,14 @@ def rewrite_pipeline(
         "rewritten_text": final_combined,
         "changes_made": total_changes,
         "notes": ". ".join(notes_bits) + ".",
-        "model_used": "pipeline (gpt-4o → gemini-2.5-flash → gpt-4o)" + (" + fallbacks" if any_fallback else ""),
+        "model_used": "openrouter",
         "protected_terms_count": len(protected_terms),
         "preserved_terms_missing": missing[:50],
         "pipeline": {
             "stages": [
-                {"key": "a", "name": "Paraphrase for originality", "primary": "gpt-4o"},
-                {"key": "b", "name": "De-AI / humanise", "primary": "gemini-2.5-flash"},
-                {"key": "c", "name": "Quality polish", "primary": "gpt-4o"},
+                {"key": "a", "name": "Paraphrase for originality", "primary": "openrouter"},
+                {"key": "b", "name": "De-AI / humanise", "primary": "openrouter"},
+                {"key": "c", "name": "Quality polish", "primary": "openrouter"},
             ],
             "any_fallback": any_fallback,
             "sections": per_section,

@@ -868,8 +868,7 @@
   function methodLabel(m) {
     return {
       'gpt-4o-mini':       'GPT-4o-mini',
-      'gemini-2.5-flash':  'Gemini 2.5 Flash',
-      gemini:              'Gemini 2.5 Flash',
+      openrouter:          'OpenRouter',
       raw_sources:         'Sources only',
       no_papers:           'No results',
     }[m] || (m || '');

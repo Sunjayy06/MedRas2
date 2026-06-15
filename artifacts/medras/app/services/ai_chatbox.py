@@ -30,25 +30,15 @@ import asyncio
 import json
 import logging
 import re
-import urllib.request
-import urllib.error
 from typing import Any, Dict, List, Optional
 
 from . import chatboxes  # rule-based fallback (last resort)
-from .llm_client import (
-    openai_chat_url,
-    openai_auth_header,
-    openai_is_configured,
-    gemini_is_configured,
-    get_gemini_client,
-    provider_status_payload,
-)
+from .llm_client import openrouter_chat, openrouter_is_configured, provider_status_payload
 from .phi_redaction import screen_external_ai_payload
 from . import domain_profiles
 
 logger = logging.getLogger(__name__)
 
-_GEMINI_MODEL = "gemini-2.5-flash"
 _OPENAI_MODEL_STANDARD = "gpt-4o-mini"   # Variables / Normality fallback
 _OPENAI_MODEL_STRONG   = "gpt-4o"        # Results / Plan primary
 
@@ -72,11 +62,6 @@ _VALID_PLAN_TEST_IDS = {
     "pb_kappa", "pb_icc_ba",
     "ancova", "tukey_hsd",
 }
-
-# Kinds where OpenAI GPT-4o is the primary provider
-_OPENAI_PRIMARY_KINDS = frozenset({"results", "plan"})
-# Kinds where Gemini is the primary provider
-_GEMINI_PRIMARY_KINDS = frozenset({"variables", "normality", "setup"})
 
 
 # ---------------------------------------------------------------------------
@@ -287,34 +272,16 @@ def _strip_action_json(text: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Gemini 2.5 Flash — called in a thread pool (sync SDK)
+# Deprecated provider-shaped wrappers
 # ---------------------------------------------------------------------------
 
 def _gemini_call_sync(system_prompt: str, message: str, max_tokens: int = 600) -> Optional[str]:
-    """Synchronous Gemini call — must run in a thread, not the event loop."""
-    if not gemini_is_configured():
-        return None
-    try:
-        from google.genai import types as genai_types
-        client = get_gemini_client()
-        full_prompt = f"{system_prompt}\n\nUser: {message}\n\nAssistant:"
-        response = client.models.generate_content(
-            model=_GEMINI_MODEL,
-            contents=full_prompt,
-            config=genai_types.GenerateContentConfig(
-                max_output_tokens=max_tokens,
-                temperature=0.4,
-            ),
-        )
-        text = (response.text or "").strip()
-        return text if text else None
-    except Exception as exc:
-        logger.info("Gemini chatbox call failed (%s) — trying secondary.", exc)
-        return None
+    """Compatibility wrapper routed exclusively through OpenRouter."""
+    return _openrouter_call_sync("chat", system_prompt, message, max_tokens)
 
 
 # ---------------------------------------------------------------------------
-# OpenAI — pure urllib, no asyncio needed
+# OpenRouter compatibility wrapper
 # ---------------------------------------------------------------------------
 
 def _openai_call_sync(
@@ -323,34 +290,41 @@ def _openai_call_sync(
     max_tokens: int = 600,
     model: str = _OPENAI_MODEL_STANDARD,
 ) -> Optional[str]:
-    """Synchronous OpenAI call — runs inline (short network hop)."""
-    if not openai_is_configured():
+    """Compatibility wrapper routed exclusively through OpenRouter."""
+    task = "reasoning" if model == _OPENAI_MODEL_STRONG else "chat"
+    return _openrouter_call_sync(task, system_prompt, message, max_tokens)
+
+
+def _openrouter_call_sync(
+    task: str,
+    system_prompt: str,
+    message: str,
+    max_tokens: int = 600,
+) -> Optional[str]:
+    if not openrouter_is_configured():
         return None
-    body = json.dumps({
-        "model": model,
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user",   "content": message},
-        ],
-        "max_tokens": max_tokens,
-        "temperature": 0.4,
-    }).encode("utf-8")
-    req = urllib.request.Request(
-        openai_chat_url(),
-        data=body,
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": openai_auth_header(),
-        },
-        method="POST",
-    )
+
+
+def _task_for_kind(kind: str) -> str:
+    if kind == "variables":
+        return "variable_mapping"
+    if kind == "missing":
+        return "cleanup_suggestions"
+    if kind == "results":
+        return "report_writing"
+    if kind == "plan":
+        return "reasoning"
+    return "chat"
     try:
-        with urllib.request.urlopen(req, timeout=20) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-        text = data["choices"][0]["message"]["content"].strip()
-        return text if text else None
+        return openrouter_chat(
+            task=task,
+            system=system_prompt,
+            user=message,
+            max_tokens=max_tokens,
+            temperature=0.4,
+        )
     except Exception as exc:
-        logger.info("OpenAI chatbox call failed (%s) — using rule-based.", exc)
+        logger.info("OpenRouter chatbox call failed (%s); using rule-based fallback.", exc)
         return None
 
 
@@ -363,31 +337,13 @@ async def _call_llm(
     system_prompt: str,
     message: str,
 ) -> tuple[Optional[str], Optional[str]]:
-    """Call the best LLM for this kind; fall back to the other; return None if both fail."""
+    """Call OpenRouter with the model assigned to this assistant task."""
     tokens = _MAX_TOKENS.get(kind, _DEFAULT_TOKENS)
-
-    if kind in _OPENAI_PRIMARY_KINDS:
-        # OpenAI GPT-4o primary → Gemini fallback
-        raw = await asyncio.to_thread(
-            _openai_call_sync, system_prompt, message, tokens, _OPENAI_MODEL_STRONG
-        )
-        provider = "openai" if raw is not None else None
-        if raw is None:
-            logger.info("GPT-4o unavailable for kind=%r — trying Gemini fallback", kind)
-            raw = await asyncio.to_thread(_gemini_call_sync, system_prompt, message, tokens)
-            provider = "gemini" if raw is not None else None
-    else:
-        # Gemini primary → OpenAI gpt-4o-mini fallback
-        raw = await asyncio.to_thread(_gemini_call_sync, system_prompt, message, tokens)
-        provider = "gemini" if raw is not None else None
-        if raw is None:
-            logger.info("Gemini unavailable for kind=%r — trying OpenAI fallback", kind)
-            raw = await asyncio.to_thread(
-                _openai_call_sync, system_prompt, message, tokens, _OPENAI_MODEL_STANDARD
-            )
-            provider = "openai" if raw is not None else None
-
-    return raw, provider
+    task = _task_for_kind(kind)
+    raw = await asyncio.to_thread(
+        _openrouter_call_sync, task, system_prompt, message, tokens
+    )
+    return raw, ("openrouter" if raw is not None else None)
 
 
 # ---------------------------------------------------------------------------
@@ -416,7 +372,7 @@ async def chat(
 
     # Rule-based engine — last resort (no API key, always available)
     if raw is None:
-        logger.warning("Both LLM providers unavailable for kind=%r — rule-based fallback", kind)
+        logger.warning("OpenRouter unavailable for kind=%r; using rule-based fallback", kind)
         result = chatboxes.reply(kind, message, context, external_ai_consent=False)
         return {
             "role": result.get("role", "ai"),
@@ -489,26 +445,15 @@ async def opening_message(
     # Small token budget — this is just a brief greeting
     tokens = 160
 
-    # Gemini primary for most kinds, OpenAI for results/plan
     provider = None
     if not external_allowed:
         raw = None
-    elif kind in _OPENAI_PRIMARY_KINDS:
-        raw = await asyncio.to_thread(
-            _openai_call_sync, system_prompt, user_msg, tokens, _OPENAI_MODEL_STANDARD
-        )
-        provider = "openai" if raw is not None else None
-        if raw is None:
-            raw = await asyncio.to_thread(_gemini_call_sync, system_prompt, user_msg, tokens)
-            provider = "gemini" if raw is not None else None
     else:
-        raw = await asyncio.to_thread(_gemini_call_sync, system_prompt, user_msg, tokens)
-        provider = "gemini" if raw is not None else None
-        if raw is None:
-            raw = await asyncio.to_thread(
-                _openai_call_sync, system_prompt, user_msg, tokens, _OPENAI_MODEL_STANDARD
-            )
-            provider = "openai" if raw is not None else None
+        task = _task_for_kind(kind)
+        raw = await asyncio.to_thread(
+            _openrouter_call_sync, task, system_prompt, user_msg, tokens
+        )
+        provider = "openrouter" if raw is not None else None
 
     if raw and len(raw.strip()) > 10:
         # Strip any accidental JSON or markdown the model may have emitted
@@ -590,15 +535,11 @@ async def parse_variable_intent(
         "phi_blocked": screening.blocked,
     }
 
-    # Gemini primary (fast JSON extraction)
     tokens = _MAX_TOKENS.get("variables", _DEFAULT_TOKENS)
-    raw = await asyncio.to_thread(_gemini_call_sync, system, message, tokens) if external_allowed else None
-    provider = "gemini" if raw is not None else None
-    if raw is None and external_allowed:
-        raw = await asyncio.to_thread(
-            _openai_call_sync, system, message, tokens, _OPENAI_MODEL_STANDARD
-        )
-        provider = "openai" if raw is not None else None
+    raw = await asyncio.to_thread(
+        _openrouter_call_sync, "variable_mapping", system, message, tokens
+    ) if external_allowed else None
+    provider = "openrouter" if raw is not None else None
     if not raw:
         return None, "local_fallback", screening_meta
 
@@ -683,14 +624,10 @@ async def plan_study_setup(
     external_allowed = external_ai_consent and not screening.blocked
 
     tokens = _MAX_TOKENS.get("setup", _DEFAULT_TOKENS)
-    # Gemini primary for planning/routing
-    raw = await asyncio.to_thread(_gemini_call_sync, system, prompt, tokens) if external_allowed else None
-    provider = "gemini" if raw is not None else None
-    if raw is None and external_allowed:
-        raw = await asyncio.to_thread(
-            _openai_call_sync, system, prompt, tokens, _OPENAI_MODEL_STANDARD
-        )
-        provider = "openai" if raw is not None else None
+    raw = await asyncio.to_thread(
+        _openrouter_call_sync, "study_setup", system, prompt, tokens
+    ) if external_allowed else None
+    provider = "openrouter" if raw is not None else None
 
     if not raw:
         return {
