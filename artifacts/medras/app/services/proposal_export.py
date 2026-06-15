@@ -179,10 +179,7 @@ def _translate_consent(english_text: str, target_language: str) -> Optional[str]
         return cached
 
     try:
-        from app.services.llm_client import get_gemini_client
-        from google.genai import types
-
-        client = get_gemini_client()
+        from app.services.llm_client import openrouter_chat
         prompt = (
             f"Translate the following INFORMED CONSENT FORM into {target_language}.\n\n"
             "Strict requirements — the output is a regulatory document:\n"
@@ -205,15 +202,14 @@ def _translate_consent(english_text: str, target_language: str) -> Optional[str]
             f"{english_text}\n"
             "=== END CONSENT FORM ==="
         )
-        resp = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                temperature=0.2,
-                max_output_tokens=4000,
-            ),
+        text = openrouter_chat(
+            task="proposal_generation",
+            system="Translate the consent form accurately while preserving regulatory structure.",
+            user=prompt,
+            temperature=0.2,
+            max_tokens=4000,
         )
-        text = (getattr(resp, "text", None) or "").strip()
+        text = (text or "").strip()
         if not text or not _validate_translation(text):
             log.warning("consent translation to %s rejected by validator (len=%d)",
                         target_language, len(text))

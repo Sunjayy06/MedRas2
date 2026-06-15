@@ -253,7 +253,8 @@ def _apply_study_type_override(
 async def analyze_endpoint(payload: AnalyzeRequest, request: Request) -> AnalyzeResponse:
     """Classify the objective and suggest a sample-size formula."""
     try:
-        result = analyze_objective(payload.objective)
+        consent = request.headers.get("X-External-AI-Consent", "").lower() == "true"
+        result = analyze_objective(payload.objective, external_ai_consent=consent)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 

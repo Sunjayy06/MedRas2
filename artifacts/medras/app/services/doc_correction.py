@@ -17,16 +17,11 @@ import datetime
 import json
 import logging
 import os
-import urllib.error
-import urllib.request
 from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
-from app.services.llm_client import (
-    openai_chat_url, openai_auth_header, openai_is_configured,
-    gemini_is_configured, get_gemini_client,
-)
+from app.services.llm_client import openrouter_chat, openrouter_is_configured
 _TIMEOUT = 25.0
 
 _SYSTEM_PROMPT = (
@@ -75,8 +70,8 @@ def _call_gemini_correction(
     instructions: str,
     inventory: Dict[str, Any],
 ) -> Optional[List[Dict[str, Any]]]:
-    """Parse correction instructions via Gemini 2.5 Flash (fallback provider)."""
-    if not gemini_is_configured():
+    """Compatibility wrapper for OpenRouter correction-intent parsing."""
+    if not openrouter_is_configured():
         return None
     var_list = ", ".join(inventory.get("variables") or [])
     context = (
@@ -90,24 +85,21 @@ def _call_gemini_correction(
         f"Correction instructions:\n{instructions}"
     )
     try:
-        from google.genai import types as gtypes
-        client = get_gemini_client()
-        resp = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=full_prompt,
-            config=gtypes.GenerateContentConfig(
-                temperature=0.1,
-                max_output_tokens=600,
-                response_mime_type="application/json",
-            ),
+        text = openrouter_chat(
+            task="reasoning",
+            system=_SYSTEM_PROMPT,
+            user=full_prompt,
+            temperature=0.1,
+            max_tokens=600,
+            json_mode=True,
         )
-        text = (resp.text or "").strip()
+        text = (text or "").strip()
         import re as _re
         text = _re.sub(r"^```(?:json)?\s*", "", text, flags=_re.IGNORECASE)
         text = _re.sub(r"\s*```$", "", text.strip())
         return _parse_actions_from_text(text)
     except Exception as exc:
-        logger.warning("Gemini correction call failed (%s).", exc)
+        logger.warning("OpenRouter correction call failed (%s).", exc)
         return None
 
 
@@ -115,11 +107,7 @@ def _call_openai_correction(
     instructions: str,
     inventory: Dict[str, Any],
 ) -> Optional[List[Dict[str, Any]]]:
-    """Parse correction instructions into a list of action dicts.
-
-    Tries OpenAI GPT-4o-mini first; falls back to Gemini 2.5 Flash if
-    OpenAI is unconfigured or returns an error.
-    """
+    """Parse correction instructions into a list of action dicts."""
     var_list = ", ".join(inventory.get("variables") or [])
     context = (
         f"Available variable names: {var_list or '(none)'}\n"
@@ -127,50 +115,26 @@ def _call_openai_correction(
         "secondary_analyses, figures, results_narrative, methods, limitations"
     )
 
-    if openai_is_configured():
-        body = json.dumps({
-            "model": "gpt-4o-mini",
-            "messages": [
-                {"role": "system", "content": _SYSTEM_PROMPT},
-                {
-                    "role": "user",
-                    "content": (
-                        f"Document context:\n{context}\n\n"
-                        f"Correction instructions:\n{instructions}"
-                    ),
-                },
-            ],
-            "max_tokens": 500,
-            "temperature": 0.1,
-            "response_format": {"type": "json_object"},
-        }).encode("utf-8")
-
-        req = urllib.request.Request(
-            openai_chat_url(),
-            data=body,
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": openai_auth_header(),
-            },
-            method="POST",
-        )
+    if openrouter_is_configured():
         try:
-            with urllib.request.urlopen(req, timeout=_TIMEOUT) as resp:
-                data = json.loads(resp.read().decode("utf-8"))
-            text = data["choices"][0]["message"]["content"].strip()
+            text = openrouter_chat(
+                task="reasoning",
+                system=_SYSTEM_PROMPT,
+                user=(
+                    f"Document context:\n{context}\n\n"
+                    f"Correction instructions:\n{instructions}"
+                ),
+                max_tokens=500,
+                temperature=0.1,
+                json_mode=True,
+            )
             result = _parse_actions_from_text(text)
             if result is not None:
                 return result
-        except (urllib.error.HTTPError, urllib.error.URLError) as exc:
-            logger.warning("OpenAI correction call failed (%s) — trying Gemini.", exc)
         except Exception as exc:  # noqa: BLE001
-            logger.warning("Unexpected error in OpenAI correction parsing (%s) — trying Gemini.", exc)
+            logger.warning("OpenRouter correction parsing failed (%s).", exc)
 
-    result = _call_gemini_correction(instructions, inventory)
-    if result is not None:
-        return result
-
-    logger.warning("Both LLM providers unavailable for correction parsing.")
+    logger.warning("OpenRouter unavailable for correction parsing.")
     return None
 
 

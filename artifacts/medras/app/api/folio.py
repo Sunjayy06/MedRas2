@@ -17,7 +17,7 @@ from typing import Any, Dict, List
 
 from docx import Document as DocxDocument
 from docx.shared import Inches, Pt
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from fastapi.responses import Response
 
 from app.core.logging import get_logger
@@ -181,7 +181,9 @@ async def format_references(body: Dict[str, Any]) -> Dict[str, Any]:
 
 
 @router.post("/parse-feedback")
-async def parse_feedback(body: Dict[str, Any]) -> Dict[str, Any]:
+async def parse_feedback(request: Request, body: Dict[str, Any]) -> Dict[str, Any]:
+    from app.services.external_ai_consent import require_external_ai_consent
+    require_external_ai_consent(request)
     feedback_text = str(body.get("feedback", "")).strip()
     if not feedback_text:
         raise HTTPException(400, "feedback field is required.")
@@ -221,25 +223,23 @@ Allowed operation types and their params:
 
 Extract every distinct instruction from the feedback. Return an empty operations list if nothing actionable is found."""
 
-    from app.services.llm_client import get_gemini_client, gemini_is_configured
-    if not gemini_is_configured():
+    from app.services.llm_client import openrouter_chat, openrouter_is_configured
+    if not openrouter_is_configured():
         raise HTTPException(503, "AI service not configured.")
 
-    def _call_gemini() -> dict:
-        from google.genai import types as gtypes
-        client = get_gemini_client()
-        resp = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt,
-            config=gtypes.GenerateContentConfig(
-                response_mime_type="application/json",
-                max_output_tokens=1024,
-            ),
+    def _call_openrouter() -> dict:
+        text = openrouter_chat(
+            task="reasoning",
+            system="Parse supervisor feedback into structured document-edit operations.",
+            user=prompt,
+            max_tokens=1024,
+            temperature=0.1,
+            json_mode=True,
         )
-        return json.loads(resp.text or "{}")
+        return json.loads(text or "{}")
 
     try:
-        result = await asyncio.to_thread(_call_gemini)
+        result = await asyncio.to_thread(_call_openrouter)
         return {"ok": True, **result}
     except json.JSONDecodeError as exc:
         raise HTTPException(502, "AI returned malformed JSON.") from exc

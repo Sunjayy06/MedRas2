@@ -16,24 +16,26 @@ import logging
 import re
 from typing import Any, Dict
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import Response
 
 from app.services.proposal_export import (
     build_docx, build_pdf, build_plaintext, build_zip,
 )
 from app.services.proposal_generator import GeneratorError, generate_rag_sections
+from app.services.external_ai_consent import require_external_ai_consent
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/proposal", tags=["proposal"])
 
 
 @router.post("/generate-rag-sections")
-async def generate_rag_sections_endpoint(payload: Dict[str, Any]) -> Dict[str, Any]:
+async def generate_rag_sections_endpoint(request: Request, payload: Dict[str, Any]) -> Dict[str, Any]:
     """Body: ``{intake: {role, format, topic, language?}}`` (or fields at the
     top level). Returns ``{sections, sources, all_retrieved, domain,
     databases_meta}`` with all seven sections.
     """
+    require_external_ai_consent(request)
     intake = payload.get("intake") if isinstance(payload, dict) else None
     if not isinstance(intake, dict):
         intake = payload if isinstance(payload, dict) else {}

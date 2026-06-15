@@ -159,6 +159,8 @@ def _normalise_provider(value: str | None) -> Literal["auto"]:
 @limiter.limit("20/minute")
 async def check_text(request: Request, payload: CheckRequest) -> dict:
     """Score originality + AI likelihood for pasted or pre-extracted text."""
+    from app.services.external_ai_consent import require_external_ai_consent
+    require_external_ai_consent(request)
     text = payload.text.strip()
     if len(text) > MAX_TEXT_CHARS:
         raise HTTPException(
@@ -185,6 +187,8 @@ async def check_file(
     file: UploadFile = File(...),
     provider: str = Form("auto"),
 ) -> dict:
+    from app.services.external_ai_consent import require_external_ai_consent
+    require_external_ai_consent(request)
     """Same as /check but accepts a PDF/DOCX/TXT file upload (≤100 MB, ≤200 pages)."""
     provider_choice = _normalise_provider(provider)
     content = await _read_with_cap(file, MAX_UPLOAD_BYTES)
@@ -313,6 +317,8 @@ async def reduce_text(request: Request, payload: ReduceRequest) -> dict:
     In both paths, ``protected_terms`` substrings are passed to the LLM
     as hard "do not change" constraints AND verified post-hoc.
     """
+    from app.services.external_ai_consent import require_external_ai_consent
+    require_external_ai_consent(request)
     text = payload.text.strip()
     if len(text) > MAX_TEXT_CHARS:
         raise HTTPException(
@@ -411,6 +417,8 @@ async def reduce_stream(request: Request, payload: ReduceStreamRequest):
 
     Validation mirrors ``/reduce``: provide either ``sections`` or ``text``.
     """
+    from app.services.external_ai_consent import require_external_ai_consent
+    require_external_ai_consent(request)
     sections_payload: list[dict[str, str]]
     if payload.sections:
         total = sum(len(s.text) for s in payload.sections)
@@ -602,6 +610,8 @@ async def create_job(request: Request, payload: JobCreateRequest) -> dict:
     Does NOT wait for any sections to complete. The browser polls
     GET /jobs/{job_id} every few seconds to learn how it's going.
     """
+    from app.services.external_ai_consent import require_external_ai_consent
+    require_external_ai_consent(request)
     if payload.sections:
         sections = [{"label": s.label, "text": s.text} for s in payload.sections]
     elif payload.text and payload.text.strip():
@@ -705,6 +715,8 @@ async def parse_report(
     software: str = Form(default="Other"),
 ) -> dict:
     """Extract a flagged-sections map from an uploaded plagiarism report."""
+    from app.services.external_ai_consent import require_external_ai_consent
+    require_external_ai_consent(request)
     from app.services import report_parser
 
     content = await file.read()
@@ -1187,6 +1199,8 @@ async def suggest_citations_route(request: Request, payload: SuggestCitationsReq
     individual claim when no live database returned a match — never a
     placeholder.
     """
+    from app.services.external_ai_consent import require_external_ai_consent
+    require_external_ai_consent(request)
     try:
         result = await citation_suggester.suggest_citations(
             text=payload.text,

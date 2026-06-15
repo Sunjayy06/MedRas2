@@ -97,7 +97,7 @@
 
     try {
       const r = await fetch('/api/study-builder/design/recommend', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: externalAIHeaders(),
         body: JSON.stringify({ question: state.question, pico: state.pico,
                                objective_type: state.objective_type }),
       });
@@ -193,7 +193,7 @@
 
     try {
       const r = await fetch('/api/study-builder/design/methodology', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: externalAIHeaders(),
         body: JSON.stringify({ question: state.question, pico: state.pico,
                                design_id: state.selectedDesignId, extra: {} }),
       });
@@ -566,3 +566,12 @@
   if (state.step > 1) navigateTo(state.step);
 
 })();
+  function externalAIHeaders() {
+    const key = 'medras.external_ai_consent.helix';
+    const saved = sessionStorage.getItem(key);
+    const allowed = saved === 'true' || (saved !== 'false' && window.confirm(
+      'The AI Methodologist can send screened study setup text to OpenRouter. Allow external AI for this session?'
+    ));
+    sessionStorage.setItem(key, allowed ? 'true' : 'false');
+    return { 'Content-Type': 'application/json', 'X-External-AI-Consent': allowed ? 'true' : 'false' };
+  }

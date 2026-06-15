@@ -512,3 +512,62 @@
     }, delay);
   };
 }());
+  const EXTERNAL_AI_PATHS = [
+    '/api/outline/generate',
+    '/api/proposal/generate-rag-sections',
+    '/api/references/generate',
+    '/api/thesis/draft-section',
+    '/api/thesis/improve-section',
+    '/api/thesis/draft-abstract',
+    '/api/thesis/plan-subsections',
+    '/api/thesis/earlier-studies',
+    '/api/thesis/convert-to-article',
+    '/api/study-builder/ask',
+    '/api/study-builder/design/recommend',
+    '/api/study-builder/design/methodology',
+    '/api/plagiarism/check',
+    '/api/plagiarism/check-file',
+    '/api/plagiarism/reduce',
+    '/api/plagiarism/reduce-stream',
+    '/api/plagiarism/jobs',
+    '/api/plagiarism/parse-report',
+    '/api/plagiarism/suggest-citations',
+    '/api/folio/parse-feedback',
+    '/api/sample-size/analyze',
+  ];
+
+  function isExternalAIRequest(input) {
+    const raw = typeof input === 'string' ? input : (input && input.url) || '';
+    let path = raw;
+    try { path = new URL(raw, window.location.origin).pathname; } catch (_) {}
+    return EXTERNAL_AI_PATHS.some((candidate) => path === candidate || path.startsWith(candidate + '/'));
+  }
+
+  function ensureExternalAIConsent() {
+    const key = 'medras.external_ai_consent.shared';
+    const saved = sessionStorage.getItem(key);
+    if (saved === 'true') return true;
+    if (saved === 'false') return false;
+    const allowed = window.confirm(
+      'This feature can send the text you provide to OpenRouter for AI assistance. ' +
+      'Do not include patient identifiers. Allow external AI for this browser session?'
+    );
+    sessionStorage.setItem(key, allowed ? 'true' : 'false');
+    return allowed;
+  }
+
+  const nativeFetch = window.fetch.bind(window);
+  window.fetch = function medrasSafeFetch(input, init) {
+    if (!isExternalAIRequest(input)) return nativeFetch(input, init);
+    const options = Object.assign({}, init || {});
+    const headers = new Headers(options.headers || (input instanceof Request ? input.headers : undefined));
+    if (!headers.has('X-External-AI-Consent')) {
+      headers.set('X-External-AI-Consent', ensureExternalAIConsent() ? 'true' : 'false');
+    }
+    options.headers = headers;
+    return nativeFetch(input, options);
+  };
+  window.MedrasAI = Object.assign(window.MedrasAI || {}, {
+    ensureConsent: ensureExternalAIConsent,
+    isExternalAIRequest,
+  });

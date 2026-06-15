@@ -127,30 +127,26 @@ def _heuristic_claims(passage: str, max_claims: int) -> List[Dict[str, str]]:
 
 
 def _extract_claims_gemini(passage: str, max_claims: int) -> List[Dict[str, str]]:
-    """Call Gemini once to extract claims+queries. Returns [] on any
+    """Call OpenRouter once to extract claims+queries. Returns [] on any
     failure — caller will fall back to the heuristic."""
     try:
-        from app.services.llm_client import get_gemini_client
-        from google.genai import types
-
-        client = get_gemini_client()
+        from app.services.llm_client import openrouter_chat
         prompt = _EXTRACTION_PROMPT.replace("{max_claims}", str(max_claims))\
                                    .replace("{passage}", passage)
-        resp = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                temperature=0.1,
-                max_output_tokens=1500,
-                response_mime_type="application/json",
-            ),
+        raw = openrouter_chat(
+            task="reasoning",
+            system="Extract citation-worthy claims and focused search queries.",
+            user=prompt,
+            temperature=0.1,
+            max_tokens=1500,
+            json_mode=True,
         )
-        raw = _strip_fences(getattr(resp, "text", "") or "")
+        raw = _strip_fences(raw)
         if not raw:
             return []
         parsed = json.loads(raw)
     except Exception as exc:                                  # noqa: BLE001
-        log.warning("citation_suggester: Gemini extraction failed: %s", exc)
+        log.warning("citation_suggester: OpenRouter extraction failed: %s", exc)
         return []
 
     claims_in = parsed.get("claims") if isinstance(parsed, dict) else None

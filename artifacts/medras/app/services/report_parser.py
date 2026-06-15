@@ -234,7 +234,7 @@ def match_intensity_for_label(
 
 
 def _parse_with_gemini(text: str, software: str = "Other") -> Dict[str, Dict[str, Any]]:
-    """LLM fallback: ask Gemini to extract a section→similarity map.
+    """LLM fallback: ask OpenRouter to extract a section→similarity map.
 
     Called when the regex parser finds 0 sections — covers complex table
     layouts, colour-coded PDFs, and vendor-specific formats that regex
@@ -244,10 +244,9 @@ def _parse_with_gemini(text: str, software: str = "Other") -> Dict[str, Dict[str
     dict as parse_report_text(), or {} on any failure.
     """
     try:
-        from app.services.llm_client import get_gemini_client, gemini_is_configured
-        if not gemini_is_configured():
+        from app.services.llm_client import openrouter_chat, openrouter_is_configured
+        if not openrouter_is_configured():
             return {}
-        from google.genai import types as gtypes
 
         # Use the first 8000 characters — the section overview is almost
         # always in the first few pages of a report PDF.
@@ -271,17 +270,15 @@ def _parse_with_gemini(text: str, software: str = "Other") -> Dict[str, Dict[str
             f"Report text:\n{snippet}"
         )
 
-        client = get_gemini_client()
-        resp = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt,
-            config=gtypes.GenerateContentConfig(
-                response_mime_type="application/json",
-                max_output_tokens=800,
-                temperature=0.1,
-            ),
+        raw = openrouter_chat(
+            task="reasoning",
+            system="Extract structured fields from a plagiarism report.",
+            user=prompt,
+            max_tokens=800,
+            temperature=0.1,
+            json_mode=True,
         )
-        raw = (resp.text or "").strip()
+        raw = (raw or "").strip()
         raw = re.sub(r"^```(?:json)?\s*", "", raw, flags=re.IGNORECASE)
         raw = re.sub(r"\s*```$", "", raw.strip())
         parsed = json.loads(raw)

@@ -241,7 +241,8 @@ def _design_by_id(did: str) -> dict | None:
 
 
 async def recommend_designs(
-    question: str, pico: dict[str, str], objective_type: str
+    question: str, pico: dict[str, str], objective_type: str,
+    external_ai_consent: bool = False,
 ) -> dict:
     design_ids = [d["id"] for d in DESIGN_CATALOGUE]
     prompt = _RECOMMEND_PROMPT.format(
@@ -254,39 +255,16 @@ async def recommend_designs(
 
     raw: dict[str, Any] | None = None
 
-    from app.services.llm_client import get_gemini_client, gemini_is_configured, get_async_openai_client, openai_is_configured
-    if gemini_is_configured():
-        def _gemini_recommend() -> dict | None:
-            from google.genai import types as gtypes
-            gc = get_gemini_client()
-            resp = gc.models.generate_content(
-                model="gemini-2.5-flash",
-                contents=prompt,
-                config=gtypes.GenerateContentConfig(
-                    max_output_tokens=1200, temperature=0.1,
-                    response_mime_type="application/json",
-                ),
-            )
-            return json.loads(resp.text or "{}")
-
+    from app.services.llm_client import openrouter_chat, openrouter_is_configured
+    if external_ai_consent and openrouter_is_configured():
         try:
-            raw = await asyncio.to_thread(_gemini_recommend)
+            text = await asyncio.to_thread(
+                openrouter_chat, task="reasoning", system="Recommend suitable research study designs.",
+                user=prompt, max_tokens=1200, temperature=0.1, json_mode=True,
+            )
+            raw = json.loads(text or "{}")
         except Exception as exc:
-            log.warning("Gemini recommend failed: %s", exc)
-
-    if raw is None:
-        if openai_is_configured():
-            try:
-                oai  = get_async_openai_client()
-                resp = await oai.chat.completions.create(
-                    model="gpt-4o-mini",
-                    messages=[{"role": "user", "content": prompt}],
-                    max_tokens=1200, temperature=0.1,
-                    response_format={"type": "json_object"},
-                )
-                raw = json.loads(resp.choices[0].message.content or "{}")
-            except Exception as exc:
-                log.warning("OpenAI recommend failed: %s", exc)
+            log.warning("OpenRouter recommend failed: %s", exc)
 
     recs = (raw or {}).get("recommendations", [])
     advice = (raw or {}).get("general_advice", "")
@@ -331,7 +309,8 @@ def _heuristic_recommendations(pico: dict, objective_type: str) -> list[dict]:
 
 
 async def generate_methodology(
-    question: str, pico: dict[str, str], design_id: str, extra: dict
+    question: str, pico: dict[str, str], design_id: str, extra: dict,
+    external_ai_consent: bool = False,
 ) -> dict:
     design = _design_by_id(design_id)
     design_name = design["name"] if design else design_id
@@ -343,39 +322,16 @@ async def generate_methodology(
 
     raw: dict | None = None
 
-    from app.services.llm_client import get_gemini_client, gemini_is_configured, get_async_openai_client, openai_is_configured
-    if gemini_is_configured():
-        def _gemini_methodology() -> dict | None:
-            from google.genai import types as gtypes
-            gc = get_gemini_client()
-            resp = gc.models.generate_content(
-                model="gemini-2.5-flash",
-                contents=prompt,
-                config=gtypes.GenerateContentConfig(
-                    max_output_tokens=1500, temperature=0.1,
-                    response_mime_type="application/json",
-                ),
-            )
-            return json.loads(resp.text or "{}")
-
+    from app.services.llm_client import openrouter_chat, openrouter_is_configured
+    if external_ai_consent and openrouter_is_configured():
         try:
-            raw = await asyncio.to_thread(_gemini_methodology)
+            text = await asyncio.to_thread(
+                openrouter_chat, task="reasoning", system="Draft a structured research methodology.",
+                user=prompt, max_tokens=1500, temperature=0.1, json_mode=True,
+            )
+            raw = json.loads(text or "{}")
         except Exception as exc:
-            log.warning("Gemini methodology failed: %s", exc)
-
-    if raw is None:
-        if openai_is_configured():
-            try:
-                oai  = get_async_openai_client()
-                resp = await oai.chat.completions.create(
-                    model="gpt-4o-mini",
-                    messages=[{"role": "user", "content": prompt}],
-                    max_tokens=1500, temperature=0.1,
-                    response_format={"type": "json_object"},
-                )
-                raw = json.loads(resp.choices[0].message.content or "{}")
-            except Exception as exc:
-                log.warning("OpenAI methodology failed: %s", exc)
+            log.warning("OpenRouter methodology failed: %s", exc)
 
     return raw or _fallback_methodology(design_id)
 

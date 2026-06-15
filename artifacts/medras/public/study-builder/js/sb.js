@@ -386,7 +386,10 @@
       window.MedrasJobs?.start('helix-ask', 'Helix searching & synthesising\u2026');
       const res = await fetch('/api/study-builder/ask', {
         method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-External-AI-Consent': externalAIConsent() ? 'true' : 'false',
+        },
         body:    JSON.stringify(body),
       });
       clearInterval(stageTmr);
@@ -1495,3 +1498,15 @@
   }
 
 })();
+  function externalAIConsent() {
+    const key = 'medras.external_ai_consent.helix';
+    const saved = sessionStorage.getItem(key);
+    if (saved === 'true') return true;
+    if (saved === 'false') return false;
+    const allowed = window.confirm(
+      'Helix can send your research question and screened study context to OpenRouter. ' +
+      'Obvious identifiers are redacted first. Allow external AI for this session?'
+    );
+    sessionStorage.setItem(key, allowed ? 'true' : 'false');
+    return allowed;
+  }

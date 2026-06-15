@@ -82,8 +82,8 @@ async def decompose(
     ``comparison``, ``outcome``, ``search_queries`` (list of 1–3 strings).
     Never raises — falls back to keyword extraction on any failure.
     """
-    from app.services.llm_client import get_gemini_client, gemini_is_configured
-    if not external_ai_consent or not gemini_is_configured():
+    from app.services.llm_client import openrouter_chat, openrouter_is_configured
+    if not external_ai_consent or not openrouter_is_configured():
         return _keyword_fallback(question, history)
 
     history_text = (
@@ -121,56 +121,25 @@ async def decompose(
             "search_queries": queries[:3],
         }
 
-    def _gemini_pico_sync() -> dict | None:
-        """Sync Gemini PICO call — run via asyncio.to_thread."""
+    def _openrouter_pico_sync() -> dict | None:
+        """Sync OpenRouter PICO call — run via asyncio.to_thread."""
         try:
-            from google.genai import types as gtypes
-            gc = get_gemini_client()
-            resp = gc.models.generate_content(
-                model="gemini-2.5-flash",
-                contents=f"{_SYSTEM}\n\n{user_msg}",
-                config=gtypes.GenerateContentConfig(
-                    max_output_tokens=512,
-                    temperature=0.05,
-                ),
-            )
-            return _parse_pico(resp.text or "")
-        except Exception as exc:
-            log.warning("PICO Gemini error (%s)", exc)
-            return None
-
-    def _openai_pico_sync() -> dict | None:
-        """Sync OpenAI PICO call — run via asyncio.to_thread.
-
-        Uses GPT-4o-mini: fast, cheap, reliably honours JSON for structured extraction.
-        """
-        try:
-            from app.services.llm_client import get_openai_client, openai_is_configured
-            if not openai_is_configured():
-                return None
-            oai = get_openai_client()
-            resp = oai.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": _SYSTEM},
-                    {"role": "user",   "content": user_msg},
-                ],
-                response_format={"type": "json_object"},
+            raw = openrouter_chat(
+                task="reasoning",
+                system=_SYSTEM,
+                user=user_msg,
                 max_tokens=512,
                 temperature=0.05,
+                json_mode=True,
             )
-            return _parse_pico(resp.choices[0].message.content or "")
+            return _parse_pico(raw)
         except Exception as exc:
-            log.warning("PICO OpenAI error (%s)", exc)
+            log.warning("PICO OpenRouter error (%s)", exc)
             return None
 
-    # Gemini primary (academic search strategy expertise); OpenAI fallback
-    result = await asyncio.to_thread(_gemini_pico_sync)
-    if result is None:
-        log.info("PICO: Gemini unavailable — trying OpenAI fallback")
-        result = await asyncio.to_thread(_openai_pico_sync)
+    result = await asyncio.to_thread(_openrouter_pico_sync)
     if result is not None:
         return result
 
-    log.warning("PICO: both providers failed — keyword fallback")
+    log.warning("PICO: OpenRouter unavailable — keyword fallback")
     return _keyword_fallback(question, history)

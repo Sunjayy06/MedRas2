@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from pydantic import BaseModel, Field
 
 from app.services.study_design_advisor import (
@@ -12,6 +12,8 @@ from app.services.study_design_advisor import (
     generate_methodology,
     recommend_designs,
 )
+from app.services.phi_redaction import screen_external_ai_payload
+from app.services.llm_client import openrouter_is_configured, provider_status_payload
 
 log    = logging.getLogger(__name__)
 router = APIRouter(prefix="/study-builder/design", tags=["study-builder-design"])
@@ -54,17 +56,37 @@ def get_catalogue() -> dict:
 
 
 @router.post("/recommend")
-async def recommend(body: RecommendRequest) -> dict:
-    result = await recommend_designs(body.question, body.pico.model_dump(),
-                                     body.objective_type)
+async def recommend(request: Request, body: RecommendRequest) -> dict:
+    screening = screen_external_ai_payload(body.model_dump())
+    consent = request.headers.get("X-External-AI-Consent", "").lower() == "true"
+    safe = screening.value
+    result = await recommend_designs(
+        safe["question"], safe["pico"], safe["objective_type"],
+        external_ai_consent=consent and not screening.blocked,
+    )
+    result.update(provider_status_payload(
+        "openrouter" if consent and not screening.blocked and openrouter_is_configured() else "local_fallback",
+        consent, screening.redaction_applied, screening.blocked,
+    ))
     return result
 
 
 @router.post("/methodology")
-async def methodology(body: MethodologyRequest) -> dict:
-    result = await generate_methodology(body.question, body.pico.model_dump(),
-                                        body.design_id, body.extra)
-    return {"methodology": result}
+async def methodology(request: Request, body: MethodologyRequest) -> dict:
+    screening = screen_external_ai_payload(body.model_dump())
+    consent = request.headers.get("X-External-AI-Consent", "").lower() == "true"
+    safe = screening.value
+    result = await generate_methodology(
+        safe["question"], safe["pico"], safe["design_id"], safe["extra"],
+        external_ai_consent=consent and not screening.blocked,
+    )
+    return {
+        "methodology": result,
+        **provider_status_payload(
+            "openrouter" if consent and not screening.blocked and openrouter_is_configured() else "local_fallback",
+            consent, screening.redaction_applied, screening.blocked,
+        ),
+    }
 
 
 @router.post("/export-text")

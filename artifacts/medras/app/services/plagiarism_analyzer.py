@@ -39,18 +39,6 @@ log = get_logger(__name__)
 # Lazy-initialised SDK clients
 # ---------------------------------------------------------------------------
 
-def _get_openai():
-    """Return a fresh OpenAI client via the integration proxy or direct key."""
-    from app.services.llm_client import get_openai_client
-    return get_openai_client()
-
-
-def _get_gemini():
-    """Return a fresh google-genai client via the integration proxy or direct key."""
-    from app.services.llm_client import get_gemini_client
-    return get_gemini_client()
-
-
 # ---------------------------------------------------------------------------
 # Prompts
 # ---------------------------------------------------------------------------
@@ -140,20 +128,16 @@ def _build_protected_terms_block(terms: list[str] | None) -> str:
 
 
 def _call_openai_json(system_prompt: str, user_text: str, *, max_tokens: int = 2000) -> Dict[str, Any]:
-    """Call OpenAI Chat Completions with JSON response format."""
-    client = _get_openai()
-    # gpt-4o-mini is fast, cheap, and reliably honours JSON mode.
-    resp = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_text},
-        ],
-        response_format={"type": "json_object"},
+    """Compatibility wrapper for OpenRouter JSON generation."""
+    from app.services.llm_client import openrouter_chat
+    raw = openrouter_chat(
+        task="report_writing",
+        system=system_prompt,
+        user=user_text,
         max_tokens=max_tokens,
         temperature=0.2,
+        json_mode=True,
     )
-    raw = resp.choices[0].message.content or "{}"
     return json.loads(raw)
 
 
@@ -253,27 +237,16 @@ def _call_openai_text(
     temperature: float = 0.4,
     timeout: Optional[float] = None,
 ) -> str:
-    """Call OpenAI Chat Completions and return plain-text content.
-
-    ``timeout`` is forwarded to the SDK so the underlying socket
-    actually closes when we want to give up — without it, an outer
-    wall-clock timeout still leaves the LLM call running on the OpenAI
-    side, burning tokens.
-    """
-    client = _get_openai()
-    kwargs: Dict[str, Any] = dict(
-        model=model,
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_text},
-        ],
+    """Compatibility wrapper for OpenRouter text generation."""
+    del model, timeout
+    from app.services.llm_client import openrouter_chat
+    return _strip_fences(openrouter_chat(
+        task="report_writing",
+        system=system_prompt,
+        user=user_text,
         max_tokens=max_tokens,
         temperature=temperature,
-    )
-    if timeout is not None:
-        kwargs["timeout"] = float(timeout)
-    resp = client.chat.completions.create(**kwargs)
-    return _strip_fences(resp.choices[0].message.content or "")
+    ))
 
 
 def _call_gemini_text(
@@ -284,51 +257,16 @@ def _call_gemini_text(
     temperature: float = 0.4,
     timeout: Optional[float] = None,
 ) -> str:
-    """Call Gemini generate_content and return plain-text content.
-
-    ``timeout`` is forwarded via ``http_options`` so the underlying
-    httpx client honours it. Same rationale as ``_call_openai_text``:
-    we never want the network call outlasting the wall-clock budget
-    or we'll keep paying for tokens after we've already given up.
-    """
-    from google.genai import types
-
-    client = _get_gemini()
-    contents = f"{system_prompt}\n\n--- TEXT ---\n{user_text}"
-    cfg_kwargs: Dict[str, Any] = dict(
-        max_output_tokens=max_tokens,
-        temperature=temperature,
+    """Compatibility wrapper routed to the OpenRouter writing model."""
+    return _call_openai_text(
+        system_prompt, user_text, max_tokens=max_tokens,
+        temperature=temperature, timeout=timeout,
     )
-    if timeout is not None:
-        # google-genai accepts http_options.timeout in MILLISECONDS.
-        cfg_kwargs["http_options"] = types.HttpOptions(timeout=int(timeout * 1000))
-    resp = client.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=contents,
-        config=types.GenerateContentConfig(**cfg_kwargs),
-    )
-    return _strip_fences(resp.text or "")
 
 
 def _call_gemini_json(system_prompt: str, user_text: str, *, max_tokens: int = 4096) -> Dict[str, Any]:
-    """Call Gemini generate_content with JSON response MIME type."""
-    from google.genai import types
-
-    client = _get_gemini()
-    # Gemini doesn't take a separate system prompt for generate_content,
-    # so we prepend the instruction block as part of the user content.
-    contents = f"{system_prompt}\n\n--- TEXT TO ANALYSE ---\n{user_text}"
-    resp = client.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=contents,
-        config=types.GenerateContentConfig(
-            response_mime_type="application/json",
-            max_output_tokens=max_tokens,
-            temperature=0.2,
-        ),
-    )
-    raw = (resp.text or "").strip()
-    return json.loads(raw)
+    """Compatibility wrapper routed to OpenRouter JSON generation."""
+    return _call_openai_json(system_prompt, user_text, max_tokens=max_tokens)
 
 
 # ---------------------------------------------------------------------------

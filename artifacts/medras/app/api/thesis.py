@@ -239,6 +239,8 @@ async def draft_section(request: Request, payload: Dict[str, Any]) -> Dict[str, 
     """Body: ``{chapter_id, topic, citation_style?, locked_numbers?,
     extra_context?, domain_hint?, mode?, style_choice?, style_sample?,
     ref_library?}``."""
+    from app.services.external_ai_consent import require_external_ai_consent
+    require_external_ai_consent(request)
     ref_lib_raw = payload.get("ref_library")
     # Never ground the AI on retracted papers; silently exclude them.
     if isinstance(ref_lib_raw, list):
@@ -296,6 +298,8 @@ async def improve_section(request: Request, payload: Dict[str, Any]) -> Dict[str
     """Body: ``{chapter_id, topic, current_text, citation_style?,
     locked_numbers?, domain_hint?, mode?, style_choice?, style_sample?,
     ref_library?}``."""
+    from app.services.external_ai_consent import require_external_ai_consent
+    require_external_ai_consent(request)
     ref_lib_raw = payload.get("ref_library")
     if isinstance(ref_lib_raw, list):
         ref_library = [r for r in ref_lib_raw if not r.get("retracted")][:200]
@@ -328,6 +332,8 @@ async def draft_abstract_endpoint(request: Request, payload: Dict[str, Any]) -> 
     Body: ``{topic, extra_context?, locked_numbers?, word_limit?,
     mode?, style_choice?, style_sample?}``.
     """
+    from app.services.external_ai_consent import require_external_ai_consent
+    require_external_ai_consent(request)
     try:
         result = await thesis_section_writer.draft_abstract(
             topic=payload.get("topic") or "",

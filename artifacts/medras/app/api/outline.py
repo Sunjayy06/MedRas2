@@ -12,6 +12,7 @@ Three endpoints:
 """
 
 from __future__ import annotations
+from fastapi import Request
 
 import json
 from typing import Any, Dict, List
@@ -209,7 +210,7 @@ async def extract_for_section(
 
 
 @router.post("/generate")
-async def generate_section(payload: Dict[str, Any]) -> Dict[str, Any]:
+async def generate_section(request: Request, payload: Dict[str, Any]) -> Dict[str, Any]:
     """Draft a missing section based on what the user has filled elsewhere.
 
     Body:
@@ -219,6 +220,8 @@ async def generate_section(payload: Dict[str, Any]) -> Dict[str, Any]:
           "filled":        {"Background": "...", "Objectives": "...", ...}
         }
     """
+    from app.services.external_ai_consent import require_external_ai_consent
+    require_external_ai_consent(request)
     section_name = str(payload.get("section_name") or "").strip()
     if not section_name:
         raise HTTPException(status_code=400, detail="`section_name` is required.")

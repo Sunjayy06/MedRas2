@@ -75,6 +75,15 @@ def openrouter_chat(
     json_mode: bool = False,
 ) -> str:
     """Run one synchronous OpenRouter chat-completions request."""
+    from app.services.phi_redaction import screen_external_ai_payload
+
+    screening = screen_external_ai_payload({"system": system, "user": user})
+    if screening.blocked:
+        raise RuntimeError(
+            "External AI was blocked because high-risk sensitive identifiers could not be safely redacted."
+        )
+    system = screening.value["system"]
+    user = screening.value["user"]
     client = get_openrouter_client()
     kwargs: dict[str, Any] = {
         "model": openrouter_model_for_task(task),

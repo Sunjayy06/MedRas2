@@ -736,25 +736,18 @@ Output JSON only. No markdown. No commentary.
 
 
 def _llm_analyze(objective: str) -> Optional[ObjectiveAnalysis]:
-    from app.services.llm_client import get_openai_client, openai_is_configured
-    if not openai_is_configured():
+    from app.services.llm_client import openrouter_chat, openrouter_is_configured
+    if not openrouter_is_configured():
         return None
     try:
-        client = get_openai_client()
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            response_format={"type": "json_object"},
-            messages=[
-                {"role": "system", "content": _LLM_SYSTEM_PROMPT},
-                {
-                    "role": "user",
-                    "content": f"{_LLM_INSTRUCTIONS}\n\nObjective:\n{objective.strip()}",
-                },
-            ],
+        raw = openrouter_chat(
+            task="reasoning",
+            system=_LLM_SYSTEM_PROMPT,
+            user=f"{_LLM_INSTRUCTIONS}\n\nObjective:\n{objective.strip()}",
             temperature=0.1,
             max_tokens=500,
+            json_mode=True,
         )
-        raw = response.choices[0].message.content or "{}"
         data = json.loads(raw)
     except Exception as exc:  # pragma: no cover — network/parse failures
         log.warning("objective_analyzer.llm_failed", extra={"error": type(exc).__name__})
@@ -810,18 +803,18 @@ def _llm_analyze(objective: str) -> Optional[ObjectiveAnalysis]:
 # ---------------------------------------------------------------------------
 
 
-def analyze_objective(objective: str) -> ObjectiveAnalysis:
+def analyze_objective(objective: str, external_ai_consent: bool = False) -> ObjectiveAnalysis:
     """Run the LLM if available, otherwise fall back to the heuristic."""
     if not objective or not objective.strip():
         raise ValueError("Objective text is empty.")
     if len(objective) > 4000:
         raise ValueError("Objective text is too long (max 4000 characters).")
 
-    llm_result = _llm_analyze(objective)
+    llm_result = _llm_analyze(objective) if external_ai_consent else None
     if llm_result:
         return llm_result
     result = heuristic_analyze(objective)
-    if settings.has_openai:
+    if external_ai_consent and settings.has_openai:
         # LLM was attempted but failed validation/network — note the fallback.
         result.source = "llm+heuristic_fallback"
         result.warnings.append(

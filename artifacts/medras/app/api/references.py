@@ -8,6 +8,7 @@
 """
 
 from __future__ import annotations
+from fastapi import Request
 
 import asyncio
 from typing import Any, Dict, List
@@ -93,7 +94,9 @@ async def extract_refs(files: List[UploadFile] = File(...)) -> Dict[str, Any]:
 
 
 @router.post("/generate")
-async def generate_refs(payload: Dict[str, Any]) -> Dict[str, Any]:
+async def generate_refs(request: Request, payload: Dict[str, Any]) -> Dict[str, Any]:
+    from app.services.external_ai_consent import require_external_ai_consent
+    require_external_ai_consent(request)
     topic = str(payload.get("topic") or "").strip()
     if not topic:
         raise HTTPException(400, "`topic` is required.")
