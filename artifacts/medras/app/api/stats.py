@@ -189,6 +189,7 @@ def _build_session_view(entry, classifications, assignment) -> Dict[str, Any]:
     new tests can resolve names and detect study-design hints.
     """
     from app.services.results import clean_display_name as _clean
+    assignment = _canonical_assignment(entry, assignment)
     intake = entry.meta.get("intake") or {}
     objective = ""
     if isinstance(intake, dict):
@@ -364,37 +365,283 @@ import json as _json
 from app.services.llm_client import (
     openrouter_chat as _openrouter_chat,
     openrouter_is_configured as _openrouter_is_configured,
+    openrouter_model_for_task as _openrouter_model_for_task,
     provider_status_payload as _provider_status_payload,
 )
 from app.services.phi_redaction import screen_external_ai_payload as _screen_external_ai_payload
 _PARSE_TIMEOUT = 25.0
 
 _PARSE_PROMPT = """\
-You are a medical research assistant. The text below is extracted from a \
-study proposal or synopsis document. Extract the following fields and return \
-ONLY valid JSON with exactly these keys — no markdown, no extra text:
+You are Sigma's proposal-understanding assistant. Extract study meaning only; \
+do not calculate statistics. The text below is from a medical research \
+proposal/synopsis. Return ONLY strict JSON, no markdown and no commentary.
 
+Required JSON shape:
 {{
-  "objective": "<Full study aim or primary objective. 2-4 sentences. \
-If multiple objectives, include all. Empty string if not found.>",
-  "outcomes": "<The PRIMARY outcome variable name exactly as it would \
-appear as a column header in an Excel/SPSS spreadsheet. \
-Examples: HbA1c, P/N, Allred Score, OS, SBP. \
-Short, precise. Empty string if not found.>",
-  "study_type": "<One of: comparison | association | correlation | regression | diagnostic | \
-survival | reliability | descriptive. Choose the best fit. Default to association.>",
-  "sample_size": <Integer sample size if stated, or null>
+  "study_title": "",
+  "study_design": "",
+  "study_type": "association|comparison|correlation|regression|diagnostic|survival|reliability|descriptive",
+  "sample_size": null,
+  "domain_profile": "generic|clinical_general|breast_pathology",
+  "objectives": {{
+    "primary": "",
+    "secondary": []
+  }},
+  "main_marker": "",
+  "main_outcome_concept": "",
+  "candidate_outcomes": [],
+  "candidate_predictors": [],
+  "candidate_covariates": [],
+  "analysis_intent": "",
+  "recommended_analysis_layers": ["descriptive", "bivariate", "multivariate_if_eligible"],
+  "confidence": {{
+    "overall": "high|medium|low",
+    "title": "high|medium|low",
+    "sample_size": "high|medium|low",
+    "main_outcome": "high|medium|low",
+    "domain": "high|medium|low"
+  }},
+  "requires_confirmation": true,
+  "warnings": []
 }}
 
-=== DOCUMENT TEXT (first 4000 chars) ===
+Rules:
+- If uncertain, list candidate options and lower confidence. Do not guess silently.
+- Identify the main marker/outcome from the title/objectives, not from common receptor names alone.
+- For breast carcinoma / IHC marker studies, use domain_profile "breast_pathology".
+- For p27 studies, main_marker should be "p27" and main_outcome_concept should be "p27 expression status" when the study evaluates p27 expression.
+- Treat ER, PR, HER2, AR, EGFR, Ki67 and molecular subtype as predictors unless the proposal explicitly makes one the main outcome.
+- Extract stated sample size as an integer. If absent, use null.
+- Suggested analysis layers are descriptive, bivariate, and multivariate_if_eligible for retrospective observational association/prognostic studies.
+
+=== DOCUMENT TEXT (first 6000 chars) ===
 {text}
 === END ===
 """
 
+_VALID_STUDY_TYPES = {
+    "comparison", "association", "correlation", "regression",
+    "diagnostic", "survival", "reliability", "descriptive",
+}
+_VALID_CONFIDENCE = {"high", "medium", "low"}
 
-def _heuristic_extract(text: str) -> dict:
-    """Return best-effort extraction using regex — used as fallback."""
-    obj = ""
+
+def _confidence(value: Any, default: str = "low") -> str:
+    value = str(value or "").strip().lower()
+    return value if value in _VALID_CONFIDENCE else default
+
+
+def _as_list(value: Any) -> list[str]:
+    if isinstance(value, list):
+        return [str(v).strip() for v in value if str(v).strip()]
+    if isinstance(value, str) and value.strip():
+        return [value.strip()]
+    return []
+
+
+def _extract_title(text: str) -> str:
+    title_patterns = [
+        r"(?:title|study\s+title)\s*[:\-–—]\s*(.+)",
+        r"^\s*([A-Z][^\n]{20,180}(?:carcinoma|cancer|tumou?r|expression|study)[^\n]*)",
+    ]
+    for pat in title_patterns:
+        m = _re.search(pat, text, _re.IGNORECASE | _re.MULTILINE)
+        if m:
+            return _re.sub(r"\s+", " ", m.group(1)).strip(" .:-")[:220]
+    return ""
+
+
+def _infer_domain_profile(text: str) -> str:
+    lower = text.lower()
+    breast_terms = [
+        "breast", "mammary", "invasive ductal", "ihc", "immunohistochemistry",
+        "er", "pr", "her2", "luminal", "triple negative", "carcinoma",
+    ]
+    if any(term in lower for term in breast_terms) and (
+        "p27" in lower or "mammary" in lower or "breast" in lower or "her2" in lower
+    ):
+        return "breast_pathology"
+    if any(term in lower for term in ["hospital", "clinical", "patient", "histopathology"]):
+        return "clinical_general"
+    return "generic"
+
+
+def _infer_study_design(text: str) -> str:
+    lower = text.lower()
+    bits = []
+    if "retrospective" in lower:
+        bits.append("retrospective")
+    elif "prospective" in lower:
+        bits.append("prospective")
+    if any(w in lower for w in ["observational", "association", "correlation", "prognostic"]):
+        bits.append("observational")
+    if "prognostic" in lower:
+        bits.append("prognostic")
+    if "cross-sectional" in lower or "cross sectional" in lower:
+        bits.append("cross-sectional")
+    if not bits:
+        return ""
+    if "association" in lower or "correlation" in lower:
+        bits.append("association")
+    return " ".join(dict.fromkeys(bits)) + " study"
+
+
+def _infer_study_type(text: str) -> str:
+    lower = text.lower()
+    if any(w in lower for w in ["sensitivity", "specificity", "roc", "auc", "diagnostic accuracy"]):
+        return "diagnostic"
+    if any(w in lower for w in ["survival", "mortality", "time to event", "kaplan", "disease-free"]):
+        return "survival"
+    if any(w in lower for w in ["predict", "prognostic", "multivariate", "regression"]):
+        return "association"
+    if any(w in lower for w in ["associate", "association", "correlat", "relationship"]):
+        return "association"
+    if any(w in lower for w in ["compare", " vs ", "versus", "between group", "trial"]):
+        return "comparison"
+    if any(w in lower for w in ["prevalence", "incidence", "frequency", "profile"]):
+        return "descriptive"
+    return "association"
+
+
+def _infer_marker_and_outcome(text: str) -> tuple[str, str, list[str]]:
+    lower = text.lower()
+    if "p27" in lower:
+        return "p27", "p27 expression status", ["p27 expression status", "Positive/Negative"]
+    markers = ["her2", "er", "pr", "ar", "egfr", "ki67", "p53"]
+    for marker in markers:
+        if _re.search(rf"\b{_re.escape(marker)}\b", lower):
+            return marker.upper() if marker != "ki67" else "Ki67", f"{marker} expression status", [f"{marker} expression status"]
+    return "", "", []
+
+
+def _infer_predictor_concepts(text: str, domain_profile: str) -> list[str]:
+    lower = text.lower()
+    concepts = []
+    candidates = [
+        ("Age", ["age"]),
+        ("Laterality", ["laterality"]),
+        ("Tumour site/quadrant", ["quadrant", "tumour site", "tumor site"]),
+        ("Tumour size", ["tumour size", "tumor size"]),
+        ("Histological type", ["histological type", "histologic type"]),
+        ("Histological grade", ["grade"]),
+        ("pT", ["pt", "tumour stage", "tumor stage"]),
+        ("Nodal status", ["nodal", "node"]),
+        ("DCIS", ["dcis"]),
+        ("LVI", ["lvi", "lymphovascular"]),
+        ("Necrosis", ["necrosis"]),
+        ("ER", [" er ", "estrogen"]),
+        ("PR", [" pr ", "progesterone"]),
+        ("HER2", ["her2"]),
+        ("AR", [" ar ", "androgen"]),
+        ("EGFR", ["egfr"]),
+        ("Ki67", ["ki67", "ki-67"]),
+        ("Molecular subtype", ["molecular subtype", "luminal", "triple negative"]),
+    ]
+    padded = f" {lower} "
+    for label, terms in candidates:
+        if domain_profile == "breast_pathology" or any(term in padded for term in terms):
+            if any(term in padded for term in terms) or label in {"Age", "ER", "PR", "HER2", "Molecular subtype"}:
+                concepts.append(label)
+    return list(dict.fromkeys(concepts))
+
+
+def _normalize_proposal_extract(
+    data: dict[str, Any] | None,
+    text: str,
+    *,
+    provider: str,
+    model: str = "",
+    redaction_applied: bool = False,
+    phi_blocked: bool = False,
+    fallback_used: bool = False,
+) -> dict[str, Any]:
+    data = data or {}
+    title = str(data.get("study_title") or data.get("title") or _extract_title(text)).strip()
+    objectives_raw = data.get("objectives") if isinstance(data.get("objectives"), dict) else {}
+    primary = str(
+        objectives_raw.get("primary")
+        or data.get("objective")
+        or data.get("objectives")
+        or ""
+    ).strip()
+    if not primary:
+        primary = _heuristic_objective(text)
+    secondary = _as_list(objectives_raw.get("secondary"))
+    sample_size = data.get("sample_size")
+    if sample_size is None:
+        sample_size = _heuristic_sample_size(text)
+    try:
+        sample_size = int(sample_size) if sample_size is not None else None
+    except (TypeError, ValueError):
+        sample_size = None
+    profile = domain_profiles.normalize_profile(
+        data.get("domain_profile") or _infer_domain_profile(text)
+    )
+    study_type = str(data.get("study_type") or _infer_study_type(text)).strip().lower()
+    if study_type not in _VALID_STUDY_TYPES:
+        study_type = _infer_study_type(text)
+    marker, outcome_concept, outcome_candidates = _infer_marker_and_outcome(text)
+    marker = str(data.get("main_marker") or marker).strip()
+    outcome_concept = str(
+        data.get("main_outcome_concept")
+        or data.get("outcomes")
+        or outcome_concept
+    ).strip()
+    candidate_outcomes = _as_list(data.get("candidate_outcomes")) or outcome_candidates
+    if outcome_concept and outcome_concept not in candidate_outcomes:
+        candidate_outcomes.insert(0, outcome_concept)
+    predictors = _as_list(data.get("candidate_predictors")) or _infer_predictor_concepts(text, profile)
+    if profile == "breast_pathology" and marker.lower() == "p27":
+        predictors = [p for p in predictors if p.lower().replace("-", "") != "p27"]
+        if "PR" not in predictors:
+            predictors.append("PR")
+    covariates = _as_list(data.get("candidate_covariates"))
+    confidence_raw = data.get("confidence") if isinstance(data.get("confidence"), dict) else {}
+    confidence = {
+        "overall": _confidence(confidence_raw.get("overall"), "medium" if not fallback_used else "low"),
+        "title": _confidence(confidence_raw.get("title"), "high" if title else "low"),
+        "sample_size": _confidence(confidence_raw.get("sample_size"), "high" if sample_size else "low"),
+        "main_outcome": _confidence(confidence_raw.get("main_outcome"), "high" if outcome_concept else "low"),
+        "domain": _confidence(confidence_raw.get("domain"), "high" if profile != "generic" else "medium"),
+    }
+    layers = _as_list(data.get("recommended_analysis_layers")) or [
+        "descriptive", "bivariate", "multivariate_if_eligible"
+    ]
+    result = {
+        "study_title": title,
+        "study_design": str(data.get("study_design") or _infer_study_design(text)).strip(),
+        "study_type": study_type,
+        "sample_size": sample_size,
+        "domain_profile": profile,
+        "objectives": {"primary": primary, "secondary": secondary},
+        "main_marker": marker,
+        "main_outcome_concept": outcome_concept,
+        "candidate_outcomes": candidate_outcomes,
+        "candidate_predictors": predictors,
+        "candidate_covariates": covariates,
+        "analysis_intent": str(
+            data.get("analysis_intent")
+            or "Assess association/prognostic relevance of the main marker with clinicopathological variables."
+        ).strip(),
+        "recommended_analysis_layers": layers,
+        "confidence": confidence,
+        "requires_confirmation": True,
+        "provider": provider,
+        "model": model,
+        "model_kind": "proposal",
+        "fallback_used": fallback_used,
+        "redaction_applied": redaction_applied,
+        "phi_blocked": phi_blocked,
+        "warnings": _as_list(data.get("warnings")),
+    }
+    # Backward-compatible fields used by the current wizard.
+    result["objective"] = primary
+    result["outcomes"] = outcome_concept or (candidate_outcomes[0] if candidate_outcomes else "")
+    result["source"] = provider if provider == "openrouter" else "heuristic"
+    return result
+
+
+def _heuristic_objective(text: str) -> str:
     obj_pat = _re.compile(
         r"(?:primary\s+)?(?:aim|objective|purpose|goal|hypothesis)\s*[:\-–—]\s*"
         r"(.+?)(?:\n\n|\n(?=[A-Z])|\Z)",
@@ -402,52 +649,168 @@ def _heuristic_extract(text: str) -> dict:
     )
     m = obj_pat.search(text)
     if m:
-        obj = m.group(1).strip()[:600]
-    if not obj:
-        para_pat = _re.compile(
-            r"(?:to\s+(?:study|evaluate|compare|assess|determine|investigate|"
-            r"examine|analyse|analyze)\b.{20,400})",
-            _re.IGNORECASE | _re.DOTALL,
-        )
-        pm = para_pat.search(text)
-        if pm:
-            obj = pm.group(0).strip()[:600]
-
-    out = ""
-    out_pat = _re.compile(
-        r"(?:primary\s+)?(?:outcome|endpoint|variable|measure)\s*[:\-–—]\s*([^\n]{3,120})",
-        _re.IGNORECASE,
+        return _re.sub(r"\s+", " ", m.group(1).strip())[:800]
+    para_pat = _re.compile(
+        r"(?:to\s+(?:study|evaluate|compare|assess|determine|investigate|"
+        r"examine|analyse|analyze)\b.{20,500})",
+        _re.IGNORECASE | _re.DOTALL,
     )
-    om = out_pat.search(text)
-    if om:
-        token = _re.split(r"[,;()\n]", om.group(1).strip())[0].strip()
-        out = token[:80]
+    pm = para_pat.search(text)
+    return _re.sub(r"\s+", " ", pm.group(0).strip())[:800] if pm else ""
 
-    n = None
+
+def _heuristic_sample_size(text: str) -> int | None:
     n_pat = _re.compile(
-        r"(?:sample\s+size|n\s*=|enrol(?:l?ed)?|participants?|subjects?)\s*[:\=\-–]?\s*(\d{2,5})",
+        r"(?:sample\s+size|n\s*=|enrol(?:l?ed)?|participants?|subjects?|cases?)\s*[:\=\-–]?\s*(\d{2,5})",
         _re.IGNORECASE,
     )
     nm = n_pat.search(text)
     if nm:
         try:
-            n = int(nm.group(1))
+            return int(nm.group(1))
         except ValueError:
-            pass
+            return None
+    return None
 
-    study_type = "correlation"
-    dl = text.lower()
-    for st, words in [
-        ("diagnostic", ["sensitiv", "specific", "roc", "auc", "diagnostic accuracy"]),
-        ("survival", ["survival", "mortality", "time to event", "kaplan", "disease-free"]),
-        ("comparison", ["compar", " vs ", "versus", "between group", "randomis", "randomiz", "trial"]),
-        ("descriptive", ["prevalence", "incidence", "frequenc", "characteris", "profile"]),
-    ]:
-        if any(w in dl for w in words):
-            study_type = st
+
+def _heuristic_extract(text: str) -> dict:
+    """Return best-effort extraction using regex — used as fallback."""
+    return _normalize_proposal_extract(
+        {}, text, provider="local_fallback", fallback_used=True
+    )
+
+
+def _norm_label(value: Any) -> str:
+    return _re.sub(r"[^a-z0-9]+", " ", str(value or "").lower()).strip()
+
+
+def _concept_aliases(concept: str, proposal: dict[str, Any] | None = None) -> list[str]:
+    norm = _norm_label(concept)
+    aliases = [concept]
+    if "p27" in norm:
+        aliases += [
+            "Positive/Negative", "Positive/ Negative", "p27 expression status",
+            "Staining Result", "Interpretation Site",
+        ]
+    if norm in {"positive negative", "positive negative status", "p27 expression status"}:
+        aliases += ["Positive/Negative", "Positive/ Negative", "P/N"]
+    mapping = {
+        "age": ["Age"],
+        "laterality": ["Laterality"],
+        "tumour site quadrant": ["Tumour site", "Tumour quadrant", "Quadrant"],
+        "tumour size": ["Tumour size", "Tumor size", "Size"],
+        "histological type": ["Histological type", "Histology"],
+        "histological grade": ["Histological grade", "Grade"],
+        "pt": ["pT", "Pathological T stage", "Tumour stage"],
+        "nodal status": ["Nodal status", "Node status", "pN"],
+        "dcis": ["DCIS"],
+        "lvi": ["LVI", "Lymphovascular invasion"],
+        "necrosis": ["Necrosis"],
+        "er": ["ER", "Estrogen receptor"],
+        "pr": ["PR", "Progesterone receptor"],
+        "her2": ["HER2", "Her2Neu", "Her2/neu"],
+        "ar": ["AR", "Androgen receptor"],
+        "egfr": ["EGFR"],
+        "ki67": ["Ki67", "Ki-67"],
+        "molecular subtype": ["Molecular subtype", "Subtype"],
+        "interpretation site": ["Interpretation Site", "Interpretation site"],
+        "staining result": ["Staining Result", "Staining result"],
+    }
+    for key, vals in mapping.items():
+        if norm == key or key in norm:
+            aliases += vals
+    if proposal and _norm_label(proposal.get("main_marker")) == "p27":
+        aliases += ["Positive/Negative", "Positive/ Negative"]
+    return list(dict.fromkeys([a for a in aliases if str(a).strip()]))
+
+
+def _match_column_for_concept(
+    concept: str,
+    columns: list[str],
+    proposal: dict[str, Any] | None = None,
+    prefer_p27_outcome: bool = False,
+) -> str | None:
+    aliases = _concept_aliases(concept, proposal)
+    norm_cols = [(col, _norm_label(col)) for col in columns]
+    best_col, best_score = None, 0.0
+    for alias in aliases:
+        an = _norm_label(alias)
+        if not an:
+            continue
+        for col, cn in norm_cols:
+            score = 0.0
+            if cn == an:
+                score = 10.0
+            elif an in cn or cn in an:
+                score = 7.0
+            else:
+                at = set(an.split())
+                ct = set(cn.split())
+                if at:
+                    score = 4.0 * (len(at & ct) / len(at))
+            if prefer_p27_outcome and "p27" in _norm_label(proposal.get("main_marker") if proposal else ""):
+                if cn in {"pr", "er", "ar", "her2"}:
+                    score -= 6.0
+                if "positive" in cn and "negative" in cn:
+                    score += 5.0
+            if score > best_score:
+                best_col, best_score = col, score
+    return best_col if best_score >= 3.0 else None
+
+
+def _map_proposal_to_columns(
+    proposal: dict[str, Any] | None,
+    columns: list[str],
+    profile: str,
+) -> dict[str, Any]:
+    proposal = proposal or {}
+    mapped_outcome = None
+    outcome_concepts = _as_list(proposal.get("candidate_outcomes"))
+    if proposal.get("main_outcome_concept"):
+        outcome_concepts.insert(0, str(proposal.get("main_outcome_concept")))
+    if _norm_label(proposal.get("main_marker")) == "p27":
+        outcome_concepts.insert(0, "p27 expression status")
+    for concept in list(dict.fromkeys(outcome_concepts)):
+        candidate = _match_column_for_concept(
+            concept, columns, proposal, prefer_p27_outcome=True
+        )
+        if candidate:
+            mapped_outcome = candidate
             break
-
-    return {"objective": obj, "outcomes": out, "study_type": study_type, "sample_size": n}
+    predictor_concepts = _as_list(proposal.get("candidate_predictors"))
+    if domain_profiles.is_breast_pathology(profile):
+        for concept in [
+            "Age", "Laterality", "Tumour site/quadrant", "Tumour size",
+            "Histological type", "Histological grade", "pT", "Nodal status",
+            "DCIS", "LVI", "Necrosis", "ER", "PR", "HER2", "AR", "EGFR",
+            "Ki67", "Molecular subtype", "Interpretation Site", "Staining Result",
+        ]:
+            if concept not in predictor_concepts:
+                predictor_concepts.append(concept)
+    mapped_predictors = []
+    unmapped = []
+    for concept in predictor_concepts:
+        col = _match_column_for_concept(concept, columns, proposal)
+        if col and col != mapped_outcome and col not in mapped_predictors:
+            mapped_predictors.append(col)
+        elif not col:
+            unmapped.append(concept)
+    covariates = []
+    for concept in _as_list(proposal.get("candidate_covariates")):
+        col = _match_column_for_concept(concept, columns, proposal)
+        if col and col != mapped_outcome and col not in covariates:
+            covariates.append(col)
+        elif not col:
+            unmapped.append(concept)
+    confidence = "high" if mapped_outcome else ("medium" if mapped_predictors else "low")
+    return {
+        "mapped_outcome": mapped_outcome,
+        "mapped_predictors": mapped_predictors,
+        "mapped_covariates": covariates,
+        "unmapped_concepts": list(dict.fromkeys(unmapped)),
+        "mapping_confidence": confidence,
+        "requires_confirmation": True,
+    }
 
 
 async def _ai_extract(text: str, external_ai_consent: bool = False) -> tuple[
@@ -457,7 +820,7 @@ async def _ai_extract(text: str, external_ai_consent: bool = False) -> tuple[
     if not external_ai_consent:
         return None, None, False, False
 
-    screening = _screen_external_ai_payload(text[:4000])
+    screening = _screen_external_ai_payload(text[:6000])
     if screening.blocked:
         return None, None, screening.redaction_applied, True
     if _openrouter_is_configured():
@@ -467,12 +830,12 @@ async def _ai_extract(text: str, external_ai_consent: bool = False) -> tuple[
                 task="proposal_parse",
                 system="Extract proposal metadata and return only valid JSON.",
                 user=_PARSE_PROMPT.format(text=screening.value),
-                max_tokens=512,
+                max_tokens=1400,
                 temperature=0.1,
                 json_mode=True,
             )
             result = _json.loads(raw)
-            if isinstance(result, dict) and "objective" in result:
+            if isinstance(result, dict):
                 return result, "openrouter", screening.redaction_applied, False
         except Exception:
             pass
@@ -521,26 +884,18 @@ async def parse_proposal(request: Request, file: UploadFile = File(...)) -> Dict
     ai_result, provider, redaction_applied, phi_blocked = await _ai_extract(
         text, external_ai_consent
     )
-    if ai_result and isinstance(ai_result, dict) and ai_result.get("objective"):
-        sample_size = ai_result.get("sample_size")
-        if sample_size is not None:
-            try:
-                sample_size = int(sample_size)
-            except (ValueError, TypeError):
-                sample_size = None
-        valid_types = {
-            "comparison", "association", "correlation", "regression",
-            "diagnostic", "survival", "reliability", "descriptive",
-        }
-        study_type = str(ai_result.get("study_type") or "correlation").strip().lower()
-        if study_type not in valid_types:
-            study_type = "correlation"
+    if ai_result and isinstance(ai_result, dict):
+        result = _normalize_proposal_extract(
+            ai_result,
+            text,
+            provider=provider or "openrouter",
+            model=_openrouter_model_for_task("proposal_parse") if provider == "openrouter" else "",
+            redaction_applied=redaction_applied,
+            phi_blocked=phi_blocked,
+            fallback_used=False,
+        )
         return {
-            "objective": str(ai_result.get("objective") or "").strip(),
-            "outcomes": str(ai_result.get("outcomes") or "").strip(),
-            "study_type": study_type,
-            "sample_size": sample_size,
-            "source": provider or "ai",
+            **result,
             **_provider_status_payload(
                 provider or "ai_unavailable",
                 external_ai_consent,
@@ -553,7 +908,6 @@ async def parse_proposal(request: Request, file: UploadFile = File(...)) -> Dict
     h = _heuristic_extract(text)
     return {
         **h,
-        "source": "heuristic",
         **_provider_status_payload(
             "local_fallback", external_ai_consent, redaction_applied, phi_blocked
         ),
@@ -1528,6 +1882,23 @@ def _invalidate_downstream(entry, *, keep_normality: bool = False) -> None:
         entry.meta.pop("normality", None)
 
 
+def _canonical_assignment(entry, assignment: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Return the assignment that planning/execution should treat as current.
+
+    Confirmed AI/proposal setup stores the final outcome separately from the
+    Step-3 assignment card. Keep those in sync here so stale auto-assignment
+    cannot make the planner fall back to the first binary-looking column.
+    """
+    current = dict(assignment or entry.meta.get("assignment") or {})
+    cols = set(entry.df.columns)
+    confirmed_outcome = entry.meta.get("confirmed_outcome_col")
+    if confirmed_outcome in cols and current.get("outcome") != confirmed_outcome:
+        current["outcome"] = confirmed_outcome
+    current.setdefault("group", None)
+    current.setdefault("covariates", [])
+    return current
+
+
 def _publish_results(entry, job_id: str, res: Dict[str, Any]) -> Dict[str, Any]:
     result_id = uuid.uuid4().hex
     generated_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
@@ -1572,8 +1943,9 @@ def _current_export_state(entry, job_id: str, expected_result_id: Optional[str])
         )
     classifications = entry.meta.get("classifications") or _classify_entry(entry)
     current = dict(res)
+    assignment = _canonical_assignment(entry)
     current["table_one"] = results_service.build_table_one(
-        entry.df, classifications, (entry.meta.get("assignment") or {}).get("group")
+        entry.df, classifications, assignment.get("group")
     )
     current["export_metadata"] = {
         "dataset_id": job_id,
@@ -1620,6 +1992,8 @@ async def save_assignment(payload: AssignRequest) -> Dict[str, Any]:
         # is still valid since the column data hasn't changed.
         _invalidate_downstream(entry, keep_normality=True)
     entry.meta["assignment"] = new_assignment
+    if payload.outcome:
+        entry.meta["confirmed_outcome_col"] = payload.outcome
     return {"status": "saved", "assignment": entry.meta["assignment"]}
 
 
@@ -1683,7 +2057,8 @@ async def generate_plan(job_id: str) -> Dict[str, Any]:
         raise HTTPException(status_code=404, detail="Dataset expired or not found.")
     classifications = entry.meta.get("classifications") or _classify_entry(entry)
     entry.meta["classifications"] = classifications
-    assignment = entry.meta.get("assignment") or {}
+    assignment = _canonical_assignment(entry, entry.meta.get("assignment") or {})
+    entry.meta["assignment"] = assignment
     normality_data = entry.meta.get("normality")
     if not normality_data:
         normality_data = await asyncio.to_thread(
@@ -1711,7 +2086,8 @@ async def run_analysis(payload: RunAnalysisRequest) -> Dict[str, Any]:
     if entry is None:
         raise HTTPException(status_code=404, detail="Dataset expired or not found.")
     classifications = entry.meta.get("classifications") or _classify_entry(entry)
-    assignment = entry.meta.get("assignment") or {}
+    assignment = _canonical_assignment(entry, entry.meta.get("assignment") or {})
+    entry.meta["assignment"] = assignment
     plan_dict = entry.meta.get("plan")
     if not plan_dict:
         normality_data = entry.meta.get("normality") or await asyncio.to_thread(
@@ -2014,6 +2390,15 @@ async def confirm_study(payload: ConfirmStudyRequest) -> Dict[str, Any]:
         "outcome_col": payload.outcome_col,
         "source": "confirmed",
     }
+    current_assignment = dict(entry.meta.get("assignment") or {})
+    confirmed_assignment = {
+        "outcome": payload.outcome_col,
+        "group": current_assignment.get("group"),
+        "covariates": list(current_assignment.get("covariates") or []),
+    }
+    if current_assignment != confirmed_assignment:
+        _invalidate_downstream(entry, keep_normality=True)
+    entry.meta["assignment"] = confirmed_assignment
     entry.meta.pop("pending_ai_study", None)
     # Apply yes/no standardisation whenever a study is confirmed (T004)
     df, yn_notes = variable_classifier.clean_yes_no_columns(entry.df)
@@ -2234,6 +2619,7 @@ class SetupStudyRequest(BaseModel):
     description: str = Field(default="", max_length=2000)
     outcome_hint: str = Field(default="", max_length=200)
     profile: Optional[DomainProfileLiteral] = None
+    proposal_metadata: Optional[Dict[str, Any]] = None
 
 
 @router.post("/setup-study")
@@ -2248,7 +2634,9 @@ async def setup_study(request: Request, payload: SetupStudyRequest) -> Dict[str,
     entry = dataset_store.get(payload.job_id)
     if entry is None:
         raise HTTPException(status_code=404, detail="Dataset expired or not found.")
-    profile = _domain_profile(entry, payload.profile)
+    proposal_metadata = payload.proposal_metadata or entry.meta.get("proposal_understanding") or {}
+    proposal_profile = proposal_metadata.get("domain_profile") if isinstance(proposal_metadata, dict) else None
+    profile = _domain_profile(entry, payload.profile or proposal_profile)
     classifications = (
         entry.meta.get("classifications")
         or _classify_entry(entry)
@@ -2264,6 +2652,29 @@ async def setup_study(request: Request, payload: SetupStudyRequest) -> Dict[str,
         external_ai_consent=request.headers.get("X-External-AI-Consent", "").lower() == "true",
         profile=profile,
     )
+    mapping = _map_proposal_to_columns(proposal_metadata, columns, profile)
+    if proposal_metadata:
+        entry.meta["proposal_understanding"] = proposal_metadata
+        result["proposal_understanding"] = proposal_metadata
+        result["proposal_mapping"] = mapping
+        if mapping.get("mapped_outcome"):
+            result["outcome_col"] = mapping["mapped_outcome"]
+            result["reasoning"] = (
+                f"Mapped the proposal's main outcome concept to Excel column "
+                f"'{mapping['mapped_outcome']}'. "
+                + str(result.get("reasoning") or "")
+            ).strip()
+        if proposal_metadata.get("study_type"):
+            result["study_type"] = proposal_metadata["study_type"]
+        if mapping.get("mapped_predictors"):
+            result["all_predictors"] = mapping["mapped_predictors"]
+        if proposal_metadata.get("study_title"):
+            result["study_title"] = proposal_metadata["study_title"]
+        if proposal_metadata.get("main_marker"):
+            result["main_marker"] = proposal_metadata["main_marker"]
+        if proposal_metadata.get("main_outcome_concept"):
+            result["main_outcome_concept"] = proposal_metadata["main_outcome_concept"]
+        result["requires_confirmation"] = True
     result["domain_profile"] = profile
     # Augment with outcome_hint if provided and AI didn't detect an outcome
     if payload.outcome_hint.strip() and not result.get("outcome_col"):

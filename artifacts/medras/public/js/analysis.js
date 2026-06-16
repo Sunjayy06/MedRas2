@@ -30,6 +30,7 @@ const state = {
   practiceTemplate: "anaemia",
   entryChoice: null,   // "upload" | "practice"
   intake: null,        // {what_you_have, outcomes, independents, instructions}
+  proposalUnderstanding: null,
   intakeStep: 0,       // current question index in intake wizard (0..3)
   sheetMode: null,     // null | "single" | "merge" — set once the user picks a radio
   previewReady: false, // true when Zone 4 should render an actual table (single-sheet
@@ -195,6 +196,10 @@ function selectedDomainProfile() {
     ? value
     : "generic";
   return state.domainProfile;
+}
+
+function proposalMetadataPayload() {
+  return state.proposalUnderstanding || (state.intake && state.intake.proposal_understanding) || null;
 }
 
 function _mergeSuggestionKey(proposal) {
@@ -408,6 +413,7 @@ async function resumeFromSavedSession(saved) {
               description: savedDesc,
               outcome_hint: "",
               profile: selectedDomainProfile(),
+              proposal_metadata: proposalMetadataPayload(),
             }),
           });
           state.aiStudy = plan;
@@ -726,6 +732,10 @@ function bindScreen1() {
       outcomes:    hint,
       study_type:  studyType  || state.intake?.study_type  || null,
       sample_size: sampleSize || state.intake?.sample_size || null,
+      study_title: state.intake?.study_title || null,
+      main_marker: state.intake?.main_marker || null,
+      main_outcome_concept: state.intake?.main_outcome_concept || hint || null,
+      proposal_understanding: proposalMetadataPayload(),
     });
     showScreen("2a");
   });
@@ -767,10 +777,16 @@ function _bindS1ProposalUpload() {
       const sampleSizeField = $("#s1-prop-sample-size");
       const aiBadge         = $("#s1-prop-ai-badge");
 
-      if (descField)    descField.value = data.objective || data.objectives || "";
-      if (outcomeField) outcomeField.value = data.outcomes || "";
+      const primaryObjective = data.objective || (data.objectives && data.objectives.primary) || "";
+      if (descField)    descField.value = primaryObjective;
+      if (outcomeField) outcomeField.value = data.main_outcome_concept || data.outcomes || "";
       if (studyTypeField && data.study_type) studyTypeField.value = data.study_type;
       if (sampleSizeField && data.sample_size) sampleSizeField.value = data.sample_size;
+      if (data.domain_profile) {
+        state.domainProfile = data.domain_profile;
+        const profileSelect = document.getElementById("s1-domain-profile");
+        if (profileSelect) profileSelect.value = data.domain_profile;
+      }
 
       // Show AI badge if extraction was AI-powered.
       if (aiBadge) {
@@ -786,11 +802,19 @@ function _bindS1ProposalUpload() {
       state.intake = Object.assign({}, state.intake || {}, {
         study_type:  data.study_type  || null,
         sample_size: data.sample_size || null,
+        study_title: data.study_title || null,
+        main_marker: data.main_marker || null,
+        main_outcome_concept: data.main_outcome_concept || null,
+        proposal_understanding: data,
       });
+      state.proposalUnderstanding = data;
 
       if (fields) fields.classList.remove("is-hidden");
       const sourceLabel = ["openrouter", "ai"].includes(data.source) ? "AI extracted" : "parsed";
-      if (status) status.textContent = `✓ ${file.name} — ${sourceLabel}`;
+      if (status) {
+        const outcomeText = data.main_outcome_concept || data.outcomes || "main outcome";
+        status.textContent = `✓ ${file.name} — ${sourceLabel}. Suggested outcome: ${outcomeText}. Please confirm or edit.`;
+      }
     } catch (e) {
       if (fields) fields.classList.remove("is-hidden");
       if (status) status.textContent = `Could not parse file: ${e.message}. Please fill the fields manually.`;
@@ -2165,6 +2189,7 @@ function bindPreview() {
             description,
             outcome_hint: outcomeHint,
             profile: selectedDomainProfile(),
+            proposal_metadata: proposalMetadataPayload(),
           }),
         });
         state.aiStudy = setupResult;
@@ -4814,12 +4839,52 @@ const _CONFIRM_TYPE_LABELS = {
 };
 const _CONFIRM_SKIP_TYPES = new Set(["id", "date", "exclude"]);
 
+function _proposalFriendlySummary(ai) {
+  const proposal = ai.proposal_understanding || proposalMetadataPayload() || {};
+  const mapping = ai.proposal_mapping || {};
+  const title = proposal.study_title || ai.study_title || "your uploaded study";
+  const marker = proposal.main_marker || ai.main_marker || "";
+  const outcome = mapping.mapped_outcome || ai.outcome_col || proposal.main_outcome_concept || "the main outcome";
+  const predictors = (mapping.mapped_predictors || ai.all_predictors || [])
+    .filter((v) => v && v !== outcome)
+    .slice(0, 12);
+  const important = predictors.length ? predictors.join(", ") : "the clinically relevant variables in your sheet";
+  const comparison = marker
+    ? `${marker} ${outcome}`
+    : `${outcome}`;
+  return {
+    title,
+    text:
+      `Study: ${title}. ` +
+      `Main comparison: ${comparison}. ` +
+      `Important variables: ${important}. ` +
+      "Recommended analysis: descriptive summary, association testing, and a limited adjusted model if eligible. " +
+      "Please confirm or edit before Sigma finalizes the analysis plan.",
+  };
+}
+
 function renderAiConfirmScreen() {
   const ai = state.aiStudy || {};
   const studyType = ai.study_type || "correlation";
   const outCol    = ai.outcome_col || "";
   const reasoning = ai.reasoning  || "";
   const cleanReasoning = reasoning.replace(/\s*\[.*?\]\s*$/, "").trim();
+
+  const screen = document.getElementById("screen-ai-confirm");
+  if (screen) {
+    let summary = document.getElementById("ai-doctor-summary");
+    if (!summary) {
+      summary = document.createElement("div");
+      summary.id = "ai-doctor-summary";
+      summary.className = "se-confirm-summary";
+      screen.insertBefore(summary, screen.firstElementChild?.nextElementSibling || screen.firstElementChild);
+    }
+    const friendly = _proposalFriendlySummary(ai);
+    summary.innerHTML = `
+      <strong>Sigma understood your study as:</strong>
+      <div>${escapeHtml(friendly.text)}</div>
+    `;
+  }
 
   // ── Study-type card ──────────────────────────────────────────────────
   const iconEl = document.getElementById("ai-plan-icon");
@@ -4832,7 +4897,7 @@ function renderAiConfirmScreen() {
   if (descEl) descEl.textContent = _STUDY_TYPE_DESCRIPTIONS[studyType] || "";
 
   const reasoningEl = document.getElementById("ai-reasoning-display");
-  if (reasoningEl) reasoningEl.textContent = cleanReasoning;
+  if (reasoningEl) reasoningEl.textContent = cleanReasoning || _proposalFriendlySummary(ai).text;
 
   // ── Outcome column display ───────────────────────────────────────────
   const colDisplay = document.getElementById("ai-outcome-col-display");
@@ -5110,6 +5175,7 @@ function bindScreenSetup() {
           description: desc,
           outcome_hint: "",
           profile: selectedDomainProfile(),
+          proposal_metadata: proposalMetadataPayload(),
         }),
       });
       if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
@@ -5254,6 +5320,9 @@ function bindAiConfirm() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ job_id: state.jobId, study_type: studyType, outcome_col: outCol || null }),
         });
+        state.outcomeCol = outCol || null;
+        state.assignment = { outcome: outCol || null, group: null, covariates: [] };
+        state.assignmentConfirmed = !!outCol;
         setStatus(status, "");
         showScreen("3");
         await loadVariablesData();
@@ -5284,6 +5353,9 @@ function bindAiConfirm() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ job_id: state.jobId, study_type: studyType, outcome_col: outCol }),
         });
+        state.outcomeCol = outCol;
+        state.assignment = { outcome: outCol, group: null, covariates: [] };
+        state.assignmentConfirmed = true;
         setStatus(status, "Running pairwise analysis…", "loading");
         const result = await api("/run-correlation", {
           method: "POST",
@@ -5409,6 +5481,7 @@ function bindAiConfirm() {
             description: desc,
             outcome_hint: "",
             profile: selectedDomainProfile(),
+            proposal_metadata: proposalMetadataPayload(),
           }),
         });
         if (!confirmAIStudyReplacement(result, "AI suggested replacing the study setup")) {
