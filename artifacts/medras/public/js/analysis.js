@@ -3706,6 +3706,9 @@ function _buildMissingDecisionPayload(currentColumns, selectedDecisions = {}) {
   const actionMap = {
     keep: "leave",
     leave: "leave",
+    exclude: "exclude_variable_from_analysis",
+    drop_from_analysis: "exclude_variable_from_analysis",
+    exclude_variable_from_analysis: "exclude_variable_from_analysis",
     impute_mean: "impute_mean",
     impute_median: "impute_median",
     impute_mode: "impute_mode",
@@ -3732,7 +3735,7 @@ async function _applyQualityHandler() {
     if (unsupported.length) {
       setStatus(
         status,
-        `Unsupported missing-data action for ${unsupported.map(([column]) => column).join(", ")}. Choose Keep or an imputation option.`,
+        `Unsupported missing-data action for ${unsupported.map(([column]) => column).join(", ")}. Choose Keep, Exclude, or an imputation option.`,
         "error"
       );
       return;
@@ -4184,6 +4187,7 @@ function renderResults() {
   if ((r.tests || []).some((test) => resultFamily(test) === "other")) {
     tabDefs.push({ id: "tab-family-other", label: "Other analyses" });
   }
+  tabDefs.push({ id: "tab-significant", label: "Significant findings" });
   tabDefs.push({ id: "tab-narrative", label: "Methods + Results" });
   tabs.innerHTML = tabDefs.map((t, i) =>
     `<button type="button" role="tab" class="se-results-tab ${i === 0 ? 'is-active' : ''}" data-tab="${t.id}" data-testid="${t.id}">${t.label}</button>`
@@ -4231,6 +4235,31 @@ function renderResultsPane(tabId) {
     bindCopyTable();
     return;
   }
+  if (tabId === "tab-significant") {
+    const rows = Array.isArray(r.significant_findings) ? r.significant_findings : [];
+    const correction = r.correction_info
+      ? `<p class="se-correction-note">Multiple-comparison correction: ${escapeHtml(r.correction_info.method || "applied")} across ${escapeHtml(String(r.correction_info.n_tests || ""))} tests. Uncorrected and adjusted p-values are retained in the result details where available.</p>`
+      : "";
+    pane.innerHTML = `<h3>Final statistically significant associations</h3>
+      ${correction}
+      ${rows.length
+        ? tableHtml(
+            ["Variable / parameter", "Key finding", "Test statistic", "p-value", "Test applied", "Effect size", "Notes/warnings"],
+            rows.map((row) => [
+              row.variable || "",
+              row.key_finding || "",
+              row.test_statistic || "",
+              row.p_value || "",
+              row.test_applied || "",
+              row.effect_size || "",
+              row.notes_warnings || "",
+            ])
+          )
+        : '<p>No statistically significant associations were found at p &lt; 0.05 among the completed tests.</p>'}
+      <button type="button" class="btn btn-tertiary" data-action="copy-table" data-testid="button-copy-significant-findings">Copy table</button>`;
+    bindCopyTable();
+    return;
+  }
   if (tabId === "tab-narrative") {
     pane.innerHTML = `<h3>Methods</h3><p>${escapeHtml(r.methods_md || '')}</p>
       <h3>Results</h3><p>${escapeHtml(r.results_md || '').replace(/\n\n/g, '</p><p>')}</p>
@@ -4275,7 +4304,9 @@ function renderResultTestBlock(test) {
   }
   const tablesHtml = renderResultTables(test);
   const figuresHtml = renderResultFigures(test);
+  const compact = test.compact_summary || "";
   return `<section class="se-result-test-block"><h4>${escapeHtml(test.title)}</h4>
+    ${compact ? `<p class="se-result-compact">${escapeHtml(compact)}</p>` : ""}
     ${tablesHtml}
     ${figuresHtml}
     ${correctionBlock}
@@ -5533,6 +5564,7 @@ function renderMissingScreen() {
       </div>
       <div class="se-missing-actions">
         <label><input type="radio" name="missing-${slug}" value="leave" ${selected === "leave" ? "checked" : ""} data-missing-col="${escapeAttr(col)}"> Leave as-is</label>
+        <label><input type="radio" name="missing-${slug}" value="exclude" ${selected === "exclude" ? "checked" : ""} data-missing-col="${escapeAttr(col)}"> Exclude from analysis</label>
         <label><input type="radio" name="missing-${slug}" value="impute_mean" ${selected === "impute_mean" ? "checked" : ""} data-missing-col="${escapeAttr(col)}"> Fill with mean</label>
         <label><input type="radio" name="missing-${slug}" value="impute_median" ${selected === "impute_median" ? "checked" : ""} data-missing-col="${escapeAttr(col)}"> Fill with median</label>
         <label><input type="radio" name="missing-${slug}" value="impute_mode" ${selected === "impute_mode" ? "checked" : ""} data-missing-col="${escapeAttr(col)}"> Fill with mode (most frequent)</label>
@@ -5574,7 +5606,7 @@ function bindScreenMissing() {
       const { decisions, unsupported } =
         _buildMissingDecisionPayload(currentMissingCols, selectedDecisions);
       if (unsupported.length) {
-        setStatus(status, "Unsupported missing-data action. Choose a supported option.", "error");
+        setStatus(status, "Unsupported missing-data action. Choose Keep, Exclude, or an imputation option.", "error");
         return;
       }
 

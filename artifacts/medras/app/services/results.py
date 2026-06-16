@@ -1287,6 +1287,151 @@ def normalize_result_for_rendering(raw_result: Dict[str, Any]) -> Dict[str, Any]
     return raw
 
 
+def _result_p_value(test: Dict[str, Any]) -> Optional[float]:
+    for key in ("p_corrected", "p", "p_value"):
+        value = test.get(key)
+        if value is None:
+            continue
+        try:
+            value = float(value)
+            if np.isfinite(value):
+                return value
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
+def _result_raw_p_value(test: Dict[str, Any]) -> Optional[float]:
+    for key in ("p", "p_value"):
+        value = test.get(key)
+        if value is None:
+            continue
+        try:
+            value = float(value)
+            if np.isfinite(value):
+                return value
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
+def _row_lookup(test: Dict[str, Any]) -> Dict[str, str]:
+    out: Dict[str, str] = {}
+    for row in test.get("rows") or []:
+        if isinstance(row, dict):
+            out[str(row.get("label", "")).strip().lower()] = str(row.get("value", ""))
+    for table in test.get("tables") or []:
+        headers = [str(h).strip().lower() for h in table.get("headers") or []]
+        if len(headers) >= 2 and headers[0] in {"measure", "statistic"}:
+            for row in table.get("rows") or []:
+                if isinstance(row, list) and len(row) >= 2:
+                    out[str(row[0]).strip().lower()] = str(row[1])
+    return out
+
+
+def _test_used(test: Dict[str, Any]) -> str:
+    rows = _row_lookup(test)
+    return (
+        rows.get("test used")
+        or test.get("actual_test_used")
+        or test.get("test_name")
+        or test.get("test")
+        or test.get("title")
+        or test.get("test_type")
+        or "Statistical test"
+    )
+
+
+def _statistic_text(test: Dict[str, Any]) -> str:
+    rows = _row_lookup(test)
+    test_type = str(test.get("test_type") or "").lower()
+    stat = test.get("statistic")
+    if stat is None:
+        stat = test.get("stat")
+    if stat is None:
+        stat = test.get("chi2")
+    if stat is None:
+        stat = rows.get("statistic") or rows.get("t statistic") or rows.get("u statistic") or rows.get("h statistic")
+    df_val = test.get("df") if test.get("df") is not None else test.get("dof")
+    if df_val is None:
+        df_val = rows.get("df") or rows.get("welch df")
+    parts: List[str] = []
+    if stat not in (None, "", "-"):
+        label = "statistic"
+        if "chi" in test_type:
+            label = "chi-square"
+        elif "welch" in test_type or "ttest" in test_type or "t_test" in test_type:
+            label = "t"
+        elif "mann" in test_type:
+            label = "U"
+        elif "kruskal" in test_type:
+            label = "H"
+        parts.append(f"{label} = {_display_value(stat)}")
+    if df_val not in (None, "", "-"):
+        parts.append(f"df = {_display_value(df_val)}")
+    return ", ".join(parts)
+
+
+def _effect_text(test: Dict[str, Any]) -> str:
+    rows = _row_lookup(test)
+    effect = test.get("effect_size")
+    if effect is None:
+        effect = test.get("cramers_v")
+    if effect is None:
+        effect = rows.get("cramer's v / effect size") or rows.get("cohen's d") or rows.get("rank-biserial correlation")
+    if effect in (None, "", "-"):
+        return ""
+    label = test.get("effect_label") or ("Cramer's V" if test.get("cramers_v") is not None else "Effect size")
+    return f"{label} = {_display_value(effect)}"
+
+
+def _warning_text(test: Dict[str, Any]) -> str:
+    rows = _row_lookup(test)
+    note = test.get("warning") or test.get("note") or rows.get("expected-count / sparse-cell warning") or ""
+    return "" if str(note).strip() in {"", "-"} else str(note).strip()
+
+
+def _compact_result_summary(test: Dict[str, Any]) -> str:
+    title = str(test.get("title") or "Analysis result")
+    pieces = [_test_used(test)]
+    for bit in (_statistic_text(test),):
+        if bit:
+            pieces.append(bit)
+    p = _result_raw_p_value(test)
+    if p is not None:
+        pieces.append(_fmt_p(p))
+    if test.get("p_corrected") is not None:
+        pieces.append(f"adjusted {_fmt_p(float(test['p_corrected']))}")
+    effect = _effect_text(test)
+    if effect:
+        pieces.append(effect)
+    warning = _warning_text(test)
+    if warning:
+        pieces.append(warning)
+    return f"{title}: " + ", ".join(pieces) + "."
+
+
+def _significant_findings(test_results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    findings: List[Dict[str, Any]] = []
+    for test in test_results:
+        p = _result_p_value(test)
+        if p is None or p >= 0.05:
+            continue
+        title = str(test.get("title") or "")
+        findings.append({
+            "variable": title.split(":", 1)[0].strip() if ":" in title else title,
+            "key_finding": test.get("compact_summary") or _compact_result_summary(test),
+            "test_statistic": _statistic_text(test) or "-",
+            "p_value": _fmt_p(p),
+            "p_numeric": p,
+            "uncorrected_p_value": _fmt_p(_result_raw_p_value(test)) if _result_raw_p_value(test) is not None else "-",
+            "test_applied": _test_used(test),
+            "effect_size": _effect_text(test) or "-",
+            "notes_warnings": _warning_text(test) or "-",
+        })
+    return findings
+
+
 def run_plan(
     df: pd.DataFrame,
     classifications: List[Dict[str, Any]],
@@ -1545,6 +1690,9 @@ def run_plan(
     if session is not None and correction_info is not None:
         session['correction_info'] = correction_info
     test_results = [normalize_result_for_rendering(r) for r in test_results]
+    for result in test_results:
+        result["compact_summary"] = _compact_result_summary(result)
+    significant_findings = _significant_findings(test_results)
 
     # Run graphs -------------------------------------------------------------
     graph_results: List[Dict[str, Any]] = []
@@ -1603,7 +1751,7 @@ def run_plan(
         if t.get("p") is not None or t.get("p_value") is not None
     ]
     plan_mismatch = bool(planned_inferential and not completed_inferential)
-    results_md = "\n\n".join(t["narrative"] for t in test_results) or (
+    results_md = "\n\n".join(t.get("compact_summary") or t["narrative"] for t in test_results) or (
         "No tests were confirmed for this run."
     )
     if plan_mismatch:
@@ -1628,11 +1776,13 @@ def run_plan(
         "results_md": results_md,
         "plan_mismatch": plan_mismatch,
         "correction_info": correction_info,
+        "significant_findings": significant_findings,
         "summary": {
             "outcome": outcome,
             "group": group,
             "n_tests": len(test_results),
             "n_graphs": len(graph_results),
+            "n_significant": len(significant_findings),
         },
     }
 

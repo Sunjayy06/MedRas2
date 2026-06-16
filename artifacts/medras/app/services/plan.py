@@ -164,10 +164,12 @@ def _layered_contract(
     predictors = [
         c for c in (session.get("analysis_predictors") or [])
         if c in df.columns and c != outcome
+        and classes.get(c, {}).get("detected_type") not in ("id", "date", "exclude")
     ]
     covariates = [
         c for c in (assignment or {}).get("covariates", [])
         if c in df.columns and c != outcome
+        and classes.get(c, {}).get("detected_type") not in ("id", "date", "exclude")
     ]
     candidate_predictors = list(dict.fromkeys(covariates + predictors))
     eligible_predictors = list(candidate_predictors)
@@ -413,6 +415,7 @@ def generate_plan(
     analysis_predictors = [
         col for col in (session.get("analysis_predictors") or [])
         if col in df.columns and col != outcome
+        and classes.get(col, {}).get("detected_type") not in ("id", "date", "exclude")
     ]
     outcome_levels = int(df[outcome].dropna().nunique())
     study_type_confirmed = bool(session.get("study_type_confirmed"))

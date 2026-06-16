@@ -155,10 +155,62 @@ def verify_actual_test_label_and_association_figure():
     assert fisher_result["actual_test_used"] == "Fisher's exact test"
 
 
+def verify_missing_exclusion_and_significant_summary():
+    df = pd.DataFrame({
+        "Positive/ Negative": ["Positive"] * 8 + ["Negative"] * 8,
+        "PR": ["Positive"] * 8 + ["Negative"] * 8,
+        "ER": ["Positive", "Negative"] * 8,
+        "Age": [51, 55, 49, 61, 58, 63, 47, 54, 60, 62, 59, 66, 57, 65, 64, 68],
+        "positive_nodes": [1, None, None, 2, None, None, 3, None, None, None, 1, None, None, 2, None, None],
+        "total_nodes": [12, None, None, 18, None, None, 20, None, None, None, 13, None, None, 15, None, None],
+        "node_ratio": [0.08, None, None, 0.11, None, None, 0.15, None, None, None, 0.08, None, None, 0.13, None, None],
+    })
+    classes = [
+        {"column": "Positive/ Negative", "detected_type": "nominal"},
+        {"column": "PR", "detected_type": "nominal"},
+        {"column": "ER", "detected_type": "nominal"},
+        {"column": "Age", "detected_type": "scale"},
+        {"column": "positive_nodes", "detected_type": "exclude"},
+        {"column": "total_nodes", "detected_type": "exclude"},
+        {"column": "node_ratio", "detected_type": "exclude"},
+    ]
+    session = {
+        "study_type": "association",
+        "study_type_confirmed": True,
+        "analysis_predictors": ["PR", "ER", "Age", "positive_nodes", "total_nodes", "node_ratio"],
+        "domain_profile": "breast_pathology",
+    }
+    sigma_plan = plan.generate_plan(
+        df, classes, {"outcome": "Positive/ Negative", "group": None, "covariates": []},
+        _normality("Age"), session,
+    )
+    plan_text = str(sigma_plan)
+    assert "positive_nodes" not in plan_text
+    assert "total_nodes" not in plan_text
+    assert "node_ratio" not in plan_text
+    assert any("PR vs Positive/ Negative" in test["title"] for test in sigma_plan["tests"])
+
+    output = results.run_plan(
+        df, classes, {"outcome": "Positive/ Negative", "group": None, "covariates": []},
+        sigma_plan, session=session,
+    )
+    rendered = str(output)
+    assert "positive_nodes" not in rendered
+    assert "total_nodes" not in rendered
+    assert "node_ratio" not in rendered
+    assert any("PR vs Positive/ Negative" in test["title"] for test in output["tests"])
+    assert not any(" by PR" in test["title"] or "vs PR" in test["title"] for test in output["tests"])
+    assert all(test.get("compact_summary") for test in output["tests"])
+    assert output["significant_findings"]
+    assert all(row["p_numeric"] < 0.05 for row in output["significant_findings"])
+    assert any(row["variable"].startswith("PR vs Positive/ Negative") for row in output["significant_findings"])
+
+
 def main():
     verify_outcome_typo_blocks_then_routes_binary()
     verify_clinical_labels_and_protected_merges()
     verify_actual_test_label_and_association_figure()
+    verify_missing_exclusion_and_significant_summary()
     root = Path(__file__).resolve().parents[1]
     js_source = (root / "public/js/analysis.js").read_text(encoding="utf-8")
     api_source = (root / "app/api/stats.py").read_text(encoding="utf-8")

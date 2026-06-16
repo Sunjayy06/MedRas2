@@ -3977,3 +3977,27 @@ td.se-corr-p-sig {
   border-color: #86b7a3;
   color: #176044;
 }
+.se-confirm-summary {
+  margin: 0 0 1rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  background: #eff6ff;
+  color: #1e3a8a;
+  line-height: 1.5;
+}
+
+.se-confirm-summary strong {
+  display: block;
+  margin-bottom: 0.35rem;
+  color: #1d4ed8;
+}
+
+.se-result-compact {
+  margin: 0.35rem 0 0.85rem;
+  padding: 0.7rem 0.8rem;
+  border-left: 4px solid #2563eb;
+  background: #f8fafc;
+  color: #1f2937;
+  line-height: 1.45;
+}

@@ -102,6 +102,31 @@ def _classify_entry(entry) -> List[Dict[str, Any]]:
     )
 
 
+def _analysis_excluded_columns(entry) -> set[str]:
+    return set(entry.meta.get("analysis_excluded_columns") or [])
+
+
+def _analysis_classifications(entry, classifications: Optional[List[Dict[str, Any]]] = None) -> List[Dict[str, Any]]:
+    """Overlay analysis-only exclusions on classification rows.
+
+    The uploaded dataframe remains unchanged; downstream statistical layers
+    already skip rows typed as ``exclude``.
+    """
+    rows = classifications or entry.meta.get("classifications") or _classify_entry(entry)
+    excluded = _analysis_excluded_columns(entry)
+    if not excluded:
+        return rows
+    out: List[Dict[str, Any]] = []
+    for row in rows:
+        copy = dict(row)
+        if copy.get("column") in excluded:
+            copy["detected_type"] = "exclude"
+            copy["excluded_from_analysis"] = True
+            copy["exclusion_reason"] = "User excluded due to missing data."
+        out.append(copy)
+    return out
+
+
 # ---------------------------------------------------------------------------
 # Schemas
 # ---------------------------------------------------------------------------
@@ -251,7 +276,7 @@ def _build_session_view(entry, classifications, assignment) -> Dict[str, Any]:
 
 
 def _build_response(job_id: str, entry) -> Dict[str, Any]:
-    classifications = entry.meta.get("classifications") or _classify_entry(entry)
+    classifications = _analysis_classifications(entry)
     entry.meta["classifications"] = classifications
     preview = excel_loader.preview_records(entry.df, n=10)
     columns = list(entry.df.columns)
@@ -1090,7 +1115,7 @@ async def quality_check(job_id: str) -> Dict[str, Any]:
     if entry is None:
         raise HTTPException(status_code=404, detail="Dataset expired or not found.")
     profile = _domain_profile(entry)
-    classifications = entry.meta.get("classifications") or _classify_entry(entry)
+    classifications = _analysis_classifications(entry)
     entry.meta["classifications"] = classifications
     return await asyncio.to_thread(
         data_quality.quality_report,
@@ -1640,7 +1665,7 @@ async def trim_all_whitespace_endpoint(
     if entry is None:
         raise HTTPException(status_code=404, detail="Dataset expired or not found.")
 
-    classifications = entry.meta.get("classifications") or _classify_entry(entry)
+    classifications = _analysis_classifications(entry)
     issues = variable_issues.detect_issues(
         entry.df, classifications, profile=_domain_profile(entry)
     )
@@ -1941,7 +1966,7 @@ def _current_export_state(entry, job_id: str, expected_result_id: Optional[str])
             status_code=409,
             detail="Export state is stale because the dataset changed after analysis. Rerun analysis first.",
         )
-    classifications = entry.meta.get("classifications") or _classify_entry(entry)
+    classifications = _analysis_classifications(entry)
     current = dict(res)
     assignment = _canonical_assignment(entry)
     current["table_one"] = results_service.build_table_one(
@@ -2007,7 +2032,7 @@ async def get_normality(job_id: str) -> Dict[str, Any]:
     entry = dataset_store.get(job_id)
     if entry is None:
         raise HTTPException(status_code=404, detail="Dataset expired or not found.")
-    classifications = entry.meta.get("classifications") or _classify_entry(entry)
+    classifications = _analysis_classifications(entry)
     entry.meta["classifications"] = classifications
     out = await asyncio.to_thread(
         normality_service.normality_for_dataset, entry.df, classifications, True
@@ -2055,7 +2080,7 @@ async def generate_plan(job_id: str) -> Dict[str, Any]:
     entry = dataset_store.get(job_id)
     if entry is None:
         raise HTTPException(status_code=404, detail="Dataset expired or not found.")
-    classifications = entry.meta.get("classifications") or _classify_entry(entry)
+    classifications = _analysis_classifications(entry)
     entry.meta["classifications"] = classifications
     assignment = _canonical_assignment(entry, entry.meta.get("assignment") or {})
     entry.meta["assignment"] = assignment
@@ -2085,7 +2110,7 @@ async def run_analysis(payload: RunAnalysisRequest) -> Dict[str, Any]:
     entry = dataset_store.get(payload.job_id)
     if entry is None:
         raise HTTPException(status_code=404, detail="Dataset expired or not found.")
-    classifications = entry.meta.get("classifications") or _classify_entry(entry)
+    classifications = _analysis_classifications(entry)
     assignment = _canonical_assignment(entry, entry.meta.get("assignment") or {})
     entry.meta["assignment"] = assignment
     plan_dict = entry.meta.get("plan")
@@ -2528,7 +2553,10 @@ async def value_counts(job_id: str, column: str = Query(..., min_length=1, max_l
 
 class MissingDecision(BaseModel):
     column: str = Field(..., min_length=1, max_length=200)
-    action: Literal["drop_rows", "impute_mean", "impute_median", "impute_mode", "leave"] = "leave"
+    action: Literal[
+        "drop_rows", "impute_mean", "impute_median", "impute_mode", "leave",
+        "exclude", "drop_from_analysis", "exclude_variable_from_analysis",
+    ] = "leave"
 
 
 class ApplyMissingRequest(BaseModel):
@@ -2545,11 +2573,26 @@ async def apply_missing_decisions(
         raise HTTPException(status_code=404, detail="Dataset expired or not found.")
     df = entry.df.copy()
     actions_taken: List[str] = []
+    excluded_columns = set(entry.meta.get("analysis_excluded_columns") or [])
+    exclusion_log = list(entry.meta.get("analysis_exclusion_log") or [])
     for dec in payload.decisions:
         col = dec.column
         if col not in df.columns:
             continue
-        if dec.action == "drop_rows":
+        if dec.action in ("exclude", "drop_from_analysis", "exclude_variable_from_analysis"):
+            if col not in excluded_columns:
+                excluded_columns.add(col)
+                exclusion_log.append({
+                    "variable": col,
+                    "reason": "High missingness / user missing-data decision",
+                    "user_action": "exclude_variable_from_analysis",
+                    "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                    "analysis_stale": True,
+                })
+            actions_taken.append(f"Excluded {col} from analysis due to missing data.")
+        elif dec.action == "leave":
+            actions_taken.append(f"Left missing values in {col} as-is.")
+        elif dec.action == "drop_rows":
             before = len(df)
             df = df.dropna(subset=[col])
             after = len(df)
@@ -2577,13 +2620,22 @@ async def apply_missing_decisions(
                 actions_taken.append(
                     f"Imputed missing {col} with mode ({mode_val.iloc[0]})."
                 )
-    if actions_taken:
+    if excluded_columns != set(entry.meta.get("analysis_excluded_columns") or []):
+        entry.meta["analysis_excluded_columns"] = sorted(excluded_columns)
+        entry.meta["analysis_exclusion_log"] = exclusion_log
+        _invalidate_downstream(entry, keep_normality=False)
+    if actions_taken and any(dec.action in ("drop_rows", "impute_mean", "impute_median", "impute_mode") for dec in payload.decisions):
         _invalidate_downstream(entry, keep_normality=False)
         dataset_store.replace_df(payload.job_id, df)
         entry.meta.pop("classifications", None)
     # Persist the human-readable action log so the Methods section can include it
     entry.meta["missing_decision_actions"] = actions_taken
-    return {"status": "applied", "actions": actions_taken, "n_rows": len(df)}
+    return {
+        "status": "applied",
+        "actions": actions_taken,
+        "n_rows": len(df),
+        "excluded_columns": sorted(excluded_columns),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -2878,7 +2930,7 @@ async def analyze(request: Request, payload: AnalyzeRequest) -> Dict[str, Any]:
     entry = dataset_store.get(payload.job_id)
     if entry is None:
         raise HTTPException(status_code=404, detail="Dataset expired or not found.")
-    classifications = entry.meta.get("classifications") or _classify_entry(entry)
+    classifications = _analysis_classifications(entry)
     df = variable_classifier.encode_for_analysis(entry.df, classifications)
     try:
         result = await asyncio.to_thread(
