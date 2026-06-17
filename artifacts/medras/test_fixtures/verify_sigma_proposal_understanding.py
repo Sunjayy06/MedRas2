@@ -255,10 +255,36 @@ def verify_confirmed_outcome_handoff(proposal: dict) -> None:
         )
         assert confirmed.status_code == 200, confirmed.text
         assert confirmed.json()["outcome_col"] == "Positive/ Negative"
+        assert confirmed.json()["assignment"]["outcome"] == "Positive/ Negative"
 
         entry = dataset_store.get(job_id)
         assert entry is not None
         entry.meta["assignment"] = {"outcome": "PR", "group": None, "covariates": []}
+
+        stale_assign = client.post(
+            "/api/stats/assign",
+            json={"job_id": job_id, "outcome": "PR", "group": None, "covariates": []},
+        )
+        assert stale_assign.status_code == 200, stale_assign.text
+        stale_assign_body = stale_assign.json()
+        assert stale_assign_body["status"] == "corrected"
+        assert stale_assign_body["assignment"]["outcome"] == "Positive/ Negative"
+        assert "refreshed the assignment to Positive/ Negative" in stale_assign_body["warning"]
+        entry = dataset_store.get(job_id)
+        assert entry is not None
+        assert entry.meta["confirmed_outcome_col"] == "Positive/ Negative"
+        assert entry.meta["assignment"]["outcome"] == "Positive/ Negative"
+
+        entry.meta["assignment"] = {"outcome": "PR", "group": None, "covariates": []}
+        reclassified = client.post(
+            "/api/stats/classify",
+            json={"job_id": job_id, "overrides": [], "profile": "breast_pathology"},
+        )
+        assert reclassified.status_code == 200, reclassified.text
+        reclassified_body = reclassified.json()
+        assert reclassified_body["confirmed_outcome_col"] == "Positive/ Negative"
+        assert reclassified_body["assignment"]["outcome"] == "Positive/ Negative"
+
         entry.meta["plan"] = {
             "tests": [{
                 "id": "stale_pr_plan",
@@ -333,10 +359,14 @@ def verify_static_wiring() -> None:
     analysis_js = (root / "public/js/analysis.js").read_text(encoding="utf-8")
     stats_py = (root / "app/api/stats.py").read_text(encoding="utf-8")
     assert "proposal_metadata: proposalMetadataPayload()" in analysis_js
+    assert "confirmedOutcomeFromState" in analysis_js
+    assert "refreshStaleAssignmentIfNeeded" in analysis_js
+    assert "MedRAS refreshed the assignment to" in analysis_js
     assert "proposal_understanding" in analysis_js
     assert "proposal_metadata: Optional[Dict[str, Any]]" in stats_py
     assert "_map_proposal_to_columns" in stats_py
     assert "_canonical_assignment" in stats_py
+    assert "confirmed_mapped_outcome" in stats_py
 
 
 def main() -> None:

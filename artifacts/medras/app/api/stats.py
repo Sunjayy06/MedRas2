@@ -1390,11 +1390,17 @@ async def classify(payload: ClassifyRequest) -> Dict[str, Any]:
     coding = variable_issues.auto_coding_plan(entry.df, classifications)
     entry.meta["variable_issues"] = issues
     entry.meta["auto_coding_plan"] = coding
+    assignment = _canonical_assignment(entry)
+    if entry.meta.get("assignment") != assignment:
+        _invalidate_downstream(entry, keep_normality=True)
+        entry.meta["assignment"] = assignment
 
     return {
         "job_id": payload.job_id,
         "domain_profile": profile,
         "classifications": classifications,
+        "assignment": assignment,
+        "confirmed_outcome_col": entry.meta.get("confirmed_outcome_col"),
         "issues": issues,
         "auto_coding_plan": coding,
         "blocking_issues": variable_issues.has_blocking_issues(issues),
@@ -1976,8 +1982,11 @@ def _canonical_assignment(entry, assignment: Optional[Dict[str, Any]] = None) ->
     confirmed_outcome = entry.meta.get("confirmed_outcome_col")
     if confirmed_outcome in cols and current.get("outcome") != confirmed_outcome:
         current["outcome"] = confirmed_outcome
+        current["source"] = "confirmed_mapped_outcome"
     current.setdefault("group", None)
     current.setdefault("covariates", [])
+    if confirmed_outcome in cols and not current.get("source"):
+        current["source"] = "confirmed_mapped_outcome"
     return current
 
 
@@ -2107,19 +2116,31 @@ async def save_assignment(payload: AssignRequest) -> Dict[str, Any]:
     bad = [c for c in payload.covariates if c not in cols]
     if bad:
         raise HTTPException(status_code=400, detail=f"Unknown covariate(s): {', '.join(bad)}")
-    new_assignment = {
+    requested_assignment = {
         "outcome": payload.outcome,
         "group": payload.group,
         "covariates": list(payload.covariates),
     }
+    new_assignment = _canonical_assignment(entry, requested_assignment)
+    warning = None
+    confirmed_outcome = entry.meta.get("confirmed_outcome_col")
+    if confirmed_outcome in cols and payload.outcome and payload.outcome != confirmed_outcome:
+        warning = (
+            "The displayed outcome did not match your confirmed setup. "
+            f"MedRAS refreshed the assignment to {confirmed_outcome}."
+        )
     if entry.meta.get("assignment") != new_assignment:
         # Assignment changed — plan & results are stale. Normality (per-column)
         # is still valid since the column data hasn't changed.
         _invalidate_downstream(entry, keep_normality=True)
     entry.meta["assignment"] = new_assignment
-    if payload.outcome:
+    if payload.outcome and not confirmed_outcome:
         entry.meta["confirmed_outcome_col"] = payload.outcome
-    return {"status": "saved", "assignment": entry.meta["assignment"]}
+    response = {"status": "saved", "assignment": entry.meta["assignment"]}
+    if warning:
+        response["warning"] = warning
+        response["status"] = "corrected"
+    return response
 
 
 # ---------------------------------------------------------------------------
@@ -2516,6 +2537,7 @@ async def confirm_study(payload: ConfirmStudyRequest) -> Dict[str, Any]:
         "outcome": payload.outcome_col,
         "group": current_assignment.get("group"),
         "covariates": list(current_assignment.get("covariates") or []),
+        "source": "confirmed_mapped_outcome" if payload.outcome_col else "confirmed_setup",
     }
     if current_assignment != confirmed_assignment:
         _invalidate_downstream(entry, keep_normality=True)
@@ -2532,6 +2554,8 @@ async def confirm_study(payload: ConfirmStudyRequest) -> Dict[str, Any]:
         "status": "confirmed",
         "study_type": payload.study_type,
         "outcome_col": payload.outcome_col,
+        "assignment": entry.meta["assignment"],
+        "confirmed_outcome_col": entry.meta.get("confirmed_outcome_col"),
         "yesno_cleaned": list(yn_notes.keys()),
     }
 

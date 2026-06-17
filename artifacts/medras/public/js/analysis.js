@@ -1462,6 +1462,7 @@ function ingestDataset(data) {
     if (banner) banner.classList.toggle("is-hidden", !isPractice);
   } catch (_) { /* banner is purely cosmetic */ }
   state.classifications = data.classifications || [];
+  applyCanonicalAssignment(data);
   state.preview = data.preview || [];
   state.repeated = data.repeated_ids || { any_repeats: false, columns: [] };
   state.quality = null;
@@ -1533,6 +1534,74 @@ function matchColumn(needle, columns) {
   return bestScore >= 1 ? best : null;
 }
 
+function confirmedOutcomeFromState() {
+  const cls = state.classifications || [];
+  const validCols = new Set(cls.map((c) => c.column));
+  const ai = state.aiStudy || {};
+  const mapping = ai.proposal_mapping || {};
+  const candidates = [
+    state.confirmedOutcomeCol,
+    state.outcomeCol,
+    mapping.mapped_outcome,
+    ai.outcome_col,
+  ];
+  return candidates.find((col) => col && validCols.has(col)) || null;
+}
+
+function applyCanonicalAssignment(data) {
+  if (!data) return false;
+  if (data.confirmed_outcome_col) {
+    state.confirmedOutcomeCol = data.confirmed_outcome_col;
+  }
+  if (!data.assignment || !data.assignment.outcome) return false;
+  const oldOutcome = state.assignment && state.assignment.outcome;
+  state.assignment = data.assignment;
+  state.outcomeCol = data.assignment.outcome;
+  state.assignmentAutoMatched = true;
+  if (oldOutcome && oldOutcome !== data.assignment.outcome) {
+    state.assignmentConfirmed = false;
+  }
+  return oldOutcome !== data.assignment.outcome;
+}
+
+async function refreshStaleAssignmentIfNeeded() {
+  const confirmed = confirmedOutcomeFromState();
+  if (!confirmed || (state.assignment && state.assignment.outcome === confirmed)) {
+    return false;
+  }
+  const prior = state.assignment || {};
+  state.assignment = {
+    outcome: confirmed,
+    group: prior.group || null,
+    covariates: prior.covariates || [],
+    source: "confirmed_mapped_outcome",
+  };
+  state.outcomeCol = confirmed;
+  state.assignmentConfirmed = false;
+  try {
+    const saved = await api("/assign", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        job_id: state.jobId,
+        outcome: confirmed,
+        group: state.assignment.group || null,
+        covariates: [],
+      }),
+    });
+    applyCanonicalAssignment(saved);
+  } catch (_) {
+    // The local correction is still safer than letting a stale outcome proceed.
+  }
+  renderAssignmentCard();
+  setStatus(
+    $("#classify-status"),
+    `The displayed outcome did not match your confirmed setup. MedRAS refreshed the assignment to ${confirmed}.`,
+    "warning"
+  );
+  return true;
+}
+
 function extractGroupHint(text) {
   // Scan free-text objective for comparison keywords and return whatever
   // word(s) follow, e.g. "compare HHS between treatment groups" → "treatment".
@@ -1551,9 +1620,9 @@ function autoAssignFromIntake() {
   const outcomeCols = cls.filter(_isUsableAsOutcome);
   const groupCols = cls.filter(_isUsableAsGroup);
 
-  // Outcome — Q3 free text (e.g. "Time to Union")
+  // Outcome — confirmed proposal/Excel mapping wins over local auto-detection.
   let outcome = matchColumn(
-    state.outcomeCol || (state.aiStudy && state.aiStudy.outcome_col) || intake.outcomes,
+    confirmedOutcomeFromState() || state.outcomeCol || (state.aiStudy && state.aiStudy.outcome_col) || intake.outcomes,
     outcomeCols
   );
   // Defensive: if matchColumn returns an ID-typed column for any reason,
@@ -1630,6 +1699,7 @@ function renderAssignmentCard(opts) {
   const outcomeRow = cls.find((c) => c.column === a.outcome);
   const groupRow = cls.find((c) => c.column === a.group);
   const matched = !!outcomeRow && _isUsableAsOutcome(outcomeRow);
+  const confirmedOutcome = confirmedOutcomeFromState();
   const formOpen = (opts && opts.formOpen) || !matched;
 
   // Build dropdown options. ID, exclude and date columns are greyed out
@@ -1667,8 +1737,10 @@ function renderAssignmentCard(opts) {
       <span class="se-assign-row-type">— ${escapeHtml(_typeLabel(outcomeRow))}</span>
     </div>
     <div class="se-assign-row" data-testid="assign-row-group">
-      <span class="se-assign-row-label">Grouping variable:</span>
-      ${a.group
+      <span class="se-assign-row-label">${!a.group && confirmedOutcome === a.outcome ? "Primary outcome/grouping for association:" : "Grouping variable:"}</span>
+      ${!a.group && confirmedOutcome === a.outcome
+        ? `<strong>${escapeHtml(a.outcome)}</strong> <span class="se-assign-row-type">— ${escapeHtml(_typeLabel(outcomeRow))}</span>`
+        : a.group
         ? `<strong>${escapeHtml(a.group)}</strong> <span class="se-assign-row-type">— ${escapeHtml(_typeLabel(groupRow))}</span>`
         : `<em>— None (descriptive only) —</em>`}
     </div>
@@ -1709,7 +1781,8 @@ function bindAssignmentCard() {
   const host = document.getElementById("assignment-card-host");
   if (!host) return;
   const yes = host.querySelector('[data-action="assign-confirm"]');
-  if (yes) yes.addEventListener("click", () => {
+  if (yes) yes.addEventListener("click", async () => {
+    if (await refreshStaleAssignmentIfNeeded()) return;
     state.assignmentConfirmed = true;
     renderAssignmentCard();
   });
@@ -1742,14 +1815,20 @@ async function saveAssignmentFromCard() {
   }
   setStatus(status, "Saving…", "loading");
   try {
-    await api("/assign", {
+    const saved = await api("/assign", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ job_id: state.jobId, outcome, group: group || null, covariates: [] }),
     });
-    state.assignment = { outcome, group: group || null, covariates: [] };
+    const corrected = applyCanonicalAssignment(saved);
+    if (corrected) {
+      setStatus(status, saved.warning || `The displayed outcome did not match your confirmed setup. MedRAS refreshed the assignment to ${state.assignment.outcome}.`, "warning");
+    } else {
+      state.assignment = { outcome, group: group || null, covariates: [] };
+      applyCanonicalAssignment(saved);
+    }
     state.assignmentAutoMatched = true;
-    state.assignmentConfirmed = true;
+    state.assignmentConfirmed = !corrected;
     renderAssignmentCard();
   } catch (err) {
     setStatus(status, `Could not save: ${err.message}`, "error");
@@ -2599,6 +2678,7 @@ async function refreshClassifications(overrides = [], { render = true, detectCat
   state.issues = data.issues || [];
   state.autoCoding = data.auto_coding_plan || [];
   state.columns = state.classifications.map((c) => c.column);
+  applyCanonicalAssignment(data);
   if (render) renderClassify();
   if (detectCategoryDupes) await _detectCategoryDupes();
   return data;
@@ -5350,13 +5430,14 @@ function bindAiConfirm() {
       const outCol    = (document.getElementById("ai-outcome-col-select") || {}).value || null;
       setStatus(status, "Confirming…", "loading");
       try {
-        await api("/confirm-study", {
+        const confirmed = await api("/confirm-study", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ job_id: state.jobId, study_type: studyType, outcome_col: outCol || null }),
         });
         state.outcomeCol = outCol || null;
         state.assignment = { outcome: outCol || null, group: null, covariates: [] };
+        applyCanonicalAssignment(confirmed);
         state.assignmentConfirmed = !!outCol;
         setStatus(status, "");
         showScreen("3");
@@ -5383,13 +5464,14 @@ function bindAiConfirm() {
       setStatus(status, "Confirming study setup…", "loading");
       if (proceedBtn) { proceedBtn.disabled = true; proceedBtn.textContent = "Running…"; }
       try {
-        await api("/confirm-study", {
+        const confirmed = await api("/confirm-study", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ job_id: state.jobId, study_type: studyType, outcome_col: outCol }),
         });
         state.outcomeCol = outCol;
         state.assignment = { outcome: outCol, group: null, covariates: [] };
+        applyCanonicalAssignment(confirmed);
         state.assignmentConfirmed = true;
         setStatus(status, "Running pairwise analysis…", "loading");
         const result = await api("/run-correlation", {
