@@ -116,6 +116,22 @@ def _graph_chart_type(graph_id: str) -> str:
     return "statistical figure"
 
 
+def _graph_type_key(graph_id: str) -> str:
+    if graph_id.startswith("scatter"):
+        return "scatter"
+    if graph_id.startswith("boxplot") or graph_id == "boxplot":
+        return "boxplot"
+    if graph_id == "violin":
+        return "violin"
+    if graph_id.startswith("stacked_bar") or graph_id == "stacked_bar":
+        return "stacked_bar"
+    if graph_id == "histogram":
+        return "histogram"
+    if graph_id == "forest_plot":
+        return "forest_plot"
+    return "statistical_figure"
+
+
 def _enrich_graph_metadata(graphs: List[Dict[str, Any]], outcome: Optional[str]) -> List[Dict[str, Any]]:
     enriched: List[Dict[str, Any]] = []
     for graph in graphs:
@@ -123,11 +139,14 @@ def _enrich_graph_metadata(graphs: List[Dict[str, Any]], outcome: Optional[str])
         graph_id = str(copy.get("id") or "")
         variables = list(copy.get("columns") or [])
         chart_type = _graph_chart_type(graph_id)
+        source_result_id = copy.get("source_result_id") or copy.get("data_source_result_id")
         copy.setdefault("graph_id", graph_id)
+        copy.setdefault("graph_type", _graph_type_key(graph_id))
         copy.setdefault("variables", variables)
         copy.setdefault("outcome", outcome)
         copy.setdefault("recommended_chart_type", chart_type)
-        copy.setdefault("data_source_result_id", None)
+        copy.setdefault("data_source_result_id", source_result_id)
+        copy.setdefault("source_result_id", source_result_id)
         copy.setdefault("caption", f"{copy.get('title', 'Figure')} for {', '.join(map(str, variables))}.")
         copy.setdefault("interpretation", "Interpret alongside the corresponding statistical test and p-value.")
         copy.setdefault("why_recommended", copy.get("why") or f"{chart_type} is appropriate for the selected variable types.")
@@ -155,24 +174,35 @@ def _test_graph_recommendations(
             continue
         seen.add(key)
         pred_type = classes.get(predictor, {}).get("detected_type")
-        if pred_type == "scale":
+        if test.get("analysis_family") == "correlation":
+            graph_id = f"scatter_{predictor}_vs_{outcome}"
+            graph_type = "scatter"
+            chart = "scatter plot"
+            title = f"{predictor} vs {outcome}"
+            why = "Scatter plot is appropriate for a scale-scale correlation."
+        elif pred_type == "scale":
             graph_id = f"boxplot_{predictor}_by_{outcome}"
+            graph_type = "boxplot"
             chart = "box plot"
             title = f"{predictor} by {outcome}"
             why = "Continuous predictor compared across binary outcome groups."
         else:
             graph_id = f"stacked_bar_{predictor}_by_{outcome}"
+            graph_type = "stacked_bar"
             chart = "stacked percentage bar chart"
             title = f"{predictor} status by {outcome}"
             why = "Categorical predictor distribution compared across outcome groups."
         recs.append({
             "id": graph_id,
+            "graph_id": graph_id,
+            "graph_type": graph_type,
             "title": title,
             "columns": [predictor, outcome],
             "variables": [predictor, outcome],
             "outcome": outcome,
             "recommended_chart_type": chart,
             "data_source_result_id": test.get("id"),
+            "source_result_id": test.get("id"),
             "caption": f"{title}.",
             "interpretation": "Interpret with the matching statistical test result.",
             "why": why,
@@ -219,8 +249,12 @@ def _study_design(session: Dict[str, Any]) -> str:
         return "diagnostic_accuracy"
     if any(term in joined for term in ("survival", "time-to-event", "time to event", "cox", "mortality")):
         return "survival_time_to_event"
+    if any(term in joined for term in ("time series", "forecast", "autocorrelation", "arima", "trend over time")):
+        return "time_series"
     if any(term in joined for term in ("repeated", "longitudinal", "timepoint", "time point", "over time")):
         return "repeated_measures"
+    if any(term in joined for term in ("agreement", "reliability", "kappa", "icc", "bland-altman", "bland altman", "method comparison")):
+        return "reliability_agreement"
     if any(term in joined for term in ("randomized", "randomised", "interventional", "trial", "rct")):
         return "randomized_interventional"
     if "case-control" in joined or "case control" in joined:
@@ -397,6 +431,26 @@ def _layered_contract(
             "reason": "A time-to-event variable and binary event indicator must be confirmed.",
         })
         warnings.append("Survival objective detected; no survival result will be fabricated.")
+
+    if design == "time_series":
+        unavailable.append({
+            "id": "time_series_unavailable",
+            "title": "Time-series analysis",
+            "reason": "A true ordered time variable and an implemented time-series model must be confirmed.",
+        })
+        warnings.append("Time-series objective detected; no time-series model was fabricated.")
+        requires_confirmation = True
+
+    if design == "reliability_agreement" and not any(
+        (t.get("_phase_b") or {}).get("test_type") in ("kappa", "icc") for t in tests
+    ):
+        unavailable.append({
+            "id": "reliability_inputs_unavailable",
+            "title": "Reliability / agreement analysis",
+            "reason": "Two or more rater/method columns measuring the same subjects must be confirmed.",
+        })
+        warnings.append("Reliability objective detected, but rater/method inputs are incomplete.")
+        requires_confirmation = True
 
     if any(t.get("id") == "descriptive_only" for t in tests):
         unavailable.append({
@@ -590,10 +644,10 @@ def generate_plan(
         if o_normal:
             tests.append({
                 "id": "ttest_independent",
-                "title": "Independent samples t-test",
+                "title": "Welch's t-test",
                 "why": (
                     f"{outcome} is scale and approximately normal; {group} has 2 levels "
-                    f"({levels[0]} vs {levels[1]})."
+                    f"({levels[0]} vs {levels[1]}). Welch's t-test is used by default."
                 ),
                 "columns": [outcome, group],
                 "parametric": True,

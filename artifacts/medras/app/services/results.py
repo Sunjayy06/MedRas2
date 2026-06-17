@@ -2247,6 +2247,28 @@ def run_icc_bland_altman(col1, col2, session, df):
     if n < 10:
         return {'error': 'Minimum 10 pairs needed for ICC.'}
 
+    diffs = data[col1] - data[col2]
+    means = (data[col1] + data[col2]) / 2
+    mean_diff = float(diffs.mean())
+    sd_diff = float(diffs.std())
+    loa_lo = mean_diff - 1.96 * sd_diff
+    loa_hi = mean_diff + 1.96 * sd_diff
+    se_mean = sd_diff / np.sqrt(n) if n > 0 else 0
+    t_crit = _phase_a_stats.t.ppf(0.975, df=n - 1)
+    bias_ci = (round(mean_diff - t_crit * se_mean, 3),
+               round(mean_diff + t_crit * se_mean, 3))
+    bland_altman = {
+        'mean_bias': round(mean_diff, 3),
+        'bias_ci': bias_ci,
+        'loa_lower': round(loa_lo, 3),
+        'loa_upper': round(loa_hi, 3),
+        'sd_diff': round(sd_diff, 3),
+    }
+    bland_altman_plot_data = {
+        'means': means.astype(float).tolist(),
+        'differences': diffs.astype(float).tolist(),
+    }
+
     long_df = pd.melt(
         data.reset_index(), id_vars='index',
         value_vars=[col1, col2],
@@ -2273,23 +2295,24 @@ def run_icc_bland_altman(col1, col2, session, df):
         F_val = float(icc_row['F'].values[0])
         p_val = float(icc_row['pval'].values[0])
     except Exception as e:
-        return {'error': f'ICC failed: {str(e)}'}
+        return {
+            'warning': f'ICC failed: {str(e)}',
+            'test': 'Bland-Altman agreement',
+            'test_type': 'icc',
+            'bland_altman': bland_altman,
+            'bland_altman_plot_data': bland_altman_plot_data,
+            'n': n,
+            'interpretation': (
+                f'ICC could not be calculated ({str(e)}). '
+                f'Bland-Altman agreement metrics were calculated: mean bias = {mean_diff:.3f} '
+                f'(95% LoA: {loa_lo:.3f} to {loa_hi:.3f}).'
+            ),
+        }
 
     icc_interp = ('poor' if icc_val < 0.50 else
                   'moderate' if icc_val < 0.75 else
                   'good' if icc_val < 0.90 else
                   'excellent')
-
-    diffs = data[col1] - data[col2]
-    means = (data[col1] + data[col2]) / 2
-    mean_diff = float(diffs.mean())
-    sd_diff = float(diffs.std())
-    loa_lo = mean_diff - 1.96 * sd_diff
-    loa_hi = mean_diff + 1.96 * sd_diff
-    se_mean = sd_diff / np.sqrt(n) if n > 0 else 0
-    t_crit = _phase_a_stats.t.ppf(0.975, df=n - 1)
-    bias_ci = (round(mean_diff - t_crit * se_mean, 3),
-               round(mean_diff + t_crit * se_mean, 3))
 
     d1 = get_display_name(col1, session)
     d2 = get_display_name(col2, session)
@@ -2304,17 +2327,8 @@ def run_icc_bland_altman(col1, col2, session, df):
         'icc_p': p_val,
         'icc_p_display': fmt_p(p_val),
         'icc_interpretation': icc_interp,
-        'bland_altman': {
-            'mean_bias': round(mean_diff, 3),
-            'bias_ci': bias_ci,
-            'loa_lower': round(loa_lo, 3),
-            'loa_upper': round(loa_hi, 3),
-            'sd_diff': round(sd_diff, 3),
-        },
-        'bland_altman_plot_data': {
-            'means': means.astype(float).tolist(),
-            'differences': diffs.astype(float).tolist(),
-        },
+        'bland_altman': bland_altman,
+        'bland_altman_plot_data': bland_altman_plot_data,
         'n': n,
         'interpretation': (
             f'ICC between {d1} and {d2} (n={n}): ICC(3,1) = {icc_val:.3f} '

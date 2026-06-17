@@ -1,0 +1,119 @@
+[
+  {
+    "analysis_type": "Correlation",
+    "supported_now": "yes",
+    "required_variables": "Two scale variables; correlation objective selected.",
+    "planner_behavior": "Pearson when both variables are marked normal; Spearman otherwise. Nominal predictors are excluded from correlation-only routing.",
+    "result_table": "Variable pair, n, Pearson r or Spearman rho, p-value; CI when available.",
+    "graph": "Scatter plot with the paired variables.",
+    "interpretation_safety": "Report correlation/association only; do not claim causality."
+  },
+  {
+    "analysis_type": "Regression",
+    "supported_now": "partial",
+    "required_variables": "Explicit outcome plus confirmed predictors; linear for scale outcome, binary logistic for binary outcome with adequate events.",
+    "planner_behavior": "Runs only for regression/prediction objective or explicit multivariable confirmation. Low EPV becomes recommended-only.",
+    "result_table": "Coefficient/OR table with CI and p-value when runner returns estimates.",
+    "graph": "Forest plot only when OR/HR estimates and confidence intervals exist.",
+    "interpretation_safety": "Use adjusted wording only for adjusted models that actually ran."
+  },
+  {
+    "analysis_type": "Survival analysis",
+    "supported_now": "partial",
+    "required_variables": "Time-to-event variable plus event/censoring variable; optional group/predictors.",
+    "planner_behavior": "Kaplan-Meier/log-rank or Cox only when time and event variables are detected/confirmed. Prognostic wording alone is not sufficient.",
+    "result_table": "Survival summaries and hazard ratios when implemented runners complete.",
+    "graph": "Kaplan-Meier curve or Cox forest plot when implemented result exists.",
+    "interpretation_safety": "Do not fabricate survival results when time/event variables are missing."
+  },
+  {
+    "analysis_type": "Time series",
+    "supported_now": "no",
+    "required_variables": "Ordered time/date/index variable plus repeated observations and explicit time-series objective.",
+    "planner_behavior": "Marked unavailable/recommended-only; no fake ARIMA/forecast result is executed.",
+    "result_table": "Unavailable note with required inputs.",
+    "graph": "Line chart recommended only when implemented in a later batch.",
+    "interpretation_safety": "Do not report trend/forecast statistics unless an implemented time-series model runs."
+  },
+  {
+    "analysis_type": "T-test",
+    "supported_now": "yes",
+    "required_variables": "Scale variable compared across exactly two independent groups.",
+    "planner_behavior": "Welch's t-test for approximately normal scale comparisons.",
+    "result_table": "Group n/means, mean difference, Welch df, CI, t, p, Cohen's d.",
+    "graph": "Boxplot or strip/box plot by group.",
+    "interpretation_safety": "Report mean difference; no causal language."
+  },
+  {
+    "analysis_type": "Mann-Whitney U",
+    "supported_now": "yes",
+    "required_variables": "Continuous or ordinal variable compared across two independent groups with non-normal/ordinal data.",
+    "planner_behavior": "Selected when two-group scale comparison is not normal.",
+    "result_table": "Group n, median/IQR where available, U, p, rank-biserial effect size.",
+    "graph": "Boxplot/strip plot by group.",
+    "interpretation_safety": "Discuss distribution/median difference, not mean difference."
+  },
+  {
+    "analysis_type": "Kruskal-Wallis",
+    "supported_now": "yes",
+    "required_variables": "Continuous or ordinal variable compared across 3+ independent groups with non-normal/ordinal data.",
+    "planner_behavior": "Selected for non-normal multi-group scale comparisons.",
+    "result_table": "H statistic, df/n where available, p-value; post-hoc only if implemented/confirmed.",
+    "graph": "Boxplot by group.",
+    "interpretation_safety": "State that at least one group differs only when significant; avoid uncorrected pairwise claims."
+  },
+  {
+    "analysis_type": "Pairwise comparisons",
+    "supported_now": "partial",
+    "required_variables": "Significant omnibus ANOVA or equivalent supported post-hoc trigger.",
+    "planner_behavior": "Tukey HSD is executable after parametric one-way ANOVA; Dunn/non-parametric post-hoc remains unavailable unless explicitly implemented.",
+    "result_table": "Comparison, difference, CI/p-value, and correction method when returned.",
+    "graph": "Optional comparison chart; not required for routing.",
+    "interpretation_safety": "Correction method must be shown; no uncorrected final pairwise claims."
+  },
+  {
+    "analysis_type": "Repeated-measures ANOVA",
+    "supported_now": "partial",
+    "required_variables": "Same subjects measured at 3+ timepoints/conditions, subject ID, within factor, continuous outcome.",
+    "planner_behavior": "Repeated-measures ANOVA only with subject and within metadata; Friedman for wide non-normal timepoint columns when available; otherwise unavailable.",
+    "result_table": "Omnibus repeated-measures/Friedman summary when runner completes.",
+    "graph": "Line plot by timepoint recommended only when implemented.",
+    "interpretation_safety": "Note sphericity limitation if not checked."
+  },
+  {
+    "analysis_type": "Interrater agreement / Kappa",
+    "supported_now": "yes",
+    "required_variables": "Two rater columns assessing the same subjects.",
+    "planner_behavior": "Cohen's kappa for nominal/binary ratings; weighted kappa for ordinal ratings; ICC for continuous ratings.",
+    "result_table": "Kappa/ICC value, CI, p-value if available, interpretation.",
+    "graph": "Agreement matrix/heatmap when available.",
+    "interpretation_safety": "Agreement strength only; not diagnostic accuracy."
+  },
+  {
+    "analysis_type": "Bland-Altman",
+    "supported_now": "partial",
+    "required_variables": "Two continuous paired measurement method/rater columns.",
+    "planner_behavior": "Routed with ICC/Bland-Altman for continuous paired rater/method columns.",
+    "result_table": "Mean bias and lower/upper limits of agreement.",
+    "graph": "Bland-Altman plot when paired continuous data are available.",
+    "interpretation_safety": "Discuss agreement/bias, not correlation."
+  },
+  {
+    "analysis_type": "Forest plot",
+    "supported_now": "partial",
+    "required_variables": "Regression/effect-size estimates with confidence intervals.",
+    "planner_behavior": "Recommended only for logistic/Cox-style effect estimates; not a statistical test.",
+    "result_table": "Uses regression/effect-size table as source.",
+    "graph": "Forest plot with reference line at 1 for OR/HR or 0 for beta when supported.",
+    "interpretation_safety": "Do not show forest plot without effect estimates and CI."
+  },
+  {
+    "analysis_type": "Boxplot",
+    "supported_now": "yes",
+    "required_variables": "Scale/ordinal variable compared across categorical groups.",
+    "planner_behavior": "Recommended for t-test, Mann-Whitney, ANOVA, and Kruskal-Wallis comparisons.",
+    "result_table": "Uses associated statistical result table.",
+    "graph": "Boxplot/strip plot by group.",
+    "interpretation_safety": "Visual support only; final claim must match the statistical test."
+  }
+]
