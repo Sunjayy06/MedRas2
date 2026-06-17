@@ -515,7 +515,7 @@ def _infer_study_type(text: str) -> str:
     lower = text.lower()
     if _has_diagnostic_accuracy_terms(lower):
         return "diagnostic"
-    if any(w in lower for w in ["survival", "mortality", "time to event", "kaplan", "disease-free"]):
+    if _has_survival_terms(lower):
         return "survival"
     if any(w in lower for w in ["predict", "prognostic", "multivariate", "regression"]):
         return "association"
@@ -534,6 +534,17 @@ def _has_diagnostic_accuracy_terms(text: str) -> bool:
         "sensitivity", "specificity", "roc", "auc", "gold standard",
         "diagnostic test", "diagnostic accuracy", "screening", "cutoff",
         "cut-off", "ppv", "npv",
+    ])
+
+
+def _has_survival_terms(text: str) -> bool:
+    lower = text.lower()
+    return any(w in lower for w in [
+        "survival time", "follow-up time", "follow up time", "death",
+        "mortality", "recurrence-free survival", "recurrence free survival",
+        "disease-free survival", "disease free survival", "overall survival",
+        " os ", " dfs ", "censored", "censoring", "kaplan-meier",
+        "kaplan meier", "cox regression", "hazard ratio",
     ])
 
 
@@ -626,14 +637,15 @@ def _normalize_proposal_extract(
         study_type = _infer_study_type(text)
     warnings = _as_list(data.get("warnings"))
     if (
-        study_type == "diagnostic"
+        study_type in ("diagnostic", "survival")
         and _has_association_terms(text_lower)
         and not _has_diagnostic_accuracy_terms(text_lower)
+        and not _has_survival_terms(text_lower)
     ):
         study_type = "association"
-        if proposed_study_type == "diagnostic":
+        if proposed_study_type in ("diagnostic", "survival"):
             warnings.append(
-                "AI suggested diagnostic accuracy, but the proposal language indicates a prognostic/association study; Sigma corrected study_type to association."
+                f"AI suggested {proposed_study_type}, but no survival/diagnostic variables were detected; Sigma normalized this to an association study."
             )
     marker, outcome_concept, outcome_candidates = _infer_marker_and_outcome(text)
     marker = str(data.get("main_marker") or marker).strip()
@@ -1969,6 +1981,49 @@ def _canonical_assignment(entry, assignment: Optional[Dict[str, Any]] = None) ->
     return current
 
 
+def _plan_outcome_mismatches(plan_dict: Dict[str, Any], outcome: Optional[str]) -> List[str]:
+    if not outcome:
+        return []
+    errors: List[str] = []
+    for test in plan_dict.get("tests") or []:
+        family = test.get("analysis_family") or "bivariate"
+        if family not in ("bivariate", "correlation"):
+            continue
+        title = str(test.get("title") or "")
+        columns = list(test.get("columns") or [])
+        phase = test.get("_phase_b") or {}
+        args = phase.get("args") or {}
+        if len(columns) >= 2 and outcome not in columns:
+            errors.append(f"{title} does not include confirmed outcome {outcome}.")
+            continue
+        role_outcome = args.get("outcome") or args.get("col2")
+        if role_outcome and role_outcome != outcome:
+            errors.append(f"{title} targets {role_outcome}, not confirmed outcome {outcome}.")
+        if f" by {role_outcome}" in title and role_outcome != outcome:
+            errors.append(f"{title} uses stale outcome wording.")
+        if "PR" != outcome and (" by PR" in title or "vs PR" in title):
+            errors.append(f"{title} uses PR as the outcome target.")
+    for graph in plan_dict.get("graphs") or []:
+        graph_outcome = graph.get("outcome")
+        if graph_outcome and graph_outcome != outcome:
+            errors.append(f"Graph {graph.get('title') or graph.get('id')} targets {graph_outcome}, not {outcome}.")
+    return errors
+
+
+async def _fresh_plan_for_entry(entry, assignment, classifications) -> Dict[str, Any]:
+    normality_data = entry.meta.get("normality") or await asyncio.to_thread(
+        normality_service.normality_for_dataset, entry.df, classifications, False
+    )
+    entry.meta["normality"] = normality_data
+    session_view = _build_session_view(entry, classifications, assignment)
+    plan_dict = await asyncio.to_thread(
+        plan_service.generate_plan,
+        entry.df, classifications, assignment, normality_data, session=session_view,
+    )
+    entry.meta["plan"] = plan_dict
+    return plan_dict
+
+
 def _publish_results(entry, job_id: str, res: Dict[str, Any]) -> Dict[str, Any]:
     result_id = uuid.uuid4().hex
     generated_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
@@ -2129,18 +2184,13 @@ async def generate_plan(job_id: str) -> Dict[str, Any]:
     entry.meta["classifications"] = classifications
     assignment = _canonical_assignment(entry, entry.meta.get("assignment") or {})
     entry.meta["assignment"] = assignment
-    normality_data = entry.meta.get("normality")
-    if not normality_data:
-        normality_data = await asyncio.to_thread(
-            normality_service.normality_for_dataset, entry.df, classifications, False
+    plan_dict = await _fresh_plan_for_entry(entry, assignment, classifications)
+    mismatches = _plan_outcome_mismatches(plan_dict, assignment.get("outcome"))
+    if mismatches:
+        raise HTTPException(
+            status_code=409,
+            detail="Generated plan did not match the confirmed outcome: " + "; ".join(mismatches[:3]),
         )
-        entry.meta["normality"] = normality_data
-    session_view = _build_session_view(entry, classifications, assignment)
-    plan_dict = await asyncio.to_thread(
-        plan_service.generate_plan,
-        entry.df, classifications, assignment, normality_data, session=session_view,
-    )
-    entry.meta["plan"] = plan_dict
     return {"job_id": job_id, "assignment": assignment, "plan": plan_dict}
 
 
@@ -2160,15 +2210,16 @@ async def run_analysis(payload: RunAnalysisRequest) -> Dict[str, Any]:
     entry.meta["assignment"] = assignment
     plan_dict = entry.meta.get("plan")
     if not plan_dict:
-        normality_data = entry.meta.get("normality") or await asyncio.to_thread(
-            normality_service.normality_for_dataset, entry.df, classifications, False
+        plan_dict = await _fresh_plan_for_entry(entry, assignment, classifications)
+    mismatches = _plan_outcome_mismatches(plan_dict, assignment.get("outcome"))
+    if mismatches:
+        plan_dict = await _fresh_plan_for_entry(entry, assignment, classifications)
+        mismatches = _plan_outcome_mismatches(plan_dict, assignment.get("outcome"))
+    if mismatches:
+        raise HTTPException(
+            status_code=409,
+            detail="Analysis plan did not match the confirmed outcome: " + "; ".join(mismatches[:3]),
         )
-        session_view = _build_session_view(entry, classifications, assignment)
-        plan_dict = await asyncio.to_thread(
-            plan_service.generate_plan,
-            entry.df, classifications, assignment, normality_data, session=session_view,
-        )
-        entry.meta["plan"] = plan_dict
     blocking = [
         item for item in (plan_dict.get("suggestions") or [])
         if item.get("blocking")

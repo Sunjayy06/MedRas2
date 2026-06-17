@@ -3977,6 +3977,10 @@ async function loadPlan() {
   document.getElementById("plan-summary").textContent = "Building your plan…";
   try {
     const data = await api(`/generate-plan/${state.jobId}`);
+    if (data.assignment && data.assignment.outcome) {
+      state.assignment = data.assignment;
+      state.outcomeCol = data.assignment.outcome;
+    }
     state.plan = data.plan;
     state.confirmedTests = new Set((data.plan.tests || []).map((t) => t.id));
     state.confirmedGraphs = new Set((data.plan.graphs || []).map((g) => g.id));

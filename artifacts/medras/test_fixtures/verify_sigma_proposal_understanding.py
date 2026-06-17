@@ -12,6 +12,7 @@ import pandas as pd
 from fastapi.testclient import TestClient
 
 from app.api import stats
+from app.services import dataset_store
 from app.services import plan
 from main import app
 
@@ -130,9 +131,32 @@ def verify_diagnostic_misclassification_guardrail() -> None:
         raw, P27_PROPOSAL, provider="openrouter", model="test/proposal"
     )
     assert result["study_type"] == "association"
-    assert any("corrected study_type to association" in warning for warning in result["warnings"])
+    assert any("normalized this to an association study" in warning for warning in result["warnings"])
     assert len(result["objectives"]["primary"]) < 900
     assert "association with clinicopathological" in result["objectives"]["primary"].lower()
+
+
+def verify_survival_misclassification_guardrail() -> None:
+    raw = json.loads(_mock_openrouter_payload())
+    raw["study_type"] = "survival"
+    result = stats._normalize_proposal_extract(
+        raw, P27_PROPOSAL, provider="openrouter", model="test/proposal"
+    )
+    assert result["study_type"] == "association"
+    assert any("normalized this to an association study" in warning for warning in result["warnings"])
+
+    survival_text = (
+        "Primary objective: To compare overall survival and disease-free survival "
+        "by p27 expression status using follow-up time, censoring, Kaplan-Meier "
+        "curves and Cox regression hazard ratios."
+    )
+    survival = stats._normalize_proposal_extract(
+        {"study_type": "survival", "objectives": {"primary": survival_text}},
+        survival_text,
+        provider="openrouter",
+        model="test/proposal",
+    )
+    assert survival["study_type"] == "survival"
 
 
 def verify_excel_mapping(proposal: dict) -> dict:
@@ -232,6 +256,31 @@ def verify_confirmed_outcome_handoff(proposal: dict) -> None:
         assert confirmed.status_code == 200, confirmed.text
         assert confirmed.json()["outcome_col"] == "Positive/ Negative"
 
+        entry = dataset_store.get(job_id)
+        assert entry is not None
+        entry.meta["assignment"] = {"outcome": "PR", "group": None, "covariates": []}
+        entry.meta["plan"] = {
+            "tests": [{
+                "id": "stale_pr_plan",
+                "title": "Age by PR: Mann-Whitney U",
+                "columns": ["Age", "PR"],
+                "analysis_family": "bivariate",
+                "_phase_b": {
+                    "function": "run_pairwise_mann_whitney",
+                    "test_type": "mann_whitney",
+                    "args": {"predictor": "Age", "outcome": "PR"},
+                },
+            }],
+            "graphs": [{
+                "id": "stale_pr_graph",
+                "title": "Age by PR",
+                "columns": ["Age", "PR"],
+                "outcome": "PR",
+            }],
+            "outputs": [],
+            "summary": "stale PR plan",
+        }
+
         generated = client.get(f"/api/stats/generate-plan/{job_id}")
         assert generated.status_code == 200, generated.text
         plan_body = generated.json()
@@ -240,6 +289,25 @@ def verify_confirmed_outcome_handoff(proposal: dict) -> None:
         assert any("PR vs Positive/ Negative" in title for title in titles)
         assert any("Age by Positive/ Negative" in title for title in titles)
         assert not any(" by PR" in title or "vs PR" in title for title in titles)
+
+        entry = dataset_store.get(job_id)
+        assert entry is not None
+        entry.meta["plan"] = {
+            "tests": [{
+                "id": "stale_pr_plan",
+                "title": "Age by PR: Mann-Whitney U",
+                "columns": ["Age", "PR"],
+                "analysis_family": "bivariate",
+                "_phase_b": {
+                    "function": "run_pairwise_mann_whitney",
+                    "test_type": "mann_whitney",
+                    "args": {"predictor": "Age", "outcome": "PR"},
+                },
+            }],
+            "graphs": [],
+            "outputs": [],
+            "summary": "stale PR plan",
+        }
 
         run = client.post(
             "/api/stats/run-analysis",
@@ -255,6 +323,9 @@ def verify_confirmed_outcome_handoff(proposal: dict) -> None:
         assert any("PR vs Positive/ Negative" in title for title in result_titles)
         assert any("Age by Positive/ Negative" in title for title in result_titles)
         assert not any(" by PR" in title or "vs PR" in title for title in result_titles)
+        for graph in plan_body["plan"].get("graphs", []):
+            assert graph.get("outcome") == "Positive/ Negative"
+            assert "PR" not in str(graph.get("outcome"))
 
 
 def verify_static_wiring() -> None:
@@ -271,6 +342,7 @@ def verify_static_wiring() -> None:
 def main() -> None:
     proposal = verify_mocked_openrouter_success()
     verify_diagnostic_misclassification_guardrail()
+    verify_survival_misclassification_guardrail()
     mapping = verify_excel_mapping(proposal)
     verify_safe_fallbacks()
     verify_planner_integration(mapping)
