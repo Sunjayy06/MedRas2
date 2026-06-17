@@ -396,8 +396,8 @@ async function resumeFromSavedSession(saved) {
       const savedDesc  = saved.studyDescription || "";
       if (savedStudy && savedStudy.study_type) {
         // Fast path: AI plan survived in localStorage — just render it.
-        state.aiStudy = savedStudy;
-        renderSetupScreen(savedStudy);
+        state.aiStudy = normalizeAiStudyPlan(savedStudy);
+        renderSetupScreen(state.aiStudy);
         showScreen("setup");
       } else {
         // Slow path: re-run /setup-study with the previously typed description.
@@ -416,8 +416,8 @@ async function resumeFromSavedSession(saved) {
               proposal_metadata: proposalMetadataPayload(),
             }),
           });
-          state.aiStudy = plan;
-          renderSetupScreen(plan);
+          state.aiStudy = normalizeAiStudyPlan(plan);
+          renderSetupScreen(state.aiStudy);
           if (statusEl) setStatus(statusEl, "");
         } catch (_) {
           if (statusEl) setStatus(statusEl, "Could not restore study plan — please re-describe.", "error");
@@ -441,7 +441,7 @@ async function resumeFromSavedSession(saved) {
             profile: selectedDomainProfile(),
           }),
         });
-        state.aiStudy = bridgeResult;
+        state.aiStudy = normalizeAiStudyPlan(bridgeResult);
       } catch (_) {
         // Silent rule-based fallback — never show "AI service unavailable" to users
         const _cols2 = (state.classifications || []);
@@ -450,14 +450,14 @@ async function resumeFromSavedSession(saved) {
         const _gType = _nom2.length && _sc2.length ? "comparison"
                      : _nom2.length >= 2            ? "association"
                      :                               "descriptive";
-        state.aiStudy = {
+        state.aiStudy = normalizeAiStudyPlan({
           study_type:    _gType,
           outcome_col:   _sc2.length ? _sc2[0].column : (_nom2.length ? _nom2[0].column : null),
           confidence:    0,
           reasoning:     "",
           source:        "rule_based",
           all_predictors: state.columns.map((c) => c.column || c),
-        };
+        });
       }
       _showAiBridgeOverlay(false);
       renderAiConfirmScreen();
@@ -1541,11 +1541,41 @@ function confirmedOutcomeFromState() {
   const mapping = ai.proposal_mapping || {};
   const candidates = [
     state.confirmedOutcomeCol,
-    state.outcomeCol,
     mapping.mapped_outcome,
+    state.outcomeCol,
     ai.outcome_col,
   ];
   return candidates.find((col) => col && validCols.has(col)) || null;
+}
+
+function canonicalOutcomeFromPlan(plan) {
+  const ai = plan || state.aiStudy || {};
+  const mapping = ai.proposal_mapping || {};
+  const cols = new Set((state.columns || []).map((c) => (typeof c === "string" ? c : c.column)));
+  const candidates = [
+    state.confirmedOutcomeCol,
+    mapping.mapped_outcome,
+    ai.outcome_col,
+    state.outcomeCol,
+  ];
+  return candidates.find((col) => col && (!cols.size || cols.has(col))) || null;
+}
+
+function normalizeAiStudyPlan(plan) {
+  if (!plan) return plan;
+  const normalized = Object.assign({}, plan);
+  const outcome = canonicalOutcomeFromPlan(normalized);
+  if (outcome) {
+    normalized.outcome_col = outcome;
+    if (normalized.proposal_mapping) {
+      normalized.proposal_mapping = Object.assign({}, normalized.proposal_mapping, {
+        mapped_outcome: normalized.proposal_mapping.mapped_outcome || outcome,
+      });
+    }
+    state.outcomeCol = outcome;
+  }
+  state.aiStudy = normalized;
+  return normalized;
 }
 
 function applyCanonicalAssignment(data) {
@@ -1557,6 +1587,9 @@ function applyCanonicalAssignment(data) {
   const oldOutcome = state.assignment && state.assignment.outcome;
   state.assignment = data.assignment;
   state.outcomeCol = data.assignment.outcome;
+  if (state.aiStudy) {
+    state.aiStudy = Object.assign({}, state.aiStudy, { outcome_col: data.assignment.outcome });
+  }
   state.assignmentAutoMatched = true;
   if (oldOutcome && oldOutcome !== data.assignment.outcome) {
     state.assignmentConfirmed = false;
@@ -1596,7 +1629,7 @@ async function refreshStaleAssignmentIfNeeded() {
   renderAssignmentCard();
   setStatus(
     $("#classify-status"),
-    `The displayed outcome did not match your confirmed setup. MedRAS refreshed the assignment to ${confirmed}.`,
+    `The displayed outcome did not match your confirmed study setup. MedRAS refreshed it to ${confirmed}.`,
     "warning"
   );
   return true;
@@ -1822,7 +1855,7 @@ async function saveAssignmentFromCard() {
     });
     const corrected = applyCanonicalAssignment(saved);
     if (corrected) {
-      setStatus(status, saved.warning || `The displayed outcome did not match your confirmed setup. MedRAS refreshed the assignment to ${state.assignment.outcome}.`, "warning");
+      setStatus(status, saved.warning || `The displayed outcome did not match your confirmed study setup. MedRAS refreshed it to ${state.assignment.outcome}.`, "warning");
     } else {
       state.assignment = { outcome, group: group || null, covariates: [] };
       applyCanonicalAssignment(saved);
@@ -2271,7 +2304,7 @@ function bindPreview() {
             proposal_metadata: proposalMetadataPayload(),
           }),
         });
-        state.aiStudy = setupResult;
+        state.aiStudy = normalizeAiStudyPlan(setupResult);
       } catch (_) {
         // /setup-study failure is non-fatal — fall back to rule-based plan silently.
         // Never surface "AI service unavailable" to the user.
@@ -2285,7 +2318,7 @@ function bindPreview() {
         const guessOutcome = scales.length    ? scales[0].column
                            : nominals.length  ? nominals[0].column
                            : (cols[0] || {}).column || null;
-        state.aiStudy = {
+        state.aiStudy = normalizeAiStudyPlan({
           study_type:  guessType,
           outcome_col: guessOutcome,
           objective:   state.intake
@@ -2296,7 +2329,7 @@ function bindPreview() {
           reasoning:   "",
           confidence:  0,
           source:      "rule_based",
-        };
+        });
       }
 
       _showAiBridgeOverlay(false);
@@ -4979,9 +5012,9 @@ function _proposalFriendlySummary(ai) {
 }
 
 function renderAiConfirmScreen() {
-  const ai = state.aiStudy || {};
+  const ai = normalizeAiStudyPlan(state.aiStudy || {}) || {};
   const studyType = ai.study_type || "correlation";
-  const outCol    = ai.outcome_col || "";
+  const outCol    = canonicalOutcomeFromPlan(ai) || ai.outcome_col || "";
   const reasoning = ai.reasoning  || "";
   const cleanReasoning = reasoning.replace(/\s*\[.*?\]\s*$/, "").trim();
 
@@ -5167,6 +5200,7 @@ function _refreshAiDetailPanels() {
 
 function renderSetupScreen(plan) {
   if (!plan) return;
+  plan = normalizeAiStudyPlan(plan);
 
   const typeEl   = document.getElementById("setup-study-type-display");
   const objEl    = document.getElementById("setup-objective-display");
@@ -5193,9 +5227,10 @@ function renderSetupScreen(plan) {
       nEl.style.display = "none";
     }
   }
+  const canonicalOutcome = canonicalOutcomeFromPlan(plan);
   if (outEl) {
-    if (plan.outcome_col) {
-      outEl.textContent = `Outcome: ${plan.outcome_col}`;
+    if (canonicalOutcome) {
+      outEl.textContent = `Outcome: ${canonicalOutcome}`;
       outEl.style.display = "";
     } else {
       outEl.style.display = "none";
@@ -5265,13 +5300,31 @@ function bindScreenSetup() {
 
   // ── Proceed ───────────────────────────────────────────────────────────────
   screen.querySelector('[data-action="setup-proceed"]')?.addEventListener("click", async () => {
+    const outCol = canonicalOutcomeFromPlan(state.aiStudy);
     if (state.aiStudy) {
       state.studyType  = state.aiStudy.study_type  || state.studyType  || "comparison";
-      state.outcomeCol = state.aiStudy.outcome_col || state.outcomeCol || null;
+      state.outcomeCol = outCol || state.aiStudy.outcome_col || state.outcomeCol || null;
     }
     // Capture grouping var from the setup screen dropdown before leaving
     const grpSel = document.getElementById("setup-group-col");
     if (grpSel) state.setupGroupCol = grpSel.value || "";
+    if (state.jobId && outCol) {
+      try {
+        const confirmed = await api("/confirm-study", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            job_id: state.jobId,
+            study_type: state.studyType || "association",
+            outcome_col: outCol,
+          }),
+        });
+        applyCanonicalAssignment(confirmed);
+      } catch (err) {
+        setStatus(statusEl, `Could not confirm study setup: ${err.message}`, "error");
+        return;
+      }
+    }
     showScreen("3");
     await loadVariablesData();
   });
@@ -5300,8 +5353,8 @@ function bindScreenSetup() {
         setStatus(statusEl, "Cancelled. The current study plan was kept.", "info");
         return;
       }
-      state.aiStudy = plan;
-      renderSetupScreen(plan);
+      state.aiStudy = normalizeAiStudyPlan(plan);
+      renderSetupScreen(state.aiStudy);
       setStatus(statusEl, "Plan updated.", "success");
       setTimeout(() => setStatus(statusEl, ""), 2500);
     } catch (err) {
@@ -5369,8 +5422,8 @@ function bindScreenSetup() {
         setStatus(adjStatusEl, "Cancelled. The current study plan was kept.", "info");
         return;
       }
-      state.aiStudy = plan;
-      renderSetupScreen(plan);
+      state.aiStudy = normalizeAiStudyPlan(plan);
+      renderSetupScreen(state.aiStudy);
       adjustBox?.classList.add("is-hidden");
       if (corrTa) corrTa.value = "";
       setStatus(adjStatusEl, "Plan revised.", "success");
@@ -5534,7 +5587,7 @@ function bindAiConfirm() {
           setStatus(status, "Cancelled. The current analysis setup was kept.", "info");
           return;
         }
-        state.aiStudy = result;
+        state.aiStudy = normalizeAiStudyPlan(result);
         if (input) input.value = "";
         if (adjustBox) adjustBox.classList.add("is-hidden");
         setStatus(status, "");
@@ -5563,11 +5616,11 @@ function bindAiConfirm() {
       const cs = document.getElementById("ai-outcome-col-select");
       const studyType = ts ? ts.value : "correlation";
       const outCol    = cs ? cs.value : "";
-      state.aiStudy = Object.assign({}, state.aiStudy || {}, {
+      state.aiStudy = normalizeAiStudyPlan(Object.assign({}, state.aiStudy || {}, {
         study_type: studyType,
         outcome_col: outCol || null,
         reasoning: "Manually set by researcher.",
-      });
+      }));
       if (manualPanel) manualPanel.classList.add("is-hidden");
       renderAiConfirmScreen();
     });
@@ -5605,7 +5658,7 @@ function bindAiConfirm() {
           setStatus(descSts, "Cancelled. The current study setup was kept.", "info");
           return;
         }
-        state.aiStudy = result;
+        state.aiStudy = normalizeAiStudyPlan(result);
         setStatus(descSts, "Updated.", "success");
         setTimeout(() => setStatus(descSts, ""), 2500);
         renderAiConfirmScreen();

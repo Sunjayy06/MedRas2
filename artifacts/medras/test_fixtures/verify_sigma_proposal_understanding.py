@@ -245,17 +245,31 @@ def verify_confirmed_outcome_handoff(proposal: dict) -> None:
         assert setup_body["proposal_mapping"]["mapped_outcome"] == "Positive/ Negative"
         assert "PR" in setup_body["proposal_mapping"]["mapped_predictors"]
 
+        entry = dataset_store.get(job_id)
+        assert entry is not None
+        entry.meta["assignment"] = {"outcome": "PR", "group": "PR", "covariates": []}
+        pending_classified = client.post(
+            "/api/stats/classify",
+            json={"job_id": job_id, "overrides": [], "profile": "breast_pathology"},
+        )
+        assert pending_classified.status_code == 200, pending_classified.text
+        pending_body = pending_classified.json()
+        assert pending_body["assignment"]["outcome"] == "Positive/ Negative"
+        assert pending_body["assignment"]["group"] is None
+        assert pending_body["assignment"]["source"] == "mapped_outcome"
+
         confirmed = client.post(
             "/api/stats/confirm-study",
             json={
                 "job_id": job_id,
                 "study_type": setup_body["study_type"],
-                "outcome_col": setup_body["outcome_col"],
+                "outcome_col": "PR",  # stale hidden/browser value should not beat mapped outcome
             },
         )
         assert confirmed.status_code == 200, confirmed.text
         assert confirmed.json()["outcome_col"] == "Positive/ Negative"
         assert confirmed.json()["assignment"]["outcome"] == "Positive/ Negative"
+        assert confirmed.json()["assignment"]["group"] is None
 
         entry = dataset_store.get(job_id)
         assert entry is not None
@@ -269,7 +283,7 @@ def verify_confirmed_outcome_handoff(proposal: dict) -> None:
         stale_assign_body = stale_assign.json()
         assert stale_assign_body["status"] == "corrected"
         assert stale_assign_body["assignment"]["outcome"] == "Positive/ Negative"
-        assert "refreshed the assignment to Positive/ Negative" in stale_assign_body["warning"]
+        assert "refreshed it to Positive/ Negative" in stale_assign_body["warning"]
         entry = dataset_store.get(job_id)
         assert entry is not None
         assert entry.meta["confirmed_outcome_col"] == "Positive/ Negative"
@@ -360,13 +374,17 @@ def verify_static_wiring() -> None:
     stats_py = (root / "app/api/stats.py").read_text(encoding="utf-8")
     assert "proposal_metadata: proposalMetadataPayload()" in analysis_js
     assert "confirmedOutcomeFromState" in analysis_js
+    assert "canonicalOutcomeFromPlan" in analysis_js
+    assert "normalizeAiStudyPlan" in analysis_js
     assert "refreshStaleAssignmentIfNeeded" in analysis_js
-    assert "MedRAS refreshed the assignment to" in analysis_js
+    assert "MedRAS refreshed it to" in analysis_js
+    assert 'api("/confirm-study"' in analysis_js
     assert "proposal_understanding" in analysis_js
     assert "proposal_metadata: Optional[Dict[str, Any]]" in stats_py
     assert "_map_proposal_to_columns" in stats_py
     assert "_canonical_assignment" in stats_py
     assert "confirmed_mapped_outcome" in stats_py
+    assert "mapped_outcome" in stats_py
 
 
 def main() -> None:

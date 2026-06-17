@@ -227,8 +227,12 @@ def _build_session_view(entry, classifications, assignment) -> Dict[str, Any]:
     analysis_predictors = list(
         ai_study.get("predictors") or ai_study.get("all_predictors") or []
     )
+    outcome = (assignment or {}).get("outcome")
+    analysis_predictors = [
+        predictor for predictor in analysis_predictors
+        if predictor and predictor in entry.df.columns and predictor != outcome
+    ]
     if not analysis_predictors:
-        outcome = (assignment or {}).get("outcome")
         analysis_predictors = [
             c.get("column") for c in (classifications or [])
             if c.get("column") != outcome
@@ -278,6 +282,9 @@ def _build_session_view(entry, classifications, assignment) -> Dict[str, Any]:
 def _build_response(job_id: str, entry) -> Dict[str, Any]:
     classifications = _analysis_classifications(entry)
     entry.meta["classifications"] = classifications
+    assignment = _canonical_assignment(entry)
+    if entry.meta.get("assignment") != assignment:
+        entry.meta["assignment"] = assignment
     preview = excel_loader.preview_records(entry.df, n=10)
     columns = list(entry.df.columns)
     # Include columns whose NAME strongly suggests an identifier even if the
@@ -313,6 +320,8 @@ def _build_response(job_id: str, entry) -> Dict[str, Any]:
         "preview": preview,
         "repeated_ids": repeated_ids,
         "intake": entry.meta.get("intake"),
+        "assignment": assignment,
+        "confirmed_outcome_col": entry.meta.get("confirmed_outcome_col"),
         "domain_profile": _domain_profile(entry),
     }
 
@@ -1979,14 +1988,30 @@ def _canonical_assignment(entry, assignment: Optional[Dict[str, Any]] = None) ->
     """
     current = dict(assignment or entry.meta.get("assignment") or {})
     cols = set(entry.df.columns)
+    ai_study = entry.meta.get("ai_study") or {}
+    pending_ai_study = entry.meta.get("pending_ai_study") or {}
+    mapped_outcome = (
+        (ai_study.get("proposal_mapping") or {}).get("mapped_outcome")
+        or (pending_ai_study.get("proposal_mapping") or {}).get("mapped_outcome")
+    )
     confirmed_outcome = entry.meta.get("confirmed_outcome_col")
-    if confirmed_outcome in cols and current.get("outcome") != confirmed_outcome:
-        current["outcome"] = confirmed_outcome
-        current["source"] = "confirmed_mapped_outcome"
+    canonical_outcome = (
+        confirmed_outcome if confirmed_outcome in cols
+        else mapped_outcome if mapped_outcome in cols
+        else None
+    )
+    previous_outcome = current.get("outcome")
+    if canonical_outcome and current.get("outcome") != canonical_outcome:
+        current["outcome"] = canonical_outcome
+        current["source"] = "confirmed_mapped_outcome" if confirmed_outcome else "mapped_outcome"
     current.setdefault("group", None)
-    current.setdefault("covariates", [])
+    if canonical_outcome and current.get("group") in {canonical_outcome, previous_outcome}:
+        current["group"] = None
+    current["covariates"] = [c for c in (current.get("covariates") or []) if c != canonical_outcome]
     if confirmed_outcome in cols and not current.get("source"):
         current["source"] = "confirmed_mapped_outcome"
+    elif mapped_outcome in cols and not current.get("source"):
+        current["source"] = "mapped_outcome"
     return current
 
 
@@ -2124,17 +2149,18 @@ async def save_assignment(payload: AssignRequest) -> Dict[str, Any]:
     new_assignment = _canonical_assignment(entry, requested_assignment)
     warning = None
     confirmed_outcome = entry.meta.get("confirmed_outcome_col")
-    if confirmed_outcome in cols and payload.outcome and payload.outcome != confirmed_outcome:
+    canonical_outcome = new_assignment.get("outcome")
+    if canonical_outcome in cols and payload.outcome and payload.outcome != canonical_outcome:
         warning = (
-            "The displayed outcome did not match your confirmed setup. "
-            f"MedRAS refreshed the assignment to {confirmed_outcome}."
+            "The displayed outcome did not match your confirmed study setup. "
+            f"MedRAS refreshed it to {canonical_outcome}."
         )
     if entry.meta.get("assignment") != new_assignment:
         # Assignment changed — plan & results are stale. Normality (per-column)
         # is still valid since the column data hasn't changed.
         _invalidate_downstream(entry, keep_normality=True)
     entry.meta["assignment"] = new_assignment
-    if payload.outcome and not confirmed_outcome:
+    if payload.outcome and not confirmed_outcome and payload.outcome == canonical_outcome and new_assignment.get("source") != "mapped_outcome":
         entry.meta["confirmed_outcome_col"] = payload.outcome
     response = {"status": "saved", "assignment": entry.meta["assignment"]}
     if warning:
@@ -2519,25 +2545,34 @@ async def confirm_study(payload: ConfirmStudyRequest) -> Dict[str, Any]:
     entry = dataset_store.get(payload.job_id)
     if entry is None:
         raise HTTPException(status_code=404, detail="Dataset expired or not found.")
-    if payload.outcome_col and payload.outcome_col not in entry.df.columns:
+    pending = entry.meta.get("pending_ai_study") or {}
+    existing_ai = entry.meta.get("ai_study") or {}
+    mapped_outcome = (
+        (pending.get("proposal_mapping") or {}).get("mapped_outcome")
+        or (existing_ai.get("proposal_mapping") or {}).get("mapped_outcome")
+    )
+    outcome_col = mapped_outcome if mapped_outcome in entry.df.columns else payload.outcome_col
+    if outcome_col and outcome_col not in entry.df.columns:
         raise HTTPException(
             status_code=400,
-            detail=f"Column '{payload.outcome_col}' not found in dataset.",
+            detail=f"Column '{outcome_col}' not found in dataset.",
         )
     entry.meta["confirmed_study_type"] = payload.study_type
-    entry.meta["confirmed_outcome_col"] = payload.outcome_col
+    entry.meta["confirmed_outcome_col"] = outcome_col
     entry.meta["ai_study"] = {
         **(entry.meta.get("pending_ai_study") or entry.meta.get("ai_study") or {}),
         "study_type": payload.study_type,
-        "outcome_col": payload.outcome_col,
+        "outcome_col": outcome_col,
         "source": "confirmed",
     }
+    if mapped_outcome in entry.df.columns:
+        entry.meta["ai_study"].setdefault("proposal_mapping", {})["mapped_outcome"] = mapped_outcome
     current_assignment = dict(entry.meta.get("assignment") or {})
     confirmed_assignment = {
-        "outcome": payload.outcome_col,
-        "group": current_assignment.get("group"),
-        "covariates": list(current_assignment.get("covariates") or []),
-        "source": "confirmed_mapped_outcome" if payload.outcome_col else "confirmed_setup",
+        "outcome": outcome_col,
+        "group": current_assignment.get("group") if current_assignment.get("group") != outcome_col else None,
+        "covariates": [c for c in list(current_assignment.get("covariates") or []) if c != outcome_col],
+        "source": "confirmed_mapped_outcome" if outcome_col else "confirmed_setup",
     }
     if current_assignment != confirmed_assignment:
         _invalidate_downstream(entry, keep_normality=True)
@@ -2553,7 +2588,7 @@ async def confirm_study(payload: ConfirmStudyRequest) -> Dict[str, Any]:
     return {
         "status": "confirmed",
         "study_type": payload.study_type,
-        "outcome_col": payload.outcome_col,
+        "outcome_col": outcome_col,
         "assignment": entry.meta["assignment"],
         "confirmed_outcome_col": entry.meta.get("confirmed_outcome_col"),
         "yesno_cleaned": list(yn_notes.keys()),
