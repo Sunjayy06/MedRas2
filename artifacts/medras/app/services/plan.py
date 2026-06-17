@@ -268,9 +268,30 @@ def _study_design(session: Dict[str, Any]) -> str:
     return "generic_unknown"
 
 
+def _study_type_token(value: Any) -> str:
+    text = str(value or "").strip().lower().replace("_", " ")
+    if "association" in text or "prognostic" in text:
+        return "association"
+    if "comparison" in text or "compare" in text:
+        return "comparison"
+    if "correlation" in text:
+        return "correlation"
+    if "regression" in text or "prediction" in text or "predict" in text:
+        return "regression"
+    if "diagnostic" in text or "roc" in text:
+        return "diagnostic"
+    if "survival" in text or "cox" in text or "kaplan" in text:
+        return "survival"
+    if "reliability" in text or "agreement" in text:
+        return "reliability"
+    if "descriptive" in text:
+        return "descriptive"
+    return text.replace(" ", "_")
+
+
 def _is_multivariable_objective(session: Dict[str, Any]) -> bool:
     objective = _objective_text(session)
-    study_type = str(session.get("study_type") or "").lower()
+    study_type = _study_type_token(session.get("study_type"))
     terms = (
         "prediction", "predict", "risk factor", "prognostic", "adjust",
         "independent association", "multivariable", "multivariate", "regression",
@@ -575,7 +596,7 @@ def generate_plan(
     o_normal = _is_normal(outcome, norm)
     levels = _group_levels(df, group) if group else []
     n_levels = len(levels)
-    study_type = str(session.get("study_type") or "").lower()
+    study_type = _study_type_token(session.get("study_type"))
     analysis_predictors = [
         col for col in (session.get("analysis_predictors") or [])
         if col in allowed_columns and col != outcome

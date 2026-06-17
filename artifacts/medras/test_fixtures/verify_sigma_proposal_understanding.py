@@ -52,6 +52,9 @@ def _p27_fixture() -> pd.DataFrame:
         "AR": ["Positive", "Negative", "Positive", "Negative", "Positive", "Negative", "Positive", "Negative", "Positive", "Negative", "Positive", "Negative"],
         "Molecular subtype": ["Luminal A", "Luminal B", "HER2neu", "Triple negative", "Luminal A", "Luminal B", "HER2neu", "Triple negative", "Luminal A", "Luminal B", "HER2neu", "Triple negative"],
         "Positive/ Negative": ["Positive", "Negative", "Positive", "Negative", "Positive", "Negative", "Positive", "Negative", "Positive", "Negative", "Positive", "Negative"],
+        "positive_nodes": [0, None, 2, None, 1, None, 0, None, 3, None, 1, None],
+        "total_nodes": [13, None, 18, None, 14, None, 12, None, 20, None, 15, None],
+        "node_ratio": [0.0, None, 2 / 18, None, 1 / 14, None, 0.0, None, 3 / 20, None, 1 / 15, None],
     })
 
 
@@ -299,12 +302,22 @@ def verify_confirmed_outcome_handoff(proposal: dict) -> None:
         assert reclassified_body["confirmed_outcome_col"] == "Positive/ Negative"
         assert reclassified_body["assignment"]["outcome"] == "Positive/ Negative"
 
+        missing = client.post(
+            "/api/stats/apply-missing-decisions",
+            json={
+                "job_id": job_id,
+                "decisions": [
+                    {"column": "positive_nodes", "action": "exclude_variable_from_analysis"},
+                    {"column": "total_nodes", "action": "exclude_variable_from_analysis"},
+                    {"column": "node_ratio", "action": "exclude_variable_from_analysis"},
+                ],
+            },
+        )
+        assert missing.status_code == 200, missing.text
+        assert set(missing.json()["excluded_columns"]) >= {"positive_nodes", "total_nodes", "node_ratio"}
+
         entry = dataset_store.get(job_id)
         assert entry is not None
-        entry.meta["analysis_excluded_columns"] = ["positive_nodes", "total_nodes", "node_ratio"]
-        for col in ("positive_nodes", "total_nodes", "node_ratio"):
-            if col not in entry.df.columns:
-                entry.df[col] = range(len(entry.df))
 
         entry.meta["plan"] = {
             "tests": [{
@@ -331,18 +344,33 @@ def verify_confirmed_outcome_handoff(proposal: dict) -> None:
         generated = client.get(f"/api/stats/generate-plan/{job_id}")
         assert generated.status_code == 200, generated.text
         plan_body = generated.json()
+        debug = plan_body["debug"]
+        assert debug["canonical_outcome"] == "Positive/ Negative"
+        assert debug["study_type"] == "association"
+        assert debug["eligible_predictor_count"] > 0
+        assert "Age" in debug["eligible_predictors_preview"]
+        assert "PR" in debug["eligible_predictors_preview"]
+        assert "Positive/ Negative" not in debug["eligible_predictors_preview"]
+        assert {"positive_nodes", "total_nodes", "node_ratio"}.issubset(set(debug["excluded_variables"]))
+        assert debug["bivariate_test_count"] > 0
+        assert debug["graph_count"] > 0
         assert plan_body["assignment"]["outcome"] == "Positive/ Negative"
         titles = [test["title"] for test in plan_body["plan"]["tests"]]
-        plan_text = json.dumps(plan_body["plan"])
+        plan_analysis_text = json.dumps({
+            "tests": plan_body["plan"].get("tests"),
+            "graphs": plan_body["plan"].get("graphs"),
+            "analysis_layers": plan_body["plan"].get("analysis_layers"),
+            "outputs": plan_body["plan"].get("outputs"),
+        })
         assert len(plan_body["plan"]["analysis_layers"]["bivariate"]) >= 3
         assert "compare eligible predictors against Positive/ Negative" in plan_body["plan"]["summary"]
         assert any("PR vs Positive/ Negative" in title for title in titles)
         assert any("Age by Positive/ Negative" in title for title in titles)
         assert not any(" by PR" in title or "vs PR" in title for title in titles)
-        assert "Positive/ Negative vs Positive/ Negative" not in plan_text
-        assert "positive_nodes" not in plan_text
-        assert "total_nodes" not in plan_text
-        assert "node_ratio" not in plan_text
+        assert "Positive/ Negative vs Positive/ Negative" not in plan_analysis_text
+        assert "positive_nodes" not in plan_analysis_text
+        assert "total_nodes" not in plan_analysis_text
+        assert "node_ratio" not in plan_analysis_text
         assert plan_body["plan"]["graphs"]
         assert all(graph.get("outcome") == "Positive/ Negative" for graph in plan_body["plan"]["graphs"])
 

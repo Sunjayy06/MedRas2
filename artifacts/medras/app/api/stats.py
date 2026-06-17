@@ -207,6 +207,29 @@ class GenerateDummyRequest(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+def _normalize_study_type_token(value: Any) -> str:
+    text = str(value or "").strip().lower().replace("_", " ")
+    if not text:
+        return ""
+    if "diagnostic" in text or "roc" in text:
+        return "diagnostic"
+    if "survival" in text or "kaplan" in text or "cox" in text:
+        return "survival"
+    if "reliability" in text or "agreement" in text or "kappa" in text or "icc" in text:
+        return "reliability"
+    if "regression" in text or "prediction" in text or "predict" in text:
+        return "regression"
+    if "correlation" in text:
+        return "correlation"
+    if "comparison" in text or "compare" in text:
+        return "comparison"
+    if "association" in text or "prognostic" in text:
+        return "association"
+    if "descriptive" in text:
+        return "descriptive"
+    return text.replace(" ", "_")
+
+
 def _build_session_view(entry, classifications, assignment) -> Dict[str, Any]:
     """Build the `session` dict consumed by phase-B trigger logic.
 
@@ -224,11 +247,12 @@ def _build_session_view(entry, classifications, assignment) -> Dict[str, Any]:
                      or "")
     ai_study = entry.meta.get("ai_study") or {}
     intake_study_type = intake.get("study_type") if isinstance(intake, dict) else None
-    study_type = (
+    raw_study_type = (
         entry.meta.get("confirmed_study_type")
         or intake_study_type
         or ai_study.get("study_type")
     )
+    study_type = _normalize_study_type_token(raw_study_type)
     outcome = (assignment or {}).get("outcome")
     eligible_predictors = [
         c.get("column") for c in (classifications or [])
@@ -242,10 +266,13 @@ def _build_session_view(entry, classifications, assignment) -> Dict[str, Any]:
         predictor for predictor in analysis_predictors
         if predictor and predictor in entry.df.columns and predictor != outcome
     ]
-    if str(study_type or "").lower() in {"association", "comparison"} and outcome:
+    predictor_source = "ai_study"
+    if study_type in {"association", "comparison"} and outcome:
         analysis_predictors = list(dict.fromkeys(analysis_predictors + eligible_predictors))
+        predictor_source = "ai_study_plus_classified_eligible" if ai_study else "classified_eligible"
     elif not analysis_predictors:
         analysis_predictors = eligible_predictors
+        predictor_source = "classified_eligible"
     variables = {}
     for c in classifications or []:
         col = c.get("column")
@@ -263,8 +290,10 @@ def _build_session_view(entry, classifications, assignment) -> Dict[str, Any]:
         "grouping_variable": (assignment or {}).get("group"),
         "covariates": list((assignment or {}).get("covariates") or []),
         "study_type": study_type,
+        "raw_study_type": raw_study_type,
         "study_type_confirmed": bool(entry.meta.get("confirmed_study_type")),
         "analysis_predictors": analysis_predictors,
+        "predictor_source": predictor_source,
         "domain_profile": _domain_profile(entry),
         # Future wizard work will populate these:
         "paired": bool(intake.get("paired")) if isinstance(intake, dict) else False,
@@ -2058,8 +2087,65 @@ async def _fresh_plan_for_entry(entry, assignment, classifications) -> Dict[str,
         plan_service.generate_plan,
         entry.df, classifications, assignment, normality_data, session=session_view,
     )
+    plan_dict["debug"] = _plan_debug_metadata(entry, classifications, assignment, plan_dict, session_view)
     entry.meta["plan"] = plan_dict
     return plan_dict
+
+
+def _plan_debug_metadata(
+    entry,
+    classifications: List[Dict[str, Any]],
+    assignment: Dict[str, Any],
+    plan_dict: Dict[str, Any],
+    session_view: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    session_view = session_view or _build_session_view(entry, classifications, assignment)
+    outcome = (assignment or {}).get("outcome")
+    excluded = set(_analysis_excluded_columns(entry))
+    removed: List[Dict[str, str]] = []
+    eligible: List[str] = []
+    for row in classifications or []:
+        col = row.get("column")
+        if not col:
+            continue
+        detected = row.get("detected_type")
+        reason = None
+        if col == outcome:
+            reason = "confirmed outcome"
+        elif col in excluded or detected == "exclude":
+            reason = "excluded from analysis"
+        elif detected == "id":
+            reason = "identifier"
+        elif detected == "date":
+            reason = "date variable"
+        elif str(col).startswith("__") or str(col).lower().startswith("medras_"):
+            reason = "technical/internal variable"
+        if reason:
+            removed.append({"variable": str(col), "reason": reason})
+        else:
+            eligible.append(str(col))
+    bivariate_count = len((plan_dict.get("analysis_layers") or {}).get("bivariate") or [])
+    graph_count = len(plan_dict.get("graphs") or [])
+    descriptive_only_reason = None
+    if any(t.get("id") == "descriptive_only" for t in plan_dict.get("tests") or []):
+        descriptive_only_reason = (
+            "No eligible predictors were available."
+            if not eligible
+            else "Eligible predictors existed but no executable association route matched the study type/variable types."
+        )
+    return {
+        "canonical_outcome": outcome,
+        "study_type": session_view.get("study_type"),
+        "raw_study_type": session_view.get("raw_study_type"),
+        "predictor_source": session_view.get("predictor_source"),
+        "eligible_predictor_count": len(eligible),
+        "eligible_predictors_preview": eligible[:20],
+        "excluded_variables": sorted(excluded),
+        "removed_predictors_with_reason": removed[:50],
+        "bivariate_test_count": bivariate_count,
+        "graph_count": graph_count,
+        "descriptive_only_reason": descriptive_only_reason,
+    }
 
 
 def _publish_results(entry, job_id: str, res: Dict[str, Any]) -> Dict[str, Any]:
@@ -2242,7 +2328,12 @@ async def generate_plan(job_id: str) -> Dict[str, Any]:
             status_code=409,
             detail="Generated plan did not match the confirmed outcome: " + "; ".join(mismatches[:3]),
         )
-    return {"job_id": job_id, "assignment": assignment, "plan": plan_dict}
+    return {
+        "job_id": job_id,
+        "assignment": assignment,
+        "plan": plan_dict,
+        "debug": plan_dict.get("debug") or {},
+    }
 
 
 class RunAnalysisRequest(BaseModel):
@@ -2266,6 +2357,25 @@ async def run_analysis(payload: RunAnalysisRequest) -> Dict[str, Any]:
     if mismatches:
         plan_dict = await _fresh_plan_for_entry(entry, assignment, classifications)
         mismatches = _plan_outcome_mismatches(plan_dict, assignment.get("outcome"))
+    debug = plan_dict.get("debug") or _plan_debug_metadata(entry, classifications, assignment, plan_dict)
+    descriptive_only = any(t.get("id") == "descriptive_only" for t in plan_dict.get("tests") or [])
+    if (
+        debug.get("study_type") in {"association", "comparison"}
+        and debug.get("canonical_outcome")
+        and int(debug.get("eligible_predictor_count") or 0) > 0
+        and descriptive_only
+    ):
+        plan_dict = await _fresh_plan_for_entry(entry, assignment, classifications)
+        debug = plan_dict.get("debug") or _plan_debug_metadata(entry, classifications, assignment, plan_dict)
+        descriptive_only = any(t.get("id") == "descriptive_only" for t in plan_dict.get("tests") or [])
+        if descriptive_only:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "Association plan has eligible predictors but only descriptive analysis was generated. "
+                    f"Debug: {debug}"
+                ),
+            )
     if mismatches:
         raise HTTPException(
             status_code=409,
