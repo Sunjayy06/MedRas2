@@ -224,20 +224,28 @@ def _build_session_view(entry, classifications, assignment) -> Dict[str, Any]:
                      or "")
     ai_study = entry.meta.get("ai_study") or {}
     intake_study_type = intake.get("study_type") if isinstance(intake, dict) else None
+    study_type = (
+        entry.meta.get("confirmed_study_type")
+        or intake_study_type
+        or ai_study.get("study_type")
+    )
+    outcome = (assignment or {}).get("outcome")
+    eligible_predictors = [
+        c.get("column") for c in (classifications or [])
+        if c.get("column") != outcome
+        and c.get("detected_type") not in ("id", "date", "exclude")
+    ]
     analysis_predictors = list(
         ai_study.get("predictors") or ai_study.get("all_predictors") or []
     )
-    outcome = (assignment or {}).get("outcome")
     analysis_predictors = [
         predictor for predictor in analysis_predictors
         if predictor and predictor in entry.df.columns and predictor != outcome
     ]
-    if not analysis_predictors:
-        analysis_predictors = [
-            c.get("column") for c in (classifications or [])
-            if c.get("column") != outcome
-            and c.get("detected_type") not in ("id", "date", "exclude")
-        ]
+    if str(study_type or "").lower() in {"association", "comparison"} and outcome:
+        analysis_predictors = list(dict.fromkeys(analysis_predictors + eligible_predictors))
+    elif not analysis_predictors:
+        analysis_predictors = eligible_predictors
     variables = {}
     for c in classifications or []:
         col = c.get("column")
@@ -254,11 +262,7 @@ def _build_session_view(entry, classifications, assignment) -> Dict[str, Any]:
         "outcome_variable": (assignment or {}).get("outcome"),
         "grouping_variable": (assignment or {}).get("group"),
         "covariates": list((assignment or {}).get("covariates") or []),
-        "study_type": (
-            entry.meta.get("confirmed_study_type")
-            or intake_study_type
-            or ai_study.get("study_type")
-        ),
+        "study_type": study_type,
         "study_type_confirmed": bool(entry.meta.get("confirmed_study_type")),
         "analysis_predictors": analysis_predictors,
         "domain_profile": _domain_profile(entry),

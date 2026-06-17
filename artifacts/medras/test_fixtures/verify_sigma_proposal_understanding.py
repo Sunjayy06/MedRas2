@@ -299,6 +299,13 @@ def verify_confirmed_outcome_handoff(proposal: dict) -> None:
         assert reclassified_body["confirmed_outcome_col"] == "Positive/ Negative"
         assert reclassified_body["assignment"]["outcome"] == "Positive/ Negative"
 
+        entry = dataset_store.get(job_id)
+        assert entry is not None
+        entry.meta["analysis_excluded_columns"] = ["positive_nodes", "total_nodes", "node_ratio"]
+        for col in ("positive_nodes", "total_nodes", "node_ratio"):
+            if col not in entry.df.columns:
+                entry.df[col] = range(len(entry.df))
+
         entry.meta["plan"] = {
             "tests": [{
                 "id": "stale_pr_plan",
@@ -326,9 +333,18 @@ def verify_confirmed_outcome_handoff(proposal: dict) -> None:
         plan_body = generated.json()
         assert plan_body["assignment"]["outcome"] == "Positive/ Negative"
         titles = [test["title"] for test in plan_body["plan"]["tests"]]
+        plan_text = json.dumps(plan_body["plan"])
+        assert len(plan_body["plan"]["analysis_layers"]["bivariate"]) >= 3
+        assert "compare eligible predictors against Positive/ Negative" in plan_body["plan"]["summary"]
         assert any("PR vs Positive/ Negative" in title for title in titles)
         assert any("Age by Positive/ Negative" in title for title in titles)
         assert not any(" by PR" in title or "vs PR" in title for title in titles)
+        assert "Positive/ Negative vs Positive/ Negative" not in plan_text
+        assert "positive_nodes" not in plan_text
+        assert "total_nodes" not in plan_text
+        assert "node_ratio" not in plan_text
+        assert plan_body["plan"]["graphs"]
+        assert all(graph.get("outcome") == "Positive/ Negative" for graph in plan_body["plan"]["graphs"])
 
         entry = dataset_store.get(job_id)
         assert entry is not None
@@ -360,9 +376,15 @@ def verify_confirmed_outcome_handoff(proposal: dict) -> None:
         assert run.status_code == 200, run.text
         results = run.json()["results"]
         result_titles = [test.get("title", "") for test in results.get("tests", [])]
+        result_text = json.dumps(results)
+        assert len(results.get("tests", [])) >= 3
         assert any("PR vs Positive/ Negative" in title for title in result_titles)
         assert any("Age by Positive/ Negative" in title for title in result_titles)
         assert not any(" by PR" in title or "vs PR" in title for title in result_titles)
+        assert "positive_nodes" not in result_text
+        assert "total_nodes" not in result_text
+        assert "node_ratio" not in result_text
+        assert "significant_findings" in results
         for graph in plan_body["plan"].get("graphs", []):
             assert graph.get("outcome") == "Positive/ Negative"
             assert "PR" not in str(graph.get("outcome"))

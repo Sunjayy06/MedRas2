@@ -1019,7 +1019,13 @@ def generate_plan(
     graphs = _filter_analysis_items(graphs, allowed_columns)
     graphs = _enrich_graph_metadata(graphs, outcome)
 
-    if tests:
+    if tests and not group and association_objective and analysis_predictors:
+        summary = (
+            f"We will compare eligible predictors against {outcome}: "
+            + ", ".join(t["title"] for t in tests)
+            + "."
+        )
+    elif tests:
         summary = (
             "We will run "
             + ", ".join(t["title"] for t in tests)
