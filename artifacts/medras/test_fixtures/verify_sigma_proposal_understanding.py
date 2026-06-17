@@ -119,6 +119,22 @@ def verify_mocked_openrouter_success() -> dict:
     return result
 
 
+def verify_diagnostic_misclassification_guardrail() -> None:
+    raw = json.loads(_mock_openrouter_payload())
+    raw["study_type"] = "diagnostic"
+    raw["objectives"]["primary"] = (
+        "p27 is discussed in many published background studies of cell cycle biology. "
+        * 20
+    )
+    result = stats._normalize_proposal_extract(
+        raw, P27_PROPOSAL, provider="openrouter", model="test/proposal"
+    )
+    assert result["study_type"] == "association"
+    assert any("corrected study_type to association" in warning for warning in result["warnings"])
+    assert len(result["objectives"]["primary"]) < 900
+    assert "association with clinicopathological" in result["objectives"]["primary"].lower()
+
+
 def verify_excel_mapping(proposal: dict) -> dict:
     mapping = stats._map_proposal_to_columns(proposal, P27_COLUMNS, "breast_pathology")
     assert mapping["mapped_outcome"] == "Positive/ Negative"
@@ -254,6 +270,7 @@ def verify_static_wiring() -> None:
 
 def main() -> None:
     proposal = verify_mocked_openrouter_success()
+    verify_diagnostic_misclassification_guardrail()
     mapping = verify_excel_mapping(proposal)
     verify_safe_fallbacks()
     verify_planner_integration(mapping)

@@ -76,6 +76,112 @@ def _included_analysis_variables(
     return list(dict.fromkeys(ordered + included))
 
 
+def _analysis_allowed_columns(
+    df: pd.DataFrame,
+    classes: Dict[str, Dict[str, Any]],
+    outcome: Optional[str],
+) -> set[str]:
+    return {
+        col for col in df.columns
+        if col == outcome
+        or classes.get(col, {}).get("detected_type") not in ("id", "date", "exclude")
+    }
+
+
+def _filter_analysis_items(
+    items: List[Dict[str, Any]],
+    allowed: set[str],
+) -> List[Dict[str, Any]]:
+    filtered: List[Dict[str, Any]] = []
+    for item in items:
+        columns = item.get("columns") or []
+        if all(col in allowed for col in columns):
+            filtered.append(item)
+    return filtered
+
+
+def _graph_chart_type(graph_id: str) -> str:
+    if graph_id.startswith("scatter"):
+        return "scatter plot"
+    if graph_id == "boxplot":
+        return "box plot"
+    if graph_id == "violin":
+        return "violin plot"
+    if graph_id == "stacked_bar":
+        return "stacked percentage bar chart"
+    if graph_id == "histogram":
+        return "histogram"
+    if graph_id == "forest_plot":
+        return "forest plot"
+    return "statistical figure"
+
+
+def _enrich_graph_metadata(graphs: List[Dict[str, Any]], outcome: Optional[str]) -> List[Dict[str, Any]]:
+    enriched: List[Dict[str, Any]] = []
+    for graph in graphs:
+        copy = dict(graph)
+        graph_id = str(copy.get("id") or "")
+        variables = list(copy.get("columns") or [])
+        chart_type = _graph_chart_type(graph_id)
+        copy.setdefault("graph_id", graph_id)
+        copy.setdefault("variables", variables)
+        copy.setdefault("outcome", outcome)
+        copy.setdefault("recommended_chart_type", chart_type)
+        copy.setdefault("data_source_result_id", None)
+        copy.setdefault("caption", f"{copy.get('title', 'Figure')} for {', '.join(map(str, variables))}.")
+        copy.setdefault("interpretation", "Interpret alongside the corresponding statistical test and p-value.")
+        copy.setdefault("why_recommended", copy.get("why") or f"{chart_type} is appropriate for the selected variable types.")
+        copy.setdefault("thesis_ready", True)
+        enriched.append(copy)
+    return enriched
+
+
+def _test_graph_recommendations(
+    tests: List[Dict[str, Any]],
+    classes: Dict[str, Dict[str, Any]],
+    outcome: Optional[str],
+) -> List[Dict[str, Any]]:
+    recs: List[Dict[str, Any]] = []
+    seen: set[str] = set()
+    for test in tests:
+        phase = test.get("_phase_b") or {}
+        args = phase.get("args") or {}
+        columns = list(test.get("columns") or [])
+        if len(columns) < 2 or outcome not in columns:
+            continue
+        predictor = next((col for col in columns if col != outcome), columns[0])
+        key = f"{predictor}::{outcome}"
+        if key in seen:
+            continue
+        seen.add(key)
+        pred_type = classes.get(predictor, {}).get("detected_type")
+        if pred_type == "scale":
+            graph_id = f"boxplot_{predictor}_by_{outcome}"
+            chart = "box plot"
+            title = f"{predictor} by {outcome}"
+            why = "Continuous predictor compared across binary outcome groups."
+        else:
+            graph_id = f"stacked_bar_{predictor}_by_{outcome}"
+            chart = "stacked percentage bar chart"
+            title = f"{predictor} status by {outcome}"
+            why = "Categorical predictor distribution compared across outcome groups."
+        recs.append({
+            "id": graph_id,
+            "title": title,
+            "columns": [predictor, outcome],
+            "variables": [predictor, outcome],
+            "outcome": outcome,
+            "recommended_chart_type": chart,
+            "data_source_result_id": test.get("id"),
+            "caption": f"{title}.",
+            "interpretation": "Interpret with the matching statistical test result.",
+            "why": why,
+            "why_recommended": why,
+            "thesis_ready": True,
+        })
+    return recs
+
+
 def _descriptive_layer(
     df: pd.DataFrame,
     classifications: List[Dict[str, Any]],
@@ -370,6 +476,10 @@ def generate_plan(
     outcome = (assignment or {}).get("outcome")
     group = (assignment or {}).get("group")
     covariates = list((assignment or {}).get("covariates") or [])
+    allowed_columns = _analysis_allowed_columns(df, classes, outcome)
+    if group and group not in allowed_columns:
+        group = None
+    covariates = [c for c in covariates if c in allowed_columns and c != outcome]
     cov_scale = [c for c in covariates if classes.get(c, {}).get("detected_type") == "scale"]
 
     tests: List[Dict[str, Any]] = []
@@ -414,8 +524,7 @@ def generate_plan(
     study_type = str(session.get("study_type") or "").lower()
     analysis_predictors = [
         col for col in (session.get("analysis_predictors") or [])
-        if col in df.columns and col != outcome
-        and classes.get(col, {}).get("detected_type") not in ("id", "date", "exclude")
+        if col in allowed_columns and col != outcome
     ]
     outcome_levels = int(df[outcome].dropna().nunique())
     study_type_confirmed = bool(session.get("study_type_confirmed"))
@@ -850,6 +959,11 @@ def generate_plan(
     from . import results as _results
     tests = [t for t in tests if _results.is_supported_test(t["id"])]
     graphs = [g for g in graphs if _results.is_supported_graph(g["id"])]
+    tests = _filter_analysis_items(tests, allowed_columns)
+    graphs = _filter_analysis_items(graphs, allowed_columns)
+    graphs.extend(_test_graph_recommendations(tests, classes, outcome))
+    graphs = _filter_analysis_items(graphs, allowed_columns)
+    graphs = _enrich_graph_metadata(graphs, outcome)
 
     if tests:
         summary = (

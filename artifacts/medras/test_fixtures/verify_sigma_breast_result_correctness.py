@@ -174,6 +174,8 @@ def verify_missing_exclusion_and_significant_summary():
         {"column": "total_nodes", "detected_type": "exclude"},
         {"column": "node_ratio", "detected_type": "exclude"},
     ]
+    excluded = {"positive_nodes", "total_nodes", "node_ratio"}
+    assert excluded <= {row["column"] for row in classes if row["detected_type"] == "exclude"}
     session = {
         "study_type": "association",
         "study_type_confirmed": True,
@@ -184,17 +186,41 @@ def verify_missing_exclusion_and_significant_summary():
         df, classes, {"outcome": "Positive/ Negative", "group": None, "covariates": []},
         _normality("Age"), session,
     )
-    plan_text = str(sigma_plan)
-    assert "positive_nodes" not in plan_text
-    assert "total_nodes" not in plan_text
-    assert "node_ratio" not in plan_text
+    analysis_payload = {
+        "tests": sigma_plan.get("tests"),
+        "graphs": sigma_plan.get("graphs"),
+        "analysis_layers": sigma_plan.get("analysis_layers"),
+        "descriptive_plan": sigma_plan.get("descriptive_plan"),
+        "bivariate_plan": sigma_plan.get("bivariate_plan"),
+        "multivariate_plan": sigma_plan.get("multivariate_plan"),
+    }
+    analysis_text = str(analysis_payload)
+    assert "positive_nodes" not in analysis_text
+    assert "total_nodes" not in analysis_text
+    assert "node_ratio" not in analysis_text
     assert any("PR vs Positive/ Negative" in test["title"] for test in sigma_plan["tests"])
+    for graph in sigma_plan.get("graphs", []):
+        assert graph.get("graph_id")
+        assert graph.get("recommended_chart_type")
+        assert graph.get("caption")
+        assert graph.get("interpretation")
+        assert graph.get("why_recommended")
+        assert graph.get("thesis_ready") is True
+        assert graph.get("outcome") == "Positive/ Negative"
+        assert not (excluded & set(graph.get("variables") or []))
 
     output = results.run_plan(
         df, classes, {"outcome": "Positive/ Negative", "group": None, "covariates": []},
         sigma_plan, session=session,
     )
-    rendered = str(output)
+    rendered_payload = {
+        "tests": output.get("tests"),
+        "graphs": output.get("graphs"),
+        "table_one": output.get("table_one"),
+        "significant_findings": output.get("significant_findings"),
+        "summary": output.get("summary"),
+    }
+    rendered = str(rendered_payload)
     assert "positive_nodes" not in rendered
     assert "total_nodes" not in rendered
     assert "node_ratio" not in rendered

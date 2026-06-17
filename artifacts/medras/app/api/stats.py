@@ -513,7 +513,7 @@ def _infer_study_design(text: str) -> str:
 
 def _infer_study_type(text: str) -> str:
     lower = text.lower()
-    if any(w in lower for w in ["sensitivity", "specificity", "roc", "auc", "diagnostic accuracy"]):
+    if _has_diagnostic_accuracy_terms(lower):
         return "diagnostic"
     if any(w in lower for w in ["survival", "mortality", "time to event", "kaplan", "disease-free"]):
         return "survival"
@@ -526,6 +526,23 @@ def _infer_study_type(text: str) -> str:
     if any(w in lower for w in ["prevalence", "incidence", "frequency", "profile"]):
         return "descriptive"
     return "association"
+
+
+def _has_diagnostic_accuracy_terms(text: str) -> bool:
+    lower = text.lower()
+    return any(w in lower for w in [
+        "sensitivity", "specificity", "roc", "auc", "gold standard",
+        "diagnostic test", "diagnostic accuracy", "screening", "cutoff",
+        "cut-off", "ppv", "npv",
+    ])
+
+
+def _has_association_terms(text: str) -> bool:
+    lower = text.lower()
+    return any(w in lower for w in [
+        "prognostic significance", "association", "correlation", "relationship",
+        "expression", "clinicopathological", "clinicopathologic",
+    ])
 
 
 def _infer_marker_and_outcome(text: str) -> tuple[str, str, list[str]]:
@@ -602,9 +619,22 @@ def _normalize_proposal_extract(
     profile = domain_profiles.normalize_profile(
         data.get("domain_profile") or _infer_domain_profile(text)
     )
+    text_lower = text.lower()
+    proposed_study_type = str(data.get("study_type") or "").strip().lower()
     study_type = str(data.get("study_type") or _infer_study_type(text)).strip().lower()
     if study_type not in _VALID_STUDY_TYPES:
         study_type = _infer_study_type(text)
+    warnings = _as_list(data.get("warnings"))
+    if (
+        study_type == "diagnostic"
+        and _has_association_terms(text_lower)
+        and not _has_diagnostic_accuracy_terms(text_lower)
+    ):
+        study_type = "association"
+        if proposed_study_type == "diagnostic":
+            warnings.append(
+                "AI suggested diagnostic accuracy, but the proposal language indicates a prognostic/association study; Sigma corrected study_type to association."
+            )
     marker, outcome_concept, outcome_candidates = _infer_marker_and_outcome(text)
     marker = str(data.get("main_marker") or marker).strip()
     outcome_concept = str(
@@ -632,6 +662,13 @@ def _normalize_proposal_extract(
     layers = _as_list(data.get("recommended_analysis_layers")) or [
         "descriptive", "bivariate", "multivariate_if_eligible"
     ]
+    heuristic_primary = _heuristic_objective(text)
+    if heuristic_primary and (
+        len(primary) > 900
+        or not any(token in primary.lower() for token in ["aim", "objective", "assess", "evaluate", "study", "determine", "investigate"])
+    ):
+        primary = heuristic_primary
+
     result = {
         "study_title": title,
         "study_design": str(data.get("study_design") or _infer_study_design(text)).strip(),
@@ -657,7 +694,7 @@ def _normalize_proposal_extract(
         "fallback_used": fallback_used,
         "redaction_applied": redaction_applied,
         "phi_blocked": phi_blocked,
-        "warnings": _as_list(data.get("warnings")),
+        "warnings": list(dict.fromkeys(warnings)),
     }
     # Backward-compatible fields used by the current wizard.
     result["objective"] = primary
@@ -674,7 +711,15 @@ def _heuristic_objective(text: str) -> str:
     )
     m = obj_pat.search(text)
     if m:
-        return _re.sub(r"\s+", " ", m.group(1).strip())[:800]
+        objective = m.group(1).strip()
+        continuation = _re.match(
+            r"\s*(?:and\s+)?to\s+(?:assess|evaluate|study|determine|investigate|examine|analyse|analyze)\b[^\n]+",
+            text[m.end():],
+            _re.IGNORECASE,
+        )
+        if continuation:
+            objective = f"{objective} {continuation.group(0).strip()}"
+        return _re.sub(r"\s+", " ", objective)[:800]
     para_pat = _re.compile(
         r"(?:to\s+(?:study|evaluate|compare|assess|determine|investigate|"
         r"examine|analyse|analyze)\b.{20,500})",
