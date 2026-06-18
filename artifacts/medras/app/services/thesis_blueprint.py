@@ -353,18 +353,37 @@ def build_thesis_analysis_blueprint(
     )
     warnings: List[str] = []
     unavailable: List[Dict[str, Any]] = []
+    plan_debug = plan.get("debug") or {}
     excluded = sorted(set(
         session.get("analysis_excluded_columns")
         or session.get("excluded_variables")
-        or (plan.get("debug") or {}).get("excluded_variables")
+        or plan_debug.get("excluded_variables")
         or []
     ))
     if excluded:
         warnings.append("Excluded variables are omitted from thesis tables and figures: " + ", ".join(excluded))
+    mapped_outcome = session.get("mapped_outcome") or plan_debug.get("mapped_outcome")
+    confirmed_outcome = session.get("confirmed_outcome_col") or plan_debug.get("confirmed_outcome_col")
+    displayed_outcome = session.get("displayed_outcome") or assignment.get("outcome") or plan_debug.get("displayed_outcome")
+    if mapped_outcome and displayed_outcome and mapped_outcome != displayed_outcome:
+        warnings.append("Outcome mismatch detected: mapped outcome differs from the executed/displayed outcome.")
+    if confirmed_outcome and displayed_outcome and confirmed_outcome != displayed_outcome:
+        warnings.append("Outcome mismatch detected: confirmed outcome differs from the executed/displayed outcome.")
     for suggestion in plan.get("suggestions") or []:
         warning = suggestion.get("warning") or suggestion.get("title")
         if warning:
             warnings.append(str(warning))
+    eligible_count = int(plan_debug.get("eligible_predictor_count") or 0)
+    bivariate_count = int(plan_debug.get("bivariate_test_count") or 0)
+    descriptive_only = any(str(test.get("id")) == "descriptive_only" for test in tests)
+    association_design = study_design in {
+        "cross_sectional_association", "cohort_prognostic_association",
+        "case_control", "two_group_comparison",
+    } or str(session.get("study_type") or plan_debug.get("study_type") or "") in {"association", "comparison"}
+    if association_design and eligible_count > 0 and bivariate_count == 0:
+        warnings.append("Association study has eligible predictors but no bivariate tests were executed.")
+    if association_design and descriptive_only:
+        warnings.append("Analysis incomplete for thesis association reporting.")
 
     domain_profile = str(session.get("domain_profile") or "generic")
     sections: List[Dict[str, Any]] = [_baseline_section(table_one, classes, outcome)]
@@ -508,8 +527,30 @@ def build_thesis_analysis_blueprint(
 
     n_rows = df_shape[0] if df_shape else session.get("n")
     n_cols = df_shape[1] if df_shape else None
+    thesis_ready = not any(
+        warning in set(warnings)
+        for warning in {
+            "Association study has eligible predictors but no bivariate tests were executed.",
+            "Analysis incomplete for thesis association reporting.",
+        }
+    ) and not any("Outcome mismatch detected" in warning for warning in warnings)
     return {
         "title": "Observation and Results",
+        "thesis_ready": thesis_ready,
+        "debug_metadata": {
+            "canonical_outcome": outcome or "",
+            "displayed_outcome": displayed_outcome or "",
+            "mapped_outcome": mapped_outcome or "",
+            "confirmed_outcome_col": confirmed_outcome or "",
+            "study_type_raw": session.get("raw_study_type") or plan_debug.get("study_type_raw") or plan_debug.get("raw_study_type") or "",
+            "study_type_normalized": session.get("study_type") or plan_debug.get("study_type_normalized") or plan_debug.get("study_type") or study_design,
+            "predictor_source": session.get("predictor_source") or plan_debug.get("predictor_source") or "",
+            "eligible_predictor_count": eligible_count,
+            "bivariate_test_count": bivariate_count,
+            "graph_count": int(plan_debug.get("graph_count") or len(graphs)),
+            "descriptive_only_reason": plan_debug.get("descriptive_only_reason"),
+            "blueprint_thesis_ready": thesis_ready,
+        },
         "study_summary": {
             "n": n_rows,
             "n_variables": n_cols,

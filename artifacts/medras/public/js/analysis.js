@@ -4409,6 +4409,7 @@ function renderThesisBlueprint(blueprint) {
   const findings = Array.isArray(blueprint.significant_findings) ? blueprint.significant_findings : [];
   const warnings = Array.isArray(blueprint.warnings) ? blueprint.warnings : [];
   const unavailable = Array.isArray(blueprint.unavailable_or_recommended_only) ? blueprint.unavailable_or_recommended_only : [];
+  const debug = blueprint.debug_metadata || {};
   const sectionRows = sections.map((section) => [
     section.title || section.section_id || "",
     section.purpose || "",
@@ -4431,8 +4432,24 @@ function renderThesisBlueprint(blueprint) {
     (figure.warnings || []).join("; "),
   ]);
   return `<h3>${escapeHtml(blueprint.title || "Thesis-ready outline")}</h3>
+    <p><strong>Blueprint status:</strong> ${blueprint.thesis_ready ? "Thesis-ready draft structure" : "Needs review before thesis use"}</p>
     <p><strong>Study design:</strong> ${escapeHtml(blueprint.study_design || "")}</p>
     <p><strong>Primary outcome:</strong> ${escapeHtml(blueprint.primary_outcome || "")}</p>
+    <details class="se-debug-details"><summary>Planning debug</summary>
+      ${tableHtml(["Field", "Value"], [
+        ["Canonical outcome", debug.canonical_outcome || ""],
+        ["Displayed outcome", debug.displayed_outcome || ""],
+        ["Mapped outcome", debug.mapped_outcome || ""],
+        ["Confirmed outcome", debug.confirmed_outcome_col || ""],
+        ["Study type raw", debug.study_type_raw || ""],
+        ["Study type normalized", debug.study_type_normalized || ""],
+        ["Predictor source", debug.predictor_source || ""],
+        ["Eligible predictors", debug.eligible_predictor_count || 0],
+        ["Bivariate tests", debug.bivariate_test_count || 0],
+        ["Graphs", debug.graph_count || 0],
+        ["Descriptive-only reason", debug.descriptive_only_reason || ""],
+      ])}
+    </details>
     <h4>Section outline</h4>
     ${sectionRows.length ? tableHtml(["Section", "Purpose", "Tables", "Figures", "Interpretation"], sectionRows) : "<p>No thesis sections were generated.</p>"}
     <h4>Planned thesis tables</h4>

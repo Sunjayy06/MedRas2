@@ -230,6 +230,8 @@ def verify_confirmed_outcome_handoff(proposal: dict) -> None:
         )
         assert classified.status_code == 200, classified.text
 
+        poisoned_proposal = dict(proposal)
+        poisoned_proposal["study_type"] = "diagnostic"
         setup = client.post(
             "/api/stats/setup-study",
             json={
@@ -237,13 +239,16 @@ def verify_confirmed_outcome_handoff(proposal: dict) -> None:
                 "description": P27_PROPOSAL,
                 "outcome_hint": "",
                 "profile": "breast_pathology",
-                "proposal_metadata": proposal,
+                "proposal_metadata": poisoned_proposal,
             },
         )
         assert setup.status_code == 200, setup.text
         setup_body = setup.json()
         assert setup_body["domain_profile"] == "breast_pathology"
         assert setup_body["study_type"] == "association"
+        assert setup_body["study_type_raw"] == "diagnostic"
+        assert setup_body["study_type_normalized"] == "association"
+        assert any("normalized this to an association study" in warning for warning in setup_body["warnings"])
         assert setup_body["outcome_col"] == "Positive/ Negative"
         assert setup_body["proposal_mapping"]["mapped_outcome"] == "Positive/ Negative"
         assert "PR" in setup_body["proposal_mapping"]["mapped_predictors"]
@@ -265,11 +270,13 @@ def verify_confirmed_outcome_handoff(proposal: dict) -> None:
             "/api/stats/confirm-study",
             json={
                 "job_id": job_id,
-                "study_type": setup_body["study_type"],
+                "study_type": "diagnostic",
                 "outcome_col": "PR",  # stale hidden/browser value should not beat mapped outcome
             },
         )
         assert confirmed.status_code == 200, confirmed.text
+        assert confirmed.json()["study_type"] == "association"
+        assert confirmed.json()["study_type_raw"] == "diagnostic"
         assert confirmed.json()["outcome_col"] == "Positive/ Negative"
         assert confirmed.json()["assignment"]["outcome"] == "Positive/ Negative"
         assert confirmed.json()["assignment"]["group"] is None
@@ -346,7 +353,11 @@ def verify_confirmed_outcome_handoff(proposal: dict) -> None:
         plan_body = generated.json()
         debug = plan_body["debug"]
         assert debug["canonical_outcome"] == "Positive/ Negative"
+        assert debug["mapped_outcome"] == "Positive/ Negative"
+        assert debug["confirmed_outcome_col"] == "Positive/ Negative"
         assert debug["study_type"] == "association"
+        assert debug["study_type_raw"] == "association"
+        assert debug["study_type_normalized"] == "association"
         assert debug["eligible_predictor_count"] > 0
         assert "Age" in debug["eligible_predictors_preview"]
         assert "PR" in debug["eligible_predictors_preview"]
@@ -421,9 +432,112 @@ def verify_confirmed_outcome_handoff(proposal: dict) -> None:
         assert "total_nodes" not in result_analysis_text
         assert "node_ratio" not in result_analysis_text
         assert "significant_findings" in results
+        assert results["debug"]["blueprint_thesis_ready"] is True
+        blueprint = results["thesis_analysis_blueprint"]
+        assert blueprint["thesis_ready"] is True
+        assert "bivariate_associations" in {section["section_id"] for section in blueprint["analysis_sections"]}
+        assert blueprint["debug_metadata"]["study_type_normalized"] == "association"
+        assert blueprint["debug_metadata"]["eligible_predictor_count"] > 0
+        assert blueprint["debug_metadata"]["bivariate_test_count"] > 0
+        assert not any("Analysis incomplete" in warning for warning in blueprint["warnings"])
         for graph in plan_body["plan"].get("graphs", []):
             assert graph.get("outcome") == "Positive/ Negative"
             assert "PR" not in str(graph.get("outcome"))
+
+
+def verify_generic_study_type_guardrails() -> None:
+    with TestClient(app) as client:
+        diagnostic_df = pd.DataFrame({
+            "Index test score": [0.1, 0.8, 0.7, 0.2],
+            "Gold standard diagnosis": ["Negative", "Positive", "Positive", "Negative"],
+            "Age": [40, 51, 62, 47],
+        })
+        payload = BytesIO()
+        diagnostic_df.to_excel(payload, index=False)
+        payload.seek(0)
+        upload = client.post(
+            "/api/stats/upload",
+            files={"file": ("diagnostic.xlsx", payload.getvalue(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+            data={"profile": "generic"},
+        )
+        assert upload.status_code == 200, upload.text
+        job_id = upload.json()["job_id"]
+        classified = client.post("/api/stats/classify", json={"job_id": job_id, "overrides": [], "profile": "generic"})
+        assert classified.status_code == 200, classified.text
+        setup = client.post(
+            "/api/stats/setup-study",
+            json={
+                "job_id": job_id,
+                "description": "Evaluate diagnostic accuracy, sensitivity, specificity and ROC AUC of an index test against the gold standard diagnosis.",
+                "profile": "generic",
+                "proposal_metadata": {
+                    "study_type": "diagnostic",
+                    "main_outcome_concept": "Gold standard diagnosis",
+                    "candidate_outcomes": ["Gold standard diagnosis"],
+                },
+            },
+        )
+        assert setup.status_code == 200, setup.text
+        assert setup.json()["study_type"] == "diagnostic"
+
+        prognostic_df = pd.DataFrame({
+            "Marker": ["High", "Low", "High", "Low"],
+            "Outcome": ["Positive", "Negative", "Positive", "Negative"],
+            "Age": [40, 51, 62, 47],
+        })
+        payload = BytesIO()
+        prognostic_df.to_excel(payload, index=False)
+        payload.seek(0)
+        upload = client.post(
+            "/api/stats/upload",
+            files={"file": ("prognostic.xlsx", payload.getvalue(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+            data={"profile": "generic"},
+        )
+        assert upload.status_code == 200, upload.text
+        job_id = upload.json()["job_id"]
+        classified = client.post("/api/stats/classify", json={"job_id": job_id, "overrides": [], "profile": "generic"})
+        assert classified.status_code == 200, classified.text
+        setup = client.post(
+            "/api/stats/setup-study",
+            json={
+                "job_id": job_id,
+                "description": "Assess prognostic significance and association of marker expression with clinicopathological outcome.",
+                "profile": "generic",
+                "proposal_metadata": {"study_type": "survival", "main_outcome_concept": "Outcome"},
+            },
+        )
+        assert setup.status_code == 200, setup.text
+        assert setup.json()["study_type"] == "association"
+        assert any("normalized this to an association study" in warning for warning in setup.json()["warnings"])
+
+        survival_df = pd.DataFrame({
+            "Follow-up time months": [10, 15, 8, 20],
+            "Death event": [1, 0, 1, 0],
+            "Group": ["A", "A", "B", "B"],
+        })
+        payload = BytesIO()
+        survival_df.to_excel(payload, index=False)
+        payload.seek(0)
+        upload = client.post(
+            "/api/stats/upload",
+            files={"file": ("survival.xlsx", payload.getvalue(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+            data={"profile": "generic"},
+        )
+        assert upload.status_code == 200, upload.text
+        job_id = upload.json()["job_id"]
+        classified = client.post("/api/stats/classify", json={"job_id": job_id, "overrides": [], "profile": "generic"})
+        assert classified.status_code == 200, classified.text
+        setup = client.post(
+            "/api/stats/setup-study",
+            json={
+                "job_id": job_id,
+                "description": "Compare overall survival using follow-up time, death event, Kaplan-Meier curves and Cox regression.",
+                "profile": "generic",
+                "proposal_metadata": {"study_type": "survival"},
+            },
+        )
+        assert setup.status_code == 200, setup.text
+        assert setup.json()["study_type"] == "survival"
 
 
 def verify_static_wiring() -> None:
@@ -453,6 +567,7 @@ def main() -> None:
     verify_safe_fallbacks()
     verify_planner_integration(mapping)
     verify_confirmed_outcome_handoff(proposal)
+    verify_generic_study_type_guardrails()
     verify_static_wiring()
     print("Sigma proposal understanding verification passed.")
 

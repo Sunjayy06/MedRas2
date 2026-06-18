@@ -253,6 +253,9 @@ def _build_session_view(entry, classifications, assignment) -> Dict[str, Any]:
         or ai_study.get("study_type")
     )
     study_type = _normalize_study_type_token(raw_study_type)
+    proposal_mapping = ai_study.get("proposal_mapping") or {}
+    mapped_outcome = proposal_mapping.get("mapped_outcome")
+    confirmed_outcome = entry.meta.get("confirmed_outcome_col")
     outcome = (assignment or {}).get("outcome")
     eligible_predictors = [
         c.get("column") for c in (classifications or [])
@@ -291,6 +294,9 @@ def _build_session_view(entry, classifications, assignment) -> Dict[str, Any]:
         "covariates": list((assignment or {}).get("covariates") or []),
         "study_type": study_type,
         "raw_study_type": raw_study_type,
+        "mapped_outcome": mapped_outcome,
+        "confirmed_outcome_col": confirmed_outcome,
+        "displayed_outcome": outcome,
         "study_type_confirmed": bool(entry.meta.get("confirmed_study_type")),
         "analysis_predictors": analysis_predictors,
         "predictor_source": predictor_source,
@@ -479,6 +485,8 @@ Rules:
 - For breast carcinoma / IHC marker studies, use domain_profile "breast_pathology".
 - For p27 studies, main_marker should be "p27" and main_outcome_concept should be "p27 expression status" when the study evaluates p27 expression.
 - Treat ER, PR, HER2, AR, EGFR, Ki67 and molecular subtype as predictors unless the proposal explicitly makes one the main outcome.
+- Do not label marker-expression / clinicopathological / prognostic-significance objectives as diagnostic accuracy unless the text explicitly asks for sensitivity, specificity, ROC/AUC, PPV/NPV, cutoff, screening, or a gold-standard diagnostic-test evaluation.
+- Do not label a study survival/time-to-event unless the text explicitly mentions follow-up time, survival time, censoring, Kaplan-Meier, Cox regression, hazard ratio, OS/DFS, death, mortality, recurrence-free survival, or disease-free survival.
 - Extract stated sample size as an integer. If absent, use null.
 - Suggested analysis layers are descriptive, bivariate, and multivariate_if_eligible for retrospective observational association/prognostic studies.
 
@@ -595,8 +603,84 @@ def _has_association_terms(text: str) -> bool:
     lower = text.lower()
     return any(w in lower for w in [
         "prognostic significance", "association", "correlation", "relationship",
-        "expression", "clinicopathological", "clinicopathologic",
+        "expression", "clinicopathological", "clinicopathologic", "ihc",
+        "immunohistochemistry", "marker", "receptor", "risk factor",
     ])
+
+
+def _dataset_has_diagnostic_accuracy_inputs(
+    columns: list[str],
+    classifications: Optional[List[Dict[str, Any]]] = None,
+) -> bool:
+    classes = {row.get("column"): row for row in classifications or [] if row.get("column")}
+    has_reference = False
+    has_test = False
+    for col in columns:
+        label = _norm_label(col)
+        detected = str((classes.get(col) or {}).get("detected_type") or "").lower()
+        if any(term in label for term in [
+            "gold standard", "reference", "truth", "true disease", "disease status",
+            "diagnosis", "final diagnosis", "case control",
+        ]):
+            has_reference = True
+        if any(term in label for term in [
+            "test", "score", "index", "marker", "assay", "screening", "cutoff",
+            "cut off", "prediction",
+        ]) or detected == "scale":
+            has_test = True
+    return has_reference and has_test
+
+
+def _dataset_has_survival_inputs(
+    columns: list[str],
+    classifications: Optional[List[Dict[str, Any]]] = None,
+) -> bool:
+    classes = {row.get("column"): row for row in classifications or [] if row.get("column")}
+    has_time = False
+    has_event = False
+    for col in columns:
+        label = _norm_label(col)
+        detected = str((classes.get(col) or {}).get("detected_type") or "").lower()
+        if any(term in label for term in [
+            "follow up", "followup", "time to", "survival time", "duration",
+            "months", "days", "weeks", "event time",
+        ]):
+            has_time = True
+        if any(term in label for term in [
+            "event", "death", "died", "mortality", "recurrence", "progression",
+            "censor", "censored", "status",
+        ]) and detected in {"nominal", "ordinal", "discrete", "scale", "binary"}:
+            has_event = True
+    return has_time and has_event
+
+
+def _normalize_study_type_for_dataset(
+    study_type: Any,
+    *,
+    text: str = "",
+    columns: Optional[list[str]] = None,
+    classifications: Optional[List[Dict[str, Any]]] = None,
+    warnings: Optional[list[str]] = None,
+) -> tuple[str, list[str]]:
+    warnings = list(warnings or [])
+    raw = _normalize_study_type_token(study_type) or _infer_study_type(text)
+    lower = str(text or "").lower()
+    columns = columns or []
+    if raw == "diagnostic":
+        if not _has_diagnostic_accuracy_terms(lower) or not _dataset_has_diagnostic_accuracy_inputs(columns, classifications):
+            warnings.append(
+                "Diagnostic accuracy was suggested, but diagnostic-test wording and required reference/test columns were not both present; Sigma normalized this to an association study."
+            )
+            return "association", list(dict.fromkeys(warnings))
+    if raw == "survival":
+        if not _has_survival_terms(lower) or not _dataset_has_survival_inputs(columns, classifications):
+            warnings.append(
+                "Survival analysis was suggested, but time-to-event wording and required time/event columns were not both present; Sigma normalized this to an association study."
+            )
+            return "association", list(dict.fromkeys(warnings))
+    if raw not in _VALID_STUDY_TYPES:
+        raw = _infer_study_type(text)
+    return raw, list(dict.fromkeys(warnings))
 
 
 def _infer_marker_and_outcome(text: str) -> tuple[str, str, list[str]]:
@@ -2136,8 +2220,13 @@ def _plan_debug_metadata(
         )
     return {
         "canonical_outcome": outcome,
+        "displayed_outcome": session_view.get("displayed_outcome"),
+        "mapped_outcome": session_view.get("mapped_outcome"),
+        "confirmed_outcome_col": session_view.get("confirmed_outcome_col"),
         "study_type": session_view.get("study_type"),
+        "study_type_normalized": session_view.get("study_type"),
         "raw_study_type": session_view.get("raw_study_type"),
+        "study_type_raw": session_view.get("raw_study_type"),
         "predictor_source": session_view.get("predictor_source"),
         "eligible_predictor_count": len(eligible),
         "eligible_predictors_preview": eligible[:20],
@@ -2399,6 +2488,9 @@ async def run_analysis(payload: RunAnalysisRequest) -> Dict[str, Any]:
         confirmed_graph_ids=payload.confirmed_graph_ids or None,
         session=session_view,
     )
+    blueprint = res.get("thesis_analysis_blueprint") or {}
+    debug["blueprint_thesis_ready"] = blueprint.get("thesis_ready")
+    res["debug"] = debug
     res = _publish_results(entry, payload.job_id, res)
     _title = (entry.meta.get("study_description") or "").strip() or "Untitled analysis"
     _var_count = sum(
@@ -2672,13 +2764,33 @@ async def confirm_study(payload: ConfirmStudyRequest) -> Dict[str, Any]:
             status_code=400,
             detail=f"Column '{outcome_col}' not found in dataset.",
         )
-    entry.meta["confirmed_study_type"] = payload.study_type
+    classifications = entry.meta.get("classifications") or _classify_entry(entry)
+    entry.meta["classifications"] = classifications
+    proposal = pending.get("proposal_understanding") or existing_ai.get("proposal_understanding") or entry.meta.get("proposal_understanding") or {}
+    study_text = " ".join([
+        str(pending.get("reasoning") or existing_ai.get("reasoning") or ""),
+        str((proposal.get("objectives") or {}).get("primary") if isinstance(proposal.get("objectives"), dict) else ""),
+        str(proposal.get("study_title") or ""),
+        str(proposal.get("analysis_intent") or ""),
+    ])
+    normalized_type, type_warnings = _normalize_study_type_for_dataset(
+        payload.study_type,
+        text=study_text,
+        columns=list(entry.df.columns),
+        classifications=classifications,
+        warnings=_as_list(pending.get("warnings") or existing_ai.get("warnings")),
+    )
+    previous_study_type = entry.meta.get("confirmed_study_type")
+    entry.meta["confirmed_study_type"] = normalized_type
     entry.meta["confirmed_outcome_col"] = outcome_col
     entry.meta["ai_study"] = {
         **(entry.meta.get("pending_ai_study") or entry.meta.get("ai_study") or {}),
-        "study_type": payload.study_type,
+        "study_type_raw": payload.study_type,
+        "study_type": normalized_type,
+        "study_type_normalized": normalized_type,
         "outcome_col": outcome_col,
         "source": "confirmed",
+        "warnings": type_warnings,
     }
     if mapped_outcome in entry.df.columns:
         entry.meta["ai_study"].setdefault("proposal_mapping", {})["mapped_outcome"] = mapped_outcome
@@ -2689,7 +2801,7 @@ async def confirm_study(payload: ConfirmStudyRequest) -> Dict[str, Any]:
         "covariates": [c for c in list(current_assignment.get("covariates") or []) if c != outcome_col],
         "source": "confirmed_mapped_outcome" if outcome_col else "confirmed_setup",
     }
-    if current_assignment != confirmed_assignment:
+    if current_assignment != confirmed_assignment or previous_study_type != normalized_type:
         _invalidate_downstream(entry, keep_normality=True)
     entry.meta["assignment"] = confirmed_assignment
     entry.meta.pop("pending_ai_study", None)
@@ -2702,10 +2814,13 @@ async def confirm_study(payload: ConfirmStudyRequest) -> Dict[str, Any]:
         entry.meta.pop("classifications", None)  # force re-classify on cleaned data
     return {
         "status": "confirmed",
-        "study_type": payload.study_type,
+        "study_type": normalized_type,
+        "study_type_raw": payload.study_type,
+        "study_type_normalized": normalized_type,
         "outcome_col": outcome_col,
         "assignment": entry.meta["assignment"],
         "confirmed_outcome_col": entry.meta.get("confirmed_outcome_col"),
+        "warnings": type_warnings,
         "yesno_cleaned": list(yn_notes.keys()),
     }
 
@@ -3001,6 +3116,28 @@ async def setup_study(request: Request, payload: SetupStudyRequest) -> Dict[str,
     # Augment with outcome_hint if provided and AI didn't detect an outcome
     if payload.outcome_hint.strip() and not result.get("outcome_col"):
         result["outcome_col"] = payload.outcome_hint.strip()
+    study_text = " ".join([
+        str(payload.description or ""),
+        str((proposal_metadata or {}).get("objectives", {}).get("primary") if isinstance((proposal_metadata or {}).get("objectives"), dict) else ""),
+        str((proposal_metadata or {}).get("study_title") or ""),
+        str((proposal_metadata or {}).get("analysis_intent") or ""),
+    ])
+    normalized_type, type_warnings = _normalize_study_type_for_dataset(
+        result.get("study_type"),
+        text=study_text,
+        columns=columns,
+        classifications=classifications,
+        warnings=_as_list(result.get("warnings")),
+    )
+    if normalized_type != result.get("study_type"):
+        result["study_type_raw"] = result.get("study_type")
+    result["study_type"] = normalized_type
+    result["study_type_normalized"] = normalized_type
+    result["warnings"] = type_warnings
+    if mapping.get("mapped_outcome") and payload.outcome_hint.strip() and payload.outcome_hint.strip() != mapping.get("mapped_outcome"):
+        result["warnings"].append(
+            f"Stale outcome '{payload.outcome_hint.strip()}' was corrected to mapped outcome '{mapping['mapped_outcome']}'."
+        )
     entry.meta["pending_ai_study"] = result
     return result
 
