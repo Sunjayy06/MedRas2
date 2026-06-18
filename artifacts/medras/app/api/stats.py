@@ -294,6 +294,7 @@ def _build_session_view(entry, classifications, assignment) -> Dict[str, Any]:
         "study_type_confirmed": bool(entry.meta.get("confirmed_study_type")),
         "analysis_predictors": analysis_predictors,
         "predictor_source": predictor_source,
+        "analysis_excluded_columns": _analysis_excluded_columns(entry),
         "domain_profile": _domain_profile(entry),
         # Future wizard work will populate these:
         "paired": bool(intake.get("paired")) if isinstance(intake, dict) else False,

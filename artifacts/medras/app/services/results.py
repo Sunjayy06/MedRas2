@@ -1767,6 +1767,21 @@ def run_plan(
     _has_forest_tests = any(
         t.get("id") in _FOREST_PLOT_TEST_IDS for t in test_results
     )
+    from app.services.thesis_blueprint import build_thesis_analysis_blueprint
+
+    thesis_blueprint = build_thesis_analysis_blueprint(
+        df_shape=df.shape,
+        classifications=classifications,
+        assignment=assignment,
+        plan=plan,
+        table_one=table_one,
+        tests=test_results,
+        graphs=graph_results,
+        significant_findings=significant_findings,
+        methods_text=methods_md,
+        results_narrative=results_md,
+        session=session,
+    )
     return {
         "table_one": table_one,
         "tests": test_results,
@@ -1777,6 +1792,7 @@ def run_plan(
         "plan_mismatch": plan_mismatch,
         "correction_info": correction_info,
         "significant_findings": significant_findings,
+        "thesis_analysis_blueprint": thesis_blueprint,
         "summary": {
             "outcome": outcome,
             "group": group,

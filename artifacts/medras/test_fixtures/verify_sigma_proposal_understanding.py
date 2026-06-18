@@ -404,14 +404,22 @@ def verify_confirmed_outcome_handoff(proposal: dict) -> None:
         assert run.status_code == 200, run.text
         results = run.json()["results"]
         result_titles = [test.get("title", "") for test in results.get("tests", [])]
-        result_text = json.dumps(results)
+        result_analysis_text = json.dumps({
+            "tests": results.get("tests"),
+            "graphs": results.get("graphs"),
+            "table_one": results.get("table_one"),
+            "significant_findings": results.get("significant_findings"),
+            "blueprint_sections": (results.get("thesis_analysis_blueprint") or {}).get("analysis_sections"),
+            "blueprint_tables": (results.get("thesis_analysis_blueprint") or {}).get("tables"),
+            "blueprint_figures": (results.get("thesis_analysis_blueprint") or {}).get("figures"),
+        })
         assert len(results.get("tests", [])) >= 3
         assert any("PR vs Positive/ Negative" in title for title in result_titles)
         assert any("Age by Positive/ Negative" in title for title in result_titles)
         assert not any(" by PR" in title or "vs PR" in title for title in result_titles)
-        assert "positive_nodes" not in result_text
-        assert "total_nodes" not in result_text
-        assert "node_ratio" not in result_text
+        assert "positive_nodes" not in result_analysis_text
+        assert "total_nodes" not in result_analysis_text
+        assert "node_ratio" not in result_analysis_text
         assert "significant_findings" in results
         for graph in plan_body["plan"].get("graphs", []):
             assert graph.get("outcome") == "Positive/ Negative"

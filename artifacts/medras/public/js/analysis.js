@@ -4304,6 +4304,9 @@ function renderResults() {
   if ((r.tests || []).some((test) => resultFamily(test) === "other")) {
     tabDefs.push({ id: "tab-family-other", label: "Other analyses" });
   }
+  if (r.thesis_analysis_blueprint) {
+    tabDefs.push({ id: "tab-thesis-blueprint", label: "Thesis blueprint" });
+  }
   tabDefs.push({ id: "tab-significant", label: "Significant findings" });
   tabDefs.push({ id: "tab-narrative", label: "Methods + Results" });
   tabs.innerHTML = tabDefs.map((t, i) =>
@@ -4377,6 +4380,10 @@ function renderResultsPane(tabId) {
     bindCopyTable();
     return;
   }
+  if (tabId === "tab-thesis-blueprint") {
+    pane.innerHTML = renderThesisBlueprint(r.thesis_analysis_blueprint || {});
+    return;
+  }
   if (tabId === "tab-narrative") {
     pane.innerHTML = `<h3>Methods</h3><p>${escapeHtml(r.methods_md || '')}</p>
       <h3>Results</h3><p>${escapeHtml(r.results_md || '').replace(/\n\n/g, '</p><p>')}</p>
@@ -4393,6 +4400,56 @@ function renderResultsPane(tabId) {
   if (!test) { pane.innerHTML = ""; return; }
   pane.innerHTML = renderResultTestBlock(test);
   bindCopyTable();
+}
+
+function renderThesisBlueprint(blueprint) {
+  const sections = Array.isArray(blueprint.analysis_sections) ? blueprint.analysis_sections : [];
+  const tables = Array.isArray(blueprint.tables) ? blueprint.tables : [];
+  const figures = Array.isArray(blueprint.figures) ? blueprint.figures : [];
+  const findings = Array.isArray(blueprint.significant_findings) ? blueprint.significant_findings : [];
+  const warnings = Array.isArray(blueprint.warnings) ? blueprint.warnings : [];
+  const unavailable = Array.isArray(blueprint.unavailable_or_recommended_only) ? blueprint.unavailable_or_recommended_only : [];
+  const sectionRows = sections.map((section) => [
+    section.title || section.section_id || "",
+    section.purpose || "",
+    Array.isArray(section.tables) ? section.tables.length : 0,
+    Array.isArray(section.figures) ? section.figures.length : 0,
+    section.interpretation || "",
+  ]);
+  const tableRows = tables.map((table) => [
+    table.title || table.table_id || "",
+    table.table_type || "",
+    (table.source_variables || []).join(", "),
+    table.thesis_ready ? "Yes" : "Needs review",
+    (table.warnings || []).join("; "),
+  ]);
+  const figureRows = figures.map((figure) => [
+    figure.title || figure.figure_id || "",
+    figure.graph_type || "",
+    (figure.source_variables || []).join(", "),
+    figure.thesis_ready ? "Yes" : "Preview pending",
+    (figure.warnings || []).join("; "),
+  ]);
+  return `<h3>${escapeHtml(blueprint.title || "Thesis-ready outline")}</h3>
+    <p><strong>Study design:</strong> ${escapeHtml(blueprint.study_design || "")}</p>
+    <p><strong>Primary outcome:</strong> ${escapeHtml(blueprint.primary_outcome || "")}</p>
+    <h4>Section outline</h4>
+    ${sectionRows.length ? tableHtml(["Section", "Purpose", "Tables", "Figures", "Interpretation"], sectionRows) : "<p>No thesis sections were generated.</p>"}
+    <h4>Planned thesis tables</h4>
+    ${tableRows.length ? tableHtml(["Table", "Type", "Variables", "Thesis ready", "Warnings"], tableRows) : "<p>No thesis tables were generated.</p>"}
+    <h4>Planned thesis figures</h4>
+    ${figureRows.length ? tableHtml(["Figure", "Graph type", "Variables", "Thesis ready", "Warnings"], figureRows) : "<p>No thesis figures were generated.</p>"}
+    <h4>Methods paragraph</h4><p>${escapeHtml(blueprint.methods_text || "")}</p>
+    <h4>Significant findings</h4>
+    ${findings.length ? tableHtml(["Variable / parameter", "Key finding", "p-value", "Test applied"], findings.map((row) => [
+      row.variable || "", row.key_finding || "", row.p_value || "", row.test_applied || ""
+    ])) : "<p>No statistically significant completed tests were available for this blueprint.</p>"}
+    <h4>Warnings and cautions</h4>
+    ${warnings.length ? `<ul>${warnings.map((warning) => `<li>${escapeHtml(String(warning))}</li>`).join("")}</ul>` : "<p>No blueprint warnings.</p>"}
+    <h4>Unavailable or recommended-only analyses</h4>
+    ${unavailable.length ? tableHtml(["Analysis", "Status", "Reason"], unavailable.map((item) => [
+      item.title || item.section_id || "", item.status || "", item.reason || ""
+    ])) : "<p>No unavailable analysis sections were required by the completed results.</p>"}`;
 }
 
 function resultFamily(test) {
