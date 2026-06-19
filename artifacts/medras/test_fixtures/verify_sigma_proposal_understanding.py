@@ -549,6 +549,8 @@ def verify_static_wiring() -> None:
     assert "canonicalOutcomeFromPlan" in analysis_js
     assert "function setupVisibleOutcome" in analysis_js
     assert "mapping.mapped_outcome" in analysis_js
+    assert "blueprint.significant_findings" in analysis_js
+    assert "Detailed significant test results" in analysis_js
     assert "normalizeAiStudyPlan" in analysis_js
     assert "refreshStaleAssignmentIfNeeded" in analysis_js
     assert "MedRAS refreshed it to" in analysis_js

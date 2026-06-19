@@ -104,7 +104,15 @@ def verify_p27_association_blueprint() -> None:
     ]
     assert component_tables
     assert all(table["detailed_report_only"] for table in component_tables if table["table_type"].endswith("_thesis_table"))
+    raw_sig_text = str(output["significant_findings"])
+    assert "Interpretation-site" in raw_sig_text
+    assert "Staining Result" in raw_sig_text
     assert all("Interpretation-site" not in str(row) and "Staining Result" not in str(row) for row in blueprint["significant_findings"])
+    sig_table = next(table for table in blueprint["tables"] if table["table_id"] == "significant_findings")
+    assert sig_table["columns"] == [
+        "Variable / parameter", "Key finding", "Test statistic", "p-value",
+        "Adjusted p-value", "Test applied", "Effect size", "Notes/warnings",
+    ]
     biv = next(section for section in blueprint["analysis_sections"] if section["section_id"] == "bivariate_associations")
     assert len(biv["interpretation"]) < 500
     assert all("priority" in table and "detailed_report_only" in table for table in blueprint["tables"])
@@ -214,7 +222,13 @@ def verify_marker_component_filtering() -> None:
         classifications=[
             {"column": "Positive/ Negative", "detected_type": "nominal"},
             {"column": "Staining result", "detected_type": "ordinal"},
+            {"column": "Interpretation-site", "detected_type": "nominal"},
             {"column": "Age", "detected_type": "scale"},
+            {"column": "Histological type", "detected_type": "nominal"},
+            {"column": "ER", "detected_type": "nominal"},
+            {"column": "PR", "detected_type": "nominal"},
+            {"column": "Molecular subtype", "detected_type": "nominal"},
+            {"column": "AR", "detected_type": "nominal"},
         ],
         assignment={"outcome": "Positive/ Negative"},
         table_one={"headers": ["Variable", "Summary"], "rows": []},
@@ -228,6 +242,65 @@ def verify_marker_component_filtering() -> None:
                 "adjusted_p_value": "p = 0.010",
                 "test_applied": "Chi-square test",
                 "effect_size": "Cramer's V = 0.80",
+                "notes_warnings": "-",
+            },
+            {
+                "variable": "Interpretation-site vs Positive/ Negative",
+                "key_finding": "Component association.",
+                "p_value": "p = 0.002",
+                "adjusted_p_value": "p = 0.012",
+                "test_applied": "Chi-square test",
+                "effect_size": "Cramer's V = 0.75",
+                "notes_warnings": "-",
+            },
+            {
+                "variable": "Histological type vs Positive/ Negative",
+                "key_finding": "Histological type association.",
+                "test_statistic": "chi-square = 7.10",
+                "p_value": "p = 0.008",
+                "adjusted_p_value": "p = 0.020",
+                "test_applied": "Chi-square test",
+                "effect_size": "Cramer's V = 0.42",
+                "notes_warnings": "-",
+            },
+            {
+                "variable": "ER vs Positive/ Negative",
+                "key_finding": "ER association.",
+                "test_statistic": "chi-square = 8.00",
+                "p_value": "p = 0.005",
+                "adjusted_p_value": "p = 0.018",
+                "test_applied": "Chi-square test",
+                "effect_size": "Cramer's V = 0.46",
+                "notes_warnings": "-",
+            },
+            {
+                "variable": "PR vs Positive/ Negative",
+                "key_finding": "PR association.",
+                "test_statistic": "chi-square = 9.30",
+                "p_value": "p = 0.002",
+                "adjusted_p_value": "p = 0.012",
+                "test_applied": "Chi-square test",
+                "effect_size": "Cramer's V = 0.50",
+                "notes_warnings": "-",
+            },
+            {
+                "variable": "Molecular subtype vs Positive/ Negative",
+                "key_finding": "Molecular subtype association.",
+                "test_statistic": "chi-square = 11.20",
+                "p_value": "p = 0.001",
+                "adjusted_p_value": "p = 0.010",
+                "test_applied": "Chi-square test",
+                "effect_size": "Cramer's V = 0.55",
+                "notes_warnings": "-",
+            },
+            {
+                "variable": "AR vs Positive/ Negative",
+                "key_finding": "AR association.",
+                "test_statistic": "chi-square = 6.20",
+                "p_value": "p = 0.013",
+                "adjusted_p_value": "p = 0.030",
+                "test_applied": "Chi-square test",
+                "effect_size": "Cramer's V = 0.39",
                 "notes_warnings": "-",
             },
             {
@@ -249,7 +322,15 @@ def verify_marker_component_filtering() -> None:
         },
     )
     assert all("Staining result" not in str(row) for row in blueprint["significant_findings"])
+    assert all("Interpretation-site" not in str(row) for row in blueprint["significant_findings"])
+    filtered_text = str(blueprint["significant_findings"])
+    for expected in ["Histological type", "ER", "PR", "Molecular subtype", "AR"]:
+        assert expected in filtered_text
     sig_table = next(table for table in blueprint["tables"] if table["table_id"] == "significant_findings")
+    assert sig_table["columns"] == [
+        "Variable / parameter", "Key finding", "Test statistic", "p-value",
+        "Adjusted p-value", "Test applied", "Effect size", "Notes/warnings",
+    ]
     assert "Adjusted p-value" in sig_table["columns"]
     assert any("Age by Positive/ Negative" in str(row) for row in sig_table["rows"])
 

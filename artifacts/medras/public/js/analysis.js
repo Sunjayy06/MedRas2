@@ -4381,11 +4381,32 @@ function renderResultsPane(tabId) {
     return;
   }
   if (tabId === "tab-significant") {
-    const rows = Array.isArray(r.significant_findings) ? r.significant_findings : [];
+    const blueprint = r.thesis_analysis_blueprint || {};
+    const rows = Array.isArray(blueprint.significant_findings)
+      ? blueprint.significant_findings
+      : (Array.isArray(r.significant_findings) ? r.significant_findings : []);
+    const rawRows = Array.isArray(r.significant_findings) ? r.significant_findings : [];
     const correction = r.correction_info
       ? `<p class="se-correction-note">Multiple-comparison correction: ${escapeHtml(r.correction_info.method || "applied")} across ${escapeHtml(String(r.correction_info.n_tests || ""))} tests. Uncorrected and adjusted p-values are retained in the result details where available.</p>`
       : "";
-    pane.innerHTML = `<h3>Final statistically significant associations</h3>
+    const rawDetails = rawRows.length && rawRows.length !== rows.length
+      ? `<details class="se-debug-details"><summary>Detailed significant test results</summary>
+          ${tableHtml(
+            ["Variable / parameter", "Key finding", "Test statistic", "p-value", "Adjusted p-value", "Test applied", "Effect size", "Notes/warnings"],
+            rawRows.map((row) => [
+              row.variable || "",
+              row.key_finding || "",
+              row.test_statistic || "",
+              row.p_value || "",
+              row.adjusted_p_value || "",
+              row.test_applied || "",
+              row.effect_size || "",
+              row.notes_warnings || "",
+            ])
+          )}
+        </details>`
+      : "";
+    pane.innerHTML = `<h3>Final thesis significant associations</h3>
       ${correction}
       ${rows.length
         ? tableHtml(
@@ -4402,6 +4423,7 @@ function renderResultsPane(tabId) {
             ])
           )
         : '<p>No statistically significant associations were found at p &lt; 0.05 among the completed tests.</p>'}
+      ${rawDetails}
       <button type="button" class="btn btn-tertiary" data-action="copy-table" data-testid="button-copy-significant-findings">Copy table</button>`;
     bindCopyTable();
     return;
