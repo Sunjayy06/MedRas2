@@ -65,7 +65,10 @@ def verify_p27_association_blueprint() -> None:
         "domain_profile": "breast_pathology",
         "main_marker": "p27",
         "main_outcome_concept": "p27 expression status",
-        "analysis_predictors": ["Age", "Laterality", "pT", "Nodal status", "ER", "PR", "Molecular subtype"],
+        "analysis_predictors": [
+            "Age", "Laterality", "pT", "Nodal status", "ER", "PR",
+            "Molecular subtype", "Interpretation-site", "Staining Result",
+        ],
         "analysis_excluded_columns": ["positive_nodes"],
     }
     sigma_plan = plan.generate_plan(df, classes, assignment, _normality("Age"), session=session)
@@ -95,6 +98,13 @@ def verify_p27_association_blueprint() -> None:
         "figures": blueprint["figures"],
     })
     assert "marker_outcome_components" in _section_ids(blueprint)
+    component_tables = [
+        table for table in blueprint["tables"]
+        if any(var in {"Interpretation-site", "Staining Result"} for var in table.get("source_variables") or [])
+    ]
+    assert component_tables
+    assert all(table["detailed_report_only"] for table in component_tables if table["table_type"].endswith("_thesis_table"))
+    assert all("Interpretation-site" not in str(row) and "Staining Result" not in str(row) for row in blueprint["significant_findings"])
     biv = next(section for section in blueprint["analysis_sections"] if section["section_id"] == "bivariate_associations")
     assert len(biv["interpretation"]) < 500
     assert all("priority" in table and "detailed_report_only" in table for table in blueprint["tables"])

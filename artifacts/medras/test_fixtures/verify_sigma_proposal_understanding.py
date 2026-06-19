@@ -547,6 +547,8 @@ def verify_static_wiring() -> None:
     assert "proposal_metadata: proposalMetadataPayload()" in analysis_js
     assert "confirmedOutcomeFromState" in analysis_js
     assert "canonicalOutcomeFromPlan" in analysis_js
+    assert "function setupVisibleOutcome" in analysis_js
+    assert "mapping.mapped_outcome" in analysis_js
     assert "normalizeAiStudyPlan" in analysis_js
     assert "refreshStaleAssignmentIfNeeded" in analysis_js
     assert "MedRAS refreshed it to" in analysis_js

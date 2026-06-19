@@ -1565,6 +1565,20 @@ function canonicalOutcomeFromPlan(plan) {
   return candidates.find((col) => col && (!cols.size || cols.has(col))) || null;
 }
 
+function setupVisibleOutcome(plan) {
+  const ai = plan || state.aiStudy || {};
+  const mapping = ai.proposal_mapping || {};
+  return (
+    ai.confirmed_outcome_col ||
+    mapping.mapped_outcome ||
+    state.confirmedOutcomeCol ||
+    canonicalOutcomeFromPlan(ai) ||
+    ai.outcome_col ||
+    state.outcomeCol ||
+    null
+  );
+}
+
 function normalizeAiStudyPlan(plan) {
   if (!plan) return plan;
   const normalized = Object.assign({}, plan);
@@ -1575,7 +1589,7 @@ function normalizeAiStudyPlan(plan) {
   if (normalized.confirmed_outcome_col) {
     state.confirmedOutcomeCol = normalized.confirmed_outcome_col;
   }
-  const outcome = canonicalOutcomeFromPlan(normalized);
+  const outcome = setupVisibleOutcome(normalized);
   if (outcome) {
     normalized.outcome_col = outcome;
     if (normalized.proposal_mapping) {
@@ -4375,12 +4389,13 @@ function renderResultsPane(tabId) {
       ${correction}
       ${rows.length
         ? tableHtml(
-            ["Variable / parameter", "Key finding", "Test statistic", "p-value", "Test applied", "Effect size", "Notes/warnings"],
+            ["Variable / parameter", "Key finding", "Test statistic", "p-value", "Adjusted p-value", "Test applied", "Effect size", "Notes/warnings"],
             rows.map((row) => [
               row.variable || "",
               row.key_finding || "",
               row.test_statistic || "",
               row.p_value || "",
+              row.adjusted_p_value || "",
               row.test_applied || "",
               row.effect_size || "",
               row.notes_warnings || "",
@@ -4473,8 +4488,8 @@ function renderThesisBlueprint(blueprint) {
     ${figureRows.length ? tableHtml(["Figure", "Graph type", "Variables", "Thesis ready", "Priority", "Placement", "Warnings"], figureRows) : "<p>No thesis figures were generated.</p>"}
     <h4>Methods paragraph</h4><p>${escapeHtml(blueprint.methods_text || "")}</p>
     <h4>Significant findings</h4>
-    ${findings.length ? tableHtml(["Variable / parameter", "Key finding", "p-value", "Test applied"], findings.map((row) => [
-      row.variable || "", row.key_finding || "", row.p_value || "", row.test_applied || ""
+    ${findings.length ? tableHtml(["Variable / parameter", "Key finding", "Test statistic", "p-value", "Adjusted p-value", "Test applied", "Effect size", "Notes/warnings"], findings.map((row) => [
+      row.variable || "", row.key_finding || "", row.test_statistic || "", row.p_value || "", row.adjusted_p_value || "", row.test_applied || "", row.effect_size || "", row.notes_warnings || ""
     ])) : "<p>No statistically significant completed tests were available for this blueprint.</p>"}
     <h4>Warnings and cautions</h4>
     ${warnings.length ? `<ul>${warnings.map((warning) => `<li>${escapeHtml(String(warning))}</li>`).join("")}</ul>` : "<p>No blueprint warnings.</p>"}
@@ -5323,12 +5338,13 @@ function renderSetupScreen(plan) {
   }
   const canonicalOutcome = canonicalOutcomeFromPlan(plan);
   if (outEl) {
-    if (canonicalOutcome) {
+    const visibleOutcome = setupVisibleOutcome(plan) || canonicalOutcome;
+    if (visibleOutcome) {
       const proposal = plan.proposal_understanding || {};
       const concept = proposal.main_outcome_concept || plan.main_outcome_concept || "";
-      outEl.textContent = concept
-        ? `Outcome: ${canonicalOutcome} (mapped from proposal concept: ${concept})`
-        : `Outcome: ${canonicalOutcome}`;
+      outEl.innerHTML = concept
+        ? `Outcome: ${escapeHtml(visibleOutcome)}<br><small>Mapped from proposal concept: ${escapeHtml(concept)}</small>`
+        : `Outcome: ${escapeHtml(visibleOutcome)}`;
       outEl.style.display = "";
     } else {
       outEl.style.display = "none";

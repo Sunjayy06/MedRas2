@@ -778,6 +778,20 @@ def build_thesis_analysis_blueprint(
         variables = _variables_from_test(test)
         interpretation = _safe_interpretation(test, label_ctx)
         bp_table = _thesis_table_for_result(test, outcome, label_ctx)
+        is_component_result = any(
+            variable == comp or variable.startswith(f"{comp} vs ") or variable.startswith(f"{comp} by ")
+            for variable in variables
+            for comp in outcome_components
+        )
+        if is_component_result:
+            bp_table["priority"] = "detailed_report_only"
+            bp_table["optional"] = True
+            bp_table["detailed_report_only"] = True
+            warnings_for_table = list(bp_table.get("warnings") or [])
+            warnings_for_table.append(
+                "Marker/outcome component result retained for detailed statistics; excluded from final thesis findings by default."
+            )
+            bp_table["warnings"] = warnings_for_table
         section["tables"].append(bp_table)
         all_tables.append(bp_table)
         for idx, fig in enumerate(test.get("figures") or [], 1):
@@ -850,6 +864,7 @@ def build_thesis_analysis_blueprint(
             [
                 finding.get("variable") or "",
                 finding.get("key_finding") or "",
+                finding.get("test_statistic") or "-",
                 finding.get("p_value") or "",
                 finding.get("adjusted_p_value") or "-",
                 finding.get("test_applied") or "",
@@ -862,7 +877,7 @@ def build_thesis_analysis_blueprint(
             "table_id": "significant_findings",
             "title": "Summary of statistically significant findings",
             "table_type": "significant_findings_table",
-            "columns": ["Variable / parameter", "Key finding", "p-value", "Adjusted p-value", "Test applied", "Effect size", "Notes/warnings"],
+            "columns": ["Variable / parameter", "Key finding", "Test statistic", "p-value", "Adjusted p-value", "Test applied", "Effect size", "Notes/warnings"],
             "rows": rows,
             "source_variables": [],
             "source_test_ids": [str(f.get("variable") or "") for f in thesis_findings],
