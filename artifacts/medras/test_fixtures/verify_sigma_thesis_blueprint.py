@@ -48,7 +48,9 @@ def verify_p27_association_blueprint() -> None:
         "ER": ["Positive", "Negative", "Positive", "Negative", "Positive", "Negative", "Positive", "Negative"],
         "PR": ["Positive", "Negative", "Positive", "Negative", "Positive", "Negative", "Positive", "Negative"],
         "Molecular subtype": ["Luminal A", "Luminal B", "HER2neu", "Triple negative", "Luminal A", "Luminal B", "HER2neu", "Triple negative"],
-        "Positive/ Negative": ["Positive", "Negative", "Positive", "Negative", "Positive", "Negative", "Positive", "Negative"],
+        "Interpretation-site": ["Nuclear", "Cytoplasmic", "Nuclear", "Cytoplasmic", "Nuclear", "Cytoplasmic", "Nuclear", "Cytoplasmic"],
+        "Staining Result": ["Strong", "Weak", "Strong", "Weak", "Strong", "Weak", "Strong", "Weak"],
+        "Positive/ Negative": ["Yes", "No", "Yes", "No", "Yes", "No", "Yes", "No"],
         "positive_nodes": [0, 1, 2, 3, 0, 1, 2, 3],
     })
     classes = _classes(df, {
@@ -61,18 +63,26 @@ def verify_p27_association_blueprint() -> None:
     session = {
         "study_type": "association",
         "domain_profile": "breast_pathology",
+        "main_marker": "p27",
+        "main_outcome_concept": "p27 expression status",
         "analysis_predictors": ["Age", "Laterality", "pT", "Nodal status", "ER", "PR", "Molecular subtype"],
         "analysis_excluded_columns": ["positive_nodes"],
     }
     sigma_plan = plan.generate_plan(df, classes, assignment, _normality("Age"), session=session)
     output = results.run_plan(df, classes, assignment, sigma_plan, session=session)
     blueprint = output["thesis_analysis_blueprint"]
-    assert blueprint["primary_outcome"] == "Positive/ Negative"
+    assert blueprint["primary_outcome"] == "p27 expression status"
     assert blueprint["study_summary"]["domain_profile"] == "breast_pathology"
     assert {"baseline_characteristics", "primary_outcome_distribution", "bivariate_associations", "significant_findings_summary"}.issubset(_section_ids(blueprint))
     assert "clinical_study_characteristics" in _section_ids(blueprint)
     assert "immunophenotype_characteristics" in _section_ids(blueprint)
     assert "categorical_association_thesis_table" in _table_types(blueprint)
+    table_text = str(blueprint["tables"])
+    assert "p27 expression status" in table_text
+    assert "Positive:" in table_text or "Positive n (%)" in table_text
+    assert "Negative:" in table_text or "Negative n (%)" in table_text
+    assert "Yes:" not in table_text
+    assert "No:" not in table_text
     forbidden_titles = {"observed counts", "expected counts", "row percentages", "column percentages", "test summary"}
     assert not any(str(table["title"]).strip().lower() in forbidden_titles for table in blueprint["tables"])
     assert all(
@@ -84,6 +94,13 @@ def verify_p27_association_blueprint() -> None:
         "tables": blueprint["tables"],
         "figures": blueprint["figures"],
     })
+    assert "marker_outcome_components" in _section_ids(blueprint)
+    biv = next(section for section in blueprint["analysis_sections"] if section["section_id"] == "bivariate_associations")
+    assert len(biv["interpretation"]) < 500
+    assert all("priority" in table and "detailed_report_only" in table for table in blueprint["tables"])
+    assert all("optional" in figure and "detailed_report_only" in figure for figure in blueprint["figures"])
+    assert "— =" not in output["results_md"]
+    assert "Chi-square test: Chi-square test" not in output["results_md"]
     assert any("Excluded variables" in warning for warning in blueprint["warnings"])
 
 

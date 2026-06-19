@@ -297,6 +297,8 @@ def _build_session_view(entry, classifications, assignment) -> Dict[str, Any]:
         "mapped_outcome": mapped_outcome,
         "confirmed_outcome_col": confirmed_outcome,
         "displayed_outcome": outcome,
+        "main_marker": ai_study.get("main_marker"),
+        "main_outcome_concept": ai_study.get("main_outcome_concept"),
         "study_type_confirmed": bool(entry.meta.get("confirmed_study_type")),
         "analysis_predictors": analysis_predictors,
         "predictor_source": predictor_source,

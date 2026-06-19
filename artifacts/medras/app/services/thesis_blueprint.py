@@ -57,6 +57,52 @@ def _clean_text(value: Any) -> str:
     return str(value or "").strip()
 
 
+def _status_label_context(outcome: Optional[str], session: Dict[str, Any]) -> Dict[str, Any]:
+    concept = _clean_text(session.get("main_outcome_concept"))
+    marker = _clean_text(session.get("main_marker"))
+    display = concept or _clean_text(outcome)
+    joined = f"{concept} {marker} {outcome or ''}".lower()
+    status_like = any(term in joined for term in ("expression", "status", "marker", "positive", "negative"))
+    return {
+        "outcome": outcome or "",
+        "display_outcome": display,
+        "status_like": status_like,
+        "value_map": {"Yes": "Positive", "No": "Negative", "yes": "Positive", "no": "Negative"},
+    }
+
+
+def _apply_display_labels(value: Any, label_ctx: Dict[str, Any]) -> Any:
+    if value is None:
+        return value
+    text = str(value)
+    if label_ctx.get("outcome") and text == label_ctx.get("outcome"):
+        return label_ctx.get("display_outcome") or text
+    if label_ctx.get("status_like"):
+        for raw, label in (label_ctx.get("value_map") or {}).items():
+            text = text.replace(f"{raw}:", f"{label}:")
+            text = text.replace(f"{raw} n", f"{label} n")
+            if text == raw:
+                text = label
+    return text
+
+
+def _display_row(row: Any, label_ctx: Dict[str, Any]) -> Any:
+    if isinstance(row, dict):
+        out = dict(row)
+        if "variable" in out:
+            out["variable"] = _apply_display_labels(out["variable"], label_ctx)
+        if "cells" in out and isinstance(out["cells"], list):
+            out["cells"] = [_apply_display_labels(cell, label_ctx) for cell in out["cells"]]
+        return out
+    if isinstance(row, list):
+        return [_apply_display_labels(cell, label_ctx) for cell in row]
+    return _apply_display_labels(row, label_ctx)
+
+
+def _display_text(value: Any, label_ctx: Dict[str, Any]) -> str:
+    return str(_apply_display_labels(value, label_ctx))
+
+
 def _p_value(test: Dict[str, Any]) -> Optional[float]:
     for key in ("p_corrected", "p", "p_value"):
         value = test.get(key)
@@ -241,6 +287,17 @@ def _warning_for_table(test: Dict[str, Any]) -> str:
     )
 
 
+def _priority_for_result(test: Dict[str, Any], warning: str) -> tuple[str, bool, bool]:
+    p = _p_value(test)
+    if p is not None and p < 0.05 and warning == "-":
+        return "thesis_ready_primary", False, False
+    if p is not None and p < 0.05:
+        return "optional", True, False
+    if warning != "-":
+        return "detailed_report_only", True, True
+    return "optional", True, False
+
+
 def _observed_table(test: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     for table in test.get("tables") or []:
         if str(table.get("title") or "").strip().lower() == "observed counts":
@@ -248,16 +305,20 @@ def _observed_table(test: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     return None
 
 
-def _thesis_table_for_result(test: Dict[str, Any], outcome: Optional[str]) -> Dict[str, Any]:
+def _thesis_table_for_result(test: Dict[str, Any], outcome: Optional[str], label_ctx: Dict[str, Any]) -> Dict[str, Any]:
     family = _test_family(test)
     predictor, target = _result_pair(test, outcome)
+    predictor_label = _display_text(predictor, label_ctx)
+    target_label = _display_text(target, label_ctx)
     test_id = str(test.get("id") or "result")
     warning = _warning_for_table(test)
+    priority, optional, detailed_only = _priority_for_result(test, warning)
     if family == "bivariate" and str(test.get("test_type") or "").lower() in {"chi_square", "fisher_exact"}:
         observed = _observed_table(test)
         headers = list(observed.get("headers") or []) if observed else []
         rows = []
         outcome_headers = headers[1:-1] if headers and headers[-1] == "Total" else headers[1:]
+        outcome_headers = [_display_text(label, label_ctx) for label in outcome_headers]
         if observed:
             for row in observed.get("rows") or []:
                 if not isinstance(row, list) or not row or str(row[0]).lower() == "total":
@@ -277,7 +338,7 @@ def _thesis_table_for_result(test: Dict[str, Any], outcome: Optional[str]) -> Di
                     for count in parsed_counts
                 ]
                 rows.append([
-                    row[0],
+                    _display_text(row[0], label_ctx),
                     *formatted_counts,
                     _p_display(test),
                     _p_display(test, adjusted=True),
@@ -287,7 +348,7 @@ def _thesis_table_for_result(test: Dict[str, Any], outcome: Optional[str]) -> Di
                 ])
         return {
             "table_id": f"{test_id}_thesis",
-            "title": f"Association of {target} with {predictor}",
+            "title": f"Association of {target_label} with {predictor_label}",
             "table_type": "categorical_association_thesis_table",
             "columns": [
                 "Predictor category",
@@ -301,21 +362,24 @@ def _thesis_table_for_result(test: Dict[str, Any], outcome: Optional[str]) -> Di
             "rows": rows or [[predictor, "-", "-", _p_display(test), _p_display(test, adjusted=True), _test_applied(test), _effect_for_table(test), warning]],
             "source_variables": [predictor, target],
             "source_test_ids": [test_id],
-            "interpretation": _safe_interpretation(test),
+            "interpretation": _safe_interpretation(test, label_ctx),
             "thesis_ready": bool(rows),
+            "priority": priority,
+            "optional": optional,
+            "detailed_report_only": detailed_only,
             "warnings": [warning] if warning != "-" else [],
             "detailed_tables_available": True,
         }
     if family == "bivariate":
         return {
             "table_id": f"{test_id}_thesis",
-            "title": f"Comparison of {predictor} by {target}",
+            "title": f"Comparison of {predictor_label} by {target_label}",
             "table_type": "continuous_or_group_comparison_thesis_table",
             "columns": ["Group", "n", "Summary", "Test statistic", "p-value", "Adjusted p-value", "Test applied", "Effect size", "Warnings"],
             "rows": [[
-                target,
+                target_label,
                 _fmt_value(test.get("n") or test.get("n_total")),
-                _clean_text(test.get("narrative")) or "See detailed statistical result.",
+                _display_text(test.get("narrative") or "See detailed statistical result.", label_ctx),
                 _statistic_for_table(test),
                 _p_display(test),
                 _p_display(test, adjusted=True),
@@ -325,22 +389,28 @@ def _thesis_table_for_result(test: Dict[str, Any], outcome: Optional[str]) -> Di
             ]],
             "source_variables": [predictor, target],
             "source_test_ids": [test_id],
-            "interpretation": _safe_interpretation(test),
+            "interpretation": _safe_interpretation(test, label_ctx),
             "thesis_ready": True,
+            "priority": priority,
+            "optional": optional,
+            "detailed_report_only": detailed_only,
             "warnings": [warning] if warning != "-" else [],
             "detailed_tables_available": bool(test.get("tables")),
         }
     first_table = (test.get("tables") or [{}])[0]
     return {
         "table_id": f"{test_id}_thesis",
-        "title": test.get("title") or "Analysis summary",
+        "title": _display_text(test.get("title") or "Analysis summary", label_ctx),
         "table_type": _summary_table_type_for_result(test),
         "columns": list(first_table.get("headers") or ["Result", "Interpretation"]),
-        "rows": list(first_table.get("rows") or [[test.get("title") or test_id, _safe_interpretation(test)]]),
+        "rows": [_display_row(row, label_ctx) for row in list(first_table.get("rows") or [[test.get("title") or test_id, _safe_interpretation(test, label_ctx)]])],
         "source_variables": _variables_from_test(test),
         "source_test_ids": [test_id],
-        "interpretation": _safe_interpretation(test),
+        "interpretation": _safe_interpretation(test, label_ctx),
         "thesis_ready": bool(first_table.get("rows")) or family in {"correlation", "regression", "diagnostic_accuracy", "reliability_agreement"},
+        "priority": priority,
+        "optional": optional,
+        "detailed_report_only": detailed_only,
         "warnings": [warning] if warning != "-" else [],
         "detailed_tables_available": bool(test.get("tables")),
     }
@@ -377,9 +447,10 @@ def _outcome_component_variables(
     return components
 
 
-def _safe_interpretation(test: Dict[str, Any]) -> str:
+def _safe_interpretation(test: Dict[str, Any], label_ctx: Optional[Dict[str, Any]] = None) -> str:
+    label_ctx = label_ctx or {}
     p = _p_value(test)
-    title = _clean_text(test.get("title") or "This analysis")
+    title = _display_text(test.get("title") or "This analysis", label_ctx)
     warning = _clean_text(test.get("warning") or test.get("note"))
     family = _test_family(test)
     if p is None:
@@ -440,22 +511,26 @@ def _summary_table_type_for_result(test: Dict[str, Any]) -> str:
     return "summary_table"
 
 
-def _baseline_section(table_one: Dict[str, Any], classes: Dict[str, Dict[str, Any]], outcome: Optional[str]) -> Dict[str, Any]:
+def _baseline_section(table_one: Dict[str, Any], classes: Dict[str, Dict[str, Any]], outcome: Optional[str], label_ctx: Dict[str, Any]) -> Dict[str, Any]:
     source_vars: List[str] = []
     for row in table_one.get("rows") or []:
         variable = row.get("variable")
         if variable and variable != outcome:
             source_vars.append(str(variable))
+    rows = [_display_row(row, label_ctx) for row in table_one.get("rows") or []]
     table = {
         "table_id": "table_one",
         "title": "Table 1. Baseline and study characteristics",
         "table_type": "descriptive_table",
         "columns": list(table_one.get("headers") or []),
-        "rows": list(table_one.get("rows") or []),
+        "rows": rows,
         "source_variables": source_vars,
         "source_test_ids": [],
         "interpretation": "This table describes the analysed sample and variable distributions.",
         "thesis_ready": bool(table_one.get("rows")),
+        "priority": "thesis_ready_primary",
+        "optional": False,
+        "detailed_report_only": False,
         "warnings": [],
     }
     return {
@@ -469,7 +544,7 @@ def _baseline_section(table_one: Dict[str, Any], classes: Dict[str, Dict[str, An
     }
 
 
-def _domain_profile_sections(table_one: Dict[str, Any], domain_profile: str) -> List[Dict[str, Any]]:
+def _domain_profile_sections(table_one: Dict[str, Any], domain_profile: str, label_ctx: Dict[str, Any]) -> List[Dict[str, Any]]:
     if domain_profile != "breast_pathology":
         return []
     groups = {
@@ -499,11 +574,14 @@ def _domain_profile_sections(table_one: Dict[str, Any], domain_profile: str) -> 
             "title": title,
             "table_type": "domain_profile_descriptive_table",
             "columns": headers,
-            "rows": matched,
+            "rows": [_display_row(row, label_ctx) for row in matched],
             "source_variables": [str(row.get("variable")) for row in matched if row.get("variable")],
             "source_test_ids": [],
             "interpretation": "This table is organised by the selected domain profile; statistical tests remain generated from variable roles and executed results.",
             "thesis_ready": True,
+            "priority": "thesis_ready_primary",
+            "optional": False,
+            "detailed_report_only": False,
             "warnings": [],
         }
         sections.append({
@@ -518,20 +596,22 @@ def _domain_profile_sections(table_one: Dict[str, Any], domain_profile: str) -> 
     return sections
 
 
-def _outcome_section(outcome: Optional[str], classes: Dict[str, Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+def _outcome_section(outcome: Optional[str], classes: Dict[str, Dict[str, Any]], label_ctx: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     if not outcome:
         return None
     kind = _variable_type(classes, outcome)
     graph_type = "bar_chart" if kind in {"nominal", "ordinal", "binary", "discrete"} else "histogram_or_boxplot"
+    display_outcome = _display_text(outcome, label_ctx)
     figure = {
         "figure_id": "primary_outcome_distribution",
-        "title": f"Distribution of {outcome}",
+        "title": f"Distribution of {display_outcome}",
         "graph_type": graph_type,
         "source_variables": [outcome],
         "source_result_id": None,
-        "caption": f"Distribution of the primary outcome variable, {outcome}.",
+        "caption": f"Distribution of the primary outcome variable, {display_outcome}.",
         "interpretation": "Use this figure to inspect outcome balance and missingness before interpreting inferential tests.",
         "thesis_ready": False,
+        "priority": "thesis_ready_primary",
         "optional": False,
         "detailed_report_only": False,
         "warnings": ["Graph image is not generated here unless the executed results already contain one."],
@@ -543,7 +623,7 @@ def _outcome_section(outcome: Optional[str], classes: Dict[str, Dict[str, Any]])
         "source_results": [],
         "tables": [],
         "figures": [figure],
-        "interpretation": f"The primary outcome for this analysis is {outcome}.",
+        "interpretation": f"The primary outcome for this analysis is {display_outcome}.",
     }
 
 
@@ -600,6 +680,7 @@ def build_thesis_analysis_blueprint(
     session = session or {}
     classes = _class_lookup(classifications)
     outcome = assignment.get("outcome") or session.get("outcome_col") or session.get("outcome")
+    label_ctx = _status_label_context(outcome, session)
     study_design = _study_type_token(
         session.get("study_type") or session.get("design") or session.get("objective") or plan.get("study_type")
     )
@@ -638,9 +719,9 @@ def build_thesis_analysis_blueprint(
         warnings.append("Analysis incomplete for thesis association reporting.")
 
     domain_profile = str(session.get("domain_profile") or "generic")
-    sections: List[Dict[str, Any]] = [_baseline_section(table_one, classes, outcome)]
-    sections.extend(_domain_profile_sections(table_one, domain_profile))
-    outcome_section = _outcome_section(outcome, classes)
+    sections: List[Dict[str, Any]] = [_baseline_section(table_one, classes, outcome, label_ctx)]
+    sections.extend(_domain_profile_sections(table_one, domain_profile, label_ctx))
+    outcome_section = _outcome_section(outcome, classes, label_ctx)
     if outcome_section:
         sections.append(outcome_section)
 
@@ -650,6 +731,39 @@ def build_thesis_analysis_blueprint(
     ]
     all_figures: List[Dict[str, Any]] = list(outcome_section["figures"] if outcome_section else [])
     outcome_components = _outcome_component_variables(classifications, outcome, session)
+    if outcome_components:
+        component_rows = [
+            _display_row(row, label_ctx)
+            for row in table_one.get("rows") or []
+            if str(row.get("variable") or "") in outcome_components
+        ]
+        component_table = {
+            "table_id": "marker_outcome_components",
+            "title": "Marker / Outcome Component Descriptives",
+            "table_type": "marker_component_descriptive_table",
+            "columns": list(table_one.get("headers") or []),
+            "rows": component_rows,
+            "source_variables": sorted(outcome_components),
+            "source_test_ids": [],
+            "interpretation": "Marker or outcome-component variables are described here and omitted from final prognostic findings by default.",
+            "thesis_ready": bool(component_rows),
+            "priority": "thesis_ready_primary",
+            "optional": False,
+            "detailed_report_only": False,
+            "warnings": [],
+        }
+        component_section = {
+            "section_id": "marker_outcome_components",
+            "title": "Marker / Outcome Components",
+            "purpose": "Describe variables that contribute to, localise, or qualify the primary marker/outcome.",
+            "source_results": [],
+            "tables": [component_table],
+            "figures": [],
+            "interpretation": "These variables are descriptive components of the primary marker/outcome, not independent prognostic predictors by default.",
+        }
+        sections_by_id[component_section["section_id"]] = component_section
+        sections.append(component_section)
+        all_tables.append(component_table)
 
     for test in tests:
         family = _test_family(test)
@@ -662,19 +776,19 @@ def build_thesis_analysis_blueprint(
         test_id = str(test.get("id") or f"result_{len(section['source_results']) + 1}")
         section["source_results"].append(test_id)
         variables = _variables_from_test(test)
-        interpretation = _safe_interpretation(test)
-        bp_table = _thesis_table_for_result(test, outcome)
+        interpretation = _safe_interpretation(test, label_ctx)
+        bp_table = _thesis_table_for_result(test, outcome, label_ctx)
         section["tables"].append(bp_table)
         all_tables.append(bp_table)
         for idx, fig in enumerate(test.get("figures") or [], 1):
-            fig_title = str(fig.get("title") or test.get("title") or f"Figure {idx}")
+            fig_title = _display_text(fig.get("title") or test.get("title") or f"Figure {idx}", label_ctx)
             bp_fig = {
                 "figure_id": f"{test_id}_figure_{idx}",
                 "title": fig_title,
                 "graph_type": _graph_type_from_title(fig_title),
                 "source_variables": variables,
                 "source_result_id": test_id,
-                "caption": fig.get("caption") or fig_title,
+                "caption": _display_text(fig.get("caption") or fig_title, label_ctx),
                 "interpretation": interpretation,
                 "thesis_ready": bool(fig.get("png_data_uri")),
                 "optional": family != "diagnostic_accuracy",
@@ -689,15 +803,15 @@ def build_thesis_analysis_blueprint(
 
     for graph in graphs:
         graph_id = str(graph.get("id") or f"graph_{len(all_figures) + 1}")
-        title = str(graph.get("title") or "Planned figure")
+        title = _display_text(graph.get("title") or "Planned figure", label_ctx)
         bp_fig = {
             "figure_id": graph_id,
             "title": title,
             "graph_type": graph.get("graph_type") or _graph_type_from_title(title),
             "source_variables": list(graph.get("columns") or []),
             "source_result_id": graph.get("source_result_id"),
-            "caption": graph.get("caption") or title,
-            "interpretation": graph.get("interpretation") or "Figure generated from the executed Sigma analysis.",
+            "caption": _display_text(graph.get("caption") or title, label_ctx),
+            "interpretation": _display_text(graph.get("interpretation") or "Figure generated from the executed Sigma analysis.", label_ctx),
             "thesis_ready": bool(graph.get("png_data_uri")),
             "optional": True,
             "detailed_report_only": False,
@@ -725,7 +839,11 @@ def build_thesis_analysis_blueprint(
             continue
         if any(variable == comp or variable.startswith(f"{comp} vs ") or variable.startswith(f"{comp} by ") for comp in outcome_components):
             continue
-        thesis_findings.append(finding)
+        displayed = dict(finding)
+        for key in ("variable", "key_finding", "test_applied", "effect_size", "notes_warnings"):
+            if key in displayed:
+                displayed[key] = _display_text(displayed[key], label_ctx)
+        thesis_findings.append(displayed)
 
     if thesis_findings:
         rows = [
@@ -750,6 +868,9 @@ def build_thesis_analysis_blueprint(
             "source_test_ids": [str(f.get("variable") or "") for f in thesis_findings],
             "interpretation": "Only statistically significant completed tests are listed here.",
             "thesis_ready": True,
+            "priority": "thesis_ready_primary",
+            "optional": False,
+            "detailed_report_only": False,
             "warnings": [],
         }
         sig_section = _section_template(
@@ -765,6 +886,31 @@ def build_thesis_analysis_blueprint(
         warnings.append(
             "Some significant detailed results were outcome/marker components and were omitted from the final thesis findings table by default."
         )
+
+    bivariate_section = sections_by_id.get("bivariate_associations")
+    if bivariate_section:
+        names = []
+        for finding in thesis_findings:
+            variable = str(finding.get("variable") or "")
+            if " vs " in variable:
+                names.append(_display_text(variable.split(" vs ", 1)[0], label_ctx))
+            elif " by " in variable:
+                names.append(_display_text(variable.split(" by ", 1)[0], label_ctx))
+            elif variable:
+                names.append(_display_text(variable, label_ctx))
+        names = list(dict.fromkeys(names))[:8]
+        sparse = any(table.get("warnings") for table in bivariate_section.get("tables") or [])
+        sentence = (
+            f"Bivariate analyses compared eligible predictors against the confirmed primary outcome, "
+            f"{_display_text(outcome, label_ctx)}."
+        )
+        if names:
+            sentence += " Significant associations were observed for " + ", ".join(names) + "."
+        else:
+            sentence += " No statistically significant associations were retained for the thesis findings table."
+        if sparse:
+            sentence += " Sparse-category warnings were present for some variables and should be reviewed."
+        bivariate_section["interpretation"] = sentence
 
     executed_families = {_test_family(test) for test in tests}
     planned_ids = {str(test.get("id") or "") for test in plan.get("tests") or []}
@@ -812,13 +958,13 @@ def build_thesis_analysis_blueprint(
             "objective": session.get("objective") or session.get("objective_text") or "",
         },
         "study_design": study_design,
-        "primary_outcome": outcome or "",
+        "primary_outcome": _display_text(outcome, label_ctx) if outcome else "",
         "analysis_sections": sections,
         "tables": all_tables,
         "figures": all_figures,
         "significant_findings": thesis_findings,
-        "methods_text": methods_text,
-        "results_narrative": results_narrative,
+        "methods_text": _display_text(methods_text, label_ctx),
+        "results_narrative": _display_text(results_narrative, label_ctx),
         "warnings": list(dict.fromkeys(warnings)),
         "unavailable_or_recommended_only": unavailable,
     }

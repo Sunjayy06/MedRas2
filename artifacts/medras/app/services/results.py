@@ -162,6 +162,42 @@ def build_table_one(df: pd.DataFrame, classifications: List[Dict[str, Any]],
     }
 
 
+def _apply_thesis_display_labels_to_table_one(
+    table_one: Dict[str, Any],
+    outcome: Optional[str],
+    session: Dict[str, Any],
+) -> Dict[str, Any]:
+    concept = str(session.get("main_outcome_concept") or "").strip()
+    marker = str(session.get("main_marker") or "").strip()
+    joined = f"{concept} {marker} {outcome or ''}".lower()
+    if not outcome or not any(term in joined for term in ("expression", "status", "marker", "positive", "negative")):
+        return table_one
+    display_outcome = concept or outcome
+
+    def display_cell(value: Any) -> Any:
+        text = str(value)
+        text = text.replace("Yes:", "Positive:")
+        text = text.replace("No:", "Negative:")
+        text = text.replace("yes:", "Positive:")
+        text = text.replace("no:", "Negative:")
+        if text == "Yes":
+            return "Positive"
+        if text == "No":
+            return "Negative"
+        return text
+
+    updated = dict(table_one)
+    rows = []
+    for row in table_one.get("rows") or []:
+        new_row = dict(row)
+        if new_row.get("variable") == outcome:
+            new_row["variable"] = display_outcome
+            new_row["cells"] = [display_cell(cell) for cell in new_row.get("cells") or []]
+        rows.append(new_row)
+    updated["rows"] = rows
+    return updated
+
+
 # ---------------------------------------------------------------------------
 # Test runners — return a uniform shape so the UI can render any of them.
 # ---------------------------------------------------------------------------
@@ -1418,6 +1454,10 @@ def _compact_result_summary(test: Dict[str, Any]) -> str:
         pieces.append(effect)
     warning = _warning_text(test)
     if warning:
+        if "sparse" in warning.lower() or "expected" in warning.lower():
+            warning = "Sparse expected counts were detected; interpret with caution."
+        elif len(warning) > 160:
+            warning = warning[:157].rstrip() + "..."
         pieces.append(warning)
     return f"{title}: " + ", ".join(pieces) + "."
 
@@ -1725,6 +1765,7 @@ def run_plan(
             graph_results.append({"id": g["id"], "title": g["title"], "png_data_uri": png})
 
     table_one = build_table_one(df, classifications, group)
+    table_one = _apply_thesis_display_labels_to_table_one(table_one, outcome, session)
 
     # Methods + Results paragraphs ------------------------------------------
     methods_lines = [

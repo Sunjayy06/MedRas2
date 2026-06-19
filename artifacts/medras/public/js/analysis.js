@@ -1543,6 +1543,7 @@ function confirmedOutcomeFromState() {
   const mapping = ai.proposal_mapping || {};
   const candidates = [
     state.confirmedOutcomeCol,
+    ai.confirmed_outcome_col,
     mapping.mapped_outcome,
     state.outcomeCol,
     ai.outcome_col,
@@ -1556,6 +1557,7 @@ function canonicalOutcomeFromPlan(plan) {
   const cols = new Set((state.columns || []).map((c) => (typeof c === "string" ? c : c.column)));
   const candidates = [
     state.confirmedOutcomeCol,
+    ai.confirmed_outcome_col,
     mapping.mapped_outcome,
     ai.outcome_col,
     state.outcomeCol,
@@ -1569,6 +1571,9 @@ function normalizeAiStudyPlan(plan) {
   if (normalized.study_type_normalized) {
     normalized.study_type_raw = normalized.study_type_raw || normalized.study_type;
     normalized.study_type = normalized.study_type_normalized;
+  }
+  if (normalized.confirmed_outcome_col) {
+    state.confirmedOutcomeCol = normalized.confirmed_outcome_col;
   }
   const outcome = canonicalOutcomeFromPlan(normalized);
   if (outcome) {
@@ -4428,6 +4433,8 @@ function renderThesisBlueprint(blueprint) {
     table.table_type || "",
     (table.source_variables || []).join(", "),
     table.thesis_ready ? "Yes" : "Needs review",
+    table.priority || (table.optional ? "optional" : "thesis_ready_primary"),
+    table.detailed_report_only ? "Detailed report only" : "Thesis preview",
     (table.warnings || []).join("; "),
   ]);
   const figureRows = figures.map((figure) => [
@@ -4461,7 +4468,7 @@ function renderThesisBlueprint(blueprint) {
     <h4>Section outline</h4>
     ${sectionRows.length ? tableHtml(["Section", "Purpose", "Tables", "Figures", "Interpretation"], sectionRows) : "<p>No thesis sections were generated.</p>"}
     <h4>Planned thesis tables</h4>
-    ${tableRows.length ? tableHtml(["Table", "Type", "Variables", "Thesis ready", "Warnings"], tableRows) : "<p>No thesis tables were generated.</p>"}
+    ${tableRows.length ? tableHtml(["Table", "Type", "Variables", "Thesis ready", "Priority", "Placement", "Warnings"], tableRows) : "<p>No thesis tables were generated.</p>"}
     <h4>Planned thesis figures</h4>
     ${figureRows.length ? tableHtml(["Figure", "Graph type", "Variables", "Thesis ready", "Priority", "Placement", "Warnings"], figureRows) : "<p>No thesis figures were generated.</p>"}
     <h4>Methods paragraph</h4><p>${escapeHtml(blueprint.methods_text || "")}</p>
