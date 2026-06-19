@@ -40,7 +40,7 @@ class FakeEntry:
 
 
 def _results():
-    return {
+    payload = {
         "table_one": {
             "headers": ["Variable", "Type", "Overall"],
             "rows": [{"variable": "PR", "type": "n (%)", "cells": ["20 (100.0%)"]}],
@@ -66,6 +66,91 @@ def _results():
         "methods_md": "Categorical associations used chi-square or Fisher as appropriate.",
         "results_md": "ER was associated with PR.",
     }
+    payload["thesis_analysis_blueprint"] = {
+        "title": "Observation and Results",
+        "study_summary": {"n": 20, "domain_profile": "generic"},
+        "study_design": "cross_sectional_association",
+        "primary_outcome": "PR",
+        "analysis_sections": [
+            {
+                "section_id": "baseline_characteristics",
+                "title": "Baseline and Study Characteristics",
+                "purpose": "Describe the analysed sample.",
+                "source_results": [],
+                "tables": [{
+                    "table_id": "table_one",
+                    "title": "Table 1. Baseline Characteristics",
+                    "table_type": "descriptive_table",
+                    "columns": ["Variable", "Type", "Overall"],
+                    "rows": [{"variable": "PR", "type": "n (%)", "cells": ["20 (100.0%)"]}],
+                    "source_variables": ["PR"],
+                    "source_test_ids": [],
+                    "interpretation": "Baseline characteristics are summarised.",
+                    "thesis_ready": True,
+                    "priority": "thesis_ready_primary",
+                    "optional": False,
+                    "detailed_report_only": False,
+                    "warnings": [],
+                }],
+                "figures": [],
+                "interpretation": "Baseline characteristics are summarised.",
+            },
+            {
+                "section_id": "bivariate_associations",
+                "title": "Bivariate Associations / Group Comparisons",
+                "purpose": "Summarise predictor-by-outcome tests.",
+                "source_results": ["association_0"],
+                "tables": [{
+                    "table_id": "association_0_thesis",
+                    "title": "Association of PR with ER",
+                    "table_type": "categorical_association_thesis_table",
+                    "columns": ["Predictor category", "PR n (%)", "p-value", "Adjusted p-value", "Test applied", "Effect size", "Warnings"],
+                    "rows": [["Positive", "10 (50.0%)", "p = 0.040", "-", "Chi-square test", "Cramer's V = 0.30", "Sparse cells should be interpreted cautiously."]],
+                    "source_variables": ["ER", "PR"],
+                    "source_test_ids": ["association_0"],
+                    "interpretation": "ER was associated with PR.",
+                    "thesis_ready": True,
+                    "priority": "thesis_ready_primary",
+                    "optional": False,
+                    "detailed_report_only": False,
+                    "warnings": ["Sparse cells should be interpreted cautiously."],
+                }],
+                "figures": [{
+                    "figure_id": "association_0_figure",
+                    "title": "ER by PR (%)",
+                    "graph_type": "grouped_or_stacked_bar",
+                    "source_variables": ["ER", "PR"],
+                    "source_result_id": "association_0",
+                    "caption": "ER by PR (%).",
+                    "interpretation": "Grouped percentage bar chart for ER by PR.",
+                    "thesis_ready": True,
+                    "priority": "thesis_ready_primary",
+                    "optional": False,
+                    "detailed_report_only": False,
+                    "warnings": [],
+                }],
+                "interpretation": "Bivariate analyses compared eligible predictors against PR.",
+            },
+        ],
+        "tables": [],
+        "figures": [],
+        "significant_findings": [{
+            "variable": "ER vs PR",
+            "key_finding": "ER was associated with PR.",
+            "test_statistic": "chi-square = 4.20",
+            "p_value": "p = 0.040",
+            "adjusted_p_value": "-",
+            "test_applied": "Chi-square test",
+            "effect_size": "Cramer's V = 0.30",
+            "notes_warnings": "Sparse cells should be interpreted cautiously.",
+        }],
+        "methods_text": "Categorical associations used chi-square or Fisher as appropriate.",
+        "results_narrative": "ER was associated with PR.",
+        "warnings": ["Sparse cells should be interpreted cautiously."],
+        "unavailable_or_recommended_only": [],
+        "thesis_ready": True,
+    }
+    return payload
 
 
 def _docx_text(blob: bytes) -> str:
@@ -115,14 +200,24 @@ async def _verify_endpoints():
         assert chapter_word.body and chapter_word.media_type.endswith("wordprocessingml.document")
         assert chapter_pdf.body.startswith(b"%PDF")
 
-        for blob in (responses["word"], chapter_word.body):
-            text = _docx_text(blob)
-            assert "Baseline Characteristics" in text
-            assert "Test summary" in text
-            assert "Chi-square test" in text
-            assert "ER by PR (%)" in text
-            assert "Data Cleaning Log" in text
-            assert "No primary inferential test ran successfully" not in text
+        text = _docx_text(responses["word"])
+        assert "Baseline Characteristics" in text
+        assert "Test summary" in text
+        assert "Chi-square test" in text
+        assert "ER by PR (%)" in text
+        assert "Data Cleaning Log" in text
+        assert "No primary inferential test ran successfully" not in text
+
+        chapter_text = _docx_text(chapter_word.body)
+        assert "CHAPTER V" in chapter_text
+        assert "Observation" in chapter_text or "OBSERVATION" in chapter_text
+        assert "Baseline Characteristics" in chapter_text
+        assert "Association of PR with ER" in chapter_text
+        assert "Chi-square test" in chapter_text
+        assert "ER by PR (%)" in chapter_text
+        assert "Test summary" not in chapter_text
+        assert "Data Cleaning Log" not in chapter_text
+        assert "No primary inferential test ran successfully" not in chapter_text
 
         assert responses["pdf"].startswith(b"%PDF")
         assert len(responses["pdf"]) > 1000

@@ -34,6 +34,7 @@ from reportlab.platypus import (
 from reportlab.lib import colors
 from reportlab.lib.units import inch
 
+from . import chapter_v_export
 from .results import clean_display_name
 
 
@@ -1480,13 +1481,13 @@ def to_pdf(entry, results: Dict[str, Any], assignment: Dict[str, Any]) -> bytes:
 
 
 def generate_chapter_v_word(entry, results: Dict[str, Any], assignment: Dict[str, Any]) -> bytes:
-    """Generate Chapter V from the same normalized Step 7 result state."""
-    return to_docx(entry, results, assignment)
+    """Generate Chapter V from Sigma's thesis_analysis_blueprint."""
+    return chapter_v_export.generate_docx(results)
 
 
 def generate_chapter_v_pdf(entry, results: Dict[str, Any], assignment: Dict[str, Any]) -> bytes:
-    """Generate Chapter V PDF from the same normalized Step 7 result state."""
-    return to_pdf(entry, results, assignment)
+    """Generate Chapter V PDF from Sigma's thesis_analysis_blueprint."""
+    return chapter_v_export.generate_pdf(results)
 
 
 def _pdf_table(data: List[List[str]]) -> Table:

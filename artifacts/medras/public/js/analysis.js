@@ -6678,10 +6678,18 @@ async function downloadChapterV(fmt, button) {
   }
   if (button) button.disabled = true;
   setStatus(statusEl, "Generating Chapter V…", "loading");
-  const fmtKey = fmt === "pdf" ? "chapter_v_pdf" : "chapter_v_word";
   try {
-    const resultId = encodeURIComponent(state.resultId);
-    const res = await fetch(`${API_BASE}/export/${state.jobId}/${fmtKey}?result_id=${resultId}`);
+    const res = await fetch(`${API_BASE}/export/chapter-v`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        job_id: state.jobId,
+        result_id: state.resultId,
+        format: fmt === "pdf" ? "pdf" : "docx",
+        include_detailed_appendix: false,
+        include_optional_figures: false,
+      }),
+    });
     if (!res.ok) {
       throw new Error(await exportErrorMessage(res));
     }

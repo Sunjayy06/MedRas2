@@ -2584,6 +2584,14 @@ async def apply_category_merge(payload: ApplyMergeRequest) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
+class ChapterVExportRequest(BaseModel):
+    job_id: str = Field(..., min_length=1, max_length=64)
+    result_id: str = Field(..., min_length=1, max_length=128)
+    format: str = Field(default="docx", pattern="^(docx|word|pdf)$")
+    include_detailed_appendix: bool = False
+    include_optional_figures: bool = False
+
+
 @router.get("/export/{job_id}/chapter_v_word")
 async def export_chapter_v_word(
     job_id: str, result_id: Optional[str] = Query(default=None)
@@ -2598,6 +2606,8 @@ async def export_chapter_v_word(
             export_service.generate_chapter_v_word,
             entry, res, entry.meta.get("assignment") or {},
         )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         log.exception("Chapter V Word export failed for job %s", job_id)
         raise HTTPException(status_code=500, detail=f"Chapter V Word export failed: {exc}") from exc
@@ -2609,6 +2619,14 @@ async def export_chapter_v_word(
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         headers=_export_headers(entry, filename),
     )
+
+
+@router.post("/export/chapter-v")
+async def export_chapter_v(payload: ChapterVExportRequest) -> Response:
+    fmt = payload.format.lower()
+    if fmt in {"docx", "word"}:
+        return await export_chapter_v_word(payload.job_id, result_id=payload.result_id)
+    return await export_chapter_v_pdf(payload.job_id, result_id=payload.result_id)
 
 
 @router.get("/export/{job_id}/chapter_v_pdf")
@@ -2625,6 +2643,8 @@ async def export_chapter_v_pdf(
             export_service.generate_chapter_v_pdf,
             entry, res, entry.meta.get("assignment") or {},
         )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         log.exception("Chapter V PDF export failed for job %s", job_id)
         raise HTTPException(status_code=500, detail=f"Chapter V PDF export failed: {exc}") from exc
