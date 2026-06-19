@@ -1367,29 +1367,29 @@
       <section class="se-screen se-screen-narrow is-hidden" id="screen-export" data-testid="screen-export">
         <header class="se-screen-head">
           <h2>Step 8 · Export your report</h2>
-          <p>Download the full results as Word, PDF or Excel. Each file embeds Table 1, every test, every graph, methods and results paragraphs.</p>
+          <p>Download the final thesis-ready report as Word or PDF, or export the cleaned analysis workbook for review.</p>
         </header>
 
         <div class="se-export-grid">
           <article class="se-export-card" data-format="word" data-testid="export-card-word">
-            <h3>Word (.docx)</h3>
-            <p>Editable report, ready to drop into your manuscript.</p>
-            <button type="button" class="btn btn-primary" data-action="download" data-format="word" data-testid="button-download-word">Download Word</button>
+            <h3>Word Report (.docx)</h3>
+            <p>Editable thesis-ready report with Chapter V / Observation and Results.</p>
+            <button type="button" class="btn btn-primary" data-action="download" data-format="word" data-testid="button-download-word">Download Word Report</button>
           </article>
           <article class="se-export-card" data-format="pdf" data-testid="export-card-pdf">
-            <h3>PDF</h3>
-            <p>Print-ready snapshot for sharing or supervisor review.</p>
-            <button type="button" class="btn btn-primary" data-action="download" data-format="pdf" data-testid="button-download-pdf">Download PDF</button>
+            <h3>PDF Report (.pdf)</h3>
+            <p>Print-ready report mirroring the Word report content.</p>
+            <button type="button" class="btn btn-primary" data-action="download" data-format="pdf" data-testid="button-download-pdf">Download PDF Report</button>
           </article>
           <article class="se-export-card" data-format="excel" data-testid="export-card-excel">
-            <h3>Excel (.xlsx)</h3>
+            <h3>Cleaned Excel Workbook (.xlsx)</h3>
             <p>One sheet per test plus Table 1 — useful for further work.</p>
-            <button type="button" class="btn btn-primary" data-action="download" data-format="excel" data-testid="button-download-excel">Download Excel</button>
+            <button type="button" class="btn btn-primary" data-action="download" data-format="excel" data-testid="button-download-excel">Download Cleaned Excel</button>
           </article>
         </div>
 
         <!-- Chapter V thesis-format export -->
-        <div class="se-export-feature">
+        <div class="se-export-feature is-hidden" hidden>
           <h3>Chapter V — Results (Thesis format)</h3>
           <p>TNR 12pt, 1.5 line spacing, 1″ margins, numbered tables with n (%) layout — ready to paste directly into your NBEMS / MD / DNB thesis.</p>
           <div class="se-export-button-row">

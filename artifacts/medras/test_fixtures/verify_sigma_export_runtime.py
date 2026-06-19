@@ -200,24 +200,17 @@ async def _verify_endpoints():
         assert chapter_word.body and chapter_word.media_type.endswith("wordprocessingml.document")
         assert chapter_pdf.body.startswith(b"%PDF")
 
-        text = _docx_text(responses["word"])
-        assert "Baseline Characteristics" in text
-        assert "Test summary" in text
-        assert "Chi-square test" in text
-        assert "ER by PR (%)" in text
-        assert "Data Cleaning Log" in text
-        assert "No primary inferential test ran successfully" not in text
-
-        chapter_text = _docx_text(chapter_word.body)
-        assert "CHAPTER V" in chapter_text
-        assert "Observation" in chapter_text or "OBSERVATION" in chapter_text
-        assert "Baseline Characteristics" in chapter_text
-        assert "Association of PR with ER" in chapter_text
-        assert "Chi-square test" in chapter_text
-        assert "ER by PR (%)" in chapter_text
-        assert "Test summary" not in chapter_text
-        assert "Data Cleaning Log" not in chapter_text
-        assert "No primary inferential test ran successfully" not in chapter_text
+        for blob in (responses["word"], chapter_word.body):
+            text = _docx_text(blob)
+            assert "CHAPTER V" in text
+            assert "Observation" in text or "OBSERVATION" in text
+            assert "Baseline Characteristics" in text
+            assert "Association of PR with ER" in text
+            assert "Chi-square test" in text
+            assert "ER by PR (%)" in text
+            assert "Test summary" not in text
+            assert "Data Cleaning Log" not in text
+            assert "No primary inferential test ran successfully" not in text
 
         assert responses["pdf"].startswith(b"%PDF")
         assert len(responses["pdf"]) > 1000
@@ -226,10 +219,22 @@ async def _verify_endpoints():
         assert b"No primary inferential test ran successfully" not in chapter_pdf.body
 
         wb = load_workbook(io.BytesIO(responses["excel"]))
-        assert {"Table 1", "Data Cleaning Log", "Narrative"} <= set(wb.sheetnames)
+        assert {
+            "cleaned_processed_dataset", "variable_classification",
+            "cleaning_decisions", "category_merges", "missing_data_decisions",
+            "excluded_variables", "analysis_summary", "significant_findings",
+            "detailed_results", "Table 1", "Data Cleaning Log", "Narrative",
+        } <= set(wb.sheetnames)
+        assert list(next(wb["cleaned_processed_dataset"].iter_rows(values_only=True))) == ["PR", "ER"]
         result_sheets = [
             name for name in wb.sheetnames
-            if name not in {"Cover", "Variables", "Data Cleaning Log", "Table 1", "Narrative"}
+            if name not in {
+                "Cover", "Variables", "Data Cleaning Log", "Table 1", "Narrative",
+                "cleaned_processed_dataset", "variable_classification",
+                "cleaning_decisions", "category_merges", "missing_data_decisions",
+                "excluded_variables", "analysis_summary", "significant_findings",
+                "detailed_results",
+            }
         ]
         assert result_sheets
         assert all(":" not in name and "/" not in name for name in result_sheets)
@@ -251,8 +256,10 @@ def main():
     html = (root / "public/analysis.html").read_text(encoding="utf-8")
     for fmt in ("word", "pdf", "excel"):
         assert f'data-action="download" data-format="{fmt}"' in html
-    assert 'data-action="download-chapter-v" data-format="word"' in html
-    assert 'data-action="download-chapter-v" data-format="pdf"' in html
+    assert "Download Word Report" in html
+    assert "Download PDF Report" in html
+    assert "Download Cleaned Excel" in html
+    assert '<div class="se-export-feature is-hidden" hidden>' in html
     assert "exportErrorMessage(res)" in js
     assert "downloadBlob(blob" in js
     print("Sigma export runtime/completeness verification passed.")

@@ -1335,6 +1335,8 @@ def generate_report(session: Dict[str, Any], df: pd.DataFrame) -> Document:
 
 
 def to_docx(entry, results: Dict[str, Any], assignment: Dict[str, Any]) -> bytes:
+    if results.get("thesis_analysis_blueprint"):
+        return chapter_v_export.generate_docx(results)
     session = _build_session(entry, results, assignment)
     doc = generate_report(session, entry.df)
     out = io.BytesIO()
@@ -1344,6 +1346,8 @@ def to_docx(entry, results: Dict[str, Any], assignment: Dict[str, Any]) -> bytes
 
 def to_pdf(entry, results: Dict[str, Any], assignment: Dict[str, Any]) -> bytes:
     """Mirror the 10-section Word report in PDF (best effort, reportlab)."""
+    if results.get("thesis_analysis_blueprint"):
+        return chapter_v_export.generate_pdf(results)
     session = _build_session(entry, results, assignment)
     out = io.BytesIO()
     pdf = SimpleDocTemplate(out, pagesize=A4, leftMargin=36, rightMargin=36,
@@ -1662,6 +1666,9 @@ def _safe_sheet_title(wb: Workbook, raw_title: Any) -> str:
 
 def to_xlsx(entry, results: Dict[str, Any], assignment: Dict[str, Any]) -> bytes:
     session = _build_session(entry, results, assignment)
+    meta = getattr(entry, "meta", {}) or {}
+    df = getattr(entry, "df", pd.DataFrame())
+    blueprint = results.get("thesis_analysis_blueprint") or {}
     wb = Workbook()
     s = wb.active; s.title = "Cover"
     for k, v in (("Study", session["objective"]), ("Date", session["analysis_date"]),
@@ -1670,6 +1677,130 @@ def to_xlsx(entry, results: Dict[str, Any], assignment: Dict[str, Any]) -> bytes
                  ("Generated at", session["generated_at"]), ("Domain profile", session["domain_profile"]),
                  ("Patients", session["n_rows"]), ("Variables", session["n_cols"])):
         s.append([k, v])
+
+    # Current analysis-ready data. This is the processed dataframe held by the
+    # active Sigma session, not a reload of the original uploaded workbook.
+    ws = wb.create_sheet("cleaned_processed_dataset")
+    if isinstance(df, pd.DataFrame) and not df.empty:
+        ws.append([str(col) for col in df.columns])
+        for row in df.itertuples(index=False, name=None):
+            ws.append([_export_cell(value) for value in row])
+    else:
+        ws.append(["No processed dataset was available."])
+
+    # Explicit metadata sheets for downstream audit/reanalysis.
+    ws = wb.create_sheet("variable_classification")
+    ws.append(["Variable", "Detected type", "Role", "Missing n", "Missing %"])
+    classes_by_col = {
+        str(item.get("column")): item
+        for item in (meta.get("classifications") or [])
+        if item.get("column")
+    }
+    for col, info in session["variables"].items():
+        cls = classes_by_col.get(str(col), {})
+        ws.append([
+            info.get("display_name", col),
+            cls.get("detected_type") or info.get("type", ""),
+            cls.get("role") or cls.get("analysis_role") or "",
+            info.get("missing_n", 0),
+            f'{info.get("missing_pct", 0):.1f}%',
+        ])
+
+    ws = wb.create_sheet("cleaning_decisions")
+    ws.append(["Category", "Variable / Scope", "Details"])
+    cleaning_log = session.get("cleaning_log") or []
+    if cleaning_log:
+        for item in cleaning_log:
+            ws.append([item.get("category", ""), item.get("scope", ""), item.get("details", "")])
+    else:
+        ws.append(["Information", "Dataset", "No preprocessing actions or quality warnings were recorded."])
+
+    ws = wb.create_sheet("category_merges")
+    ws.append(["Details"])
+    merge_actions = [
+        action for action in (meta.get("cleaning_actions") or [])
+        if "merge" in str(action).lower() or "category" in str(action).lower()
+    ]
+    if merge_actions:
+        for action in merge_actions:
+            ws.append([_export_cell(action)])
+    else:
+        ws.append(["No category merge actions were recorded."])
+
+    ws = wb.create_sheet("missing_data_decisions")
+    ws.append(["Decision"])
+    missing_actions = meta.get("missing_decision_actions") or []
+    if missing_actions:
+        for action in missing_actions:
+            ws.append([_export_cell(action)])
+    else:
+        ws.append(["No missing-data decisions were recorded."])
+
+    ws = wb.create_sheet("excluded_variables")
+    ws.append(["Variable", "Reason"])
+    excluded = sorted(set(meta.get("analysis_excluded_columns") or []))
+    plan_debug = ((results.get("plan") or {}).get("debug") or {})
+    removed = {
+        str(item.get("variable")): item.get("reason", "")
+        for item in plan_debug.get("removed_predictors_with_reason") or []
+        if isinstance(item, dict) and item.get("variable")
+    }
+    if excluded:
+        for variable in excluded:
+            ws.append([variable, removed.get(variable, "Excluded from analysis")])
+    else:
+        ws.append(["None", "No variables were excluded from analysis."])
+
+    ws = wb.create_sheet("analysis_summary")
+    summary = blueprint.get("study_summary") or {}
+    for key, value in [
+        ("Study design", blueprint.get("study_design") or summary.get("study_design")),
+        ("Primary outcome", blueprint.get("primary_outcome")),
+        ("Thesis ready", blueprint.get("thesis_ready")),
+        ("Dataset ID", session["dataset_id"]),
+        ("Result ID", session["result_id"]),
+        ("Analysis version", session["analysis_version"]),
+        ("Domain profile", session["domain_profile"]),
+    ]:
+        ws.append([key, _export_cell(value)])
+    for warning in blueprint.get("warnings") or []:
+        ws.append(["Warning", _export_cell(warning)])
+
+    ws = wb.create_sheet("significant_findings")
+    sig_headers = [
+        "Variable / parameter", "Key finding", "Test statistic", "p-value",
+        "Adjusted p-value", "Test applied", "Effect size", "Notes/warnings",
+    ]
+    ws.append(sig_headers)
+    for row in blueprint.get("significant_findings") or results.get("significant_findings") or []:
+        if isinstance(row, dict):
+            ws.append([
+                row.get("variable", ""),
+                row.get("key_finding", ""),
+                row.get("test_statistic", ""),
+                row.get("p_value", ""),
+                row.get("adjusted_p_value", ""),
+                row.get("test_applied", ""),
+                row.get("effect_size", ""),
+                row.get("notes_warnings", ""),
+            ])
+
+    ws = wb.create_sheet("detailed_results")
+    ws.append(["Result", "Test used", "Table / Metric", "Value"])
+    for result in session["results"]:
+        title = result.get("title") or result.get("plan_name") or result.get("id") or "Result"
+        test_used = result.get("actual_test_used") or result.get("test") or result.get("test_type", "")
+        normalized = _normalized_tables(result)
+        if normalized:
+            for table in normalized:
+                ws.append([title, test_used, table.get("title", ""), ""])
+                ws.append(["", "", " | ".join(table.get("headers") or []), ""])
+                for row in table.get("rows") or []:
+                    ws.append(["", "", "", " | ".join(_export_cell(cell) for cell in row)])
+        else:
+            for row in result.get("rows") or []:
+                if isinstance(row, dict):
+                    ws.append([title, test_used, row.get("label", ""), row.get("value", "")])
 
     # Variable summary
     ws = wb.create_sheet("Variables")

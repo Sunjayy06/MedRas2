@@ -14,7 +14,7 @@ import pandas as pd
 from docx import Document
 
 from app.api import stats
-from app.services import chapter_v_export
+from app.services import chapter_v_export, export
 from app.services.thesis_blueprint import build_thesis_analysis_blueprint
 
 
@@ -229,6 +229,11 @@ def verify_service_docx() -> None:
     assert "cross_sectional_association" not in text
     assert "Internal detailed figure" not in text
 
+    regular_word = export.to_docx(FakeEntry(), results, {"outcome": "Positive/ Negative"})
+    regular_text = _docx_text(regular_word)
+    assert "CHAPTER V" in regular_text
+    assert "Observed counts" not in regular_text
+
 
 def verify_generic_docx() -> None:
     blueprint = build_thesis_analysis_blueprint(
@@ -280,8 +285,12 @@ def verify_frontend_wiring() -> None:
     root = Path(__file__).resolve().parents[1]
     html = (root / "public/analysis.html").read_text(encoding="utf-8")
     js = (root / "public/js/analysis.js").read_text(encoding="utf-8")
-    assert "Download Chapter V DOCX" in html
+    assert "Download Word Report" in html
+    assert "Download PDF Report" in html
+    assert "Download Cleaned Excel" in html
+    assert '<div class="se-export-feature is-hidden" hidden>' in html
     assert "/export/chapter-v" in js
+    assert 'data-testid="button-chapter-v-word">Download Chapter V DOCX' in html
     assert "include_detailed_appendix: false" in js
     assert "include_optional_figures: false" in js
 
