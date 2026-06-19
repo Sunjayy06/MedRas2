@@ -127,6 +127,256 @@ def _variables_from_test(test: Dict[str, Any]) -> List[str]:
     return []
 
 
+def _result_pair(test: Dict[str, Any], outcome: Optional[str]) -> tuple[str, str]:
+    variables = _variables_from_test(test)
+    if len(variables) >= 2:
+        if outcome and variables[1] == outcome:
+            return variables[0], variables[1]
+        if outcome and variables[0] == outcome:
+            return variables[1], variables[0]
+        return variables[0], variables[1]
+    return str(test.get("title") or "Variable"), str(outcome or "Outcome")
+
+
+def _summary_lookup(test: Dict[str, Any]) -> Dict[str, str]:
+    out: Dict[str, str] = {}
+    for table in test.get("tables") or []:
+        headers = [str(h).strip().lower() for h in table.get("headers") or []]
+        if len(headers) >= 2 and headers[0] in {"measure", "metric", "statistic"}:
+            for row in table.get("rows") or []:
+                if isinstance(row, list) and len(row) >= 2:
+                    out[str(row[0]).strip().lower()] = str(row[1])
+    for row in test.get("rows") or []:
+        if isinstance(row, dict) and row.get("label") is not None:
+            out[str(row.get("label")).strip().lower()] = str(row.get("value", ""))
+    return out
+
+
+def _fmt_value(value: Any) -> str:
+    if value is None:
+        return "-"
+    text = str(value)
+    return "-" if text.strip() in {"", "None", "nan"} else text
+
+
+def _test_applied(test: Dict[str, Any]) -> str:
+    summary = _summary_lookup(test)
+    value = (
+        summary.get("test used")
+        or test.get("actual_test_used")
+        or test.get("test")
+        or test.get("test_type")
+        or test.get("title")
+        or "Statistical test"
+    )
+    text = str(value)
+    if ":" in text:
+        text = text.split(":", 1)[-1].strip()
+    return text
+
+
+def _statistic_for_table(test: Dict[str, Any]) -> str:
+    summary = _summary_lookup(test)
+    parts = []
+    stat = test.get("statistic") or test.get("stat") or test.get("chi2") or summary.get("statistic")
+    if stat not in (None, "", "-"):
+        parts.append(_fmt_value(stat))
+    df = test.get("df") if test.get("df") is not None else test.get("dof")
+    if df is None:
+        df = summary.get("df") or summary.get("welch df")
+    if df not in (None, "", "-"):
+        parts.append(f"df = {_fmt_value(df)}")
+    return ", ".join(parts) or "-"
+
+
+def _effect_for_table(test: Dict[str, Any]) -> str:
+    summary = _summary_lookup(test)
+    effect = (
+        test.get("effect_size")
+        if test.get("effect_size") not in (None, "", "-", "—")
+        else test.get("cramers_v")
+    )
+    if effect in (None, "", "-", "—"):
+        effect = (
+            summary.get("cramer's v / effect size")
+            or summary.get("cohen's d")
+            or summary.get("rank-biserial correlation")
+        )
+    if effect in (None, "", "-", "—"):
+        return "-"
+    label = str(test.get("effect_label") or "").strip()
+    test_type = str(test.get("test_type") or "").lower()
+    if label in {"", "-", "—"}:
+        if test.get("cramers_v") is not None or "chi" in test_type or "fisher" in test_type:
+            label = "Cramer's V"
+        elif "welch" in test_type or "ttest" in test_type or "t_test" in test_type:
+            label = "Cohen's d"
+        elif "mann" in test_type:
+            label = "Rank-biserial correlation"
+        else:
+            label = "Effect size"
+    return f"{label} = {_fmt_value(effect)}"
+
+
+def _p_display(test: Dict[str, Any], *, adjusted: bool = False) -> str:
+    key = "p_corrected" if adjusted else None
+    value = test.get(key) if key else (test.get("p") if test.get("p") is not None else test.get("p_value"))
+    if value is None:
+        return "-"
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return str(value)
+    if numeric < 0.001:
+        return "p < 0.001"
+    return f"p = {numeric:.3f}"
+
+
+def _warning_for_table(test: Dict[str, Any]) -> str:
+    summary = _summary_lookup(test)
+    return _fmt_value(
+        test.get("warning")
+        or test.get("note")
+        or summary.get("expected-count / sparse-cell warning")
+    )
+
+
+def _observed_table(test: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    for table in test.get("tables") or []:
+        if str(table.get("title") or "").strip().lower() == "observed counts":
+            return table
+    return None
+
+
+def _thesis_table_for_result(test: Dict[str, Any], outcome: Optional[str]) -> Dict[str, Any]:
+    family = _test_family(test)
+    predictor, target = _result_pair(test, outcome)
+    test_id = str(test.get("id") or "result")
+    warning = _warning_for_table(test)
+    if family == "bivariate" and str(test.get("test_type") or "").lower() in {"chi_square", "fisher_exact"}:
+        observed = _observed_table(test)
+        headers = list(observed.get("headers") or []) if observed else []
+        rows = []
+        outcome_headers = headers[1:-1] if headers and headers[-1] == "Total" else headers[1:]
+        if observed:
+            for row in observed.get("rows") or []:
+                if not isinstance(row, list) or not row or str(row[0]).lower() == "total":
+                    continue
+                counts = row[1:1 + len(outcome_headers)]
+                row_total = 0.0
+                parsed_counts = []
+                for value in counts:
+                    try:
+                        numeric = float(str(value).replace("%", ""))
+                    except (TypeError, ValueError):
+                        numeric = 0.0
+                    parsed_counts.append(numeric)
+                    row_total += numeric
+                formatted_counts = [
+                    f"{int(count) if count.is_integer() else count:g} ({(count / row_total * 100.0):.1f}%)" if row_total else f"{count:g} (0.0%)"
+                    for count in parsed_counts
+                ]
+                rows.append([
+                    row[0],
+                    *formatted_counts,
+                    _p_display(test),
+                    _p_display(test, adjusted=True),
+                    _test_applied(test),
+                    _effect_for_table(test),
+                    warning,
+                ])
+        return {
+            "table_id": f"{test_id}_thesis",
+            "title": f"Association of {target} with {predictor}",
+            "table_type": "categorical_association_thesis_table",
+            "columns": [
+                "Predictor category",
+                *[f"{label} n (%)" for label in outcome_headers],
+                "p-value",
+                "Adjusted p-value",
+                "Test applied",
+                "Effect size",
+                "Warnings",
+            ],
+            "rows": rows or [[predictor, "-", "-", _p_display(test), _p_display(test, adjusted=True), _test_applied(test), _effect_for_table(test), warning]],
+            "source_variables": [predictor, target],
+            "source_test_ids": [test_id],
+            "interpretation": _safe_interpretation(test),
+            "thesis_ready": bool(rows),
+            "warnings": [warning] if warning != "-" else [],
+            "detailed_tables_available": True,
+        }
+    if family == "bivariate":
+        return {
+            "table_id": f"{test_id}_thesis",
+            "title": f"Comparison of {predictor} by {target}",
+            "table_type": "continuous_or_group_comparison_thesis_table",
+            "columns": ["Group", "n", "Summary", "Test statistic", "p-value", "Adjusted p-value", "Test applied", "Effect size", "Warnings"],
+            "rows": [[
+                target,
+                _fmt_value(test.get("n") or test.get("n_total")),
+                _clean_text(test.get("narrative")) or "See detailed statistical result.",
+                _statistic_for_table(test),
+                _p_display(test),
+                _p_display(test, adjusted=True),
+                _test_applied(test),
+                _effect_for_table(test),
+                warning,
+            ]],
+            "source_variables": [predictor, target],
+            "source_test_ids": [test_id],
+            "interpretation": _safe_interpretation(test),
+            "thesis_ready": True,
+            "warnings": [warning] if warning != "-" else [],
+            "detailed_tables_available": bool(test.get("tables")),
+        }
+    first_table = (test.get("tables") or [{}])[0]
+    return {
+        "table_id": f"{test_id}_thesis",
+        "title": test.get("title") or "Analysis summary",
+        "table_type": _summary_table_type_for_result(test),
+        "columns": list(first_table.get("headers") or ["Result", "Interpretation"]),
+        "rows": list(first_table.get("rows") or [[test.get("title") or test_id, _safe_interpretation(test)]]),
+        "source_variables": _variables_from_test(test),
+        "source_test_ids": [test_id],
+        "interpretation": _safe_interpretation(test),
+        "thesis_ready": bool(first_table.get("rows")) or family in {"correlation", "regression", "diagnostic_accuracy", "reliability_agreement"},
+        "warnings": [warning] if warning != "-" else [],
+        "detailed_tables_available": bool(test.get("tables")),
+    }
+
+
+_OUTCOME_COMPONENT_TERMS = (
+    "staining", "interpretation site", "interpretation", "localization",
+    "localisation", "intensity", "score", "status", "expression", "marker component",
+)
+
+
+def _outcome_component_variables(
+    classifications: List[Dict[str, Any]],
+    outcome: Optional[str],
+    session: Dict[str, Any],
+) -> set[str]:
+    marker = str(session.get("main_marker") or "").strip().lower()
+    concept = str(session.get("main_outcome_concept") or "").strip().lower()
+    outcome_label = str(outcome or "").strip().lower()
+    if not (marker or concept or outcome_label):
+        return set()
+    components: set[str] = set()
+    for row in classifications or []:
+        col = str(row.get("column") or "")
+        low = col.lower()
+        if col == outcome:
+            continue
+        shares_marker = bool(marker and marker in low)
+        shares_semantics = any(term in low for term in _OUTCOME_COMPONENT_TERMS)
+        concept_tokens = {token for token in concept.replace("/", " ").split() if len(token) >= 4}
+        shares_concept = bool(concept_tokens and any(token in low for token in concept_tokens))
+        if shares_semantics and (shares_marker or shares_concept or "status" in outcome_label or "expression" in concept):
+            components.add(col)
+    return components
+
+
 def _safe_interpretation(test: Dict[str, Any]) -> str:
     p = _p_value(test)
     title = _clean_text(test.get("title") or "This analysis")
@@ -282,6 +532,8 @@ def _outcome_section(outcome: Optional[str], classes: Dict[str, Dict[str, Any]])
         "caption": f"Distribution of the primary outcome variable, {outcome}.",
         "interpretation": "Use this figure to inspect outcome balance and missingness before interpreting inferential tests.",
         "thesis_ready": False,
+        "optional": False,
+        "detailed_report_only": False,
         "warnings": ["Graph image is not generated here unless the executed results already contain one."],
     }
     return {
@@ -397,6 +649,7 @@ def build_thesis_analysis_blueprint(
         table for section in sections for table in section.get("tables", [])
     ]
     all_figures: List[Dict[str, Any]] = list(outcome_section["figures"] if outcome_section else [])
+    outcome_components = _outcome_component_variables(classifications, outcome, session)
 
     for test in tests:
         family = _test_family(test)
@@ -410,36 +663,9 @@ def build_thesis_analysis_blueprint(
         section["source_results"].append(test_id)
         variables = _variables_from_test(test)
         interpretation = _safe_interpretation(test)
-        for idx, table in enumerate(test.get("tables") or [], 1):
-            bp_table = {
-                "table_id": f"{test_id}_table_{idx}",
-                "title": table.get("title") or test.get("title") or f"Result table {idx}",
-                "table_type": _table_type_for_result(test, table),
-                "columns": list(table.get("headers") or []),
-                "rows": list(table.get("rows") or []),
-                "source_variables": variables,
-                "source_test_ids": [test_id],
-                "interpretation": interpretation,
-                "thesis_ready": bool(table.get("headers") and table.get("rows")),
-                "warnings": [_warning for _warning in [_clean_text(test.get("warning") or test.get("note"))] if _warning],
-            }
-            section["tables"].append(bp_table)
-            all_tables.append(bp_table)
-        if not test.get("tables"):
-            bp_table = {
-                "table_id": f"{test_id}_summary",
-                "title": test.get("title") or "Analysis summary",
-                "table_type": _summary_table_type_for_result(test),
-                "columns": ["Result", "Interpretation"],
-                "rows": [[test.get("title") or test_id, interpretation]],
-                "source_variables": variables,
-                "source_test_ids": [test_id],
-                "interpretation": interpretation,
-                "thesis_ready": False,
-                "warnings": ["No normalized detailed table was available for this result."],
-            }
-            section["tables"].append(bp_table)
-            all_tables.append(bp_table)
+        bp_table = _thesis_table_for_result(test, outcome)
+        section["tables"].append(bp_table)
+        all_tables.append(bp_table)
         for idx, fig in enumerate(test.get("figures") or [], 1):
             fig_title = str(fig.get("title") or test.get("title") or f"Figure {idx}")
             bp_fig = {
@@ -451,6 +677,8 @@ def build_thesis_analysis_blueprint(
                 "caption": fig.get("caption") or fig_title,
                 "interpretation": interpretation,
                 "thesis_ready": bool(fig.get("png_data_uri")),
+                "optional": family != "diagnostic_accuracy",
+                "detailed_report_only": False,
                 "warnings": [],
             }
             section["figures"].append(bp_fig)
@@ -471,6 +699,8 @@ def build_thesis_analysis_blueprint(
             "caption": graph.get("caption") or title,
             "interpretation": graph.get("interpretation") or "Figure generated from the executed Sigma analysis.",
             "thesis_ready": bool(graph.get("png_data_uri")),
+            "optional": True,
+            "detailed_report_only": False,
             "warnings": [] if graph.get("png_data_uri") else ["Figure metadata is available; image rendering is pending or unavailable."],
         }
         all_figures.append(bp_fig)
@@ -478,26 +708,46 @@ def build_thesis_analysis_blueprint(
         if section:
             section["figures"].append(bp_fig)
 
-    if significant_findings:
+    max_default_figures = 8
+    for idx, figure in enumerate(all_figures):
+        is_primary = figure.get("figure_id") == "primary_outcome_distribution"
+        if idx >= max_default_figures and not is_primary:
+            figure["optional"] = True
+            figure["detailed_report_only"] = True
+            warning_list = list(figure.get("warnings") or [])
+            warning_list.append("Held for detailed report to keep the thesis blueprint concise.")
+            figure["warnings"] = warning_list
+
+    thesis_findings = []
+    for finding in significant_findings:
+        variable = str(finding.get("variable") or "")
+        if variable in excluded:
+            continue
+        if any(variable == comp or variable.startswith(f"{comp} vs ") or variable.startswith(f"{comp} by ") for comp in outcome_components):
+            continue
+        thesis_findings.append(finding)
+
+    if thesis_findings:
         rows = [
             [
                 finding.get("variable") or "",
                 finding.get("key_finding") or "",
                 finding.get("p_value") or "",
+                finding.get("adjusted_p_value") or "-",
                 finding.get("test_applied") or "",
                 finding.get("effect_size") or "",
                 finding.get("notes_warnings") or "",
             ]
-            for finding in significant_findings
+            for finding in thesis_findings
         ]
         sig_table = {
             "table_id": "significant_findings",
             "title": "Summary of statistically significant findings",
             "table_type": "significant_findings_table",
-            "columns": ["Variable / parameter", "Key finding", "p-value", "Test applied", "Effect size", "Notes/warnings"],
+            "columns": ["Variable / parameter", "Key finding", "p-value", "Adjusted p-value", "Test applied", "Effect size", "Notes/warnings"],
             "rows": rows,
             "source_variables": [],
-            "source_test_ids": [str(f.get("variable") or "") for f in significant_findings],
+            "source_test_ids": [str(f.get("variable") or "") for f in thesis_findings],
             "interpretation": "Only statistically significant completed tests are listed here.",
             "thesis_ready": True,
             "warnings": [],
@@ -511,6 +761,10 @@ def build_thesis_analysis_blueprint(
         sig_section["interpretation"] = "Statistically significant findings should be interpreted in the context of study design and multiplicity."
         sections.append(sig_section)
         all_tables.append(sig_table)
+    elif outcome_components and significant_findings:
+        warnings.append(
+            "Some significant detailed results were outcome/marker components and were omitted from the final thesis findings table by default."
+        )
 
     executed_families = {_test_family(test) for test in tests}
     planned_ids = {str(test.get("id") or "") for test in plan.get("tests") or []}
@@ -562,7 +816,7 @@ def build_thesis_analysis_blueprint(
         "analysis_sections": sections,
         "tables": all_tables,
         "figures": all_figures,
-        "significant_findings": significant_findings,
+        "significant_findings": thesis_findings,
         "methods_text": methods_text,
         "results_narrative": results_narrative,
         "warnings": list(dict.fromkeys(warnings)),

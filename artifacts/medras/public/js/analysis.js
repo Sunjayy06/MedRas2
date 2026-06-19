@@ -780,7 +780,9 @@ function _bindS1ProposalUpload() {
       const primaryObjective = data.objective || (data.objectives && data.objectives.primary) || "";
       if (descField)    descField.value = primaryObjective;
       if (outcomeField) outcomeField.value = data.main_outcome_concept || data.outcomes || "";
-      if (studyTypeField && data.study_type) studyTypeField.value = data.study_type;
+      if (studyTypeField && (data.study_type_normalized || data.study_type)) {
+        studyTypeField.value = data.study_type_normalized || data.study_type;
+      }
       if (sampleSizeField && data.sample_size) sampleSizeField.value = data.sample_size;
       if (data.domain_profile) {
         state.domainProfile = data.domain_profile;
@@ -1564,6 +1566,10 @@ function canonicalOutcomeFromPlan(plan) {
 function normalizeAiStudyPlan(plan) {
   if (!plan) return plan;
   const normalized = Object.assign({}, plan);
+  if (normalized.study_type_normalized) {
+    normalized.study_type_raw = normalized.study_type_raw || normalized.study_type;
+    normalized.study_type = normalized.study_type_normalized;
+  }
   const outcome = canonicalOutcomeFromPlan(normalized);
   if (outcome) {
     normalized.outcome_col = outcome;
@@ -4429,6 +4435,8 @@ function renderThesisBlueprint(blueprint) {
     figure.graph_type || "",
     (figure.source_variables || []).join(", "),
     figure.thesis_ready ? "Yes" : "Preview pending",
+    figure.optional ? "Optional" : "Core",
+    figure.detailed_report_only ? "Detailed report only" : "Thesis preview",
     (figure.warnings || []).join("; "),
   ]);
   return `<h3>${escapeHtml(blueprint.title || "Thesis-ready outline")}</h3>
@@ -4455,7 +4463,7 @@ function renderThesisBlueprint(blueprint) {
     <h4>Planned thesis tables</h4>
     ${tableRows.length ? tableHtml(["Table", "Type", "Variables", "Thesis ready", "Warnings"], tableRows) : "<p>No thesis tables were generated.</p>"}
     <h4>Planned thesis figures</h4>
-    ${figureRows.length ? tableHtml(["Figure", "Graph type", "Variables", "Thesis ready", "Warnings"], figureRows) : "<p>No thesis figures were generated.</p>"}
+    ${figureRows.length ? tableHtml(["Figure", "Graph type", "Variables", "Thesis ready", "Priority", "Placement", "Warnings"], figureRows) : "<p>No thesis figures were generated.</p>"}
     <h4>Methods paragraph</h4><p>${escapeHtml(blueprint.methods_text || "")}</p>
     <h4>Significant findings</h4>
     ${findings.length ? tableHtml(["Variable / parameter", "Key finding", "p-value", "Test applied"], findings.map((row) => [
@@ -5286,12 +5294,17 @@ function renderSetupScreen(plan) {
   const noPairs  = document.getElementById("setup-no-pairs-hint");
 
   const st = (plan.study_type || "descriptive").toLowerCase();
-  if (typeEl)   typeEl.textContent = st.charAt(0).toUpperCase() + st.slice(1) + " study";
+  const typeLabel = _STUDY_TYPE_LABELS[st] || (st.charAt(0).toUpperCase() + st.slice(1) + " study");
+  if (typeEl)   typeEl.textContent = typeLabel;
   if (iconEl)   iconEl.textContent = _STUDY_TYPE_ICONS[st] || "📊";
   if (objEl)    objEl.textContent  = plan.objective || "—";
   if (reasonEl) {
-    reasonEl.textContent = plan.reasoning || "";
-    reasonEl.style.display = plan.reasoning ? "" : "none";
+    const warnings = Array.isArray(plan.warnings) ? plan.warnings : [];
+    const reasonParts = [];
+    if (plan.reasoning) reasonParts.push(plan.reasoning);
+    if (warnings.length) reasonParts.push(warnings.join(" "));
+    reasonEl.textContent = reasonParts.join(" ");
+    reasonEl.style.display = reasonParts.length ? "" : "none";
   }
   if (nEl) {
     if (plan.sample_size) {
@@ -5304,7 +5317,11 @@ function renderSetupScreen(plan) {
   const canonicalOutcome = canonicalOutcomeFromPlan(plan);
   if (outEl) {
     if (canonicalOutcome) {
-      outEl.textContent = `Outcome: ${canonicalOutcome}`;
+      const proposal = plan.proposal_understanding || {};
+      const concept = proposal.main_outcome_concept || plan.main_outcome_concept || "";
+      outEl.textContent = concept
+        ? `Outcome: ${canonicalOutcome} (mapped from proposal concept: ${concept})`
+        : `Outcome: ${canonicalOutcome}`;
       outEl.style.display = "";
     } else {
       outEl.style.display = "none";
@@ -5394,6 +5411,15 @@ function bindScreenSetup() {
           }),
         });
         applyCanonicalAssignment(confirmed);
+        if (confirmed.study_type_normalized || confirmed.study_type) {
+          state.studyType = confirmed.study_type_normalized || confirmed.study_type;
+          if (state.aiStudy) {
+            state.aiStudy = normalizeAiStudyPlan(Object.assign({}, state.aiStudy, {
+              study_type: state.studyType,
+              study_type_normalized: state.studyType,
+            }));
+          }
+        }
       } catch (err) {
         setStatus(statusEl, `Could not confirm study setup: ${err.message}`, "error");
         return;
@@ -5565,6 +5591,15 @@ function bindAiConfirm() {
         state.outcomeCol = outCol || null;
         state.assignment = { outcome: outCol || null, group: null, covariates: [] };
         applyCanonicalAssignment(confirmed);
+        if (confirmed.study_type_normalized || confirmed.study_type) {
+          state.studyType = confirmed.study_type_normalized || confirmed.study_type;
+          if (state.aiStudy) {
+            state.aiStudy = normalizeAiStudyPlan(Object.assign({}, state.aiStudy, {
+              study_type: state.studyType,
+              study_type_normalized: state.studyType,
+            }));
+          }
+        }
         state.assignmentConfirmed = !!outCol;
         setStatus(status, "");
         showScreen("3");

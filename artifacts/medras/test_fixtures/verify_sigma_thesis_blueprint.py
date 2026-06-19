@@ -72,7 +72,13 @@ def verify_p27_association_blueprint() -> None:
     assert {"baseline_characteristics", "primary_outcome_distribution", "bivariate_associations", "significant_findings_summary"}.issubset(_section_ids(blueprint))
     assert "clinical_study_characteristics" in _section_ids(blueprint)
     assert "immunophenotype_characteristics" in _section_ids(blueprint)
-    assert "categorical_association_table" in _table_types(blueprint)
+    assert "categorical_association_thesis_table" in _table_types(blueprint)
+    forbidden_titles = {"observed counts", "expected counts", "row percentages", "column percentages", "test summary"}
+    assert not any(str(table["title"]).strip().lower() in forbidden_titles for table in blueprint["tables"])
+    assert all(
+        len([t for t in blueprint["tables"] if test_id in (t.get("source_test_ids") or [])]) == 1
+        for test_id in {test["id"] for test in output["tests"]}
+    )
     assert "positive_nodes" not in str({
         "sections": blueprint["analysis_sections"],
         "tables": blueprint["tables"],
@@ -92,7 +98,7 @@ def verify_two_group_blueprint() -> None:
     output = results.run_plan(df, classes, assignment, sigma_plan, session={"study_type": "two-group comparison"})
     blueprint = output["thesis_analysis_blueprint"]
     assert "bivariate_associations" in _section_ids(blueprint)
-    assert "two_group_or_bivariate_comparison_table" in _table_types(blueprint)
+    assert "continuous_or_group_comparison_thesis_table" in _table_types(blueprint)
     assert "boxplot" in _figure_types(blueprint) or any("box" in fig["graph_type"] for fig in blueprint["figures"])
 
 
@@ -175,14 +181,61 @@ def verify_direct_family_blueprints() -> None:
     assert "survival_analysis" not in _section_ids(survival)
 
 
+def verify_marker_component_filtering() -> None:
+    blueprint = build_thesis_analysis_blueprint(
+        df_shape=(12, 4),
+        classifications=[
+            {"column": "Positive/ Negative", "detected_type": "nominal"},
+            {"column": "Staining result", "detected_type": "ordinal"},
+            {"column": "Age", "detected_type": "scale"},
+        ],
+        assignment={"outcome": "Positive/ Negative"},
+        table_one={"headers": ["Variable", "Summary"], "rows": []},
+        tests=[],
+        graphs=[],
+        significant_findings=[
+            {
+                "variable": "Staining result vs Positive/ Negative",
+                "key_finding": "Component association.",
+                "p_value": "p = 0.001",
+                "adjusted_p_value": "p = 0.010",
+                "test_applied": "Chi-square test",
+                "effect_size": "Cramer's V = 0.80",
+                "notes_warnings": "-",
+            },
+            {
+                "variable": "Age by Positive/ Negative",
+                "key_finding": "Age association.",
+                "p_value": "p = 0.020",
+                "adjusted_p_value": "p = 0.040",
+                "test_applied": "Welch's t-test",
+                "effect_size": "Cohen's d = 0.70",
+                "notes_warnings": "-",
+            },
+        ],
+        methods_text="Methods.",
+        results_narrative="Results.",
+        session={
+            "study_type": "association",
+            "main_marker": "p27",
+            "main_outcome_concept": "p27 expression status",
+        },
+    )
+    assert all("Staining result" not in str(row) for row in blueprint["significant_findings"])
+    sig_table = next(table for table in blueprint["tables"] if table["table_id"] == "significant_findings")
+    assert "Adjusted p-value" in sig_table["columns"]
+    assert any("Age by Positive/ Negative" in str(row) for row in sig_table["rows"])
+
+
 def main() -> None:
     verify_p27_association_blueprint()
     verify_two_group_blueprint()
     verify_correlation_blueprint()
     verify_direct_family_blueprints()
+    verify_marker_component_filtering()
     matrix = [
-        ("cross-sectional association", "bivariate_associations", "categorical_association_table", "grouped_or_stacked_bar", "supported"),
-        ("two-group comparison", "bivariate_associations", "two_group_or_bivariate_comparison_table", "boxplot", "supported"),
+        ("cross-sectional association", "bivariate_associations", "categorical_association_thesis_table", "grouped_or_stacked_bar", "supported"),
+        ("two-group comparison", "bivariate_associations", "continuous_or_group_comparison_thesis_table", "boxplot", "supported"),
         ("correlation", "correlation_analysis", "correlation_table", "scatter_plot metadata when available", "supported"),
         ("diagnostic accuracy", "diagnostic_accuracy", "diagnostic_accuracy_table", "roc_curve", "supported when diagnostic result exists"),
         ("reliability/agreement", "reliability_agreement", "agreement_table", "agreement/Bland-Altman figure when available", "supported when result exists"),

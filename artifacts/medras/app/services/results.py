@@ -1381,7 +1381,17 @@ def _effect_text(test: Dict[str, Any]) -> str:
         effect = rows.get("cramer's v / effect size") or rows.get("cohen's d") or rows.get("rank-biserial correlation")
     if effect in (None, "", "-"):
         return ""
-    label = test.get("effect_label") or ("Cramer's V" if test.get("cramers_v") is not None else "Effect size")
+    label = test.get("effect_label")
+    if str(label or "").strip() in {"", "-", "—"}:
+        test_type = str(test.get("test_type") or "").lower()
+        if test.get("cramers_v") is not None or "chi" in test_type or "fisher" in test_type:
+            label = "Cramer's V"
+        elif "welch" in test_type or "ttest" in test_type or "t_test" in test_type:
+            label = "Cohen's d"
+        elif "mann" in test_type:
+            label = "Rank-biserial correlation"
+        else:
+            label = "Effect size"
     return f"{label} = {_display_value(effect)}"
 
 
@@ -1393,7 +1403,8 @@ def _warning_text(test: Dict[str, Any]) -> str:
 
 def _compact_result_summary(test: Dict[str, Any]) -> str:
     title = str(test.get("title") or "Analysis result")
-    pieces = [_test_used(test)]
+    test_used = _test_used(test)
+    pieces = [] if test_used and test_used.lower() in title.lower() else [test_used]
     for bit in (_statistic_text(test),):
         if bit:
             pieces.append(bit)
@@ -1423,6 +1434,7 @@ def _significant_findings(test_results: List[Dict[str, Any]]) -> List[Dict[str, 
             "key_finding": test.get("compact_summary") or _compact_result_summary(test),
             "test_statistic": _statistic_text(test) or "-",
             "p_value": _fmt_p(p),
+            "adjusted_p_value": _fmt_p(float(test["p_corrected"])) if test.get("p_corrected") is not None else "-",
             "p_numeric": p,
             "uncorrected_p_value": _fmt_p(_result_raw_p_value(test)) if _result_raw_p_value(test) is not None else "-",
             "test_applied": _test_used(test),
