@@ -200,6 +200,13 @@ def _section_figures(section: Dict[str, Any], include_optional: bool = False) ->
 
 BASELINE_TERMS = ("age", "sex", "gender", "laterality", "side", "group", "cohort")
 
+DESCRIPTIVE_TABLE_TYPES = {
+    "descriptive_table",
+    "domain_profile_descriptive_table",
+    "marker_component_descriptive_table",
+    "primary_outcome_distribution_table",
+}
+
 
 def _row_variable(row: Any) -> str:
     if isinstance(row, dict):
@@ -214,6 +221,92 @@ def _source_variables(table: Dict[str, Any]) -> List[str]:
     if variables:
         return variables
     return [_row_variable(row) for row in table.get("rows") or [] if _row_variable(row)]
+
+
+def _clean_table_title(title: Any) -> str:
+    text = _text(title)
+    return re.sub(r"^Table\s+\d+[A-Z]?\.\s*", "", text, flags=re.IGNORECASE).strip()
+
+
+def _clean_interpretation(value: Any, label_ctx: Optional[Dict[str, Any]] = None) -> str:
+    text = _display_value(value, label_ctx) if label_ctx else _text(value)
+    blocked = (
+        "Domain-profile grouping is descriptive",
+        "statistical tests remain generated from variable roles",
+        "Use this figure to inspect outcome balance",
+    )
+    if any(item in text for item in blocked):
+        return ""
+    text = text.replace("Chi-square test with sparse-cell warning was", "was")
+    text = text.replace("Chi-square test: Chi-square test", "Chi-square test")
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
+
+
+def _parse_category_summary(summary: Any, label_ctx: Optional[Dict[str, Any]] = None) -> List[Tuple[str, str, str]]:
+    text = _display_value(summary, label_ctx) if label_ctx else _text(summary)
+    rows: List[Tuple[str, str, str]] = []
+    for label, count, pct in re.findall(r"([^:;]+):\s*([0-9]+(?:\.[0-9]+)?)\s*\(([0-9]+(?:\.[0-9]+)?)%\)", text):
+        rows.append((_text(label).strip(), str(int(float(count))) if float(count).is_integer() else count, f"{pct}%"))
+    return rows
+
+
+def _descriptive_export_table(table: Dict[str, Any], label_ctx: Dict[str, Any]) -> Dict[str, Any]:
+    if str(table.get("table_type") or "") not in DESCRIPTIVE_TABLE_TYPES:
+        return table
+    rows: List[List[str]] = []
+    for row in table.get("rows") or []:
+        variable = _row_variable(row)
+        if not variable:
+            continue
+        cells = row.get("cells") if isinstance(row, dict) else None
+        kind = _text(row.get("type") if isinstance(row, dict) else "")
+        summary = cells[0] if isinstance(cells, list) and cells else ""
+        categories = _parse_category_summary(summary, label_ctx)
+        if categories:
+            for category, count, pct in categories:
+                rows.append([_display_value(variable, label_ctx), category, count, pct])
+        elif summary:
+            statistic = kind or "Summary"
+            rows.append([_display_value(variable, label_ctx), statistic, _display_value(summary, label_ctx), ""])
+    if not rows:
+        return table
+    clone = deepcopy(table)
+    clone["columns"] = ["Parameter", "Category", "n", "%"]
+    clone.pop("headers", None)
+    clone["rows"] = rows
+    clone["title"] = _clean_table_title(clone.get("title") or "Descriptive findings")
+    clone["interpretation"] = _descriptive_table_interpretation(clone)
+    return clone
+
+
+def _descriptive_table_interpretation(table: Dict[str, Any]) -> str:
+    rows = table.get("rows") or []
+    if not rows:
+        return ""
+    first_param = _text(rows[0][0]) if isinstance(rows[0], list) and rows[0] else ""
+    best: Optional[List[str]] = None
+    for row in rows:
+        if not isinstance(row, list) or len(row) < 4:
+            continue
+        try:
+            current = float(str(row[2]).replace(",", ""))
+        except ValueError:
+            continue
+        if best is None:
+            best = row
+            continue
+        try:
+            previous = float(str(best[2]).replace(",", ""))
+        except ValueError:
+            previous = -1.0
+        if current > previous:
+            best = row
+    if best and len(best) >= 4 and best[1]:
+        return f"The most frequent category for {best[0]} was {best[1]} ({best[2]}, {best[3]})."
+    if first_param:
+        return f"This table summarises {first_param} in the analysed sample."
+    return "This table summarises the analysed sample."
 
 
 def _filter_table_variables(table: Dict[str, Any], allowed: Set[str], seen: Set[str]) -> Optional[Dict[str, Any]]:
@@ -242,6 +335,12 @@ def _dedupe_descriptive_sections(sections: List[Dict[str, Any]]) -> List[Dict[st
         "marker_outcome_components",
     }
     has_domain_sections = any(section.get("section_id") in domain_ids for section in sections)
+    marker_vars: Set[str] = set()
+    for section in sections:
+        if section.get("section_id") != "marker_outcome_components":
+            continue
+        for table in section.get("tables") or []:
+            marker_vars.update(_source_variables(table))
     seen: Set[str] = set()
     out: List[Dict[str, Any]] = []
     for section in sections:
@@ -255,6 +354,13 @@ def _dedupe_descriptive_sections(sections: List[Dict[str, Any]]) -> List[Dict[st
                         allowed.add(var)
         new_tables = []
         for table in clone.get("tables") or []:
+            if section_id != "marker_outcome_components" and marker_vars:
+                clone_table = deepcopy(table)
+                clone_table["rows"] = [
+                    row for row in clone_table.get("rows") or []
+                    if _row_variable(row) not in marker_vars
+                ]
+                table = clone_table
             filtered = _filter_table_variables(table, allowed, seen)
             if filtered:
                 new_tables.append(filtered)
@@ -453,11 +559,12 @@ def _add_table_docx(
     label_ctx: Optional[Dict[str, Any]] = None,
     include_interpretation: bool = True,
 ) -> int:
+    payload = _descriptive_export_table(payload, label_ctx or {})
     payload, warning_notes = _compact_table_for_export(payload)
     headers, rows = _table_rows(payload)
     if not rows:
         return caption_no
-    caption = _display_value(payload.get("title") or f"Table {caption_no}", label_ctx)
+    caption = _display_value(_clean_table_title(payload.get("title") or f"Table {caption_no}"), label_ctx)
     _plain_docx_text(doc, f"Table {caption_no}. {caption}", style=None).runs[0].bold = True
     table = doc.add_table(rows=1, cols=len(headers))
     table.style = "Table Grid"
@@ -474,7 +581,7 @@ def _add_table_docx(
     _format_docx_table(table, font_size=8 if len(headers) > 5 else 9)
     for warning in warning_notes:
         _plain_docx_text(doc, f"Caution: {_display_value(warning, label_ctx)}")
-    interpretation = _display_value(payload.get("interpretation"), label_ctx)
+    interpretation = _clean_interpretation(payload.get("interpretation"), label_ctx)
     if include_interpretation and interpretation:
         _plain_docx_text(doc, interpretation)
     doc.add_paragraph()
@@ -506,7 +613,7 @@ def _add_figure_docx(doc: Document, figure: Dict[str, Any], figure_no: int, labe
     caption_para = doc.add_paragraph()
     caption_run = caption_para.add_run(f"Figure {figure_no}. {caption}")
     caption_run.italic = True
-    interpretation = _display_value(figure.get("interpretation"), label_ctx)
+    interpretation = _clean_interpretation(figure.get("interpretation"), label_ctx)
     if interpretation:
         _plain_docx_text(doc, interpretation)
     doc.add_paragraph()
@@ -604,6 +711,40 @@ def _main_sections(blueprint: Dict[str, Any]) -> List[Dict[str, Any]]:
     ]
 
 
+def _section_export_title(section_id: str, fallback: Any, label_ctx: Dict[str, Any]) -> str:
+    marker = _text(label_ctx.get("display") or "Marker")
+    titles = {
+        "baseline_characteristics": "Section I - Baseline Characteristics",
+        "clinical_study_characteristics": "Section II - Nodal and Prognostic Pathology",
+        "immunophenotype_characteristics": "Section III - Immunophenotype",
+        "marker_outcome_components": f"Section IV - {marker} / Marker Expression",
+        "primary_outcome_distribution": f"Section IV - {marker} / Marker Expression",
+        "bivariate_associations": "Section V - Statistical Associations",
+        "correlation_analysis": "Section V - Correlation Analysis",
+        "regression_adjusted_analysis": "Section V - Regression / Adjusted Analysis",
+        "diagnostic_accuracy": "Section V - Diagnostic Accuracy",
+        "reliability_agreement": "Section V - Reliability and Agreement",
+        "survival_analysis": "Section V - Survival Analysis",
+        "repeated_measures": "Section V - Repeated-Measures Analysis",
+        "other_analyses": "Section V - Statistical Analyses",
+    }
+    return titles.get(section_id, _text(fallback) or "Results")
+
+
+def _section_intro(section: Dict[str, Any], label_ctx: Dict[str, Any]) -> str:
+    section_id = str(section.get("section_id") or "")
+    marker = _text(label_ctx.get("display") or "the primary outcome")
+    intros = {
+        "baseline_characteristics": "This section describes the baseline profile of the analysed sample.",
+        "clinical_study_characteristics": "This section summarises clinically relevant pathology and prognostic variables.",
+        "immunophenotype_characteristics": "This section summarises receptor, immunophenotypic, and molecular marker variables.",
+        "marker_outcome_components": f"This section summarises {marker} and related marker-expression components.",
+        "primary_outcome_distribution": f"This section reports the distribution of {marker}.",
+        "bivariate_associations": f"This section presents statistical associations between eligible predictors and {marker}.",
+    }
+    return intros.get(section_id, _clean_interpretation(section.get("interpretation"), label_ctx))
+
+
 def _add_warnings_docx(doc: Document, blueprint: Dict[str, Any]) -> None:
     warnings = list(blueprint.get("warnings") or [])
     unavailable = list(blueprint.get("unavailable_or_recommended_only") or [])
@@ -646,7 +787,6 @@ def generate_docx(results: Dict[str, Any], *, include_optional_figures: bool = F
     figure_no = 1
     main_sections = _main_sections(blueprint)
 
-    _add_heading(doc, "5.3 Baseline and Study Characteristics", 1)
     baseline_sections = _dedupe_descriptive_sections([
         section for section in main_sections
         if section.get("section_id") in {
@@ -659,19 +799,23 @@ def generate_docx(results: Dict[str, Any], *, include_optional_figures: bool = F
     ])
     if not baseline_sections:
         _plain_docx_text(doc, "Baseline and study characteristics were not available in the blueprint.")
-    for section in baseline_sections:
-        _add_heading(doc, section.get("title") or "Study Characteristics", 2)
-        if _text(section.get("interpretation")):
-            _plain_docx_text(doc, _display_value(section.get("interpretation"), label_ctx))
+    for section in [s for s in baseline_sections if s.get("section_id") not in {"marker_outcome_components"}]:
+        _add_heading(doc, _section_export_title(str(section.get("section_id") or ""), section.get("title"), label_ctx), 1)
+        intro = _section_intro(section, label_ctx)
+        if intro:
+            _plain_docx_text(doc, intro)
         table_no, figure_no = _render_section_docx(
             doc, section, table_no, figure_no, label_ctx, include_optional_figures
         )
 
-    _add_heading(doc, "5.4 Primary Outcome Distribution", 1)
+    _add_heading(doc, _section_export_title("primary_outcome_distribution", "Marker Expression", label_ctx), 1)
     outcome_sections = [section for section in main_sections if section.get("section_id") == "primary_outcome_distribution"]
+    marker_sections = [section for section in baseline_sections if section.get("section_id") == "marker_outcome_components"]
     if outcome_sections:
         for section in outcome_sections:
-            _plain_docx_text(doc, section.get("interpretation") or "")
+            intro = _section_intro(section, label_ctx)
+            if intro:
+                _plain_docx_text(doc, intro)
             outcome_tables = _section_tables(section) or _primary_outcome_tables(blueprint, label_ctx)
             for table in outcome_tables:
                 table_no = _add_table_docx(doc, table, table_no, label_ctx, include_interpretation=False)
@@ -687,13 +831,16 @@ def generate_docx(results: Dict[str, Any], *, include_optional_figures: bool = F
                     rendered_outcome_figure = rendered_outcome_figure or next_no != figure_no
                     figure_no = next_no
             for table in outcome_tables:
-                interpretation = _display_value(table.get("interpretation"), label_ctx)
+                interpretation = _clean_interpretation(table.get("interpretation"), label_ctx)
                 if interpretation:
                     _plain_docx_text(doc, interpretation)
     else:
         _plain_docx_text(doc, "Primary outcome distribution was not available in the blueprint.")
+    for section in marker_sections:
+        table_no, figure_no = _render_section_docx(
+            doc, section, table_no, figure_no, label_ctx, include_optional_figures
+        )
 
-    _add_heading(doc, "5.5 Inferential Analysis / Bivariate Associations", 1)
     inferential_ids = {
         "bivariate_associations", "correlation_analysis", "regression_adjusted_analysis",
         "diagnostic_accuracy", "reliability_agreement", "survival_analysis",
@@ -701,16 +848,18 @@ def generate_docx(results: Dict[str, Any], *, include_optional_figures: bool = F
     }
     inferential_sections = [section for section in main_sections if section.get("section_id") in inferential_ids]
     if not inferential_sections:
+        _add_heading(doc, "Section V - Statistical Associations", 1)
         _plain_docx_text(doc, "No thesis-ready inferential analysis tables were available.")
     for section in inferential_sections:
-        _add_heading(doc, section.get("title") or "Inferential Analysis", 2)
-        if _text(section.get("interpretation")):
-            _plain_docx_text(doc, _display_value(section.get("interpretation"), label_ctx))
+        _add_heading(doc, _section_export_title(str(section.get("section_id") or ""), section.get("title"), label_ctx), 1)
+        intro = _section_intro(section, label_ctx)
+        if intro:
+            _plain_docx_text(doc, intro)
         table_no, figure_no = _render_section_docx(
             doc, section, table_no, figure_no, label_ctx, include_optional_figures
         )
 
-    _add_heading(doc, "5.6 Significant Findings Summary", 1)
+    _add_heading(doc, "Section VI - Significant Findings Summary", 1)
     findings = list(blueprint.get("significant_findings") or [])
     if findings:
         sig_table = {
@@ -739,7 +888,7 @@ def generate_docx(results: Dict[str, Any], *, include_optional_figures: bool = F
     else:
         _plain_docx_text(doc, "No final thesis significant findings were identified among the completed tests.")
 
-    _add_heading(doc, "5.7 Warnings and Interpretation Notes", 1)
+    _add_heading(doc, "Warnings and Interpretation Notes", 1)
     _add_warnings_docx(doc, blueprint)
 
     out = io.BytesIO()
@@ -752,6 +901,7 @@ def _pdf_escape(value: Any) -> str:
 
 
 def _pdf_table(payload: Dict[str, Any], label_ctx: Optional[Dict[str, Any]] = None, width: float = 10.4 * inch) -> Tuple[Table, List[str]]:
+    payload = _descriptive_export_table(payload, label_ctx or {})
     payload, warning_notes = _compact_table_for_export(payload)
     headers, rows = _table_rows(payload)
     font_size = 6 if len(headers) > 6 else 7
@@ -781,7 +931,7 @@ def _add_pdf_figure(flow: List[Any], figure: Dict[str, Any], figure_no: int, lab
     except Exception:
         return figure_no
     flow.append(Paragraph(f"<i>Figure {figure_no}. {_pdf_escape(_display_value(figure.get('caption') or figure.get('title'), label_ctx))}</i>", small))
-    interpretation = _display_value(figure.get("interpretation"), label_ctx)
+    interpretation = _clean_interpretation(figure.get("interpretation"), label_ctx)
     if interpretation:
         flow.append(Paragraph(_pdf_escape(interpretation), body))
     return figure_no + 1
@@ -805,7 +955,7 @@ def _render_section_pdf(
     used_figures: Set[str] = set()
     tables = _section_tables(section)
     for table in tables:
-        flow.append(Paragraph(f"<b>{_pdf_escape(_display_value(table.get('title'), label_ctx))}</b>", small))
+        flow.append(Paragraph(f"<b>{_pdf_escape(_display_value(_clean_table_title(table.get('title')), label_ctx))}</b>", small))
         pdf_table, warning_notes = _pdf_table(table, label_ctx, available_width)
         flow.append(pdf_table)
         for warning in warning_notes:
@@ -818,7 +968,7 @@ def _render_section_pdf(
             if next_no != figure_no:
                 figure_no = next_no
                 used_figures.add(figure_id)
-        interpretation = _display_value(table.get("interpretation"), label_ctx)
+        interpretation = _clean_interpretation(table.get("interpretation"), label_ctx)
         if interpretation:
             flow.append(Paragraph(_pdf_escape(interpretation), body))
         flow.append(Spacer(1, 6))
@@ -856,55 +1006,63 @@ def generate_pdf(results: Dict[str, Any], *, include_optional_figures: bool = Fa
     flow.append(Paragraph("5.2 Statistical Methods", h1))
     flow.append(Paragraph(_pdf_escape(blueprint.get("methods_text") or "Statistical methods were generated from the executed Sigma analysis plan."), body))
 
-    section_map = [
-        ("5.3 Baseline and Study Characteristics", {"baseline_characteristics", "clinical_study_characteristics", "immunophenotype_characteristics", "marker_outcome_components", "descriptive_results"}),
-        ("5.4 Primary Outcome Distribution", {"primary_outcome_distribution"}),
-        ("5.5 Inferential Analysis / Bivariate Associations", {"bivariate_associations", "correlation_analysis", "regression_adjusted_analysis", "diagnostic_accuracy", "reliability_agreement", "survival_analysis", "repeated_measures", "other_analyses"}),
-    ]
     main_sections = _main_sections(blueprint)
     descriptive_sections = _dedupe_descriptive_sections([
         section for section in main_sections
-        if section.get("section_id") in section_map[0][1]
+        if section.get("section_id") in {"baseline_characteristics", "clinical_study_characteristics", "immunophenotype_characteristics", "marker_outcome_components", "descriptive_results"}
     ])
-    for heading, section_ids in section_map:
-        flow.append(Paragraph(heading, h1))
-        candidate_sections = descriptive_sections if heading.startswith("5.3") else main_sections
-        for section in candidate_sections:
-            if section.get("section_id") not in section_ids:
-                continue
-            flow.append(Paragraph(_pdf_escape(section.get("title")), h2))
-            if _text(section.get("interpretation")):
-                flow.append(Paragraph(_pdf_escape(_display_value(section.get("interpretation"), label_ctx)), body))
-            if section.get("section_id") == "primary_outcome_distribution":
-                outcome_tables = _primary_outcome_tables(blueprint, label_ctx)
-                if not outcome_tables:
-                    outcome_tables = _section_tables(section)
-                for table in outcome_tables:
-                    flow.append(Paragraph(f"<b>{_pdf_escape(_display_value(table.get('title'), label_ctx))}</b>", small))
-                    pdf_table, warning_notes = _pdf_table(table, label_ctx, available_width)
-                    flow.append(pdf_table)
-                    for warning in warning_notes:
-                        flow.append(Paragraph(f"Caution: {_pdf_escape(_display_value(warning, label_ctx))}", small))
-                rendered_outcome_figure = False
-                for fig in _section_figures(section, include_optional_figures)[:2]:
-                    next_no = _add_pdf_figure(flow, fig, figure_no, label_ctx, body, small)
-                    rendered_outcome_figure = rendered_outcome_figure or next_no != figure_no
-                    figure_no = next_no
-                if not rendered_outcome_figure and outcome_tables:
-                    generated = _primary_outcome_figure(blueprint, outcome_tables[0], label_ctx)
-                    if generated:
-                        next_no = _add_pdf_figure(flow, generated, figure_no, label_ctx, body, small)
-                        rendered_outcome_figure = rendered_outcome_figure or next_no != figure_no
-                        figure_no = next_no
-                for table in outcome_tables:
-                    interpretation = _display_value(table.get("interpretation"), label_ctx)
-                    if interpretation:
-                        flow.append(Paragraph(_pdf_escape(interpretation), body))
-            else:
-                figure_no = _render_section_pdf(
-                    flow, section, figure_no, label_ctx, available_width, body, small, include_optional_figures
-                )
-    flow.append(Paragraph("5.6 Significant Findings Summary", h1))
+    for section in [s for s in descriptive_sections if s.get("section_id") != "marker_outcome_components"]:
+        flow.append(Paragraph(_pdf_escape(_section_export_title(str(section.get("section_id") or ""), section.get("title"), label_ctx)), h1))
+        intro = _section_intro(section, label_ctx)
+        if intro:
+            flow.append(Paragraph(_pdf_escape(intro), body))
+        figure_no = _render_section_pdf(
+            flow, section, figure_no, label_ctx, available_width, body, small, include_optional_figures
+        )
+
+    flow.append(Paragraph(_pdf_escape(_section_export_title("primary_outcome_distribution", "Marker Expression", label_ctx)), h1))
+    outcome_sections = [section for section in main_sections if section.get("section_id") == "primary_outcome_distribution"]
+    for section in outcome_sections:
+        intro = _section_intro(section, label_ctx)
+        if intro:
+            flow.append(Paragraph(_pdf_escape(intro), body))
+        outcome_tables = _primary_outcome_tables(blueprint, label_ctx) or _section_tables(section)
+        for table in outcome_tables:
+            flow.append(Paragraph(f"<b>{_pdf_escape(_display_value(_clean_table_title(table.get('title')), label_ctx))}</b>", small))
+            pdf_table, warning_notes = _pdf_table(table, label_ctx, available_width)
+            flow.append(pdf_table)
+            for warning in warning_notes:
+                flow.append(Paragraph(f"Caution: {_pdf_escape(_display_value(warning, label_ctx))}", small))
+        rendered_outcome_figure = False
+        for fig in _section_figures(section, include_optional_figures)[:2]:
+            next_no = _add_pdf_figure(flow, fig, figure_no, label_ctx, body, small)
+            rendered_outcome_figure = rendered_outcome_figure or next_no != figure_no
+            figure_no = next_no
+        if not rendered_outcome_figure and outcome_tables:
+            generated = _primary_outcome_figure(blueprint, outcome_tables[0], label_ctx)
+            if generated:
+                next_no = _add_pdf_figure(flow, generated, figure_no, label_ctx, body, small)
+                rendered_outcome_figure = rendered_outcome_figure or next_no != figure_no
+                figure_no = next_no
+        for table in outcome_tables:
+            interpretation = _clean_interpretation(table.get("interpretation"), label_ctx)
+            if interpretation:
+                flow.append(Paragraph(_pdf_escape(interpretation), body))
+    for section in [s for s in descriptive_sections if s.get("section_id") == "marker_outcome_components"]:
+        figure_no = _render_section_pdf(
+            flow, section, figure_no, label_ctx, available_width, body, small, include_optional_figures
+        )
+
+    inferential_ids = {"bivariate_associations", "correlation_analysis", "regression_adjusted_analysis", "diagnostic_accuracy", "reliability_agreement", "survival_analysis", "repeated_measures", "other_analyses"}
+    for section in [section for section in main_sections if section.get("section_id") in inferential_ids]:
+        flow.append(Paragraph(_pdf_escape(_section_export_title(str(section.get("section_id") or ""), section.get("title"), label_ctx)), h1))
+        intro = _section_intro(section, label_ctx)
+        if intro:
+            flow.append(Paragraph(_pdf_escape(intro), body))
+        figure_no = _render_section_pdf(
+            flow, section, figure_no, label_ctx, available_width, body, small, include_optional_figures
+        )
+    flow.append(Paragraph("Section VI - Significant Findings Summary", h1))
     if blueprint.get("significant_findings"):
         pdf_table, warning_notes = _pdf_table({
             "columns": [
@@ -930,7 +1088,7 @@ def generate_pdf(results: Dict[str, Any], *, include_optional_figures: bool = Fa
             flow.append(Paragraph(f"Caution: {_pdf_escape(_display_value(warning, label_ctx))}", small))
     else:
         flow.append(Paragraph("No final thesis significant findings were identified among the completed tests.", body))
-    flow.append(Paragraph("5.7 Warnings and Interpretation Notes", h1))
+    flow.append(Paragraph("Warnings and Interpretation Notes", h1))
     warnings = list(blueprint.get("warnings") or [])
     unavailable = list(blueprint.get("unavailable_or_recommended_only") or [])
     if not warnings and not unavailable:

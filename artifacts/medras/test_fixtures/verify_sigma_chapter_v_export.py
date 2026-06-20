@@ -321,13 +321,20 @@ def verify_service_docx() -> None:
     assert "OBSERVATION AND RESULTS" in text
     assert "5.1 Study Summary" in text
     assert "5.2 Statistical Methods" in text
-    assert "5.3 Baseline and Study Characteristics" in text
-    assert "5.5 Inferential Analysis / Bivariate Associations" in text
-    assert "5.6 Significant Findings Summary" in text
+    assert "Section I - Baseline Characteristics" in text
+    assert "Section II - Nodal and Prognostic Pathology" in text
+    assert "Section III - Immunophenotype" in text
+    assert "Section IV - p27 expression status / Marker Expression" in text
+    assert "Section V - Statistical Associations" in text
+    assert "Section VI - Significant Findings Summary" in text
     assert "p27 expression status" in text
-    assert "Positive: 9 (75.0%)" in text
+    assert "Positive\n9\n75.0%" in text
     assert "No:" not in text and "Yes:" not in text
     assert "Postive" not in text
+    assert "Domain-profile grouping is descriptive" not in text
+    assert "Variable\nType\nOverall" not in text
+    assert "Parameter\nCategory\nn\n%" in text
+    assert "Table 1. Table 1." not in text
     assert "Dataset ID" not in text
     assert "Result ID" not in text
     assert "Generated at" not in text
@@ -356,7 +363,7 @@ def verify_service_docx() -> None:
     assert "Grouped percentage bar chart of Nodal status by p27 expression status." not in text
     assert "Grouped percentage bar chart of LVI by p27 expression status." not in text
     assert "Graph preview not generated yet" not in text
-    final_section = text.split("5.6 Significant Findings Summary", 1)[1].split("5.7 Warnings", 1)[0]
+    final_section = text.split("Section VI - Significant Findings Summary", 1)[1].split("Warnings and Interpretation Notes", 1)[0]
     assert "Interpretation-site" not in final_section
     assert "Staining Result" not in final_section
     assert "Observed counts" not in text
@@ -366,8 +373,17 @@ def verify_service_docx() -> None:
     assert "section_id" not in text and "source_result_id" not in text
     assert "cross_sectional_association" not in text
     assert "Internal detailed figure" not in text
-    for variable in ["Age", "ER", "PR", "Interpretation-site", "Staining Result"]:
-        assert text.count(f"\n{variable}\n") == 1
+    doc = Document(io.BytesIO(blob))
+    descriptive_table_members = []
+    for table in doc.tables[1:6]:
+        members = set()
+        for row in table.rows[1:]:
+            value = row.cells[0].text
+            if value:
+                members.add(value)
+        descriptive_table_members.extend(members)
+    for variable in ["Age", "ER", "PR", "AR", "pT", "Nodal status", "LVI", "Interpretation-site", "Staining Result"]:
+        assert descriptive_table_members.count(variable) == 1
 
     regular_word = export.to_docx(FakeEntry(), results, {"outcome": "Positive/ Negative"})
     regular_text = _docx_text(regular_word)

@@ -441,6 +441,10 @@ _OUTCOME_COMPONENT_TERMS = (
     "localisation", "intensity", "score", "status", "expression", "marker component",
 )
 
+_NON_MARKER_STATUS_TERMS = (
+    "nodal", "node", "stage", "pt", "tnm", "metastasis", "laterality",
+)
+
 
 def _outcome_component_variables(
     classifications: List[Dict[str, Any]],
@@ -457,6 +461,8 @@ def _outcome_component_variables(
         col = str(row.get("column") or "")
         low = col.lower()
         if col == outcome:
+            continue
+        if any(term in low for term in _NON_MARKER_STATUS_TERMS):
             continue
         shares_marker = bool(marker and marker in low)
         shares_semantics = any(term in low for term in _OUTCOME_COMPONENT_TERMS)
