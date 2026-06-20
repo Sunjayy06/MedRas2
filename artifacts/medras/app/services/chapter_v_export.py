@@ -8,15 +8,19 @@ other exports, but the main thesis chapter stays doctor-readable.
 from __future__ import annotations
 
 import base64
+import html
 import io
-from typing import Any, Dict, List, Optional
+from copy import deepcopy
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
 from docx.shared import Inches, Pt
 
 from reportlab.lib import colors
-from reportlab.lib.pagesizes import A4
+from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
 from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
@@ -40,7 +44,21 @@ def _text(value: Any) -> str:
         return "; ".join(_text(item) for item in value if _text(item))
     if isinstance(value, dict):
         return "; ".join(f"{_label(k)}: {_text(v)}" for k, v in value.items() if _text(v))
-    return str(value).strip()
+    text = html.unescape(str(value)).strip()
+    replacements = {
+        "Â±": "±",
+        "ą": "±",
+        "â‰¤": "≤",
+        "â‰¥": "≥",
+        "â€”": "—",
+        "â€“": "–",
+        "â€¢": "•",
+        "Cramer's V": "Cramér's V",
+        "Cramer’s V": "Cramér's V",
+    }
+    for raw, clean in replacements.items():
+        text = text.replace(raw, clean)
+    return text
 
 
 def _label(value: Any) -> str:
@@ -50,6 +68,23 @@ def _label(value: Any) -> str:
     acronyms = {"id": "ID", "roc": "ROC", "auc": "AUC", "pdf": "PDF", "docx": "DOCX"}
     words = [acronyms.get(part.lower(), part.capitalize()) for part in text.split()]
     return " ".join(words)
+
+
+def _readable_study_design(value: Any) -> str:
+    text = _text(value).replace("_", " ").strip().lower()
+    mapping = {
+        "cross sectional association": "Cross-sectional association study",
+        "cohort prognostic association": "Cohort/prognostic association study",
+        "two group comparison": "Two-group comparison study",
+        "descriptive prevalence": "Descriptive/prevalence study",
+        "diagnostic accuracy": "Diagnostic accuracy study",
+        "reliability agreement": "Reliability/agreement study",
+        "regression prediction": "Regression/prediction study",
+        "repeated measures": "Repeated-measures study",
+        "survival": "Survival/time-to-event study",
+        "correlation": "Correlation study",
+    }
+    return mapping.get(text, _label(text))
 
 
 def _outcome_label_context(blueprint: Dict[str, Any]) -> Dict[str, Any]:
@@ -81,6 +116,15 @@ def _display_value(value: Any, label_ctx: Optional[Dict[str, Any]]) -> str:
     return text
 
 
+def _clean_finding_text(value: Any) -> str:
+    text = _text(value)
+    text = text.replace("Chi-square test: Chi-square test", "Chi-square test")
+    for token in ("; p =", "; adjusted p", "; Cram", "; Cohen", " p =", " adjusted p"):
+        if token in text:
+            text = text.split(token, 1)[0].strip()
+    return text
+
+
 def _is_main_table(table: Dict[str, Any]) -> bool:
     if not isinstance(table, dict):
         return False
@@ -100,11 +144,11 @@ def _is_main_table(table: Dict[str, Any]) -> bool:
 def _is_main_figure(figure: Dict[str, Any], include_optional: bool = False) -> bool:
     if not isinstance(figure, dict):
         return False
+    if not figure.get("png_data_uri"):
+        return False
     if figure.get("detailed_report_only"):
         return False
     if str(figure.get("priority") or "").lower() == "detailed_report_only":
-        return False
-    if figure.get("optional") and not include_optional:
         return False
     return bool(figure.get("thesis_ready") or str(figure.get("priority") or "").lower() == "thesis_ready_primary")
 
@@ -115,6 +159,125 @@ def _section_tables(section: Dict[str, Any]) -> List[Dict[str, Any]]:
 
 def _section_figures(section: Dict[str, Any], include_optional: bool = False) -> List[Dict[str, Any]]:
     return [figure for figure in section.get("figures") or [] if _is_main_figure(figure, include_optional)]
+
+
+BASELINE_TERMS = ("age", "sex", "gender", "laterality", "side", "group", "cohort")
+
+
+def _row_variable(row: Any) -> str:
+    if isinstance(row, dict):
+        return _text(row.get("variable"))
+    if isinstance(row, (list, tuple)) and row:
+        return _text(row[0])
+    return ""
+
+
+def _source_variables(table: Dict[str, Any]) -> List[str]:
+    variables = [_text(var) for var in table.get("source_variables") or [] if _text(var)]
+    if variables:
+        return variables
+    return [_row_variable(row) for row in table.get("rows") or [] if _row_variable(row)]
+
+
+def _filter_table_variables(table: Dict[str, Any], allowed: Set[str], seen: Set[str]) -> Optional[Dict[str, Any]]:
+    clone = deepcopy(table)
+    rows = []
+    for row in clone.get("rows") or []:
+        variable = _row_variable(row)
+        if variable and variable in seen:
+            continue
+        if allowed and variable and variable not in allowed:
+            continue
+        rows.append(row)
+        if variable:
+            seen.add(variable)
+    if not rows:
+        return None
+    clone["rows"] = rows
+    clone["source_variables"] = [var for var in _source_variables(clone) if not allowed or var in allowed]
+    return clone
+
+
+def _dedupe_descriptive_sections(sections: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    domain_ids = {
+        "clinical_study_characteristics",
+        "immunophenotype_characteristics",
+        "marker_outcome_components",
+    }
+    has_domain_sections = any(section.get("section_id") in domain_ids for section in sections)
+    seen: Set[str] = set()
+    out: List[Dict[str, Any]] = []
+    for section in sections:
+        section_id = section.get("section_id")
+        clone = deepcopy(section)
+        allowed: Set[str] = set()
+        if section_id == "baseline_characteristics" and has_domain_sections:
+            for table in clone.get("tables") or []:
+                for var in _source_variables(table):
+                    if any(term in var.lower() for term in BASELINE_TERMS):
+                        allowed.add(var)
+        new_tables = []
+        for table in clone.get("tables") or []:
+            filtered = _filter_table_variables(table, allowed, seen)
+            if filtered:
+                new_tables.append(filtered)
+        clone["tables"] = new_tables
+        if new_tables or clone.get("figures") or _text(clone.get("interpretation")):
+            out.append(clone)
+    return out
+
+
+def _primary_outcome_tables(blueprint: Dict[str, Any], label_ctx: Dict[str, Any]) -> List[Dict[str, Any]]:
+    display = _text(label_ctx.get("display"))
+    raw_values = set(label_ctx.get("raw_values") or [])
+    candidates = raw_values | ({display} if display else set())
+    if not candidates:
+        return []
+    for section in blueprint.get("analysis_sections") or []:
+        for table in section.get("tables") or []:
+            for row in table.get("rows") or []:
+                variable = _row_variable(row)
+                if variable not in candidates:
+                    continue
+                clone = deepcopy(table)
+                clone["title"] = f"Primary outcome distribution: {display or variable}"
+                clone["table_type"] = "primary_outcome_distribution_table"
+                clone["rows"] = [row]
+                clone["source_variables"] = [variable]
+                clone["interpretation"] = f"This table reports the distribution of {display or variable}."
+                clone["warnings"] = []
+                return [clone]
+    return []
+
+
+def _compact_table_for_export(table: Dict[str, Any]) -> Tuple[Dict[str, Any], List[str]]:
+    clone = deepcopy(table)
+    headers = [_text(header) for header in (clone.get("columns") or clone.get("headers") or [])]
+    warnings: List[str] = list(clone.get("warnings") or [])
+    warning_indexes = [
+        idx for idx, header in enumerate(headers)
+        if header.strip().lower() in {"warning", "warnings", "notes/warnings"}
+    ]
+    if len(headers) > 7 and warning_indexes:
+        remove = set(warning_indexes)
+        clone["columns"] = [header for idx, header in enumerate(headers) if idx not in remove]
+        new_rows = []
+        for row in clone.get("rows") or []:
+            if isinstance(row, dict):
+                row_warning = row.get("warnings") or row.get("warning") or row.get("notes_warnings")
+                if row_warning and _text(row_warning) not in {"-", "None"}:
+                    warnings.append(_text(row_warning))
+                new_rows.append(row)
+            elif isinstance(row, (list, tuple)):
+                values = list(row)
+                for idx in warning_indexes:
+                    if idx < len(values) and _text(values[idx]) not in {"", "-", "None"}:
+                        warnings.append(_text(values[idx]))
+                new_rows.append([cell for idx, cell in enumerate(values) if idx not in remove])
+            else:
+                new_rows.append(row)
+        clone["rows"] = new_rows
+    return clone, list(dict.fromkeys(warnings))
 
 
 def _table_rows(table: Dict[str, Any]) -> tuple[List[str], List[List[str]]]:
@@ -173,7 +336,30 @@ def _add_heading(doc: Document, text: str, level: int = 1) -> None:
     doc.add_heading(_text(text), level=level)
 
 
-def _add_table_docx(doc: Document, payload: Dict[str, Any], caption_no: int, label_ctx: Optional[Dict[str, Any]] = None) -> int:
+def _repeat_docx_header(row) -> None:
+    tr_pr = row._tr.get_or_add_trPr()
+    tbl_header = OxmlElement("w:tblHeader")
+    tbl_header.set(qn("w:val"), "true")
+    tr_pr.append(tbl_header)
+
+
+def _format_docx_table(table, font_size: int = 8) -> None:
+    table.autofit = True
+    for row in table.rows:
+        for cell in row.cells:
+            for paragraph in cell.paragraphs:
+                for run in paragraph.runs:
+                    run.font.size = Pt(font_size)
+
+
+def _add_table_docx(
+    doc: Document,
+    payload: Dict[str, Any],
+    caption_no: int,
+    label_ctx: Optional[Dict[str, Any]] = None,
+    include_interpretation: bool = True,
+) -> int:
+    payload, warning_notes = _compact_table_for_export(payload)
     headers, rows = _table_rows(payload)
     if not rows:
         return caption_no
@@ -186,15 +372,17 @@ def _add_table_docx(doc: Document, payload: Dict[str, Any], caption_no: int, lab
         cell.text = _display_value(header, label_ctx)
         for run in cell.paragraphs[0].runs:
             run.bold = True
+    _repeat_docx_header(table.rows[0])
     for row in rows:
         cells = table.add_row().cells
         for idx, value in enumerate(row[:len(headers)]):
             cells[idx].text = _display_value(value, label_ctx)
-    interpretation = _display_value(payload.get("interpretation"), label_ctx)
-    if interpretation:
-        _plain_docx_text(doc, interpretation)
-    for warning in payload.get("warnings") or []:
+    _format_docx_table(table, font_size=8 if len(headers) > 5 else 9)
+    for warning in warning_notes:
         _plain_docx_text(doc, f"Caution: {_display_value(warning, label_ctx)}")
+    interpretation = _display_value(payload.get("interpretation"), label_ctx)
+    if include_interpretation and interpretation:
+        _plain_docx_text(doc, interpretation)
     doc.add_paragraph()
     return caption_no + 1
 
@@ -213,13 +401,13 @@ def _strip_data_uri(data_uri: str) -> bytes:
 def _add_figure_docx(doc: Document, figure: Dict[str, Any], figure_no: int, label_ctx: Optional[Dict[str, Any]] = None) -> int:
     title = _display_value(figure.get("title") or f"Figure {figure_no}", label_ctx)
     png = _strip_data_uri(_text(figure.get("png_data_uri")))
+    if not png:
+        return figure_no
     if png:
         try:
             doc.add_picture(io.BytesIO(png), width=Inches(5.7))
         except Exception:
-            _plain_docx_text(doc, "Graph preview not generated yet.")
-    else:
-        _plain_docx_text(doc, "Graph preview not generated yet.")
+            return figure_no
     caption = _display_value(figure.get("caption") or title, label_ctx)
     caption_para = doc.add_paragraph()
     caption_run = caption_para.add_run(f"Figure {figure_no}. {caption}")
@@ -231,6 +419,51 @@ def _add_figure_docx(doc: Document, figure: Dict[str, Any], figure_no: int, labe
     return figure_no + 1
 
 
+def _figure_matches_table(figure: Dict[str, Any], table: Dict[str, Any]) -> bool:
+    table_ids = {str(item) for item in table.get("source_test_ids") or [] if item}
+    fig_result = str(figure.get("source_result_id") or "")
+    if table_ids and fig_result and fig_result in table_ids:
+        return True
+    table_vars = set(_source_variables(table))
+    fig_vars = {str(item) for item in figure.get("source_variables") or [] if item}
+    return bool(table_vars and fig_vars and table_vars.intersection(fig_vars))
+
+
+def _render_section_docx(
+    doc: Document,
+    section: Dict[str, Any],
+    table_no: int,
+    figure_no: int,
+    label_ctx: Dict[str, Any],
+    include_optional_figures: bool = False,
+) -> tuple[int, int]:
+    figures = _section_figures(section, include_optional_figures)
+    used_figures: Set[str] = set()
+    tables = _section_tables(section)
+    for table in tables:
+        table_no = _add_table_docx(doc, table, table_no, label_ctx, include_interpretation=False)
+        for figure in figures:
+            figure_id = _text(figure.get("figure_id") or figure.get("title"))
+            if figure_id in used_figures or not _figure_matches_table(figure, table):
+                continue
+            next_no = _add_figure_docx(doc, figure, figure_no, label_ctx)
+            if next_no != figure_no:
+                figure_no = next_no
+                used_figures.add(figure_id)
+        interpretation = _display_value(table.get("interpretation"), label_ctx)
+        if interpretation:
+            _plain_docx_text(doc, interpretation)
+    for figure in figures[:4]:
+        figure_id = _text(figure.get("figure_id") or figure.get("title"))
+        if figure_id in used_figures:
+            continue
+        next_no = _add_figure_docx(doc, figure, figure_no, label_ctx)
+        if next_no != figure_no:
+            figure_no = next_no
+            used_figures.add(figure_id)
+    return table_no, figure_no
+
+
 def _blueprint(results: Dict[str, Any]) -> Dict[str, Any]:
     blueprint = results.get("thesis_analysis_blueprint")
     if not isinstance(blueprint, dict) or not blueprint:
@@ -240,15 +473,10 @@ def _blueprint(results: Dict[str, Any]) -> Dict[str, Any]:
 
 def _study_summary(blueprint: Dict[str, Any], results: Dict[str, Any]) -> List[tuple[str, str]]:
     summary = dict(blueprint.get("study_summary") or {})
-    metadata = dict(results.get("export_metadata") or {})
     rows = [
-        ("Study design", _label(blueprint.get("study_design") or summary.get("study_design"))),
+        ("Study design", _readable_study_design(blueprint.get("study_design") or summary.get("study_design"))),
         ("Sample size", summary.get("sample_size") or summary.get("n") or ""),
         ("Primary outcome", blueprint.get("primary_outcome") or summary.get("primary_outcome") or ""),
-        ("Domain/profile", summary.get("domain_profile") or metadata.get("domain_profile") or ""),
-        ("Dataset ID", metadata.get("dataset_id") or ""),
-        ("Result ID", metadata.get("result_id") or ""),
-        ("Generated at", metadata.get("generated_at") or ""),
     ]
     return [(label, _text(value)) for label, value in rows if _text(value)]
 
@@ -318,10 +546,11 @@ def generate_docx(results: Dict[str, Any], *, include_optional_figures: bool = F
 
     table_no = 1
     figure_no = 1
+    main_sections = _main_sections(blueprint)
 
     _add_heading(doc, "5.3 Baseline and Study Characteristics", 1)
-    baseline_sections = [
-        section for section in _main_sections(blueprint)
+    baseline_sections = _dedupe_descriptive_sections([
+        section for section in main_sections
         if section.get("section_id") in {
             "baseline_characteristics",
             "clinical_study_characteristics",
@@ -329,25 +558,31 @@ def generate_docx(results: Dict[str, Any], *, include_optional_figures: bool = F
             "marker_outcome_components",
             "descriptive_results",
         }
-    ]
+    ])
     if not baseline_sections:
         _plain_docx_text(doc, "Baseline and study characteristics were not available in the blueprint.")
     for section in baseline_sections:
         _add_heading(doc, section.get("title") or "Study Characteristics", 2)
         if _text(section.get("interpretation")):
             _plain_docx_text(doc, _display_value(section.get("interpretation"), label_ctx))
-        for table in _section_tables(section):
-            table_no = _add_table_docx(doc, table, table_no, label_ctx)
+        table_no, figure_no = _render_section_docx(
+            doc, section, table_no, figure_no, label_ctx, include_optional_figures
+        )
 
     _add_heading(doc, "5.4 Primary Outcome Distribution", 1)
-    outcome_sections = [section for section in _main_sections(blueprint) if section.get("section_id") == "primary_outcome_distribution"]
+    outcome_sections = [section for section in main_sections if section.get("section_id") == "primary_outcome_distribution"]
     if outcome_sections:
         for section in outcome_sections:
             _plain_docx_text(doc, section.get("interpretation") or "")
-            for table in _section_tables(section):
-                table_no = _add_table_docx(doc, table, table_no, label_ctx)
+            outcome_tables = _section_tables(section) or _primary_outcome_tables(blueprint, label_ctx)
+            for table in outcome_tables:
+                table_no = _add_table_docx(doc, table, table_no, label_ctx, include_interpretation=False)
             for fig in _section_figures(section, include_optional_figures)[:2]:
                 figure_no = _add_figure_docx(doc, fig, figure_no, label_ctx)
+            for table in outcome_tables:
+                interpretation = _display_value(table.get("interpretation"), label_ctx)
+                if interpretation:
+                    _plain_docx_text(doc, interpretation)
     else:
         _plain_docx_text(doc, "Primary outcome distribution was not available in the blueprint.")
 
@@ -357,17 +592,16 @@ def generate_docx(results: Dict[str, Any], *, include_optional_figures: bool = F
         "diagnostic_accuracy", "reliability_agreement", "survival_analysis",
         "repeated_measures", "other_analyses",
     }
-    inferential_sections = [section for section in _main_sections(blueprint) if section.get("section_id") in inferential_ids]
+    inferential_sections = [section for section in main_sections if section.get("section_id") in inferential_ids]
     if not inferential_sections:
         _plain_docx_text(doc, "No thesis-ready inferential analysis tables were available.")
     for section in inferential_sections:
         _add_heading(doc, section.get("title") or "Inferential Analysis", 2)
         if _text(section.get("interpretation")):
             _plain_docx_text(doc, _display_value(section.get("interpretation"), label_ctx))
-        for table in _section_tables(section):
-            table_no = _add_table_docx(doc, table, table_no, label_ctx)
-        for fig in _section_figures(section, include_optional_figures)[:4]:
-            figure_no = _add_figure_docx(doc, fig, figure_no, label_ctx)
+        table_no, figure_no = _render_section_docx(
+            doc, section, table_no, figure_no, label_ctx, include_optional_figures
+        )
 
     _add_heading(doc, "5.6 Significant Findings Summary", 1)
     findings = list(blueprint.get("significant_findings") or [])
@@ -381,7 +615,7 @@ def generate_docx(results: Dict[str, Any], *, include_optional_figures: bool = F
             "rows": [
                 [
                     _display_value(row.get("variable") or "", label_ctx),
-                    row.get("key_finding") or "",
+                    _clean_finding_text(row.get("key_finding") or ""),
                     row.get("test_statistic") or "",
                     row.get("p_value") or "",
                     row.get("adjusted_p_value") or "",
@@ -410,33 +644,98 @@ def _pdf_escape(value: Any) -> str:
     return _text(value).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
-def _pdf_table(payload: Dict[str, Any], label_ctx: Optional[Dict[str, Any]] = None) -> Table:
+def _pdf_table(payload: Dict[str, Any], label_ctx: Optional[Dict[str, Any]] = None, width: float = 10.4 * inch) -> Tuple[Table, List[str]]:
+    payload, warning_notes = _compact_table_for_export(payload)
     headers, rows = _table_rows(payload)
-    data = [[_pdf_escape(_display_value(h, label_ctx)) for h in headers]] + [
-        [_pdf_escape(_display_value(cell, label_ctx)) for cell in row] for row in rows
+    font_size = 6 if len(headers) > 6 else 7
+    style = ParagraphStyle("Cell", fontName="Helvetica", fontSize=font_size, leading=font_size + 2)
+    header_style = ParagraphStyle("CellHeader", parent=style, fontName="Helvetica-Bold")
+    data = [[Paragraph(_pdf_escape(_display_value(h, label_ctx)), header_style) for h in headers]] + [
+        [Paragraph(_pdf_escape(_display_value(cell, label_ctx)), style) for cell in row] for row in rows
     ]
-    table = Table(data, repeatRows=1)
+    col_width = width / max(len(headers), 1)
+    table = Table(data, colWidths=[col_width] * max(len(headers), 1), repeatRows=1)
     table.setStyle(TableStyle([
         ("GRID", (0, 0), (-1, -1), 0.25, colors.lightgrey),
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#E9EEF7")),
         ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-        ("FONTSIZE", (0, 0), (-1, -1), 7),
+        ("FONTSIZE", (0, 0), (-1, -1), font_size),
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
     ]))
-    return table
+    return table, warning_notes
+
+
+def _add_pdf_figure(flow: List[Any], figure: Dict[str, Any], figure_no: int, label_ctx: Dict[str, Any], body, small) -> int:
+    png = _strip_data_uri(_text(figure.get("png_data_uri")))
+    if not png:
+        return figure_no
+    try:
+        flow.append(Image(io.BytesIO(png), width=5.5 * inch, height=3.4 * inch))
+    except Exception:
+        return figure_no
+    flow.append(Paragraph(f"<i>Figure {figure_no}. {_pdf_escape(_display_value(figure.get('caption') or figure.get('title'), label_ctx))}</i>", small))
+    interpretation = _display_value(figure.get("interpretation"), label_ctx)
+    if interpretation:
+        flow.append(Paragraph(_pdf_escape(interpretation), body))
+    return figure_no + 1
+
+
+def _render_section_pdf(
+    flow: List[Any],
+    section: Dict[str, Any],
+    figure_no: int,
+    label_ctx: Dict[str, Any],
+    available_width: float,
+    body,
+    small,
+    include_optional_figures: bool = False,
+) -> int:
+    figures = _section_figures(section, include_optional_figures)
+    used_figures: Set[str] = set()
+    tables = _section_tables(section)
+    for table in tables:
+        flow.append(Paragraph(f"<b>{_pdf_escape(_display_value(table.get('title'), label_ctx))}</b>", small))
+        pdf_table, warning_notes = _pdf_table(table, label_ctx, available_width)
+        flow.append(pdf_table)
+        for warning in warning_notes:
+            flow.append(Paragraph(f"Caution: {_pdf_escape(_display_value(warning, label_ctx))}", small))
+        for figure in figures:
+            figure_id = _text(figure.get("figure_id") or figure.get("title"))
+            if figure_id in used_figures or not _figure_matches_table(figure, table):
+                continue
+            next_no = _add_pdf_figure(flow, figure, figure_no, label_ctx, body, small)
+            if next_no != figure_no:
+                figure_no = next_no
+                used_figures.add(figure_id)
+        interpretation = _display_value(table.get("interpretation"), label_ctx)
+        if interpretation:
+            flow.append(Paragraph(_pdf_escape(interpretation), body))
+        flow.append(Spacer(1, 6))
+    for figure in figures[:4]:
+        figure_id = _text(figure.get("figure_id") or figure.get("title"))
+        if figure_id in used_figures:
+            continue
+        next_no = _add_pdf_figure(flow, figure, figure_no, label_ctx, body, small)
+        if next_no != figure_no:
+            figure_no = next_no
+            used_figures.add(figure_id)
+    return figure_no
 
 
 def generate_pdf(results: Dict[str, Any], *, include_optional_figures: bool = False) -> bytes:
     blueprint = _blueprint(results)
     label_ctx = _outcome_label_context(blueprint)
     out = io.BytesIO()
-    doc = SimpleDocTemplate(out, pagesize=A4, leftMargin=36, rightMargin=36, topMargin=48, bottomMargin=48)
+    page_size = landscape(A4)
+    available_width = page_size[0] - 72
+    doc = SimpleDocTemplate(out, pagesize=page_size, leftMargin=36, rightMargin=36, topMargin=36, bottomMargin=36)
     styles = getSampleStyleSheet()
     h1 = styles["Heading1"]
     h2 = styles["Heading2"]
     body = styles["BodyText"]
     small = ParagraphStyle("Small", parent=body, fontSize=8, leading=10)
     flow: List[Any] = []
+    figure_no = 1
 
     flow.append(Paragraph("CHAPTER V<br/>OBSERVATION AND RESULTS", styles["Title"]))
     flow.append(Spacer(1, 10))
@@ -451,31 +750,41 @@ def generate_pdf(results: Dict[str, Any], *, include_optional_figures: bool = Fa
         ("5.4 Primary Outcome Distribution", {"primary_outcome_distribution"}),
         ("5.5 Inferential Analysis / Bivariate Associations", {"bivariate_associations", "correlation_analysis", "regression_adjusted_analysis", "diagnostic_accuracy", "reliability_agreement", "survival_analysis", "repeated_measures", "other_analyses"}),
     ]
+    main_sections = _main_sections(blueprint)
+    descriptive_sections = _dedupe_descriptive_sections([
+        section for section in main_sections
+        if section.get("section_id") in section_map[0][1]
+    ])
     for heading, section_ids in section_map:
         flow.append(Paragraph(heading, h1))
-        for section in _main_sections(blueprint):
+        candidate_sections = descriptive_sections if heading.startswith("5.3") else main_sections
+        for section in candidate_sections:
             if section.get("section_id") not in section_ids:
                 continue
             flow.append(Paragraph(_pdf_escape(section.get("title")), h2))
             if _text(section.get("interpretation")):
                 flow.append(Paragraph(_pdf_escape(_display_value(section.get("interpretation"), label_ctx)), body))
-            for table in _section_tables(section):
-                flow.append(Paragraph(f"<b>{_pdf_escape(_display_value(table.get('title'), label_ctx))}</b>", small))
-                flow.append(_pdf_table(table, label_ctx))
-                flow.append(Spacer(1, 6))
-            for fig in _section_figures(section, include_optional_figures)[:4]:
-                png = _strip_data_uri(_text(fig.get("png_data_uri")))
-                if png:
-                    try:
-                        flow.append(Image(io.BytesIO(png), width=5.5 * inch, height=3.4 * inch))
-                    except Exception:
-                        flow.append(Paragraph("Graph preview not generated yet.", body))
-                else:
-                    flow.append(Paragraph("Graph preview not generated yet.", body))
-                flow.append(Paragraph(f"<i>{_pdf_escape(_display_value(fig.get('caption') or fig.get('title'), label_ctx))}</i>", small))
+            if section.get("section_id") == "primary_outcome_distribution" and not _section_tables(section):
+                outcome_tables = _primary_outcome_tables(blueprint, label_ctx)
+                for table in outcome_tables:
+                    flow.append(Paragraph(f"<b>{_pdf_escape(_display_value(table.get('title'), label_ctx))}</b>", small))
+                    pdf_table, warning_notes = _pdf_table(table, label_ctx, available_width)
+                    flow.append(pdf_table)
+                    for warning in warning_notes:
+                        flow.append(Paragraph(f"Caution: {_pdf_escape(_display_value(warning, label_ctx))}", small))
+                for fig in _section_figures(section, include_optional_figures)[:2]:
+                    figure_no = _add_pdf_figure(flow, fig, figure_no, label_ctx, body, small)
+                for table in outcome_tables:
+                    interpretation = _display_value(table.get("interpretation"), label_ctx)
+                    if interpretation:
+                        flow.append(Paragraph(_pdf_escape(interpretation), body))
+            else:
+                figure_no = _render_section_pdf(
+                    flow, section, figure_no, label_ctx, available_width, body, small, include_optional_figures
+                )
     flow.append(Paragraph("5.6 Significant Findings Summary", h1))
     if blueprint.get("significant_findings"):
-        flow.append(_pdf_table({
+        pdf_table, warning_notes = _pdf_table({
             "columns": [
                 "Variable / parameter", "Key finding", "Test statistic", "p-value",
                 "Adjusted p-value", "Test applied", "Effect size", "Notes/warnings",
@@ -483,7 +792,7 @@ def generate_pdf(results: Dict[str, Any], *, include_optional_figures: bool = Fa
             "rows": [
                 [
                     _display_value(row.get("variable") or "", label_ctx),
-                    row.get("key_finding") or "",
+                    _clean_finding_text(row.get("key_finding") or ""),
                     row.get("test_statistic") or "",
                     row.get("p_value") or "",
                     row.get("adjusted_p_value") or "",
@@ -493,7 +802,10 @@ def generate_pdf(results: Dict[str, Any], *, include_optional_figures: bool = Fa
                 ]
                 for row in blueprint.get("significant_findings") or []
             ],
-        }, label_ctx))
+        }, label_ctx, available_width)
+        flow.append(pdf_table)
+        for warning in warning_notes:
+            flow.append(Paragraph(f"Caution: {_pdf_escape(_display_value(warning, label_ctx))}", small))
     else:
         flow.append(Paragraph("No final thesis significant findings were identified among the completed tests.", body))
     flow.append(Paragraph("5.7 Warnings and Interpretation Notes", h1))

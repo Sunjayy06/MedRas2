@@ -18,6 +18,13 @@ from app.services import chapter_v_export, export
 from app.services.thesis_blueprint import build_thesis_analysis_blueprint
 
 
+PNG_1X1 = (
+    "data:image/png;base64,"
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8"
+    "/x8AAwMCAO+/p9sAAAAASUVORK5CYII="
+)
+
+
 class FakeEntry:
     def __init__(self):
         self.df = pd.DataFrame({
@@ -94,7 +101,11 @@ def _representative_results() -> dict:
                 "headers": ["Predictor category", "Positive n (%)", "Negative n (%)", "p-value", "Adjusted p-value", "Test applied", "Effect size", "Warnings"],
                 "rows": [["Positive", "6 (66.7%)", "0 (0.0%)", "p = 0.005", "p = 0.018", "Chi-square test", "Cramer's V = 0.46", "-"]],
             }],
-            "figures": [],
+            "figures": [{
+                "title": "ER by p27 expression status",
+                "png_data_uri": PNG_1X1,
+                "caption": "Grouped percentage bar chart of ER by p27 expression status.",
+            }],
         },
     ]
     significant_findings = [
@@ -150,7 +161,7 @@ def _representative_results() -> dict:
         methods_text=(
             "Descriptive statistics were used for baseline variables. Welch's t-test "
             "and chi-square tests were used for completed bivariate analyses. "
-            "A p-value threshold of 0.05 was used."
+            "A p-value threshold of p &lt; 0.05 was used."
         ),
         results_narrative="ER and PR were significantly associated with p27 expression status.",
         session={
@@ -214,10 +225,20 @@ def verify_service_docx() -> None:
     assert "p27 expression status" in text
     assert "Positive: 9 (75.0%)" in text
     assert "No:" not in text and "Yes:" not in text
+    assert "Dataset ID" not in text
+    assert "Result ID" not in text
+    assert "Generated at" not in text
+    assert "breast_pathology" not in text
+    assert "cross_sectional_association" not in text
+    assert "&gt;" not in text and "&lt;" not in text and "&amp;" not in text
+    assert "p < 0.05" in text
+    assert "mean ± SD" in text
     assert "Variable / parameter" in text
     assert "p-value" in text and "Adjusted p-value" in text
     assert "ER vs p27 expression status" in text
     assert "PR vs p27 expression status" in text
+    assert "Figure 1. Grouped percentage bar chart of ER by p27 expression status." in text
+    assert "Graph preview not generated yet" not in text
     final_section = text.split("5.6 Significant Findings Summary", 1)[1].split("5.7 Warnings", 1)[0]
     assert "Interpretation-site" not in final_section
     assert "Staining Result" not in final_section
@@ -228,11 +249,15 @@ def verify_service_docx() -> None:
     assert "section_id" not in text and "source_result_id" not in text
     assert "cross_sectional_association" not in text
     assert "Internal detailed figure" not in text
+    for variable in ["Age", "ER", "PR", "Interpretation-site", "Staining Result"]:
+        assert text.count(f"\n{variable}\n") == 1
 
     regular_word = export.to_docx(FakeEntry(), results, {"outcome": "Positive/ Negative"})
     regular_text = _docx_text(regular_word)
     assert "CHAPTER V" in regular_text
     assert "Observed counts" not in regular_text
+    pdf_blob = chapter_v_export.generate_pdf(results)
+    assert pdf_blob.startswith(b"%PDF") and len(pdf_blob) > 1000
 
 
 def verify_generic_docx() -> None:

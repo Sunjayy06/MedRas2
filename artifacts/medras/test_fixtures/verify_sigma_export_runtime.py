@@ -122,6 +122,7 @@ def _results():
                     "source_variables": ["ER", "PR"],
                     "source_result_id": "association_0",
                     "caption": "ER by PR (%).",
+                    "png_data_uri": PNG_1X1,
                     "interpretation": "Grouped percentage bar chart for ER by PR.",
                     "thesis_ready": True,
                     "priority": "thesis_ready_primary",

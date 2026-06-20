@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import base64
 import datetime
+import html
 import io
 import math
 import os
@@ -335,7 +336,7 @@ def _export_cell(value: Any) -> str:
         return " – ".join(_export_cell(v) for v in value)
     if isinstance(value, dict):
         return "; ".join(f"{k}: {_export_cell(v)}" for k, v in value.items())
-    return str(value)
+    return html.unescape(str(value))
 
 
 def _normalized_tables(result: Dict[str, Any]) -> List[Dict[str, Any]]:

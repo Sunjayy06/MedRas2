@@ -803,6 +803,7 @@ def build_thesis_analysis_blueprint(
                 "source_variables": variables,
                 "source_result_id": test_id,
                 "caption": _display_text(fig.get("caption") or fig_title, label_ctx),
+                "png_data_uri": fig.get("png_data_uri"),
                 "interpretation": interpretation,
                 "thesis_ready": bool(fig.get("png_data_uri")),
                 "optional": family != "diagnostic_accuracy",
