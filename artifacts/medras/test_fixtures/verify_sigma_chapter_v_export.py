@@ -32,6 +32,12 @@ class FakeEntry:
             "Age": [42, 44, 51, 53, 55, 56, 60, 61, 63, 65, 67, 69],
             "ER": ["Positive", "Negative"] * 6,
             "PR": ["Positive", "Negative"] * 6,
+            "AR": ["Positive", "Negative"] * 6,
+            "Histological type": ["Type 1", "Type 2", "Type 3"] * 4,
+            "Molecular subtype": ["Luminal A", "Luminal B", "HER2neu", "Triple negative"] * 3,
+            "pT": ["T1", "T2", "T3"] * 4,
+            "Nodal status": ["N0", "N1", "N2"] * 4,
+            "LVI": ["Present", "Absent"] * 6,
             "Interpretation-site": ["Nuclear", "Cytoplasmic"] * 6,
             "Staining Result": ["Strong", "Weak"] * 6,
         })
@@ -44,6 +50,12 @@ class FakeEntry:
                 {"column": "Age", "detected_type": "scale"},
                 {"column": "ER", "detected_type": "nominal"},
                 {"column": "PR", "detected_type": "nominal"},
+                {"column": "AR", "detected_type": "nominal"},
+                {"column": "Histological type", "detected_type": "nominal"},
+                {"column": "Molecular subtype", "detected_type": "nominal"},
+                {"column": "pT", "detected_type": "ordinal"},
+                {"column": "Nodal status", "detected_type": "ordinal"},
+                {"column": "LVI", "detected_type": "nominal"},
                 {"column": "Interpretation-site", "detected_type": "nominal"},
                 {"column": "Staining Result", "detected_type": "ordinal"},
             ],
@@ -64,6 +76,12 @@ def _representative_results() -> dict:
         {"column": "Age", "detected_type": "scale"},
         {"column": "ER", "detected_type": "nominal"},
         {"column": "PR", "detected_type": "nominal"},
+        {"column": "AR", "detected_type": "nominal"},
+        {"column": "Histological type", "detected_type": "nominal"},
+        {"column": "Molecular subtype", "detected_type": "nominal"},
+        {"column": "pT", "detected_type": "ordinal"},
+        {"column": "Nodal status", "detected_type": "ordinal"},
+        {"column": "LVI", "detected_type": "nominal"},
         {"column": "Interpretation-site", "detected_type": "nominal"},
         {"column": "Staining Result", "detected_type": "ordinal"},
     ]
@@ -72,12 +90,37 @@ def _representative_results() -> dict:
         "rows": [
             {"variable": "Positive/ Negative", "type": "n (%)", "cells": ["Yes: 9 (75.0%); No: 3 (25.0%)"]},
             {"variable": "Age", "type": "mean ± SD", "cells": ["57.2 ± 8.6"]},
-            {"variable": "ER", "type": "n (%)", "cells": ["Positive: 6 (50.0%); Negative: 6 (50.0%)"]},
+            {"variable": "ER", "type": "n (%)", "cells": ["Postive: 6 (50.0%); Negative: 6 (50.0%)"]},
             {"variable": "PR", "type": "n (%)", "cells": ["Positive: 6 (50.0%); Negative: 6 (50.0%)"]},
+            {"variable": "AR", "type": "n (%)", "cells": ["Positive: 6 (50.0%); Negative: 6 (50.0%)"]},
+            {"variable": "Histological type", "type": "n (%)", "cells": ["Type 1: 4 (33.3%); Type 2: 4 (33.3%); Type 3: 4 (33.3%)"]},
+            {"variable": "Molecular subtype", "type": "n (%)", "cells": ["Luminal A: 3 (25.0%); Luminal B: 3 (25.0%); HER2neu: 3 (25.0%); Triple negative: 3 (25.0%)"]},
+            {"variable": "pT", "type": "n (%)", "cells": ["T1: 4 (33.3%); T2: 4 (33.3%); T3: 4 (33.3%)"]},
+            {"variable": "Nodal status", "type": "n (%)", "cells": ["N0: 4 (33.3%); N1: 4 (33.3%); N2: 4 (33.3%)"]},
+            {"variable": "LVI", "type": "n (%)", "cells": ["Present: 6 (50.0%); Absent: 6 (50.0%)"]},
             {"variable": "Interpretation-site", "type": "n (%)", "cells": ["Nuclear: 6 (50.0%); Cytoplasmic: 6 (50.0%)"]},
             {"variable": "Staining Result", "type": "n (%)", "cells": ["Strong: 6 (50.0%); Weak: 6 (50.0%)"]},
         ],
     }
+
+    def assoc_test(name: str, *, p_value: str, adjusted: str, effect: str = "Cramer's V = 0.46") -> dict:
+        return {
+            "id": f"{name.lower().replace(' ', '_')}_by_outcome",
+            "title": f"{name} vs p27 expression status: Chi-square test",
+            "test_type": "chi_square",
+            "analysis_family": "bivariate",
+            "tables": [{
+                "title": f"Association of p27 expression status with {name}",
+                "headers": ["Predictor category", "Positive n (%)", "Negative n (%)", "p-value", "Adjusted p-value", "Test applied", "Effect size", "Warnings"],
+                "rows": [["Positive", "6 (66.7%)", "0 (0.0%)", p_value, adjusted, "Chi-square test", effect, "-"]],
+            }],
+            "figures": [{
+                "title": f"{name} by p27 expression status",
+                "png_data_uri": PNG_1X1,
+                "caption": f"Grouped percentage bar chart of {name} by p27 expression status.",
+            }],
+        }
+
     tests = [
         {
             "id": "age_by_outcome",
@@ -108,7 +151,46 @@ def _representative_results() -> dict:
             }],
         },
     ]
+    tests = [
+        {
+            "id": "age_by_outcome",
+            "title": "Age by p27 expression status: Welch's t-test",
+            "test_type": "welch_ttest",
+            "analysis_family": "bivariate",
+            "tables": [{
+                "title": "Comparison of Age by p27 expression status",
+                "headers": ["Group", "n", "Mean Â± SD", "Test statistic", "p-value", "Adjusted p-value", "Test applied", "Effect size", "Warnings"],
+                "rows": [
+                    ["p27 Positive", "9", "56.1 Â± 8.0", "t = 1.20", "p = 0.240", "p = 0.300", "Welch's t-test", "Cohen's d = 0.42", "-"],
+                    ["p27 Negative", "3", "59.0 Â± 9.1", "t = 1.20", "p = 0.240", "p = 0.300", "Welch's t-test", "Cohen's d = 0.42", "-"],
+                ],
+            }],
+            "figures": [{
+                "title": "Age by p27 expression status",
+                "png_data_uri": PNG_1X1,
+                "caption": "Boxplot of Age by p27 expression status.",
+            }],
+        },
+        assoc_test("Histological type", p_value="p = 0.004", adjusted="p = 0.013"),
+        assoc_test("ER", p_value="p = 0.005", adjusted="p = 0.018"),
+        assoc_test("PR", p_value="p = 0.002", adjusted="p = 0.012", effect="Cramer's V = 0.50"),
+        assoc_test("Molecular subtype", p_value="p = 0.006", adjusted="p = 0.019"),
+        assoc_test("AR", p_value="p = 0.030", adjusted="p = 0.045"),
+        assoc_test("pT", p_value="p = 0.400", adjusted="p = 0.700"),
+        assoc_test("Nodal status", p_value="p = 0.420", adjusted="p = 0.710"),
+        assoc_test("LVI", p_value="p = 0.500", adjusted="p = 0.750"),
+    ]
     significant_findings = [
+        {
+            "variable": "Histological type vs Positive/ Negative",
+            "key_finding": "Histological type was associated with the primary outcome.",
+            "test_statistic": "chi-square = 8.40",
+            "p_value": "p = 0.004",
+            "adjusted_p_value": "p = 0.013",
+            "test_applied": "Chi-square test",
+            "effect_size": "Cramer's V = 0.46",
+            "notes_warnings": "-",
+        },
         {
             "variable": "ER vs Positive/ Negative",
             "key_finding": "ER status was associated with the primary outcome.",
@@ -127,6 +209,26 @@ def _representative_results() -> dict:
             "adjusted_p_value": "p = 0.012",
             "test_applied": "Chi-square test",
             "effect_size": "Cramer's V = 0.50",
+            "notes_warnings": "-",
+        },
+        {
+            "variable": "Molecular subtype vs Positive/ Negative",
+            "key_finding": "Molecular subtype was associated with the primary outcome.",
+            "test_statistic": "chi-square = 7.80",
+            "p_value": "p = 0.006",
+            "adjusted_p_value": "p = 0.019",
+            "test_applied": "Chi-square test",
+            "effect_size": "Cramer's V = 0.46",
+            "notes_warnings": "-",
+        },
+        {
+            "variable": "AR vs Positive/ Negative",
+            "key_finding": "AR status was associated with the primary outcome.",
+            "test_statistic": "chi-square = 4.70",
+            "p_value": "p = 0.030",
+            "adjusted_p_value": "p = 0.045",
+            "test_applied": "Chi-square test",
+            "effect_size": "Cramer's V = 0.32",
             "notes_warnings": "-",
         },
         {
@@ -225,6 +327,7 @@ def verify_service_docx() -> None:
     assert "p27 expression status" in text
     assert "Positive: 9 (75.0%)" in text
     assert "No:" not in text and "Yes:" not in text
+    assert "Postive" not in text
     assert "Dataset ID" not in text
     assert "Result ID" not in text
     assert "Generated at" not in text
@@ -235,9 +338,23 @@ def verify_service_docx() -> None:
     assert "mean ± SD" in text
     assert "Variable / parameter" in text
     assert "p-value" in text and "Adjusted p-value" in text
+    assert "p27 Positive" in text and "p27 Negative" in text
+    assert "56.1" in text and "59.0" in text
+    assert "Histological type vs p27 expression status" in text
     assert "ER vs p27 expression status" in text
     assert "PR vs p27 expression status" in text
-    assert "Figure 1. Grouped percentage bar chart of ER by p27 expression status." in text
+    assert "Molecular subtype vs p27 expression status" in text
+    assert "AR vs p27 expression status" in text
+    assert "Figure 1. Distribution of p27 expression status." in text
+    assert "Figure 2. Boxplot of Age by p27 expression status." in text
+    assert "Figure 3. Grouped percentage bar chart of Histological type by p27 expression status." in text
+    assert "Figure 4. Grouped percentage bar chart of ER by p27 expression status." in text
+    assert "Figure 5. Grouped percentage bar chart of PR by p27 expression status." in text
+    assert "Figure 6. Grouped percentage bar chart of Molecular subtype by p27 expression status." in text
+    assert "Figure 7. Grouped percentage bar chart of AR by p27 expression status." in text
+    assert "Grouped percentage bar chart of pT by p27 expression status." not in text
+    assert "Grouped percentage bar chart of Nodal status by p27 expression status." not in text
+    assert "Grouped percentage bar chart of LVI by p27 expression status." not in text
     assert "Graph preview not generated yet" not in text
     final_section = text.split("5.6 Significant Findings Summary", 1)[1].split("5.7 Warnings", 1)[0]
     assert "Interpretation-site" not in final_section

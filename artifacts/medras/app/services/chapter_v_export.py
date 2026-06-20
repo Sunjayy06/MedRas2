@@ -10,6 +10,7 @@ from __future__ import annotations
 import base64
 import html
 import io
+import re
 from copy import deepcopy
 from typing import Any, Dict, List, Optional, Set, Tuple
 
@@ -58,6 +59,8 @@ def _text(value: Any) -> str:
     }
     for raw, clean in replacements.items():
         text = text.replace(raw, clean)
+    text = text.replace("Postive", "Positive")
+    text = re.sub(r">=\s*14%?", ">=14%", text)
     return text
 
 
@@ -90,7 +93,20 @@ def _readable_study_design(value: Any) -> str:
 def _outcome_label_context(blueprint: Dict[str, Any]) -> Dict[str, Any]:
     display = _text(blueprint.get("primary_outcome"))
     raw_values = set()
+    core_figure_variables = set()
+    outcome_values = {"yes", "no", "positive", "negative"}
+    for finding in blueprint.get("significant_findings") or []:
+        variable = _text(finding.get("variable") if isinstance(finding, dict) else "")
+        for sep in (" vs ", " by "):
+            if sep in variable:
+                core_figure_variables.add(variable.split(sep, 1)[0].strip())
+                break
     for section in blueprint.get("analysis_sections") or []:
+        for table in section.get("tables") or []:
+            if str(table.get("table_type") or "").startswith("continuous_or_group"):
+                for variable in _source_variables(table):
+                    if variable and variable != display and variable.lower() not in outcome_values:
+                        core_figure_variables.add(variable)
         if not isinstance(section, dict) or section.get("section_id") != "primary_outcome_distribution":
             continue
         for figure in section.get("figures") or []:
@@ -101,7 +117,12 @@ def _outcome_label_context(blueprint: Dict[str, Any]) -> Dict[str, Any]:
             for variable in table.get("source_variables") or []:
                 if _text(variable) and _text(variable) != display:
                     raw_values.add(_text(variable))
-    return {"display": display, "raw_values": sorted(raw_values, key=len, reverse=True)}
+    return {
+        "display": display,
+        "raw_values": sorted(raw_values, key=len, reverse=True),
+        "core_figure_variables": sorted(core_figure_variables),
+        "status_like": any(token in display.lower() for token in ("expression", "status", "marker", "positive", "negative")),
+    }
 
 
 def _display_value(value: Any, label_ctx: Optional[Dict[str, Any]]) -> str:
@@ -113,6 +134,9 @@ def _display_value(value: Any, label_ctx: Optional[Dict[str, Any]]) -> str:
         return text
     for raw in label_ctx.get("raw_values") or []:
         text = text.replace(raw, display)
+    if label_ctx.get("status_like"):
+        text = re.sub(r"\bYes\b", "Positive", text)
+        text = re.sub(r"\bNo\b", "Negative", text)
     return text
 
 
@@ -151,6 +175,19 @@ def _is_main_figure(figure: Dict[str, Any], include_optional: bool = False) -> b
     if str(figure.get("priority") or "").lower() == "detailed_report_only":
         return False
     return bool(figure.get("thesis_ready") or str(figure.get("priority") or "").lower() == "thesis_ready_primary")
+
+
+def _is_core_figure(figure: Dict[str, Any], label_ctx: Dict[str, Any], section_id: str = "") -> bool:
+    if section_id == "primary_outcome_distribution":
+        return True
+    core = {str(item) for item in label_ctx.get("core_figure_variables") or []}
+    if not core:
+        return False
+    fig_vars = {str(item) for item in figure.get("source_variables") or [] if item}
+    title = _text(figure.get("title") or figure.get("caption"))
+    if fig_vars.intersection(core):
+        return True
+    return any(variable and variable in title for variable in core)
 
 
 def _section_tables(section: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -248,6 +285,63 @@ def _primary_outcome_tables(blueprint: Dict[str, Any], label_ctx: Dict[str, Any]
                 clone["warnings"] = []
                 return [clone]
     return []
+
+
+def _parse_distribution_counts(table: Dict[str, Any], label_ctx: Dict[str, Any]) -> Tuple[List[str], List[float]]:
+    labels: List[str] = []
+    counts: List[float] = []
+    _, rows = _table_rows(table)
+    for row in rows:
+        for cell in row[2:] if len(row) > 2 else row:
+            text = _display_value(cell, label_ctx)
+            for label, count in re.findall(r"([^:;]+):\s*([0-9]+(?:\.[0-9]+)?)", text):
+                clean_label = _display_value(label.strip(), label_ctx)
+                if clean_label and clean_label not in labels:
+                    labels.append(clean_label)
+                    counts.append(float(count))
+    return labels, counts
+
+
+def _bar_chart_data_uri(labels: List[str], counts: List[float], title: str) -> str:
+    if not labels or not counts:
+        return ""
+    try:
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+    except Exception:
+        return ""
+    fig, ax = plt.subplots(figsize=(5.5, 3.4), dpi=160)
+    colours = ["#4B78A8", "#F58518", "#54A24B", "#B279A2", "#E45756"]
+    bars = ax.bar(labels, counts, color=colours[:len(labels)], edgecolor="white")
+    ax.set_title(title)
+    ax.set_ylabel("n")
+    ax.spines[["top", "right"]].set_visible(False)
+    for bar, value in zip(bars, counts):
+        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + max(counts) * 0.02, f"{value:g}", ha="center", va="bottom", fontsize=8)
+    fig.tight_layout()
+    out = io.BytesIO()
+    fig.savefig(out, format="png", bbox_inches="tight")
+    plt.close(fig)
+    return "data:image/png;base64," + base64.b64encode(out.getvalue()).decode("ascii")
+
+
+def _primary_outcome_figure(blueprint: Dict[str, Any], table: Dict[str, Any], label_ctx: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    labels, counts = _parse_distribution_counts(table, label_ctx)
+    display = _text(label_ctx.get("display") or blueprint.get("primary_outcome") or "primary outcome")
+    png = _bar_chart_data_uri(labels, counts, f"Distribution of {display}")
+    if not png:
+        return None
+    return {
+        "figure_id": "primary_outcome_distribution_generated",
+        "title": f"Distribution of {display}",
+        "caption": f"Distribution of {display}.",
+        "interpretation": f"The figure shows the distribution of {display} across the analysed sample.",
+        "source_variables": [display],
+        "png_data_uri": png,
+        "thesis_ready": True,
+        "detailed_report_only": False,
+    }
 
 
 def _compact_table_for_export(table: Dict[str, Any]) -> Tuple[Dict[str, Any], List[str]]:
@@ -437,7 +531,11 @@ def _render_section_docx(
     label_ctx: Dict[str, Any],
     include_optional_figures: bool = False,
 ) -> tuple[int, int]:
-    figures = _section_figures(section, include_optional_figures)
+    section_id = str(section.get("section_id") or "")
+    figures = [
+        figure for figure in _section_figures(section, include_optional_figures)
+        if include_optional_figures or _is_core_figure(figure, label_ctx, section_id)
+    ]
     used_figures: Set[str] = set()
     tables = _section_tables(section)
     for table in tables:
@@ -577,8 +675,17 @@ def generate_docx(results: Dict[str, Any], *, include_optional_figures: bool = F
             outcome_tables = _section_tables(section) or _primary_outcome_tables(blueprint, label_ctx)
             for table in outcome_tables:
                 table_no = _add_table_docx(doc, table, table_no, label_ctx, include_interpretation=False)
+            rendered_outcome_figure = False
             for fig in _section_figures(section, include_optional_figures)[:2]:
-                figure_no = _add_figure_docx(doc, fig, figure_no, label_ctx)
+                next_no = _add_figure_docx(doc, fig, figure_no, label_ctx)
+                rendered_outcome_figure = rendered_outcome_figure or next_no != figure_no
+                figure_no = next_no
+            if not rendered_outcome_figure and outcome_tables:
+                generated = _primary_outcome_figure(blueprint, outcome_tables[0], label_ctx)
+                if generated:
+                    next_no = _add_figure_docx(doc, generated, figure_no, label_ctx)
+                    rendered_outcome_figure = rendered_outcome_figure or next_no != figure_no
+                    figure_no = next_no
             for table in outcome_tables:
                 interpretation = _display_value(table.get("interpretation"), label_ctx)
                 if interpretation:
@@ -690,7 +797,11 @@ def _render_section_pdf(
     small,
     include_optional_figures: bool = False,
 ) -> int:
-    figures = _section_figures(section, include_optional_figures)
+    section_id = str(section.get("section_id") or "")
+    figures = [
+        figure for figure in _section_figures(section, include_optional_figures)
+        if include_optional_figures or _is_core_figure(figure, label_ctx, section_id)
+    ]
     used_figures: Set[str] = set()
     tables = _section_tables(section)
     for table in tables:
@@ -764,16 +875,27 @@ def generate_pdf(results: Dict[str, Any], *, include_optional_figures: bool = Fa
             flow.append(Paragraph(_pdf_escape(section.get("title")), h2))
             if _text(section.get("interpretation")):
                 flow.append(Paragraph(_pdf_escape(_display_value(section.get("interpretation"), label_ctx)), body))
-            if section.get("section_id") == "primary_outcome_distribution" and not _section_tables(section):
+            if section.get("section_id") == "primary_outcome_distribution":
                 outcome_tables = _primary_outcome_tables(blueprint, label_ctx)
+                if not outcome_tables:
+                    outcome_tables = _section_tables(section)
                 for table in outcome_tables:
                     flow.append(Paragraph(f"<b>{_pdf_escape(_display_value(table.get('title'), label_ctx))}</b>", small))
                     pdf_table, warning_notes = _pdf_table(table, label_ctx, available_width)
                     flow.append(pdf_table)
                     for warning in warning_notes:
                         flow.append(Paragraph(f"Caution: {_pdf_escape(_display_value(warning, label_ctx))}", small))
+                rendered_outcome_figure = False
                 for fig in _section_figures(section, include_optional_figures)[:2]:
-                    figure_no = _add_pdf_figure(flow, fig, figure_no, label_ctx, body, small)
+                    next_no = _add_pdf_figure(flow, fig, figure_no, label_ctx, body, small)
+                    rendered_outcome_figure = rendered_outcome_figure or next_no != figure_no
+                    figure_no = next_no
+                if not rendered_outcome_figure and outcome_tables:
+                    generated = _primary_outcome_figure(blueprint, outcome_tables[0], label_ctx)
+                    if generated:
+                        next_no = _add_pdf_figure(flow, generated, figure_no, label_ctx, body, small)
+                        rendered_outcome_figure = rendered_outcome_figure or next_no != figure_no
+                        figure_no = next_no
                 for table in outcome_tables:
                     interpretation = _display_value(table.get("interpretation"), label_ctx)
                     if interpretation:

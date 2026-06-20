@@ -371,6 +371,26 @@ def _thesis_table_for_result(test: Dict[str, Any], outcome: Optional[str], label
             "detailed_tables_available": True,
         }
     if family == "bivariate":
+        first_table = (test.get("tables") or [{}])[0]
+        headers = list(first_table.get("headers") or [])
+        rows = [_display_row(row, label_ctx) for row in list(first_table.get("rows") or [])]
+        if rows and headers and str(headers[0]).strip().lower() == "group":
+            return {
+                "table_id": f"{test_id}_thesis",
+                "title": f"Comparison of {predictor_label} by {target_label}",
+                "table_type": "continuous_or_group_comparison_thesis_table",
+                "columns": headers,
+                "rows": rows,
+                "source_variables": [predictor, target],
+                "source_test_ids": [test_id],
+                "interpretation": _safe_interpretation(test, label_ctx),
+                "thesis_ready": True,
+                "priority": priority,
+                "optional": optional,
+                "detailed_report_only": detailed_only,
+                "warnings": [warning] if warning != "-" else [],
+                "detailed_tables_available": True,
+            }
         return {
             "table_id": f"{test_id}_thesis",
             "title": f"Comparison of {predictor_label} by {target_label}",
