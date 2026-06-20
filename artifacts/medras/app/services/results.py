@@ -198,6 +198,29 @@ def _apply_thesis_display_labels_to_table_one(
     return updated
 
 
+def _apply_thesis_display_labels_to_graph_df(
+    df: pd.DataFrame,
+    outcome: Optional[str],
+    session: Dict[str, Any],
+) -> pd.DataFrame:
+    """Return a display-only copy for graph labels; calculations use raw df."""
+    if not outcome or outcome not in df.columns:
+        return df
+    concept = str(session.get("main_outcome_concept") or "").strip()
+    marker = str(session.get("main_marker") or "").strip()
+    joined = f"{concept} {marker} {outcome}".lower()
+    if not any(term in joined for term in ("expression", "status", "marker", "positive", "negative")):
+        return df
+    out = df.copy()
+    mapped = out[outcome].map(lambda value: (
+        "Positive" if str(value).strip().lower() == "yes"
+        else "Negative" if str(value).strip().lower() == "no"
+        else value
+    ))
+    out[outcome] = mapped
+    return out
+
+
 # ---------------------------------------------------------------------------
 # Test runners — return a uniform shape so the UI can render any of them.
 # ---------------------------------------------------------------------------
@@ -235,8 +258,12 @@ def _ttest_independent(df, outcome, group) -> Dict[str, Any]:
     t_crit = float(stats.t.ppf(0.975, df=welch_df))
     ci_lo, ci_hi = diff - t_crit * se, diff + t_crit * se
     rows = [
+        _row(f"n ({la})", n_a),
         _row(f"Mean ({la})", float(np.mean(a))),
+        _row(f"SD ({la})", float(np.std(a, ddof=1))),
+        _row(f"n ({lb})", n_b),
         _row(f"Mean ({lb})", float(np.mean(b))),
+        _row(f"SD ({lb})", float(np.std(b, ddof=1))),
         _row("Mean difference", diff),
         _row("95% CI", f"[{_fmt_num(ci_lo)}, {_fmt_num(ci_hi)}]"),
         _row("t statistic", float(stat)),
@@ -1687,8 +1714,9 @@ def run_plan(
             r.setdefault("plan_name", t["title"])
             r["plan_reason"] = t.get("why")
             figures = list(r.get("figures") or [])
+            graph_df = _apply_thesis_display_labels_to_graph_df(df, args.get("outcome") or args.get("col1"), session)
             if function_name == "run_chi_or_fisher":
-                png = _stacked_bar(df, args.get("col2"), args.get("col1"))
+                png = _stacked_bar(graph_df, args.get("col2"), args.get("col1"))
                 if png:
                     figures.append({
                         "title": f"{args.get('col2')} by {args.get('col1')} (%)",
@@ -1698,7 +1726,7 @@ def run_plan(
                 "run_pairwise_welch", "run_pairwise_mann_whitney",
                 "run_pairwise_anova", "run_pairwise_kruskal",
             }:
-                png = _boxplot(df, args.get("predictor"), args.get("outcome"))
+                png = _boxplot(graph_df, args.get("predictor"), args.get("outcome"))
                 if png:
                     figures.append({
                         "title": f"{args.get('predictor')} by {args.get('outcome')}",

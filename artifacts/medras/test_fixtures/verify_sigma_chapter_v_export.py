@@ -102,6 +102,12 @@ def _representative_results() -> dict:
             {"variable": "Staining Result", "type": "n (%)", "cells": ["Strong: 6 (50.0%); Weak: 6 (50.0%)"]},
         ],
     }
+    for row in table_one["rows"]:
+        if row.get("variable") == "Age":
+            row["type"] = "Mean ± SD"
+            row["cells"] = ["57.2 ± 8.6 (n=12); Missing: 0 (0.0%)"]
+        if row.get("variable") == "ER":
+            row["cells"] = ["Postive: 6 (50.0%); Positive: 2 (16.7%); Negative: 4 (33.3%)"]
 
     def assoc_test(name: str, *, p_value: str, adjusted: str, effect: str = "Cramer's V = 0.46") -> dict:
         return {
@@ -261,6 +267,7 @@ def _representative_results() -> dict:
         graphs=[],
         significant_findings=significant_findings,
         methods_text=(
+            "Continuous variables are summarised as mean ± SD. "
             "Descriptive statistics were used for baseline variables. Welch's t-test "
             "and chi-square tests were used for completed bivariate analyses. "
             "A p-value threshold of p &lt; 0.05 was used."
@@ -332,6 +339,7 @@ def verify_service_docx() -> None:
     assert "No:" not in text and "Yes:" not in text
     assert "Postive" not in text
     assert "Domain-profile grouping is descriptive" not in text
+    assert "selected domain profile" not in text
     assert "Variable\nType\nOverall" not in text
     assert "Parameter\nCategory\nn\n%" in text
     assert "Table 1. Table 1." not in text
@@ -345,6 +353,21 @@ def verify_service_docx() -> None:
     assert "mean ± SD" in text
     assert "Variable / parameter" in text
     assert "p-value" in text and "Adjusted p-value" in text
+    doc = Document(io.BytesIO(blob))
+    continuous_headers = [cell.text for cell in doc.tables[1].rows[0].cells]
+    continuous_values = [cell.text for cell in doc.tables[1].rows[1].cells]
+    assert continuous_headers[0:2] == ["Parameter", "n"]
+    assert continuous_headers[2].startswith("Mean") and "SD" in continuous_headers[2]
+    assert continuous_headers[3:] == ["Median", "Minimum", "Maximum", "Missing n (%)"]
+    assert continuous_values[0] == "Age" and continuous_values[1] == "12"
+    assert "57.2" in continuous_values[2] and "8.6" in continuous_values[2]
+    assert continuous_values[-1] == "0 (0.0%)"
+    immuno_rows = [[cell.text for cell in row.cells] for row in doc.tables[3].rows]
+    assert ["ER", "Positive", "8", "66.7%"] in immuno_rows
+    assert all(row[0] != "p27 expression status" for row in immuno_rows[1:])
+    final_rows = [[cell.text for cell in row.cells] for row in doc.tables[-1].rows]
+    histology = next(row for row in final_rows if row[0] == "Histological type vs p27 expression status")
+    assert histology[3] == "p = 0.004" and histology[4] == "p = 0.013"
     assert "p27 Positive" in text and "p27 Negative" in text
     assert "56.1" in text and "59.0" in text
     assert "Histological type vs p27 expression status" in text

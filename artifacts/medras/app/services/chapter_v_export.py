@@ -239,6 +239,25 @@ def _clean_interpretation(value: Any, label_ctx: Optional[Dict[str, Any]] = None
         return ""
     text = text.replace("Chi-square test with sparse-cell warning was", "was")
     text = text.replace("Chi-square test: Chi-square test", "Chi-square test")
+    text = re.sub(
+        r"^(.+?)\s+vs\s+(.+?):\s+was significantly associated with the outcome\.?$",
+        r"\1 showed a statistically significant association with \2.",
+        text,
+        flags=re.IGNORECASE,
+    )
+    text = re.sub(
+        r"^(.+?)\s+vs\s+(.+?):\s+was not significantly associated with the outcome\.?$",
+        r"\1 was not significantly associated with \2.",
+        text,
+        flags=re.IGNORECASE,
+    )
+    text = re.sub(
+        r"^(.+?)\s+by\s+(.+?):\s+Welch's t-test was not significantly associated with the outcome\.?$",
+        r"\1 was not significantly associated with \2.",
+        text,
+        flags=re.IGNORECASE,
+    )
+    text = re.sub(r"^(.+?):\s+was ", r"\1 was ", text)
     text = re.sub(r"\s+", " ", text).strip()
     return text
 
@@ -251,30 +270,84 @@ def _parse_category_summary(summary: Any, label_ctx: Optional[Dict[str, Any]] = 
     return rows
 
 
+def _parse_continuous_summary(summary: Any, label_ctx: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, str]]:
+    text = _display_value(summary, label_ctx) if label_ctx else _text(summary)
+    mean_sd = re.search(r"([0-9.+-]+)\s*(?:±|Â±|ą|\+/-)\s*([0-9.+-]+)", text)
+    n_match = re.search(r"\(n\s*=\s*([0-9]+)\)", text, flags=re.IGNORECASE)
+    missing = re.search(r"Missing:\s*([0-9]+)\s*\(([0-9.]+)%\)", text, flags=re.IGNORECASE)
+    median = re.search(r"Median(?:\s*[:=])?\s*([0-9.+-]+)", text, flags=re.IGNORECASE)
+    minimum = re.search(r"(?:Minimum|Min)(?:\s*[:=])?\s*([0-9.+-]+)", text, flags=re.IGNORECASE)
+    maximum = re.search(r"(?:Maximum|Max)(?:\s*[:=])?\s*([0-9.+-]+)", text, flags=re.IGNORECASE)
+    if not (mean_sd or n_match or median or minimum or maximum):
+        return None
+    mean_sd_text = f"{mean_sd.group(1)} ± {mean_sd.group(2)}" if mean_sd else "-"
+    missing_text = f"{missing.group(1)} ({missing.group(2)}%)" if missing else "-"
+    return {
+        "n": n_match.group(1) if n_match else "-",
+        "mean_sd": mean_sd_text,
+        "median": median.group(1) if median else "-",
+        "min": minimum.group(1) if minimum else "-",
+        "max": maximum.group(1) if maximum else "-",
+        "missing": missing_text,
+    }
+
+
 def _descriptive_export_table(table: Dict[str, Any], label_ctx: Dict[str, Any]) -> Dict[str, Any]:
     if str(table.get("table_type") or "") not in DESCRIPTIVE_TABLE_TYPES:
         return table
-    rows: List[List[str]] = []
+    categorical_counts: Dict[Tuple[str, str], float] = {}
+    categorical_order: List[Tuple[str, str]] = []
+    continuous_rows: List[List[str]] = []
     for row in table.get("rows") or []:
         variable = _row_variable(row)
         if not variable:
             continue
+        variable = _display_value(variable, label_ctx)
         cells = row.get("cells") if isinstance(row, dict) else None
         kind = _text(row.get("type") if isinstance(row, dict) else "")
         summary = cells[0] if isinstance(cells, list) and cells else ""
+        continuous = _parse_continuous_summary(summary, label_ctx)
+        if continuous and ("mean" in kind.lower() or "sd" in kind.lower() or not _parse_category_summary(summary, label_ctx)):
+            continuous_rows.append([
+                variable,
+                continuous["n"],
+                continuous["mean_sd"],
+                continuous["median"],
+                continuous["min"],
+                continuous["max"],
+                continuous["missing"],
+            ])
+            continue
         categories = _parse_category_summary(summary, label_ctx)
         if categories:
             for category, count, pct in categories:
-                rows.append([_display_value(variable, label_ctx), category, count, pct])
+                key = (variable, _display_value(category, label_ctx))
+                if key not in categorical_counts:
+                    categorical_order.append(key)
+                    categorical_counts[key] = 0.0
+                categorical_counts[key] += float(count)
         elif summary:
-            statistic = kind or "Summary"
-            rows.append([_display_value(variable, label_ctx), statistic, _display_value(summary, label_ctx), ""])
-    if not rows:
+            continuous_rows.append([variable, "-", _display_value(summary, label_ctx), "-", "-", "-", "-"])
+    if not categorical_counts and not continuous_rows:
         return table
     clone = deepcopy(table)
-    clone["columns"] = ["Parameter", "Category", "n", "%"]
+    if continuous_rows and not categorical_counts:
+        clone["columns"] = ["Parameter", "n", "Mean ± SD", "Median", "Minimum", "Maximum", "Missing n (%)"]
+        clone["rows"] = continuous_rows
+    else:
+        totals: Dict[str, float] = {}
+        for variable, _category in categorical_order:
+            totals[variable] = totals.get(variable, 0.0) + categorical_counts[(variable, _category)]
+        rows = []
+        for variable, category in categorical_order:
+            count = categorical_counts[(variable, category)]
+            total = totals.get(variable, 0.0)
+            pct = (count / total * 100.0) if total else 0.0
+            count_text = str(int(count)) if float(count).is_integer() else f"{count:g}"
+            rows.append([variable, category, count_text, f"{pct:.1f}%"])
+        clone["columns"] = ["Parameter", "Category", "n", "%"]
+        clone["rows"] = rows
     clone.pop("headers", None)
-    clone["rows"] = rows
     clone["title"] = _clean_table_title(clone.get("title") or "Descriptive findings")
     clone["interpretation"] = _descriptive_table_interpretation(clone)
     return clone
@@ -328,7 +401,7 @@ def _filter_table_variables(table: Dict[str, Any], allowed: Set[str], seen: Set[
     return clone
 
 
-def _dedupe_descriptive_sections(sections: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def _dedupe_descriptive_sections(sections: List[Dict[str, Any]], label_ctx: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
     domain_ids = {
         "clinical_study_characteristics",
         "immunophenotype_characteristics",
@@ -336,6 +409,9 @@ def _dedupe_descriptive_sections(sections: List[Dict[str, Any]]) -> List[Dict[st
     }
     has_domain_sections = any(section.get("section_id") in domain_ids for section in sections)
     marker_vars: Set[str] = set()
+    outcome_vars: Set[str] = set(label_ctx.get("raw_values") or []) if label_ctx else set()
+    if label_ctx and _text(label_ctx.get("display")):
+        outcome_vars.add(_text(label_ctx.get("display")))
     for section in sections:
         if section.get("section_id") != "marker_outcome_components":
             continue
@@ -359,6 +435,13 @@ def _dedupe_descriptive_sections(sections: List[Dict[str, Any]]) -> List[Dict[st
                 clone_table["rows"] = [
                     row for row in clone_table.get("rows") or []
                     if _row_variable(row) not in marker_vars
+                ]
+                table = clone_table
+            if section_id != "marker_outcome_components" and outcome_vars:
+                clone_table = deepcopy(table)
+                clone_table["rows"] = [
+                    row for row in clone_table.get("rows") or []
+                    if _row_variable(row) not in outcome_vars
                 ]
                 table = clone_table
             filtered = _filter_table_variables(table, allowed, seen)
@@ -655,7 +738,7 @@ def _render_section_docx(
             if next_no != figure_no:
                 figure_no = next_no
                 used_figures.add(figure_id)
-        interpretation = _display_value(table.get("interpretation"), label_ctx)
+        interpretation = _clean_interpretation(table.get("interpretation"), label_ctx)
         if interpretation:
             _plain_docx_text(doc, interpretation)
     for figure in figures[:4]:
@@ -796,7 +879,7 @@ def generate_docx(results: Dict[str, Any], *, include_optional_figures: bool = F
             "marker_outcome_components",
             "descriptive_results",
         }
-    ])
+    ], label_ctx)
     if not baseline_sections:
         _plain_docx_text(doc, "Baseline and study characteristics were not available in the blueprint.")
     for section in [s for s in baseline_sections if s.get("section_id") not in {"marker_outcome_components"}]:
@@ -1010,7 +1093,7 @@ def generate_pdf(results: Dict[str, Any], *, include_optional_figures: bool = Fa
     descriptive_sections = _dedupe_descriptive_sections([
         section for section in main_sections
         if section.get("section_id") in {"baseline_characteristics", "clinical_study_characteristics", "immunophenotype_characteristics", "marker_outcome_components", "descriptive_results"}
-    ])
+    ], label_ctx)
     for section in [s for s in descriptive_sections if s.get("section_id") != "marker_outcome_components"]:
         flow.append(Paragraph(_pdf_escape(_section_export_title(str(section.get("section_id") or ""), section.get("title"), label_ctx)), h1))
         intro = _section_intro(section, label_ctx)

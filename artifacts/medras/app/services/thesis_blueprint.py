@@ -7,6 +7,8 @@ asking an LLM to decide statistical content.
 
 from __future__ import annotations
 
+import re
+
 from typing import Any, Dict, List, Optional
 
 
@@ -265,8 +267,12 @@ def _effect_for_table(test: Dict[str, Any]) -> str:
 
 
 def _p_display(test: Dict[str, Any], *, adjusted: bool = False) -> str:
-    key = "p_corrected" if adjusted else None
-    value = test.get(key) if key else (test.get("p") if test.get("p") is not None else test.get("p_value"))
+    value = (
+        test.get("p_corrected")
+        or test.get("adjusted_p_value")
+        or test.get("p_adjusted")
+        or test.get("q_value")
+    ) if adjusted else (test.get("p") if test.get("p") is not None else test.get("p_value"))
     if value is None:
         return "-"
     try:
@@ -276,6 +282,43 @@ def _p_display(test: Dict[str, Any], *, adjusted: bool = False) -> str:
     if numeric < 0.001:
         return "p < 0.001"
     return f"p = {numeric:.3f}"
+
+
+def _group_summary_rows_from_result(test: Dict[str, Any]) -> List[List[str]]:
+    values: Dict[str, Dict[str, Any]] = {}
+    for row in test.get("rows") or []:
+        if not isinstance(row, dict):
+            continue
+        label = str(row.get("label") or "")
+        match = re.match(r"^(n|mean|sd)\s*\((.+)\)$", label, flags=re.IGNORECASE)
+        if not match:
+            continue
+        stat, group = match.group(1).lower(), match.group(2).strip()
+        values.setdefault(group, {})[stat] = row.get("value")
+    if len(values) < 2:
+        return []
+    stat = _statistic_for_table(test)
+    p_value = _p_display(test)
+    adjusted = _p_display(test, adjusted=True)
+    applied = _test_applied(test)
+    effect = _effect_for_table(test)
+    rows: List[List[str]] = []
+    for group, stats in values.items():
+        mean = stats.get("mean")
+        sd = stats.get("sd")
+        mean_sd = f"{_fmt_value(mean)} ± {_fmt_value(sd)}" if mean not in (None, "") and sd not in (None, "") else "-"
+        rows.append([
+            group,
+            _fmt_value(stats.get("n")),
+            mean_sd,
+            stat,
+            p_value,
+            adjusted,
+            applied,
+            effect,
+            "-",
+        ])
+    return rows
 
 
 def _warning_for_table(test: Dict[str, Any]) -> str:
@@ -381,6 +424,24 @@ def _thesis_table_for_result(test: Dict[str, Any], outcome: Optional[str], label
                 "table_type": "continuous_or_group_comparison_thesis_table",
                 "columns": headers,
                 "rows": rows,
+                "source_variables": [predictor, target],
+                "source_test_ids": [test_id],
+                "interpretation": _safe_interpretation(test, label_ctx),
+                "thesis_ready": True,
+                "priority": priority,
+                "optional": optional,
+                "detailed_report_only": detailed_only,
+                "warnings": [warning] if warning != "-" else [],
+                "detailed_tables_available": True,
+            }
+        summary_rows = _group_summary_rows_from_result(test)
+        if summary_rows:
+            return {
+                "table_id": f"{test_id}_thesis",
+                "title": f"Comparison of {predictor_label} by {target_label}",
+                "table_type": "continuous_or_group_comparison_thesis_table",
+                "columns": ["Group", "n", "Mean ± SD", "Test statistic", "p-value", "Adjusted p-value", "Test applied", "Effect size", "Warnings"],
+                "rows": summary_rows,
                 "source_variables": [predictor, target],
                 "source_test_ids": [test_id],
                 "interpretation": _safe_interpretation(test, label_ctx),
