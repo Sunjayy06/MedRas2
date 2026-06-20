@@ -375,13 +375,14 @@ def _descriptive_export_table(table: Dict[str, Any], label_ctx: Dict[str, Any]) 
             continuous_rows.append([variable, "-", _display_value(summary, label_ctx), "-", "-", "-", "-"])
     if not categorical_counts and not continuous_rows:
         return table
+    polish = table.get("_polish_interpretation")
     clone = deepcopy(table)
     if continuous_rows and categorical_counts:
         continuous = deepcopy(table)
         continuous["columns"] = ["Parameter", "n", "Mean ± SD", "Median", "Minimum", "Maximum", "Missing n (%)"]
         continuous["rows"] = continuous_rows
         continuous["title"] = _clean_table_title(continuous.get("title") or "Continuous descriptive findings")
-        continuous["interpretation"] = _descriptive_table_interpretation(continuous)
+        continuous["interpretation"] = polish or _descriptive_table_interpretation(continuous)
         categorical = deepcopy(table)
         totals: Dict[str, float] = {}
         for variable, _category in categorical_order:
@@ -396,7 +397,7 @@ def _descriptive_export_table(table: Dict[str, Any], label_ctx: Dict[str, Any]) 
         categorical["columns"] = ["Parameter", "Category", "n", "%"]
         categorical["rows"] = rows
         categorical["title"] = _clean_table_title(categorical.get("title") or "Categorical descriptive findings")
-        categorical["interpretation"] = _descriptive_table_interpretation(categorical)
+        categorical["interpretation"] = polish or _descriptive_table_interpretation(categorical)
         for item in (continuous, categorical):
             item.pop("headers", None)
         return [continuous, categorical]
@@ -418,7 +419,7 @@ def _descriptive_export_table(table: Dict[str, Any], label_ctx: Dict[str, Any]) 
         clone["rows"] = rows
     clone.pop("headers", None)
     clone["title"] = _clean_table_title(clone.get("title") or "Descriptive findings")
-    clone["interpretation"] = _descriptive_table_interpretation(clone)
+    clone["interpretation"] = polish or _descriptive_table_interpretation(clone)
     return clone
 
 
@@ -892,8 +893,45 @@ def _section_export_title(section_id: str, fallback: Any, label_ctx: Dict[str, A
     return titles.get(section_id, _text(fallback) or "Results")
 
 
-def _section_intro(section: Dict[str, Any], label_ctx: Dict[str, Any]) -> str:
+def _apply_polish_overrides(
+    blueprint: Dict[str, Any],
+    overrides: Dict[str, str],
+) -> Dict[str, Any]:
+    """Return a deep copy of blueprint with prose overrides injected into interpretation fields.
+
+    Tables also get a ``_polish_interpretation`` key so the override survives
+    through ``_descriptive_export_table``, which regenerates ``interpretation``.
+    """
+    if not overrides:
+        return blueprint
+    bp = deepcopy(blueprint)
+    for section in bp.get("analysis_sections") or []:
+        section_id = str(section.get("section_id") or "")
+        s_key = f"section:{section_id}"
+        if s_key in overrides:
+            section["interpretation"] = overrides[s_key]
+        for table in section.get("tables") or []:
+            t_key = f"table:{table.get('table_id', '')}"
+            if t_key in overrides:
+                table["interpretation"] = overrides[t_key]
+                table["_polish_interpretation"] = overrides[t_key]
+        for fig in section.get("figures") or []:
+            f_key = f"figure:{fig.get('figure_id', '')}"
+            if f_key in overrides:
+                fig["interpretation"] = overrides[f_key]
+    return bp
+
+
+def _section_intro(
+    section: Dict[str, Any],
+    label_ctx: Dict[str, Any],
+    overrides: Optional[Dict[str, str]] = None,
+) -> str:
     section_id = str(section.get("section_id") or "")
+    if overrides:
+        s_key = f"section:{section_id}"
+        if s_key in overrides:
+            return overrides[s_key]
     marker = _text(label_ctx.get("display") or "the primary outcome")
     intros = {
         "baseline_characteristics": "This section describes the baseline profile of the analysed sample.",
@@ -925,8 +963,15 @@ def _add_warnings_docx(doc: Document, blueprint: Dict[str, Any]) -> None:
     )
 
 
-def generate_docx(results: Dict[str, Any], *, include_optional_figures: bool = False) -> bytes:
+def generate_docx(
+    results: Dict[str, Any],
+    *,
+    include_optional_figures: bool = False,
+    polish_overrides: Optional[Dict[str, str]] = None,
+) -> bytes:
     blueprint = _blueprint(results)
+    if polish_overrides:
+        blueprint = _apply_polish_overrides(blueprint, polish_overrides)
     label_ctx = _outcome_label_context(blueprint)
     doc = Document()
     _set_docx_styles(doc)
@@ -962,7 +1007,7 @@ def generate_docx(results: Dict[str, Any], *, include_optional_figures: bool = F
         _plain_docx_text(doc, "Baseline and study characteristics were not available in the blueprint.")
     for section in [s for s in baseline_sections if s.get("section_id") not in {"marker_outcome_components"}]:
         _add_heading(doc, _section_export_title(str(section.get("section_id") or ""), section.get("title"), label_ctx), 1)
-        intro = _section_intro(section, label_ctx)
+        intro = _section_intro(section, label_ctx, polish_overrides)
         if intro:
             _plain_docx_text(doc, intro)
         table_no, figure_no = _render_section_docx(
@@ -974,7 +1019,7 @@ def generate_docx(results: Dict[str, Any], *, include_optional_figures: bool = F
     marker_sections = [section for section in baseline_sections if section.get("section_id") == "marker_outcome_components"]
     if outcome_sections:
         for section in outcome_sections:
-            intro = _section_intro(section, label_ctx)
+            intro = _section_intro(section, label_ctx, polish_overrides)
             if intro:
                 _plain_docx_text(doc, intro)
             outcome_tables = _section_tables(section) or _primary_outcome_tables(blueprint, label_ctx)
@@ -1015,7 +1060,7 @@ def generate_docx(results: Dict[str, Any], *, include_optional_figures: bool = F
         _plain_docx_text(doc, "No thesis-ready inferential analysis tables were available.")
     for section in inferential_sections:
         _add_heading(doc, _section_export_title(str(section.get("section_id") or ""), section.get("title"), label_ctx), 1)
-        intro = _section_intro(section, label_ctx)
+        intro = _section_intro(section, label_ctx, polish_overrides)
         if intro:
             _plain_docx_text(doc, intro)
         table_no, figure_no = _render_section_docx(
@@ -1146,8 +1191,15 @@ def _render_section_pdf(
     return figure_no
 
 
-def generate_pdf(results: Dict[str, Any], *, include_optional_figures: bool = False) -> bytes:
+def generate_pdf(
+    results: Dict[str, Any],
+    *,
+    include_optional_figures: bool = False,
+    polish_overrides: Optional[Dict[str, str]] = None,
+) -> bytes:
     blueprint = _blueprint(results)
+    if polish_overrides:
+        blueprint = _apply_polish_overrides(blueprint, polish_overrides)
     label_ctx = _outcome_label_context(blueprint)
     out = io.BytesIO()
     page_size = landscape(A4)
@@ -1176,7 +1228,7 @@ def generate_pdf(results: Dict[str, Any], *, include_optional_figures: bool = Fa
     ], label_ctx)
     for section in [s for s in descriptive_sections if s.get("section_id") != "marker_outcome_components"]:
         flow.append(Paragraph(_pdf_escape(_section_export_title(str(section.get("section_id") or ""), section.get("title"), label_ctx)), h1))
-        intro = _section_intro(section, label_ctx)
+        intro = _section_intro(section, label_ctx, polish_overrides)
         if intro:
             flow.append(Paragraph(_pdf_escape(intro), body))
         figure_no = _render_section_pdf(
@@ -1186,11 +1238,12 @@ def generate_pdf(results: Dict[str, Any], *, include_optional_figures: bool = Fa
     flow.append(Paragraph(_pdf_escape(_section_export_title("primary_outcome_distribution", "Marker Expression", label_ctx)), h1))
     outcome_sections = [section for section in main_sections if section.get("section_id") == "primary_outcome_distribution"]
     for section in outcome_sections:
-        intro = _section_intro(section, label_ctx)
+        intro = _section_intro(section, label_ctx, polish_overrides)
         if intro:
             flow.append(Paragraph(_pdf_escape(intro), body))
         outcome_tables = _primary_outcome_tables(blueprint, label_ctx) or _section_tables(section)
-        for table in outcome_tables:
+        display_tables = _expand_export_tables(outcome_tables, label_ctx)
+        for table in display_tables:
             flow.append(Paragraph(f"<b>{_pdf_escape(_display_value(_clean_table_title(table.get('title')), label_ctx))}</b>", small))
             pdf_table, warning_notes = _pdf_table(table, label_ctx, available_width)
             flow.append(pdf_table)
@@ -1209,7 +1262,7 @@ def generate_pdf(results: Dict[str, Any], *, include_optional_figures: bool = Fa
             next_no = _add_pdf_figure(flow, _normalise_figure_metadata(fig, label_ctx), figure_no, label_ctx, body, small)
             rendered_outcome_figure = rendered_outcome_figure or next_no != figure_no
             figure_no = next_no
-        for table in outcome_tables:
+        for table in display_tables:
             interpretation = _clean_interpretation(table.get("interpretation"), label_ctx)
             if interpretation:
                 flow.append(Paragraph(_pdf_escape(interpretation), body))
@@ -1221,7 +1274,7 @@ def generate_pdf(results: Dict[str, Any], *, include_optional_figures: bool = Fa
     inferential_ids = {"bivariate_associations", "correlation_analysis", "regression_adjusted_analysis", "diagnostic_accuracy", "reliability_agreement", "survival_analysis", "repeated_measures", "other_analyses"}
     for section in [section for section in main_sections if section.get("section_id") in inferential_ids]:
         flow.append(Paragraph(_pdf_escape(_section_export_title(str(section.get("section_id") or ""), section.get("title"), label_ctx)), h1))
-        intro = _section_intro(section, label_ctx)
+        intro = _section_intro(section, label_ctx, polish_overrides)
         if intro:
             flow.append(Paragraph(_pdf_escape(intro), body))
         figure_no = _render_section_pdf(

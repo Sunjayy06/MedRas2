@@ -1635,14 +1635,24 @@ def to_pdf(entry, results: Dict[str, Any], assignment: Dict[str, Any]) -> bytes:
     return out.getvalue()
 
 
-def generate_chapter_v_word(entry, results: Dict[str, Any], assignment: Dict[str, Any]) -> bytes:
+def generate_chapter_v_word(
+    entry,
+    results: Dict[str, Any],
+    assignment: Dict[str, Any],
+    polish_overrides: Optional[Dict[str, Any]] = None,
+) -> bytes:
     """Generate Chapter V from Sigma's thesis_analysis_blueprint."""
-    return chapter_v_export.generate_docx(results)
+    return chapter_v_export.generate_docx(results, polish_overrides=polish_overrides or {})
 
 
-def generate_chapter_v_pdf(entry, results: Dict[str, Any], assignment: Dict[str, Any]) -> bytes:
+def generate_chapter_v_pdf(
+    entry,
+    results: Dict[str, Any],
+    assignment: Dict[str, Any],
+    polish_overrides: Optional[Dict[str, Any]] = None,
+) -> bytes:
     """Generate Chapter V PDF from Sigma's thesis_analysis_blueprint."""
-    return chapter_v_export.generate_pdf(results)
+    return chapter_v_export.generate_pdf(results, polish_overrides=polish_overrides or {})
 
 
 def _pdf_table(data: List[List[str]]) -> Table:

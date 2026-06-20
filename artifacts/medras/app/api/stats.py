@@ -22,7 +22,7 @@ import io
 import uuid
 from typing import Any, Dict, List, Literal, Optional
 
-from fastapi import APIRouter, File, Form, HTTPException, Query, Request, UploadFile
+from fastapi import APIRouter, File, Form, Header, HTTPException, Query, Request, UploadFile
 from pydantic import BaseModel, Field
 
 from app.core.limiter import limiter
@@ -2620,19 +2620,34 @@ class ChapterVExportRequest(BaseModel):
     include_optional_figures: bool = False
 
 
+def _chapter_v_polish_overrides(consent_header, res: dict) -> dict:
+    """Return narrative polish overrides if the caller opted in and OpenRouter is configured."""
+    if not isinstance(consent_header, str) or consent_header.lower() != "true":
+        return {}
+    try:
+        from app.services import narrative_polish
+        return narrative_polish.polish_results(res)
+    except Exception:
+        log.debug("narrative_polish.polish_results failed; falling back to deterministic text")
+        return {}
+
+
 @router.get("/export/{job_id}/chapter_v_word")
 async def export_chapter_v_word(
-    job_id: str, result_id: Optional[str] = Query(default=None)
+    job_id: str,
+    result_id: Optional[str] = Query(default=None),
+    x_narrative_polish_consent: Optional[str] = Header(default=None),
 ) -> Response:
     """Download Chapter V — Results as thesis-format DOCX (TNR 12pt, 1.5 spacing)."""
     entry = dataset_store.get(job_id)
     if entry is None:
         raise HTTPException(status_code=404, detail="Dataset expired or not found.")
     res = _current_export_state(entry, job_id, result_id)
+    overrides = await asyncio.to_thread(_chapter_v_polish_overrides, x_narrative_polish_consent, res)
     try:
         payload_bytes = await asyncio.to_thread(
             export_service.generate_chapter_v_word,
-            entry, res, entry.meta.get("assignment") or {},
+            entry, res, entry.meta.get("assignment") or {}, overrides,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -2650,26 +2665,38 @@ async def export_chapter_v_word(
 
 
 @router.post("/export/chapter-v")
-async def export_chapter_v(payload: ChapterVExportRequest) -> Response:
+async def export_chapter_v(
+    payload: ChapterVExportRequest,
+    x_narrative_polish_consent: Optional[str] = Header(default=None),
+) -> Response:
     fmt = payload.format.lower()
     if fmt in {"docx", "word"}:
-        return await export_chapter_v_word(payload.job_id, result_id=payload.result_id)
-    return await export_chapter_v_pdf(payload.job_id, result_id=payload.result_id)
+        return await export_chapter_v_word(
+            payload.job_id, result_id=payload.result_id,
+            x_narrative_polish_consent=x_narrative_polish_consent,
+        )
+    return await export_chapter_v_pdf(
+        payload.job_id, result_id=payload.result_id,
+        x_narrative_polish_consent=x_narrative_polish_consent,
+    )
 
 
 @router.get("/export/{job_id}/chapter_v_pdf")
 async def export_chapter_v_pdf(
-    job_id: str, result_id: Optional[str] = Query(default=None)
+    job_id: str,
+    result_id: Optional[str] = Query(default=None),
+    x_narrative_polish_consent: Optional[str] = Header(default=None),
 ) -> Response:
     """Download Chapter V — Results as thesis-format PDF (TNR equivalent, 1.5 spacing)."""
     entry = dataset_store.get(job_id)
     if entry is None:
         raise HTTPException(status_code=404, detail="Dataset expired or not found.")
     res = _current_export_state(entry, job_id, result_id)
+    overrides = await asyncio.to_thread(_chapter_v_polish_overrides, x_narrative_polish_consent, res)
     try:
         payload_bytes = await asyncio.to_thread(
             export_service.generate_chapter_v_pdf,
-            entry, res, entry.meta.get("assignment") or {},
+            entry, res, entry.meta.get("assignment") or {}, overrides,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

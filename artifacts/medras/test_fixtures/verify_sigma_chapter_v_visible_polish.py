@@ -61,6 +61,13 @@ def test_significant_findings_keep_raw_and_adjusted_p_values_separate() -> None:
     assert "_excel_display_value(row.get(\"adjusted_p_value\", \"\"), label_ctx)" in excel
 
 
+def test_pdf_primary_outcome_applies_expand_tables() -> None:
+    source = _read("app/services/chapter_v_export.py")
+    pdf_section = source[source.index("def generate_pdf"):]
+    assert "display_tables = _expand_export_tables(outcome_tables" in pdf_section, \
+        "PDF path must apply _expand_export_tables to outcome_tables before _pdf_table"
+
+
 def test_thesis_interpretation_language_is_not_raw_outcome_phrase() -> None:
     blueprint = _read("app/services/thesis_blueprint.py")
     assert "was significantly associated with the outcome" not in blueprint
@@ -74,6 +81,7 @@ def test_thesis_interpretation_language_is_not_raw_outcome_phrase() -> None:
 def main() -> None:
     test_chapter_v_export_uses_thesis_display_figures()
     test_chapter_v_export_splits_mixed_descriptive_tables()
+    test_pdf_primary_outcome_applies_expand_tables()
     test_results_graph_generation_uses_outcome_display_mapping()
     test_significant_findings_keep_raw_and_adjusted_p_values_separate()
     test_thesis_interpretation_language_is_not_raw_outcome_phrase()
