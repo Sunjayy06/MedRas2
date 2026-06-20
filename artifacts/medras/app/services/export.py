@@ -26,6 +26,8 @@ from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
 
 from openpyxl import Workbook
+from openpyxl.styles import Alignment, Font, PatternFill
+from openpyxl.utils import get_column_letter
 
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -337,6 +339,110 @@ def _export_cell(value: Any) -> str:
     if isinstance(value, dict):
         return "; ".join(f"{k}: {_export_cell(v)}" for k, v in value.items())
     return html.unescape(str(value))
+
+
+def _excel_label_context(results: Dict[str, Any], assignment: Dict[str, Any]) -> Dict[str, Any]:
+    blueprint = results.get("thesis_analysis_blueprint") or {}
+    outcome = (assignment or {}).get("outcome") or blueprint.get("raw_primary_outcome") or ""
+    primary = str(blueprint.get("primary_outcome") or outcome or "")
+    status_like = bool(
+        re.search(r"(expression|status|marker|positive|negative)", primary, re.I)
+        or re.search(r"(positive\s*/\s*negative|status)", str(outcome), re.I)
+    )
+    return {
+        "outcome": str(outcome or ""),
+        "display_outcome": primary,
+        "status_like": status_like,
+        "value_map": {"Yes": "Positive", "No": "Negative", "yes": "Positive", "no": "Negative"},
+    }
+
+
+def _excel_display_value(value: Any, label_ctx: Dict[str, Any]) -> Any:
+    if value is None:
+        return value
+    text = html.unescape(str(value)).strip()
+    text = text.replace("Postive", "Positive")
+    text = re.sub(r">\s*=\s*14\s*%?", ">=14%", text)
+    text = re.sub(r"^>=\s*14$", ">=14%", text)
+    text = re.sub(r"^>=\s*14%$", ">=14%", text)
+    if label_ctx.get("status_like") and text in (label_ctx.get("value_map") or {}):
+        return label_ctx["value_map"][text]
+    return text
+
+
+def _excel_display_dataframe(df: "pd.DataFrame", label_ctx: Dict[str, Any], merge_rows: List[Dict[str, Any]]) -> "pd.DataFrame":
+    if not isinstance(df, pd.DataFrame) or df.empty:
+        return df
+    out = df.copy()
+    replacement_by_col: Dict[str, Dict[str, str]] = {}
+    for row in merge_rows or []:
+        col = str(row.get("variable") or "")
+        old = row.get("original_category")
+        new = row.get("cleaned_category")
+        if col and old is not None and new is not None:
+            replacement_by_col.setdefault(col, {})[str(old)] = str(new)
+    for col in out.columns:
+        if out[col].dtype == object or str(col) == str(label_ctx.get("outcome")):
+            replacements = replacement_by_col.get(str(col), {})
+            out[col] = out[col].map(
+                lambda value: value if pd.isna(value)
+                else _excel_display_value(replacements.get(str(value), value), label_ctx)
+            )
+    return out
+
+
+def _parse_legacy_category_merge(action: str) -> List[Dict[str, Any]]:
+    text = html.unescape(str(action))
+    match = re.search(
+        r'in "([^"]+)"\s*(?:→|->|to)\s*canonical "([^"]+)"\s*\(replaced:\s*(.*?)\)\.',
+        text,
+    )
+    if not match:
+        return []
+    variable, canonical, replaced = match.groups()
+    originals = re.findall(r'"([^"]+)"', replaced)
+    return [{
+        "variable": variable,
+        "original_category": original,
+        "cleaned_category": canonical,
+        "count_affected": "",
+        "decision_type": "legacy-log",
+        "applied_to_dataset": True,
+        "notes_warnings": text,
+    } for original in originals]
+
+
+def _category_merge_rows(meta: Dict[str, Any]) -> List[Dict[str, Any]]:
+    rows: List[Dict[str, Any]] = []
+    for item in meta.get("category_merge_actions") or []:
+        if isinstance(item, dict):
+            rows.append(item)
+    if rows:
+        return rows
+    for action in meta.get("cleaning_actions") or []:
+        rows.extend(_parse_legacy_category_merge(str(action)))
+    return rows
+
+
+def _normalise_sheet_values(rows: List[List[Any]], label_ctx: Dict[str, Any]) -> List[List[str]]:
+    return [[_export_cell(_excel_display_value(cell, label_ctx)) for cell in row] for row in rows]
+
+
+def _format_workbook(wb: Workbook) -> None:
+    for ws in wb.worksheets:
+        ws.freeze_panes = "A2"
+        for cell in ws[1]:
+            if cell.value:
+                cell.font = Font(bold=True, color="FFFFFF")
+                cell.fill = PatternFill("solid", fgColor="1F3864")
+                cell.alignment = Alignment(wrap_text=True, vertical="top")
+        for col_idx, column in enumerate(ws.columns, 1):
+            values = [str(cell.value) for cell in column if cell.value is not None]
+            width = min(max([len(v) for v in values] + [12]) + 2, 55)
+            ws.column_dimensions[get_column_letter(col_idx)].width = width
+        for row in ws.iter_rows():
+            for cell in row:
+                cell.alignment = Alignment(wrap_text=True, vertical="top")
 
 
 def _normalized_tables(result: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -1670,6 +1776,9 @@ def to_xlsx(entry, results: Dict[str, Any], assignment: Dict[str, Any]) -> bytes
     meta = getattr(entry, "meta", {}) or {}
     df = getattr(entry, "df", pd.DataFrame())
     blueprint = results.get("thesis_analysis_blueprint") or {}
+    label_ctx = _excel_label_context(results, assignment)
+    category_merge_rows = _category_merge_rows(meta)
+    export_df = _excel_display_dataframe(df, label_ctx, category_merge_rows)
     wb = Workbook()
     s = wb.active; s.title = "Cover"
     for k, v in (("Study", session["objective"]), ("Date", session["analysis_date"]),
@@ -1682,9 +1791,9 @@ def to_xlsx(entry, results: Dict[str, Any], assignment: Dict[str, Any]) -> bytes
     # Current analysis-ready data. This is the processed dataframe held by the
     # active Sigma session, not a reload of the original uploaded workbook.
     ws = wb.create_sheet("cleaned_processed_dataset")
-    if isinstance(df, pd.DataFrame) and not df.empty:
-        ws.append([str(col) for col in df.columns])
-        for row in df.itertuples(index=False, name=None):
+    if isinstance(export_df, pd.DataFrame) and not export_df.empty:
+        ws.append([str(col) for col in export_df.columns])
+        for row in export_df.itertuples(index=False, name=None):
             ws.append([_export_cell(value) for value in row])
     else:
         ws.append(["No processed dataset was available."])
@@ -1697,48 +1806,94 @@ def to_xlsx(entry, results: Dict[str, Any], assignment: Dict[str, Any]) -> bytes
         for item in (meta.get("classifications") or [])
         if item.get("column")
     }
+    outcome_col = (assignment or {}).get("outcome")
+    excluded_cols = set(meta.get("analysis_excluded_columns") or [])
+    component_vars = {
+        str(row.get("variable") or "")
+        for section in blueprint.get("analysis_sections") or []
+        if str(section.get("section_id") or "") in {"marker_components", "primary_outcome_distribution"}
+        for table in section.get("tables") or []
+        for row in table.get("rows") or []
+        if isinstance(row, dict)
+    }
     for col, info in session["variables"].items():
         cls = classes_by_col.get(str(col), {})
+        role = cls.get("role") or cls.get("analysis_role") or ""
+        if str(col) == str(outcome_col):
+            role = "primary_outcome"
+        elif str(col) in excluded_cols:
+            role = "excluded_variable"
+        elif info.get("display_name", col) in component_vars or str(col) in component_vars:
+            role = "marker_or_outcome_component"
         ws.append([
             info.get("display_name", col),
             cls.get("detected_type") or info.get("type", ""),
-            cls.get("role") or cls.get("analysis_role") or "",
+            role,
             info.get("missing_n", 0),
             f'{info.get("missing_pct", 0):.1f}%',
         ])
 
     ws = wb.create_sheet("cleaning_decisions")
-    ws.append(["Category", "Variable / Scope", "Details"])
+    ws.append(["Variable", "Issue type", "Suggested action", "User decision", "Applied", "Notes"])
     cleaning_log = session.get("cleaning_log") or []
     if cleaning_log:
         for item in cleaning_log:
-            ws.append([item.get("category", ""), item.get("scope", ""), item.get("details", "")])
+            ws.append([
+                item.get("scope", ""),
+                item.get("category", ""),
+                item.get("category", ""),
+                item.get("category", ""),
+                True,
+                item.get("details", ""),
+            ])
     else:
-        ws.append(["Information", "Dataset", "No preprocessing actions or quality warnings were recorded."])
+        ws.append(["Dataset", "Information", "", "", False, "No preprocessing actions or quality warnings were recorded."])
 
     ws = wb.create_sheet("category_merges")
-    ws.append(["Details"])
-    merge_actions = [
-        action for action in (meta.get("cleaning_actions") or [])
-        if "merge" in str(action).lower() or "category" in str(action).lower()
-    ]
-    if merge_actions:
-        for action in merge_actions:
-            ws.append([_export_cell(action)])
+    ws.append([
+        "Variable", "Original category", "Cleaned category", "Count affected",
+        "Decision type", "Applied to dataset", "Notes/warnings",
+    ])
+    if category_merge_rows:
+        for row in category_merge_rows:
+            ws.append([
+                row.get("variable", ""),
+                _export_cell(row.get("original_category", "")),
+                _excel_display_value(row.get("cleaned_category", ""), label_ctx),
+                row.get("count_affected", ""),
+                row.get("decision_type", ""),
+                row.get("applied_to_dataset", ""),
+                row.get("notes_warnings", "") or row.get("notes", ""),
+            ])
     else:
-        ws.append(["No category merge actions were recorded."])
+        ws.append(["", "", "", "", "", False, "No category merge actions were recorded."])
 
     ws = wb.create_sheet("missing_data_decisions")
-    ws.append(["Decision"])
-    missing_actions = meta.get("missing_decision_actions") or []
-    if missing_actions:
-        for action in missing_actions:
-            ws.append([_export_cell(action)])
+    ws.append(["Variable", "Missing count", "Missing percent", "Decision", "Applied", "Impact on analysis"])
+    missing_log = meta.get("missing_decisions_log") or []
+    if missing_log:
+        for row in missing_log:
+            ws.append([
+                row.get("variable", ""),
+                row.get("missing_count", ""),
+                row.get("missing_percent", ""),
+                row.get("decision", ""),
+                row.get("applied", ""),
+                row.get("impact_on_analysis", ""),
+            ])
     else:
-        ws.append(["No missing-data decisions were recorded."])
+        missing_actions = meta.get("missing_decision_actions") or []
+        if missing_actions:
+            for action in missing_actions:
+                ws.append(["", "", "", _export_cell(action), True, _export_cell(action)])
+        else:
+            ws.append(["", "", "", "", False, "No missing-data decisions were recorded."])
 
     ws = wb.create_sheet("excluded_variables")
-    ws.append(["Variable", "Reason"])
+    ws.append([
+        "Variable", "Reason", "Excluded from analysis", "Still present in cleaned dataset",
+        "Downstream impact",
+    ])
     excluded = sorted(set(meta.get("analysis_excluded_columns") or []))
     plan_debug = ((results.get("plan") or {}).get("debug") or {})
     removed = {
@@ -1747,10 +1902,23 @@ def to_xlsx(entry, results: Dict[str, Any], assignment: Dict[str, Any]) -> bytes
         if isinstance(item, dict) and item.get("variable")
     }
     if excluded:
+        exclusion_log = {
+            str(item.get("variable")): item
+            for item in (meta.get("analysis_exclusion_log") or [])
+            if isinstance(item, dict) and item.get("variable")
+        }
         for variable in excluded:
-            ws.append([variable, removed.get(variable, "Excluded from analysis")])
+            log_row = exclusion_log.get(variable) or {}
+            reason = log_row.get("reason") or removed.get(variable, "Excluded from analysis")
+            ws.append([
+                variable,
+                reason,
+                True,
+                bool(isinstance(export_df, pd.DataFrame) and variable in export_df.columns),
+                "Omitted from analysis plan/results; retained for audit unless removed by row/drop processing.",
+            ])
     else:
-        ws.append(["None", "No variables were excluded from analysis."])
+        ws.append(["None", "No variables were excluded from analysis.", False, "", ""])
 
     ws = wb.create_sheet("analysis_summary")
     summary = blueprint.get("study_summary") or {}
@@ -1776,32 +1944,37 @@ def to_xlsx(entry, results: Dict[str, Any], assignment: Dict[str, Any]) -> bytes
     for row in blueprint.get("significant_findings") or results.get("significant_findings") or []:
         if isinstance(row, dict):
             ws.append([
-                row.get("variable", ""),
-                row.get("key_finding", ""),
-                row.get("test_statistic", ""),
-                row.get("p_value", ""),
-                row.get("adjusted_p_value", ""),
-                row.get("test_applied", ""),
-                row.get("effect_size", ""),
-                row.get("notes_warnings", ""),
+                _excel_display_value(row.get("variable", ""), label_ctx),
+                _excel_display_value(row.get("key_finding", ""), label_ctx),
+                _excel_display_value(row.get("test_statistic", ""), label_ctx),
+                _excel_display_value(row.get("p_value", ""), label_ctx),
+                _excel_display_value(row.get("adjusted_p_value", ""), label_ctx),
+                _excel_display_value(row.get("test_applied", ""), label_ctx),
+                _excel_display_value(row.get("effect_size", ""), label_ctx),
+                _excel_display_value(row.get("notes_warnings", ""), label_ctx),
             ])
 
     ws = wb.create_sheet("detailed_results")
     ws.append(["Result", "Test used", "Table / Metric", "Value"])
     for result in session["results"]:
-        title = result.get("title") or result.get("plan_name") or result.get("id") or "Result"
-        test_used = result.get("actual_test_used") or result.get("test") or result.get("test_type", "")
+        title = _excel_display_value(result.get("title") or result.get("plan_name") or result.get("id") or "Result", label_ctx)
+        test_used = _excel_display_value(result.get("actual_test_used") or result.get("test") or result.get("test_type", ""), label_ctx)
         normalized = _normalized_tables(result)
         if normalized:
             for table in normalized:
-                ws.append([title, test_used, table.get("title", ""), ""])
-                ws.append(["", "", " | ".join(table.get("headers") or []), ""])
+                ws.append([title, test_used, _excel_display_value(table.get("title", ""), label_ctx), ""])
+                ws.append(["", "", " | ".join(_export_cell(_excel_display_value(h, label_ctx)) for h in (table.get("headers") or [])), ""])
                 for row in table.get("rows") or []:
-                    ws.append(["", "", "", " | ".join(_export_cell(cell) for cell in row)])
+                    ws.append(["", "", "", " | ".join(_export_cell(_excel_display_value(cell, label_ctx)) for cell in row)])
         else:
             for row in result.get("rows") or []:
                 if isinstance(row, dict):
-                    ws.append([title, test_used, row.get("label", ""), row.get("value", "")])
+                    ws.append([
+                        title,
+                        test_used,
+                        _excel_display_value(row.get("label", ""), label_ctx),
+                        _excel_display_value(row.get("value", ""), label_ctx),
+                    ])
 
     # Variable summary
     ws = wb.create_sheet("Variables")
@@ -1828,7 +2001,7 @@ def to_xlsx(entry, results: Dict[str, Any], assignment: Dict[str, Any]) -> bytes
         for row in t1.get("rows") or []:
             dname = session["variables"].get(row.get("variable", ""), {}).get(
                 "display_name") or clean_display_name(row.get("variable", ""))
-            ws.append([dname, row.get("type", "")] + list(row.get("cells") or []))
+            ws.append(_normalise_sheet_values([[dname, row.get("type", "")] + list(row.get("cells") or [])], label_ctx)[0])
 
     # Normality
     if session["normality_results"]:
@@ -1836,7 +2009,7 @@ def to_xlsx(entry, results: Dict[str, Any], assignment: Dict[str, Any]) -> bytes
         ws.append(["Variable", "Test", "Statistic", "p-value", "Decision"])
         for v, r in session["normality_results"].items():
             dname = session["variables"].get(v, {}).get("display_name") or clean_display_name(v)
-            ws.append([dname, r.get("test", ""), r.get("stat"), r.get("p"), r.get("decision", "")])
+            ws.append(_normalise_sheet_values([[dname, r.get("test", ""), r.get("stat"), r.get("p"), r.get("decision", "")]], label_ctx)[0])
 
     # Each normalized result table gets its own sheet. The first table keeps
     # the result title for backward compatibility; later tables use subtitles.
@@ -1847,36 +2020,40 @@ def to_xlsx(entry, results: Dict[str, Any], assignment: Dict[str, Any]) -> bytes
         for index, payload in enumerate(table_payloads):
             raw_title = result_title if index == 0 else f"{result_title} {payload['title']}"
             ws = wb.create_sheet(_safe_sheet_title(wb, raw_title))
-            ws.append(["Result", result_title])
-            ws.append(["Test used", t.get("actual_test_used") or t.get("test") or t.get("test_type", "")])
+            ws.append(["Result", _excel_display_value(result_title, label_ctx)])
+            ws.append(["Test used", _excel_display_value(t.get("actual_test_used") or t.get("test") or t.get("test_type", ""), label_ctx)])
             if t.get("warning"):
-                ws.append(["Warning", t.get("warning")])
+                ws.append(["Warning", _excel_display_value(t.get("warning"), label_ctx)])
             ws.append([])
             if payload:
-                ws.append([payload["title"]])
-                ws.append(payload["headers"])
+                ws.append([_excel_display_value(payload["title"], label_ctx)])
+                ws.append([_excel_display_value(h, label_ctx) for h in payload["headers"]])
                 for row in payload["rows"]:
-                    ws.append(row)
+                    ws.append([_excel_display_value(cell, label_ctx) for cell in row])
             else:
                 ws.append(["Statistic", "Value"])
                 for r in t.get("rows") or []:
                     if isinstance(r, dict):
-                        ws.append([r.get("label", ""), r.get("value", "")])
+                        ws.append([
+                            _excel_display_value(r.get("label", ""), label_ctx),
+                            _excel_display_value(r.get("value", ""), label_ctx),
+                        ])
             if index == 0:
                 _xlsx_write_normalized_figures(ws, t)
             ws.append([])
             ws.append(["Narrative"])
-            ws.append([t.get("narrative", "")])
+            ws.append([_excel_display_value(t.get("narrative", ""), label_ctx)])
 
     # Narrative & methods sheet
     ws = wb.create_sheet("Narrative")
-    ws.append(["Results section"]); ws.append([build_results_narrative(session, session["results"])])
+    ws.append(["Results section"]); ws.append([_excel_display_value(build_results_narrative(session, session["results"]), label_ctx)])
     ws.append([]); ws.append(["Methods section"])
-    ws.append([build_methods_paragraph(session, session["results"])])
+    ws.append([_excel_display_value(build_methods_paragraph(session, session["results"]), label_ctx)])
     ws.append([]); ws.append(["Limitations"])
     for l in collect_limitations(session, session["results"]):
-        ws.append([l])
+        ws.append([_excel_display_value(l, label_ctx)])
 
+    _format_workbook(wb)
     out = io.BytesIO()
     wb.save(out)
     return out.getvalue()

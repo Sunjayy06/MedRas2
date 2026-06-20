@@ -2564,6 +2564,31 @@ async def apply_category_merge(payload: ApplyMergeRequest) -> Dict[str, Any]:
             status_code=400,
             detail="Protected clinical categories cannot be merged in breast_pathology mode.",
         )
+    structured_merges = []
+    for merge in merges_dicts:
+        column = merge.get("column")
+        canonical = merge.get("canonical")
+        members = [str(value) for value in (merge.get("members") or [])]
+        if not column or column not in entry.df.columns or canonical is None:
+            continue
+        for original in members:
+            if str(original) == str(canonical):
+                continue
+            count = int(entry.df[column].notna().astype(bool).sum())
+            try:
+                count = int((entry.df[column].astype("object") == original).sum())
+            except Exception:
+                pass
+            structured_merges.append({
+                "variable": column,
+                "original_category": original,
+                "cleaned_category": str(canonical),
+                "count_affected": count,
+                "decision_type": merge.get("kind") or merge.get("decision_type") or "user-confirmed",
+                "applied_to_dataset": True,
+                "notes_warnings": "Applied category merge before analysis/export.",
+                "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            })
     new_df, actions = await asyncio.to_thread(
         category_merger.apply_merges, entry.df, merges_dicts, profile
     )
@@ -2576,6 +2601,9 @@ async def apply_category_merge(payload: ApplyMergeRequest) -> Dict[str, Any]:
     existing_cleaning = list(entry.meta.get("cleaning_actions") or [])
     existing_cleaning.extend(actions)
     entry.meta["cleaning_actions"] = existing_cleaning
+    existing_structured = list(entry.meta.get("category_merge_actions") or [])
+    existing_structured.extend(structured_merges)
+    entry.meta["category_merge_actions"] = existing_structured
     return {"status": "applied", "actions": actions, "n_merges": len(actions)}
 
 
@@ -2980,12 +3008,17 @@ async def apply_missing_decisions(
         raise HTTPException(status_code=404, detail="Dataset expired or not found.")
     df = entry.df.copy()
     actions_taken: List[str] = []
+    decision_log: List[Dict[str, Any]] = []
     excluded_columns = set(entry.meta.get("analysis_excluded_columns") or [])
     exclusion_log = list(entry.meta.get("analysis_exclusion_log") or [])
     for dec in payload.decisions:
         col = dec.column
         if col not in df.columns:
             continue
+        missing_count = int(df[col].isna().sum())
+        missing_percent = round(100.0 * missing_count / max(len(df), 1), 2)
+        applied = True
+        impact = ""
         if dec.action in ("exclude", "drop_from_analysis", "exclude_variable_from_analysis"):
             if col not in excluded_columns:
                 excluded_columns.add(col)
@@ -2997,8 +3030,10 @@ async def apply_missing_decisions(
                     "analysis_stale": True,
                 })
             actions_taken.append(f"Excluded {col} from analysis due to missing data.")
+            impact = "Variable excluded from analysis; retained in cleaned dataset for audit/reference."
         elif dec.action == "leave":
             actions_taken.append(f"Left missing values in {col} as-is.")
+            impact = "Missing values retained and reported."
         elif dec.action == "drop_rows":
             before = len(df)
             df = df.dropna(subset=[col])
@@ -3006,6 +3041,7 @@ async def apply_missing_decisions(
             actions_taken.append(
                 f"Dropped {before - after} rows with missing {col}."
             )
+            impact = f"Dropped {before - after} row(s) from processed analysis dataset."
         elif dec.action == "impute_mean":
             mean_val = pd.to_numeric(df[col], errors="coerce").mean()
             if pd.notna(mean_val):
@@ -3013,6 +3049,9 @@ async def apply_missing_decisions(
                 actions_taken.append(
                     f"Imputed missing {col} with mean ({mean_val:.2f})."
                 )
+                impact = f"Missing values replaced with mean {mean_val:.2f}."
+            else:
+                applied = False
         elif dec.action == "impute_median":
             med = pd.to_numeric(df[col], errors="coerce").median()
             if pd.notna(med):
@@ -3020,6 +3059,9 @@ async def apply_missing_decisions(
                 actions_taken.append(
                     f"Imputed missing {col} with median ({med:.2f})."
                 )
+                impact = f"Missing values replaced with median {med:.2f}."
+            else:
+                applied = False
         elif dec.action == "impute_mode":
             mode_val = df[col].mode()
             if not mode_val.empty:
@@ -3027,6 +3069,21 @@ async def apply_missing_decisions(
                 actions_taken.append(
                     f"Imputed missing {col} with mode ({mode_val.iloc[0]})."
                 )
+                impact = f"Missing values replaced with mode {mode_val.iloc[0]}."
+            else:
+                applied = False
+        else:
+            applied = False
+            impact = "Unsupported decision; no dataset change applied."
+        decision_log.append({
+            "variable": col,
+            "missing_count": missing_count,
+            "missing_percent": missing_percent,
+            "decision": dec.action,
+            "applied": applied,
+            "impact_on_analysis": impact,
+            "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        })
     if excluded_columns != set(entry.meta.get("analysis_excluded_columns") or []):
         entry.meta["analysis_excluded_columns"] = sorted(excluded_columns)
         entry.meta["analysis_exclusion_log"] = exclusion_log
@@ -3037,6 +3094,7 @@ async def apply_missing_decisions(
         entry.meta.pop("classifications", None)
     # Persist the human-readable action log so the Methods section can include it
     entry.meta["missing_decision_actions"] = actions_taken
+    entry.meta["missing_decisions_log"] = decision_log
     return {
         "status": "applied",
         "actions": actions_taken,
