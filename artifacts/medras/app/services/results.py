@@ -459,7 +459,7 @@ _RUNNERS = {
 # ---------------------------------------------------------------------------
 
 
-def _boxplot(df, outcome, group) -> Optional[str]:
+def _boxplot(df, outcome, group, outcome_label: Optional[str] = None, group_label: Optional[str] = None) -> Optional[str]:
     """Box plot with individual data points jittered over the boxes."""
     try:
         import scipy.stats as _sp_stats  # noqa: F401 (already imported globally below)
@@ -490,9 +490,11 @@ def _boxplot(df, outcome, group) -> Optional[str]:
                 np.full(len(d), i) + jitter, d,
                 color="#103a6e", alpha=0.45, s=18, zorder=3, linewidths=0,
             )
-        ax.set_ylabel(clean_display_name(outcome), fontsize=10)
-        ax.set_xlabel(clean_display_name(group), fontsize=10)
-        ax.set_title(f"{clean_display_name(outcome)} by {clean_display_name(group)}", fontsize=11, fontweight="bold")
+        y_label = outcome_label or clean_display_name(outcome)
+        x_label = group_label or clean_display_name(group)
+        ax.set_ylabel(y_label, fontsize=10)
+        ax.set_xlabel(x_label, fontsize=10)
+        ax.set_title(f"{y_label} by {x_label}", fontsize=11, fontweight="bold")
         ax.grid(axis="y", alpha=0.3, linestyle="--")
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
@@ -542,7 +544,7 @@ def _categorical_graph_uses_horizontal_layout(labels: List[str]) -> bool:
     return len(labels) > 6 or max((len(str(label)) for label in labels), default=0) > 18
 
 
-def _stacked_bar(df, outcome, group) -> Optional[str]:
+def _stacked_bar(df, outcome, group, outcome_label: Optional[str] = None, group_label: Optional[str] = None) -> Optional[str]:
     """Grouped percentage bar chart — % of each outcome level per group category."""
     try:
         plot_df = df[[group, outcome]].dropna().copy()
@@ -595,21 +597,21 @@ def _stacked_bar(df, outcome, group) -> Optional[str]:
                 fontsize=8.5,
             )
             ax.set_xlabel("Percentage (%)", fontsize=10)
-            ax.set_ylabel(clean_display_name(group), fontsize=10)
+            ax.set_ylabel(group_label or clean_display_name(group), fontsize=10)
             ax.set_xlim(0, 115)
             ax.grid(axis="x", alpha=0.3, linestyle="--")
         else:
             ax.set_xticks(positions)
             ax.set_xticklabels(labels, fontsize=9, rotation=0)
             ax.set_ylabel("Percentage (%)", fontsize=10)
-            ax.set_xlabel(clean_display_name(group), fontsize=10)
+            ax.set_xlabel(group_label or clean_display_name(group), fontsize=10)
             ax.set_ylim(0, 115)
             ax.grid(axis="y", alpha=0.3, linestyle="--")
         ax.set_title(
-            f"{clean_display_name(outcome)} distribution by {clean_display_name(group)}",
+            f"{outcome_label or clean_display_name(outcome)} by {group_label or clean_display_name(group)}",
             fontsize=11, fontweight="bold",
         )
-        ax.legend(title=clean_display_name(outcome), fontsize=8, framealpha=0.8)
+        ax.legend(title=outcome_label or clean_display_name(outcome), fontsize=8, framealpha=0.8)
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
         fig.tight_layout()
@@ -1351,7 +1353,7 @@ def normalize_result_for_rendering(raw_result: Dict[str, Any]) -> Dict[str, Any]
 
 
 def _result_p_value(test: Dict[str, Any]) -> Optional[float]:
-    for key in ("p_corrected", "p", "p_value"):
+    for key in ("p_corrected", "adjusted_p_value", "p_adjusted", "q_value", "p", "p_value"):
         value = test.get(key)
         if value is None:
             continue
@@ -1366,6 +1368,20 @@ def _result_p_value(test: Dict[str, Any]) -> Optional[float]:
 
 def _result_raw_p_value(test: Dict[str, Any]) -> Optional[float]:
     for key in ("p", "p_value"):
+        value = test.get(key)
+        if value is None:
+            continue
+        try:
+            value = float(value)
+            if np.isfinite(value):
+                return value
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
+def _result_adjusted_p_value(test: Dict[str, Any]) -> Optional[float]:
+    for key in ("p_corrected", "adjusted_p_value", "p_adjusted", "q_value"):
         value = test.get(key)
         if value is None:
             continue
@@ -1474,8 +1490,9 @@ def _compact_result_summary(test: Dict[str, Any]) -> str:
     p = _result_raw_p_value(test)
     if p is not None:
         pieces.append(_fmt_p(p))
-    if test.get("p_corrected") is not None:
-        pieces.append(f"adjusted {_fmt_p(float(test['p_corrected']))}")
+    adjusted_p = _result_adjusted_p_value(test)
+    if adjusted_p is not None:
+        pieces.append(f"adjusted {_fmt_p(adjusted_p)}")
     effect = _effect_text(test)
     if effect:
         pieces.append(effect)
@@ -1492,18 +1509,21 @@ def _compact_result_summary(test: Dict[str, Any]) -> str:
 def _significant_findings(test_results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     findings: List[Dict[str, Any]] = []
     for test in test_results:
-        p = _result_p_value(test)
-        if p is None or p >= 0.05:
+        significance_p = _result_p_value(test)
+        raw_p = _result_raw_p_value(test)
+        adjusted_p = _result_adjusted_p_value(test)
+        if significance_p is None or significance_p >= 0.05:
             continue
         title = str(test.get("title") or "")
         findings.append({
             "variable": title.split(":", 1)[0].strip() if ":" in title else title,
             "key_finding": test.get("compact_summary") or _compact_result_summary(test),
             "test_statistic": _statistic_text(test) or "-",
-            "p_value": _fmt_p(p),
-            "adjusted_p_value": _fmt_p(float(test["p_corrected"])) if test.get("p_corrected") is not None else "-",
-            "p_numeric": p,
-            "uncorrected_p_value": _fmt_p(_result_raw_p_value(test)) if _result_raw_p_value(test) is not None else "-",
+            "p_value": _fmt_p(raw_p) if raw_p is not None else _fmt_p(significance_p),
+            "adjusted_p_value": _fmt_p(adjusted_p) if adjusted_p is not None else "-",
+            "p_numeric": raw_p if raw_p is not None else significance_p,
+            "p_corrected_numeric": adjusted_p,
+            "uncorrected_p_value": _fmt_p(raw_p) if raw_p is not None else "-",
             "test_applied": _test_used(test),
             "effect_size": _effect_text(test) or "-",
             "notes_warnings": _warning_text(test) or "-",
@@ -1714,23 +1734,39 @@ def run_plan(
             r.setdefault("plan_name", t["title"])
             r["plan_reason"] = t.get("why")
             figures = list(r.get("figures") or [])
-            graph_df = _apply_thesis_display_labels_to_graph_df(df, args.get("outcome") or args.get("col1"), session)
+            graph_outcome = args.get("outcome") or args.get("col2") or args.get("col1")
+            graph_df = _apply_thesis_display_labels_to_graph_df(df, graph_outcome, session)
+            outcome_label = str((session or {}).get("main_outcome_concept") or graph_outcome or "").strip() or None
             if function_name == "run_chi_or_fisher":
-                png = _stacked_bar(graph_df, args.get("col2"), args.get("col1"))
+                png = _stacked_bar(
+                    graph_df,
+                    args.get("col2"),
+                    args.get("col1"),
+                    outcome_label=outcome_label,
+                    group_label=clean_display_name(args.get("col1")),
+                )
                 if png:
                     figures.append({
-                        "title": f"{args.get('col2')} by {args.get('col1')} (%)",
+                        "title": f"{outcome_label or args.get('col2')} by {clean_display_name(args.get('col1'))}",
                         "png_data_uri": png,
+                        "source_variables": [args.get("col1"), args.get("col2")],
                     })
             elif function_name in {
                 "run_pairwise_welch", "run_pairwise_mann_whitney",
                 "run_pairwise_anova", "run_pairwise_kruskal",
             }:
-                png = _boxplot(graph_df, args.get("predictor"), args.get("outcome"))
+                png = _boxplot(
+                    graph_df,
+                    args.get("predictor"),
+                    args.get("outcome"),
+                    outcome_label=clean_display_name(args.get("predictor")),
+                    group_label=outcome_label or clean_display_name(args.get("outcome")),
+                )
                 if png:
                     figures.append({
-                        "title": f"{args.get('predictor')} by {args.get('outcome')}",
+                        "title": f"{clean_display_name(args.get('predictor'))} by {outcome_label or args.get('outcome')}",
                         "png_data_uri": png,
+                        "source_variables": [args.get("predictor"), args.get("outcome")],
                     })
             if figures:
                 r["figures"] = figures

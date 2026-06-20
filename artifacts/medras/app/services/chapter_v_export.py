@@ -190,12 +190,37 @@ def _is_core_figure(figure: Dict[str, Any], label_ctx: Dict[str, Any], section_i
     return any(variable and variable in title for variable in core)
 
 
+def _normalise_figure_metadata(figure: Dict[str, Any], label_ctx: Dict[str, Any]) -> Dict[str, Any]:
+    clone = deepcopy(figure)
+    display = _text(label_ctx.get("display"))
+    source_vars = [_display_value(item, label_ctx) for item in clone.get("source_variables") or []]
+    predictor = next((item for item in source_vars if item and item != display), "")
+    for key in ("title", "caption", "interpretation"):
+        if clone.get(key):
+            clone[key] = _display_value(clone[key], label_ctx)
+    if display and predictor and (" by " in _text(clone.get("title")).lower() or " vs " in _text(clone.get("title")).lower()):
+        clone["title"] = f"{display} by {predictor}"
+        clone["caption"] = f"{display} by {predictor}."
+    return clone
+
+
 def _section_tables(section: Dict[str, Any]) -> List[Dict[str, Any]]:
     return [table for table in section.get("tables") or [] if _is_main_table(table)]
 
 
 def _section_figures(section: Dict[str, Any], include_optional: bool = False) -> List[Dict[str, Any]]:
     return [figure for figure in section.get("figures") or [] if _is_main_figure(figure, include_optional)]
+
+
+def _expand_export_tables(tables: List[Dict[str, Any]], label_ctx: Dict[str, Any]) -> List[Dict[str, Any]]:
+    expanded: List[Dict[str, Any]] = []
+    for table in tables:
+        payload = _descriptive_export_table(table, label_ctx)
+        if isinstance(payload, list):
+            expanded.extend(payload)
+        else:
+            expanded.append(payload)
+    return expanded
 
 
 BASELINE_TERMS = ("age", "sex", "gender", "laterality", "side", "group", "cohort")
@@ -237,6 +262,10 @@ def _clean_interpretation(value: Any, label_ctx: Optional[Dict[str, Any]] = None
     )
     if any(item in text for item in blocked):
         return ""
+    text = text.replace(
+        "Marker or outcome-component variables are described here and omitted from final prognostic findings by default.",
+        "Localization and staining score are presented descriptively as components of the immunohistochemical assessment.",
+    )
     text = text.replace("Chi-square test with sparse-cell warning was", "was")
     text = text.replace("Chi-square test: Chi-square test", "Chi-square test")
     text = re.sub(
@@ -247,7 +276,19 @@ def _clean_interpretation(value: Any, label_ctx: Optional[Dict[str, Any]] = None
     )
     text = re.sub(
         r"^(.+?)\s+vs\s+(.+?):\s+was not significantly associated with the outcome\.?$",
-        r"\1 was not significantly associated with \2.",
+        r"\1 did not show a statistically significant association with \2.",
+        text,
+        flags=re.IGNORECASE,
+    )
+    text = re.sub(
+        r"^(.+?)\s+vs\s+(.+?)\s+was significantly associated with the outcome\.?$",
+        r"\1 showed a statistically significant association with \2.",
+        text,
+        flags=re.IGNORECASE,
+    )
+    text = re.sub(
+        r"^(.+?)\s+vs\s+(.+?)\s+was not significantly associated with the outcome\.?$",
+        r"\1 did not show a statistically significant association with \2.",
         text,
         flags=re.IGNORECASE,
     )
@@ -256,6 +297,10 @@ def _clean_interpretation(value: Any, label_ctx: Optional[Dict[str, Any]] = None
         r"\1 was not significantly associated with \2.",
         text,
         flags=re.IGNORECASE,
+    )
+    text = text.replace(
+        "Sparse categories were detected; interpret with caution.",
+        "This finding should be interpreted cautiously because some expected cell counts were below 5.",
     )
     text = re.sub(r"^(.+?):\s+was ", r"\1 was ", text)
     text = re.sub(r"\s+", " ", text).strip()
@@ -292,7 +337,7 @@ def _parse_continuous_summary(summary: Any, label_ctx: Optional[Dict[str, Any]] 
     }
 
 
-def _descriptive_export_table(table: Dict[str, Any], label_ctx: Dict[str, Any]) -> Dict[str, Any]:
+def _descriptive_export_table(table: Dict[str, Any], label_ctx: Dict[str, Any]) -> Any:
     if str(table.get("table_type") or "") not in DESCRIPTIVE_TABLE_TYPES:
         return table
     categorical_counts: Dict[Tuple[str, str], float] = {}
@@ -331,6 +376,30 @@ def _descriptive_export_table(table: Dict[str, Any], label_ctx: Dict[str, Any]) 
     if not categorical_counts and not continuous_rows:
         return table
     clone = deepcopy(table)
+    if continuous_rows and categorical_counts:
+        continuous = deepcopy(table)
+        continuous["columns"] = ["Parameter", "n", "Mean ± SD", "Median", "Minimum", "Maximum", "Missing n (%)"]
+        continuous["rows"] = continuous_rows
+        continuous["title"] = _clean_table_title(continuous.get("title") or "Continuous descriptive findings")
+        continuous["interpretation"] = _descriptive_table_interpretation(continuous)
+        categorical = deepcopy(table)
+        totals: Dict[str, float] = {}
+        for variable, _category in categorical_order:
+            totals[variable] = totals.get(variable, 0.0) + categorical_counts[(variable, _category)]
+        rows = []
+        for variable, category in categorical_order:
+            count = categorical_counts[(variable, category)]
+            total = totals.get(variable, 0.0)
+            pct = (count / total * 100.0) if total else 0.0
+            count_text = str(int(count)) if float(count).is_integer() else f"{count:g}"
+            rows.append([variable, category, count_text, f"{pct:.1f}%"])
+        categorical["columns"] = ["Parameter", "Category", "n", "%"]
+        categorical["rows"] = rows
+        categorical["title"] = _clean_table_title(categorical.get("title") or "Categorical descriptive findings")
+        categorical["interpretation"] = _descriptive_table_interpretation(categorical)
+        for item in (continuous, categorical):
+            item.pop("headers", None)
+        return [continuous, categorical]
     if continuous_rows and not categorical_counts:
         clone["columns"] = ["Parameter", "n", "Mean ± SD", "Median", "Minimum", "Maximum", "Missing n (%)"]
         clone["rows"] = continuous_rows
@@ -643,6 +712,8 @@ def _add_table_docx(
     include_interpretation: bool = True,
 ) -> int:
     payload = _descriptive_export_table(payload, label_ctx or {})
+    if isinstance(payload, list):
+        payload = payload[0] if payload else {}
     payload, warning_notes = _compact_table_for_export(payload)
     headers, rows = _table_rows(payload)
     if not rows:
@@ -723,11 +794,12 @@ def _render_section_docx(
 ) -> tuple[int, int]:
     section_id = str(section.get("section_id") or "")
     figures = [
-        figure for figure in _section_figures(section, include_optional_figures)
+        _normalise_figure_metadata(figure, label_ctx)
+        for figure in _section_figures(section, include_optional_figures)
         if include_optional_figures or _is_core_figure(figure, label_ctx, section_id)
     ]
     used_figures: Set[str] = set()
-    tables = _section_tables(section)
+    tables = _expand_export_tables(_section_tables(section), label_ctx)
     for table in tables:
         table_no = _add_table_docx(doc, table, table_no, label_ctx, include_interpretation=False)
         for figure in figures:
@@ -903,16 +975,18 @@ def generate_docx(results: Dict[str, Any], *, include_optional_figures: bool = F
             for table in outcome_tables:
                 table_no = _add_table_docx(doc, table, table_no, label_ctx, include_interpretation=False)
             rendered_outcome_figure = False
-            for fig in _section_figures(section, include_optional_figures)[:2]:
-                next_no = _add_figure_docx(doc, fig, figure_no, label_ctx)
-                rendered_outcome_figure = rendered_outcome_figure or next_no != figure_no
-                figure_no = next_no
-            if not rendered_outcome_figure and outcome_tables:
+            if outcome_tables:
                 generated = _primary_outcome_figure(blueprint, outcome_tables[0], label_ctx)
                 if generated:
                     next_no = _add_figure_docx(doc, generated, figure_no, label_ctx)
                     rendered_outcome_figure = rendered_outcome_figure or next_no != figure_no
                     figure_no = next_no
+            for fig in _section_figures(section, include_optional_figures)[:1]:
+                if _text(fig.get("figure_id")) == "primary_outcome_distribution_generated":
+                    continue
+                next_no = _add_figure_docx(doc, _normalise_figure_metadata(fig, label_ctx), figure_no, label_ctx)
+                rendered_outcome_figure = rendered_outcome_figure or next_no != figure_no
+                figure_no = next_no
             for table in outcome_tables:
                 interpretation = _clean_interpretation(table.get("interpretation"), label_ctx)
                 if interpretation:
@@ -984,7 +1058,6 @@ def _pdf_escape(value: Any) -> str:
 
 
 def _pdf_table(payload: Dict[str, Any], label_ctx: Optional[Dict[str, Any]] = None, width: float = 10.4 * inch) -> Tuple[Table, List[str]]:
-    payload = _descriptive_export_table(payload, label_ctx or {})
     payload, warning_notes = _compact_table_for_export(payload)
     headers, rows = _table_rows(payload)
     font_size = 6 if len(headers) > 6 else 7
@@ -1032,11 +1105,12 @@ def _render_section_pdf(
 ) -> int:
     section_id = str(section.get("section_id") or "")
     figures = [
-        figure for figure in _section_figures(section, include_optional_figures)
+        _normalise_figure_metadata(figure, label_ctx)
+        for figure in _section_figures(section, include_optional_figures)
         if include_optional_figures or _is_core_figure(figure, label_ctx, section_id)
     ]
     used_figures: Set[str] = set()
-    tables = _section_tables(section)
+    tables = _expand_export_tables(_section_tables(section), label_ctx)
     for table in tables:
         flow.append(Paragraph(f"<b>{_pdf_escape(_display_value(_clean_table_title(table.get('title')), label_ctx))}</b>", small))
         pdf_table, warning_notes = _pdf_table(table, label_ctx, available_width)
@@ -1117,16 +1191,18 @@ def generate_pdf(results: Dict[str, Any], *, include_optional_figures: bool = Fa
             for warning in warning_notes:
                 flow.append(Paragraph(f"Caution: {_pdf_escape(_display_value(warning, label_ctx))}", small))
         rendered_outcome_figure = False
-        for fig in _section_figures(section, include_optional_figures)[:2]:
-            next_no = _add_pdf_figure(flow, fig, figure_no, label_ctx, body, small)
-            rendered_outcome_figure = rendered_outcome_figure or next_no != figure_no
-            figure_no = next_no
-        if not rendered_outcome_figure and outcome_tables:
+        if outcome_tables:
             generated = _primary_outcome_figure(blueprint, outcome_tables[0], label_ctx)
             if generated:
                 next_no = _add_pdf_figure(flow, generated, figure_no, label_ctx, body, small)
                 rendered_outcome_figure = rendered_outcome_figure or next_no != figure_no
                 figure_no = next_no
+        for fig in _section_figures(section, include_optional_figures)[:1]:
+            if _text(fig.get("figure_id")) == "primary_outcome_distribution_generated":
+                continue
+            next_no = _add_pdf_figure(flow, _normalise_figure_metadata(fig, label_ctx), figure_no, label_ctx, body, small)
+            rendered_outcome_figure = rendered_outcome_figure or next_no != figure_no
+            figure_no = next_no
         for table in outcome_tables:
             interpretation = _clean_interpretation(table.get("interpretation"), label_ctx)
             if interpretation:

@@ -106,7 +106,21 @@ def _display_text(value: Any, label_ctx: Dict[str, Any]) -> str:
 
 
 def _p_value(test: Dict[str, Any]) -> Optional[float]:
-    for key in ("p_corrected", "p", "p_value"):
+    for key in ("p", "p_value"):
+        value = test.get(key)
+        if value is None:
+            continue
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError):
+            continue
+        if numeric == numeric:
+            return numeric
+    return None
+
+
+def _significance_p_value(test: Dict[str, Any]) -> Optional[float]:
+    for key in ("p_corrected", "adjusted_p_value", "p_adjusted", "q_value", "p", "p_value"):
         value = test.get(key)
         if value is None:
             continue
@@ -331,7 +345,7 @@ def _warning_for_table(test: Dict[str, Any]) -> str:
 
 
 def _priority_for_result(test: Dict[str, Any], warning: str) -> tuple[str, bool, bool]:
-    p = _p_value(test)
+    p = _significance_p_value(test)
     if p is not None and p < 0.05 and warning == "-":
         return "thesis_ready_primary", False, False
     if p is not None and p < 0.05:
@@ -536,7 +550,7 @@ def _outcome_component_variables(
 
 def _safe_interpretation(test: Dict[str, Any], label_ctx: Optional[Dict[str, Any]] = None) -> str:
     label_ctx = label_ctx or {}
-    p = _p_value(test)
+    p = _significance_p_value(test)
     title = _display_text(test.get("title") or "This analysis", label_ctx)
     warning = _clean_text(test.get("warning") or test.get("note"))
     family = _test_family(test)
@@ -555,10 +569,20 @@ def _safe_interpretation(test: Dict[str, Any], label_ctx: Optional[Dict[str, Any
             else f"{title} did not show a statistically significant model term."
         )
     else:
-        base = (
-            f"{title} was significantly associated with the outcome."
+        relation = ""
+        for sep in (" vs ", " by "):
+            if sep in title:
+                left, right = title.split(sep, 1)
+                relation = (
+                    f"{left.strip()} showed a statistically significant association with {right.strip()}."
+                    if p < 0.05
+                    else f"{left.strip()} did not show a statistically significant association with {right.strip()}."
+                )
+                break
+        base = relation or (
+            f"{title} showed a statistically significant association."
             if p < 0.05
-            else f"{title} was not significantly associated with the outcome."
+            else f"{title} did not show a statistically significant association."
         )
     if warning:
         base += " Interpret with caution: " + warning
@@ -832,7 +856,7 @@ def build_thesis_analysis_blueprint(
             "rows": component_rows,
             "source_variables": sorted(outcome_components),
             "source_test_ids": [],
-            "interpretation": "Marker or outcome-component variables are described here and omitted from final prognostic findings by default.",
+            "interpretation": "Localization and staining score are presented descriptively as components of the immunohistochemical assessment.",
             "thesis_ready": bool(component_rows),
             "priority": "thesis_ready_primary",
             "optional": False,
