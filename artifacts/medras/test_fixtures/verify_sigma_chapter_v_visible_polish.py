@@ -31,6 +31,16 @@ def test_chapter_v_export_uses_thesis_display_figures() -> None:
     assert pdf_primary < pdf_existing
 
 
+def test_main_export_does_not_append_unmatched_optional_figures() -> None:
+    source = _read("app/services/chapter_v_export.py")
+    docx_renderer = source[source.index("def _render_section_docx"):source.index("def _blueprint")]
+    pdf_renderer = source[source.index("def _render_section_pdf"):source.index("def generate_pdf")]
+    assert "if include_optional_figures:" in docx_renderer
+    assert "if include_optional_figures:" in pdf_renderer
+    assert "for figure in figures[:4]:" not in docx_renderer.replace("if include_optional_figures:\n        for figure in figures[:4]:", "")
+    assert "for figure in figures[:4]:" not in pdf_renderer.replace("if include_optional_figures:\n        for figure in figures[:4]:", "")
+
+
 def test_chapter_v_export_splits_mixed_descriptive_tables() -> None:
     source = _read("app/services/chapter_v_export.py")
     assert "def _expand_export_tables" in source
@@ -80,6 +90,7 @@ def test_thesis_interpretation_language_is_not_raw_outcome_phrase() -> None:
 
 def main() -> None:
     test_chapter_v_export_uses_thesis_display_figures()
+    test_main_export_does_not_append_unmatched_optional_figures()
     test_chapter_v_export_splits_mixed_descriptive_tables()
     test_pdf_primary_outcome_applies_expand_tables()
     test_results_graph_generation_uses_outcome_display_mapping()

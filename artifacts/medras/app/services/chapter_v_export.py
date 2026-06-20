@@ -185,9 +185,9 @@ def _is_core_figure(figure: Dict[str, Any], label_ctx: Dict[str, Any], section_i
         return False
     fig_vars = {str(item) for item in figure.get("source_variables") or [] if item}
     title = _text(figure.get("title") or figure.get("caption"))
-    if fig_vars.intersection(core):
-        return True
-    return any(variable and variable in title for variable in core)
+    display = _text(label_ctx.get("display"))
+    non_outcome_vars = {var for var in fig_vars if var and var != display and var not in set(label_ctx.get("raw_values") or [])}
+    return bool(non_outcome_vars.intersection(core) or any(variable and variable in title for variable in core))
 
 
 def _normalise_figure_metadata(figure: Dict[str, Any], label_ctx: Dict[str, Any]) -> Dict[str, Any]:
@@ -820,14 +820,15 @@ def _render_section_docx(
         interpretation = _clean_interpretation(table.get("interpretation"), label_ctx)
         if interpretation:
             _plain_docx_text(doc, interpretation)
-    for figure in figures[:4]:
-        figure_id = _text(figure.get("figure_id") or figure.get("title"))
-        if figure_id in used_figures:
-            continue
-        next_no = _add_figure_docx(doc, figure, figure_no, label_ctx)
-        if next_no != figure_no:
-            figure_no = next_no
-            used_figures.add(figure_id)
+    if include_optional_figures:
+        for figure in figures[:4]:
+            figure_id = _text(figure.get("figure_id") or figure.get("title"))
+            if figure_id in used_figures:
+                continue
+            next_no = _add_figure_docx(doc, figure, figure_no, label_ctx)
+            if next_no != figure_no:
+                figure_no = next_no
+                used_figures.add(figure_id)
     return table_no, figure_no
 
 
@@ -1180,14 +1181,15 @@ def _render_section_pdf(
         if interpretation:
             flow.append(Paragraph(_pdf_escape(interpretation), body))
         flow.append(Spacer(1, 6))
-    for figure in figures[:4]:
-        figure_id = _text(figure.get("figure_id") or figure.get("title"))
-        if figure_id in used_figures:
-            continue
-        next_no = _add_pdf_figure(flow, figure, figure_no, label_ctx, body, small)
-        if next_no != figure_no:
-            figure_no = next_no
-            used_figures.add(figure_id)
+    if include_optional_figures:
+        for figure in figures[:4]:
+            figure_id = _text(figure.get("figure_id") or figure.get("title"))
+            if figure_id in used_figures:
+                continue
+            next_no = _add_pdf_figure(flow, figure, figure_no, label_ctx, body, small)
+            if next_no != figure_no:
+                figure_no = next_no
+                used_figures.add(figure_id)
     return figure_no
 
 

@@ -466,17 +466,31 @@ def test_significant_findings_pvalues_separate() -> None:
 # ── 9. PDF primary outcome table uses Parameter|Category|n|% ─────────────────
 
 def _pdf_text(blob: bytes) -> str:
-    """Extract plain text from a PDF blob using pdfplumber."""
+    """Extract plain text from a PDF blob using an available PDF reader."""
     try:
         import pdfplumber
     except ImportError:
-        return ""
-    pages = []
-    with pdfplumber.open(io.BytesIO(blob)) as pdf:
-        for page in pdf.pages:
-            t = page.extract_text() or ""
-            pages.append(t)
-    return "\n".join(pages)
+        pdfplumber = None
+    if pdfplumber is not None:
+        pages = []
+        with pdfplumber.open(io.BytesIO(blob)) as pdf:
+            for page in pdf.pages:
+                t = page.extract_text() or ""
+                pages.append(t)
+        text = "\n".join(pages)
+        if text.strip():
+            return text
+
+    try:
+        from pypdf import PdfReader
+    except ImportError:
+        try:
+            from PyPDF2 import PdfReader  # type: ignore[no-redef]
+        except ImportError as exc:
+            raise AssertionError("PDF text extraction requires pdfplumber, pypdf, or PyPDF2") from exc
+
+    reader = PdfReader(io.BytesIO(blob))
+    return "\n".join((page.extract_text() or "") for page in reader.pages)
 
 
 def test_primary_outcome_table_format_pdf() -> None:
@@ -485,8 +499,7 @@ def test_primary_outcome_table_format_pdf() -> None:
     blob = chapter_v_export.generate_pdf(results)
     assert blob[:4] == b"%PDF", "export must produce a valid PDF"
     text = _pdf_text(blob)
-    if not text:
-        return  # pdfplumber not available; skip content check
+    assert text.strip(), "PDF text extraction returned empty content"
     assert "Variable Summary Overall" not in text, \
         "PDF must not render primary outcome table as Variable|Summary|Overall"
     assert "Parameter" in text, \
@@ -502,8 +515,7 @@ def test_nonsignificant_figures_absent_pdf() -> None:
     results, _, _ = _build_fixture()
     blob = chapter_v_export.generate_pdf(results)
     text = _pdf_text(blob)
-    if not text:
-        return
+    assert text.strip(), "PDF text extraction returned empty content"
     assert "p27 expression status by pT" not in text, \
         "pT figure must be absent from main PDF"
     assert "p27 expression status by Nodal status" not in text, \
@@ -519,8 +531,7 @@ def test_significant_figures_present_pdf() -> None:
     results, _, _ = _build_fixture()
     blob = chapter_v_export.generate_pdf(results)
     text = _pdf_text(blob)
-    if not text:
-        return
+    assert text.strip(), "PDF text extraction returned empty content"
     assert "Figure 1. Distribution of p27 expression status." in text, \
         "Distribution figure must be Figure 1 in PDF"
     for predictor in ("Age", "Histological type", "ER", "PR", "Molecular subtype", "AR"):
