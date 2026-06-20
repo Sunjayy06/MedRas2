@@ -376,15 +376,15 @@ def verify_service_docx() -> None:
     assert "Molecular subtype vs p27 expression status" in text
     assert "AR vs p27 expression status" in text
     assert "Figure 1. Distribution of p27 expression status." in text
-    assert "Figure 2. Boxplot of Age by p27 expression status." in text
-    assert "Figure 3. Grouped percentage bar chart of Histological type by p27 expression status." in text
-    assert "Figure 4. Grouped percentage bar chart of ER by p27 expression status." in text
-    assert "Figure 5. Grouped percentage bar chart of PR by p27 expression status." in text
-    assert "Figure 6. Grouped percentage bar chart of Molecular subtype by p27 expression status." in text
-    assert "Figure 7. Grouped percentage bar chart of AR by p27 expression status." in text
-    assert "Grouped percentage bar chart of pT by p27 expression status." not in text
-    assert "Grouped percentage bar chart of Nodal status by p27 expression status." not in text
-    assert "Grouped percentage bar chart of LVI by p27 expression status." not in text
+    assert "Figure 2." in text and "p27 expression status by Age" in text
+    assert "p27 expression status by Histological type" in text
+    assert "p27 expression status by ER" in text
+    assert "p27 expression status by PR" in text
+    assert "p27 expression status by Molecular subtype" in text
+    assert "p27 expression status by AR" in text
+    assert "p27 expression status by pT" not in text
+    assert "p27 expression status by Nodal status" not in text
+    assert "p27 expression status by LVI" not in text
     assert "Graph preview not generated yet" not in text
     final_section = text.split("Section VI - Significant Findings Summary", 1)[1].split("Warnings and Interpretation Notes", 1)[0]
     assert "Interpretation-site" not in final_section

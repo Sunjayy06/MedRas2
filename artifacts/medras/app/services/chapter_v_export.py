@@ -550,7 +550,13 @@ def _parse_distribution_counts(table: Dict[str, Any], label_ctx: Dict[str, Any])
     counts: List[float] = []
     _, rows = _table_rows(table)
     for row in rows:
-        for cell in row[2:] if len(row) > 2 else row:
+        # Prefer columns after index 1 (skip variable name + type/summary label).
+        # If that slice is empty or blank, fall back to scanning all cells so
+        # tables using a "Summary" column (index 1) are also parsed correctly.
+        cells_to_scan = row[2:] if len(row) > 2 else row
+        if not any(_text(cell) for cell in cells_to_scan):
+            cells_to_scan = row[1:] if len(row) > 1 else row
+        for cell in cells_to_scan:
             text = _display_value(cell, label_ctx)
             for label, count in re.findall(r"([^:;]+):\s*([0-9]+(?:\.[0-9]+)?)", text):
                 clean_label = _display_value(label.strip(), label_ctx)

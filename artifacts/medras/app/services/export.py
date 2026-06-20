@@ -424,6 +424,50 @@ def _category_merge_rows(meta: Dict[str, Any]) -> List[Dict[str, Any]]:
     return rows
 
 
+_SYSTEM_DISPLAY_NORMALIZATIONS: List[Tuple[str, str]] = [
+    ("Postive", "Positive"),
+    (">=14", ">=14%"),
+    (">= 14", ">=14%"),
+    (">= 14%", ">=14%"),
+]
+
+
+def _system_display_merge_rows(df: "pd.DataFrame") -> List[Dict[str, Any]]:
+    """Scan the raw df for known display-layer typos and return audit entries.
+
+    These corrections are applied by _excel_display_value at export time.  This
+    function makes them visible in the category_merges audit sheet so the reader
+    can trace every label change, including automatic normalisation.
+    """
+    rows: List[Dict[str, Any]] = []
+    if not isinstance(df, pd.DataFrame) or df.empty:
+        return rows
+    seen: set = set()
+    for col in df.columns:
+        if df[col].dtype != object:
+            continue
+        col_str = str(col)
+        values = df[col].dropna().astype(str)
+        for raw, cleaned in _SYSTEM_DISPLAY_NORMALIZATIONS:
+            count = int((values == raw).sum())
+            if count == 0:
+                continue
+            key = (col_str, raw, cleaned)
+            if key in seen:
+                continue
+            seen.add(key)
+            rows.append({
+                "variable": col_str,
+                "original_category": raw,
+                "cleaned_category": cleaned,
+                "count_affected": count,
+                "decision_type": "system_display",
+                "applied_to_dataset": True,
+                "notes_warnings": f"Automatic display normalisation: {raw!r} → {cleaned!r}. Raw value retained in source.",
+            })
+    return rows
+
+
 def _normalise_sheet_values(rows: List[List[Any]], label_ctx: Dict[str, Any]) -> List[List[str]]:
     return [[_export_cell(_excel_display_value(cell, label_ctx)) for cell in row] for row in rows]
 
@@ -1778,6 +1822,11 @@ def to_xlsx(entry, results: Dict[str, Any], assignment: Dict[str, Any]) -> bytes
     blueprint = results.get("thesis_analysis_blueprint") or {}
     label_ctx = _excel_label_context(results, assignment)
     category_merge_rows = _category_merge_rows(meta)
+    system_merges = _system_display_merge_rows(df)
+    existing_merge_keys = {(r.get("variable"), r.get("original_category")) for r in category_merge_rows}
+    for sys_row in system_merges:
+        if (sys_row["variable"], sys_row["original_category"]) not in existing_merge_keys:
+            category_merge_rows.append(sys_row)
     export_df = _excel_display_dataframe(df, label_ctx, category_merge_rows)
     wb = Workbook()
     s = wb.active; s.title = "Cover"

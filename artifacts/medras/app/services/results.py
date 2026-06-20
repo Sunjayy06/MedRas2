@@ -101,6 +101,9 @@ def _table_one_scale_cell(series: pd.Series) -> str:
         return f"—; Missing: {missing_n} ({missing_pct:.1f}%)"
     return (
         f"{_fmt_num(clean.mean())} ± {_fmt_num(clean.std(ddof=1))} (n={len(clean)}); "
+        f"Median: {_fmt_num(clean.median())}; "
+        f"Minimum: {_fmt_num(clean.min())}; "
+        f"Maximum: {_fmt_num(clean.max())}; "
         f"Missing: {missing_n} ({missing_pct:.1f}%)"
     )
 

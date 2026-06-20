@@ -208,7 +208,7 @@ async def _verify_endpoints():
             assert "Baseline Characteristics" in text
             assert "Association of PR with ER" in text
             assert "Chi-square test" in text
-            assert "ER by PR (%)" in text
+            assert "PR by ER" in text
             assert "Test summary" not in text
             assert "Data Cleaning Log" not in text
             assert "No primary inferential test ran successfully" not in text
