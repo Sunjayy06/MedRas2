@@ -25,6 +25,7 @@ const state = {
   quality: null,
   qualityActions: [],   // {row, variable, action, bound_low, bound_high}
   missingDecisions: {},
+  missingAppliedSignature: null,
   currentScreen: 1,
   followUp: null,
   practiceTemplate: "anaemia",
@@ -304,7 +305,7 @@ const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 // screen 1 / intake would defeat the resume banner (there's nothing to
 // resume to) and would also wipe the saved session every time the page
 // reloads cold.
-const RESUMABLE_SCREENS = new Set(["preview", "setup", "ai-confirm", "3", "4", "normality", "plan", "results", "export"]);
+const RESUMABLE_SCREENS = new Set(["preview", "setup", "ai-confirm", "3", "4", "missing", "normality", "plan", "results", "export"]);
 
 function saveSession() {
   if (!state.jobId) return;
@@ -320,6 +321,8 @@ function saveSession() {
       (state.classifications || []).map((c) => [c.column, c.detected_type])
     ),
     quality_actions: state.qualityActions || [],
+    missing_decisions: state.missingDecisions || {},
+    missing_applied_signature: state.missingAppliedSignature || null,
     // Persist AI study plan + description so screen-setup can rehydrate without
     // a network call on resume (fast path in resumeFromSavedSession).
     aiStudy: state.aiStudy || null,
@@ -377,6 +380,8 @@ async function resumeFromSavedSession(saved) {
   try {
     const data = await api(`/dataset/${saved.dataset_id}`);
     ingestDataset(data);
+    state.missingDecisions = saved.missing_decisions || {};
+    state.missingAppliedSignature = saved.missing_applied_signature || null;
     const target = saved.screen;
     // Map legacy screen ids ("soon", "assign") onto the current 8-step
     // model so a saved session from before the refactor still resumes
@@ -467,6 +472,9 @@ async function resumeFromSavedSession(saved) {
       // Without renderPreview() the zone label, conditional buttons, and
       // Step-3 reassurance note never get rebuilt for the resumed dataset.
       renderPreview();
+    } else if (resolved === "missing") {
+      renderMissingScreen();
+      showScreen("missing");
     } else if (resolved === "normality") {
       showScreen("normality");
       loadNormality();
@@ -558,14 +566,56 @@ const SCREENS = [
   "normality", "plan", "results", "export",
 ];
 // Map a logical screen id to which step number is "active" in the tracker.
-// 7-step model: 1 Setup, 2 Data, 3 Variables+Quality (merged), 4 Normality,
+// 7-step model: 1 Setup, 2 Data, 3 Variables, 4 Data preparation/Normality,
 //               5 Plan, 6 Results, 7 Export.
 const SCREEN_TO_STEP = {
   "1": 1, "intake": 1,
   "2a": 2, "2c": 2, "2c-custom": 2, "preview": 2, "setup": 2, "ai-confirm": 2,
-  "3": 3, "4": 3, "missing": 3,
+  "3": 3,
+  "4": 4, "missing": 4,
   "normality": 4, "plan": 5, "results": 6, "corr-results": 6, "export": 7,
 };
+
+function isWizardStepReady(step) {
+  if (step <= 1) return Boolean(state.jobId || state.aiStudy || state.proposalUnderstanding);
+  if (step === 2) return Boolean(state.jobId && state.summary);
+  if (step === 3) return Boolean(state.assignment && state.assignment.outcome);
+  if (step === 4) return Boolean(state.normality || state.quality || state.classifications?.length);
+  if (step === 5) return Boolean(state.plan);
+  if (step === 6) return Boolean(state.results && state.resultId);
+  if (step === 7) return Boolean(state.results && state.resultId);
+  return false;
+}
+
+function updateWizardTracker(activeScreen) {
+  const activeStep = SCREEN_TO_STEP[activeScreen] || 1;
+  $$(".se-step").forEach((node) => {
+    const n = Number(node.dataset.step);
+    node.classList.remove("is-active", "is-done", "is-future");
+    if (n === activeStep) {
+      node.classList.add("is-active");
+    } else if (n < activeStep && isWizardStepReady(n)) {
+      node.classList.add("is-done");
+    } else {
+      node.classList.add("is-future");
+    }
+  });
+}
+
+function restoreWizardScreenState(id) {
+  if (id === "missing") {
+    renderMissingScreen();
+    updateMissingScreenReadiness();
+  } else if (id === "normality" && state.normality) {
+    renderNormality();
+  } else if (id === "plan" && state.plan) {
+    renderPlan();
+  } else if (id === "results" && state.results) {
+    renderResults();
+  } else if (id === "export") {
+    updateExportAvailability();
+  }
+}
 
 function showScreen(id) {
   state.currentScreen = id;
@@ -573,25 +623,14 @@ function showScreen(id) {
     const el = document.getElementById(`screen-${s}`);
     if (el) el.classList.toggle("is-hidden", s !== id);
   });
-  if (id === "export") updateExportAvailability();
+  restoreWizardScreenState(id);
   // The step navigator has three explicit states per circle:
   //   is-done    → completed, clickable to go back, green check
   //   is-active  → current, blue with halo
   //   is-future  → not yet reachable, dimmed, NOT clickable
   // We always reset every node before applying the right one so going
   // backwards correctly drops the higher steps back into the future bucket.
-  const activeStep = SCREEN_TO_STEP[id] || 1;
-  $$(".se-step").forEach((node) => {
-    const n = Number(node.dataset.step);
-    node.classList.remove("is-active", "is-done", "is-future");
-    if (n < activeStep) {
-      node.classList.add("is-done");
-    } else if (n === activeStep) {
-      node.classList.add("is-active");
-    } else {
-      node.classList.add("is-future");
-    }
-  });
+  updateWizardTracker(id);
   // Whenever we leave Step 4, force-hide the sticky controls so they don't
   // bleed into Step 3 or the soon screen. renderQuality() will re-show
   // them with the correct continue-button state when we re-enter Step 4.
@@ -602,13 +641,13 @@ function showScreen(id) {
   const target = document.getElementById(`screen-${id}`);
   if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
 
-  // Update the Pass badge: Steps 1-4 = data preparation; Steps 5-8 = analysis
+  // Update the Pass badge: Steps 1-4 = data preparation; Steps 5-7 = analysis
   const passBadge = document.querySelector('[data-testid="badge-pass"]');
   if (passBadge) {
     const helpBtn = passBadge.querySelector(".se-pass-help");
     const tip     = passBadge.querySelector(".se-pass-tip");
     const step    = SCREEN_TO_STEP[id] || 1;
-    const isAnalysis = step >= 4;
+    const isAnalysis = step >= 5;
     const labelText = isAnalysis
       ? "Pass 2 of 2 — statistical analysis"
       : "Pass 1 of 2 — data preparation";
@@ -630,8 +669,8 @@ function showScreen(id) {
 // screen so users can jump back without burrowing through the wizard.
 function bindStepNavBack() {
   const STEP_TO_SCREEN = {
-    1: "1", 2: "preview", 3: "4",
-    4: "normality", 5: "plan", 6: "results",
+    1: "1", 2: "preview", 3: "3",
+    4: "4", 5: "plan", 6: "results",
   };
   $$(".se-step").forEach((node) => {
     node.addEventListener("click", () => {
@@ -1429,6 +1468,7 @@ function ingestDataset(data) {
     state.assistantThread = [];
     state.recodingChoices = {};
     state.missingDecisions = {};
+    state.missingAppliedSignature = null;
     state.categoryDupeResults = null;
     state.rejectedMergeSuggestions = new Set();
     // Also clear all Step 4–7 state so a new dataset starts clean.
@@ -3781,7 +3821,8 @@ function renderMissingDecisions() {
     const dtype    = col.detected_type || "";
     const isNum    = dtype === "scale" || dtype === "ordinal" || dtype === "discrete";
     const isCat    = dtype === "nominal" || dtype === "binary";
-    const existing = state.missingDecisions[colKey];
+    const existing = state.missingDecisions[colKey] || "keep";
+    state.missingDecisions[colKey] = existing;
     const colId    = colKey.replace(/[^a-zA-Z0-9]/g, "_");
 
     const opt = (val, label, sub) =>
@@ -3860,6 +3901,30 @@ function _buildMissingDecisionPayload(currentColumns, selectedDecisions = {}) {
   return { decisions: missingDecisions, unsupported };
 }
 
+function _missingDecisionSignature(decisions = []) {
+  return JSON.stringify(
+    (decisions || [])
+      .map((d) => ({ column: d.column, action: d.action }))
+      .sort((a, b) => String(a.column).localeCompare(String(b.column)))
+  );
+}
+
+function _missingDecisionsAlreadyApplied(decisions = []) {
+  if (!decisions.length) return false;
+  return state.missingAppliedSignature === _missingDecisionSignature(decisions);
+}
+
+function _rememberAppliedMissingDecisions(decisions = []) {
+  if (!decisions.length) return;
+  state.missingAppliedSignature = _missingDecisionSignature(decisions);
+  state.missingDecisions = state.missingDecisions || {};
+  decisions.forEach((d) => {
+    state.missingDecisions[d.column] = d.action === "exclude_variable_from_analysis"
+      ? "exclude"
+      : d.action;
+  });
+}
+
 // Shared apply-quality logic so it can be wired both to the inline button
 // and to the clean-banner button without duplicating the network code.
 async function _applyQualityHandler() {
@@ -3888,7 +3953,7 @@ async function _applyQualityHandler() {
           decisions: missingDecisions,
         }),
       });
-      state.missingDecisions = {};
+      _rememberAppliedMissingDecisions(missingDecisions);
     } catch (err) {
       setStatus(status, `Could not apply missing-data decisions: ${err.message}`, "error");
       return;
@@ -5832,6 +5897,7 @@ function bindAiConfirm() {
 function renderMissingScreen() {
   const container = document.getElementById("missing-decisions-container");
   if (!container) return;
+  state.missingDecisions = state.missingDecisions || {};
 
   // Collect high-missing columns from state
   const missingCols = (state.classifications || []).filter(
@@ -5850,6 +5916,7 @@ function renderMissingScreen() {
     const pct = ((c.missing_pct || (c.missing_fraction || 0) * 100) || 0).toFixed(1);
     const slug = col.replace(/[^a-z0-9]/gi, "_");
     const selected = (state.missingDecisions || {})[col] || "leave";
+    state.missingDecisions[col] = selected;
     return `<div class="se-missing-card" data-testid="missing-card-${slug}">
       <div class="se-missing-card-header">
         <strong>${escapeHtml(col)}</strong>
@@ -5865,6 +5932,28 @@ function renderMissingScreen() {
       </div>
     </div>`;
   }).join("");
+
+  document.querySelectorAll("[data-missing-col]").forEach((radio) => {
+    radio.addEventListener("change", () => {
+      if (!radio.checked) return;
+      state.missingDecisions[radio.dataset.missingCol] = radio.value;
+      updateMissingScreenReadiness();
+      saveSession();
+    });
+  });
+  updateMissingScreenReadiness();
+}
+
+function updateMissingScreenReadiness() {
+  const applyBtn = document.getElementById("btn-apply-missing");
+  if (!applyBtn) return;
+  const missingCols = (state.classifications || []).filter(
+    (c) => (c.missing_pct || c.missing_fraction * 100 || 0) > 5
+  );
+  const required = missingCols.map((c) => c.column).filter(Boolean);
+  const decisions = state.missingDecisions || {};
+  const ready = required.every((column) => Boolean(decisions[column]));
+  applyBtn.disabled = !ready;
 }
 
 function bindScreenMissing() {
@@ -5905,13 +5994,20 @@ function bindScreenMissing() {
 
       setStatus(status, "Applying missing-data decisions…", "loading");
       applyBtn.disabled = true;
+      if (_missingDecisionsAlreadyApplied(decisions)) {
+        setStatus(status, "Missing-data decisions were already applied. Continuing to normality...", "info");
+        showScreen("normality");
+        if (state.normality) renderNormality();
+        else loadNormality();
+        return;
+      }
       try {
         await api("/handle-missing", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ job_id: state.jobId, decisions }),
         });
-        state.missingDecisions = {};
+        _rememberAppliedMissingDecisions(decisions);
         // Reclassify so downstream screens (normality, plan) see the updated
         // imputed/dropped columns rather than stale classification data.
         setStatus(status, "Reclassifying variables…", "loading");
@@ -6895,6 +6991,7 @@ function restart() {
   state.assistantThread = [];
   state.recodingChoices = {};
   state.missingDecisions = {};
+  state.missingAppliedSignature = null;
   state.categoryDupeResults = null;
   state.rejectedMergeSuggestions = new Set();
   state.assignment = null;
