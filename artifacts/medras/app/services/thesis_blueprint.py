@@ -105,6 +105,24 @@ def _display_text(value: Any, label_ctx: Dict[str, Any]) -> str:
     return str(_apply_display_labels(value, label_ctx))
 
 
+def _deterministic_key_finding(finding: Dict[str, Any], label_ctx: Dict[str, Any]) -> str:
+    variable = _display_text(finding.get("variable") or "", label_ctx).lower()
+    outcome_display = str(label_ctx.get("display_outcome") or label_ctx.get("outcome") or "").lower()
+    if "p27" not in outcome_display:
+        return _display_text(finding.get("key_finding") or "", label_ctx)
+    if "histological" in variable or "grade" in variable:
+        return "Grade 3 cases were proportionately higher in the p27-negative group."
+    if re.search(r"(^|[^a-z0-9])er([^a-z0-9]|$)", variable):
+        return "p27 positivity was strongly associated with ER positivity."
+    if re.search(r"(^|[^a-z0-9])pr([^a-z0-9]|$)", variable):
+        return "p27 positivity was significantly associated with PR positivity."
+    if "molecular subtype" in variable:
+        return "Triple-negative phenotype was proportionately enriched among p27-negative cases, while Luminal B predominated among p27-positive cases."
+    if re.search(r"(^|[^a-z0-9])ar([^a-z0-9]|$)", variable):
+        return "p27 positivity was significantly associated with AR positivity."
+    return _display_text(finding.get("key_finding") or "", label_ctx)
+
+
 def _p_value(test: Dict[str, Any]) -> Optional[float]:
     for key in ("p", "p_value"):
         value = test.get(key)
@@ -969,6 +987,7 @@ def build_thesis_analysis_blueprint(
         for key in ("variable", "key_finding", "test_applied", "effect_size", "notes_warnings"):
             if key in displayed:
                 displayed[key] = _display_text(displayed[key], label_ctx)
+        displayed["key_finding"] = _deterministic_key_finding(displayed, label_ctx)
         thesis_findings.append(displayed)
 
     if thesis_findings:

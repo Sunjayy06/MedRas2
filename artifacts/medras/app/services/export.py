@@ -250,7 +250,6 @@ def _build_cleaning_log(
 
     if meta.get("merged_sheets"):
         add("Dataset preparation", "Dataset", f"Merged sheets: {', '.join(meta['merged_sheets'])}.")
-
     return rows
 
 
@@ -387,7 +386,7 @@ def _excel_clinical_label(value: Any, variable: Any = "") -> str:
     if key in _EXCEL_PRESENCE_MARKER_VARS:
         if low in {"positive", "postive", "yes", "present"}:
             return "Present"
-        if low in {"negative", "no", "absent"}:
+        if low in {"negative", "no", "absent", "abse"}:
             return "Absent"
     if key in _EXCEL_BINARY_MARKER_VARS or any(marker in key for marker in _EXCEL_BINARY_MARKER_VARS):
         if low in {"positive", "postive", "yes", "present"}:
@@ -509,6 +508,20 @@ def _system_display_merge_rows(df: "pd.DataFrame") -> List[Dict[str, Any]]:
                 "applied_to_dataset": True,
                 "notes_warnings": f"Automatic display normalisation: {raw!r} → {cleaned!r}. Raw value retained in source.",
             })
+        if _excel_var_key(col_str) in _EXCEL_PRESENCE_MARKER_VARS:
+            count = int((values.str.lower() == "abse").sum())
+            key = (col_str, "Abse", "Absent")
+            if count and key not in seen:
+                seen.add(key)
+                rows.append({
+                    "variable": col_str,
+                    "original_category": "Abse",
+                    "cleaned_category": "Absent",
+                    "count_affected": count,
+                    "decision_type": "system_display",
+                    "applied_to_dataset": True,
+                    "notes_warnings": "Automatic display normalisation: 'Abse' -> 'Absent'. Raw value retained in source.",
+                })
     return rows
 
 

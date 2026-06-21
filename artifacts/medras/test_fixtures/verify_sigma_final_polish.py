@@ -44,6 +44,11 @@ def _docx_text(blob: bytes) -> str:
     return "\n".join(paragraphs + cells)
 
 
+def _docx_paragraph_text(blob: bytes) -> str:
+    doc = Document(io.BytesIO(blob))
+    return "\n".join(p.text for p in doc.paragraphs)
+
+
 def _observed_rows_for(name: str) -> List[List[Any]]:
     if name == "ER":
         return [["Postive", 2, 0, 2], ["Positive", 4, 0, 4], ["Negative", 0, 6, 6], ["Total", 6, 6, 12]]
@@ -52,7 +57,7 @@ def _observed_rows_for(name: str) -> List[List[Any]]:
     if name == "AR":
         return [["Postive", 1, 0, 1], ["Positive", 5, 0, 5], ["Negative", 0, 6, 6], ["Total", 6, 6, 12]]
     if name == "Histological type":
-        return [["Type 1", 3, 0, 3], ["Type 2", 3, 1, 4], ["Type 3", 0, 5, 5], ["Total", 6, 6, 12]]
+        return [["1.0", 3, 0, 3], ["2.0", 3, 1, 4], ["3.0", 0, 5, 5], ["Total", 6, 6, 12]]
     if name == "Molecular subtype":
         return [["Luminal A", 3, 0, 3], ["Luminal B", 2, 1, 3], ["Her2neu", 1, 2, 3], ["Triple negative", 0, 3, 3], ["Total", 6, 6, 12]]
     if name == "Ki67":
@@ -89,6 +94,14 @@ def _assoc_test(name: str, *, p_value: str, adjusted: str, effect: str = "Cramé
     }
 
 
+def _with_sparse_warning(test: Dict[str, Any]) -> Dict[str, Any]:
+    test["tables"][1]["rows"][0][7] = (
+        "Warning: Interpret with caution: sparse cells detected. "
+        "Minimum expected count = 1.20. Interpret with caution."
+    )
+    return test
+
+
 def _build_fixture() -> tuple[Dict[str, Any], "pd.DataFrame", Dict[str, Any]]:
     """Build representative results, raw df, and FakeEntry-style meta."""
     # Age range deliberately spans 30–88 to verify min/max pipeline.
@@ -106,7 +119,7 @@ def _build_fixture() -> tuple[Dict[str, Any], "pd.DataFrame", Dict[str, Any]]:
         "Ki67": [">=14"] * 5 + ["<14"] * 7,                               # unnormalised Ki67
         "pT": ["T1", "T2", "T3"] * 4,
         "Nodal status": ["N0", "N1", "N2"] * 4,
-        "LVI": ["Present", "Absent"] * 6,
+        "LVI": ["Present", "Abse"] * 6,
     })
 
     classifications = [
@@ -149,7 +162,7 @@ def _build_fixture() -> tuple[Dict[str, Any], "pd.DataFrame", Dict[str, Any]]:
             }],
         },
         # Significant predictors (real p-values per task spec)
-        _assoc_test("Histological type", p_value="p = 0.004", adjusted="p = 0.013"),
+        _with_sparse_warning(_assoc_test("Histological type", p_value="p = 0.004", adjusted="p = 0.013")),
         _assoc_test("ER",                p_value="p < 0.001",  adjusted="p = 0.005"),
         _assoc_test("PR",                p_value="p = 0.002",  adjusted="p = 0.009"),
         _assoc_test("Molecular subtype", p_value="p < 0.001",  adjusted="p < 0.001"),
@@ -368,6 +381,26 @@ def test_significant_association_figures_present() -> None:
             f"Figure for {predictor} must be present in main report"
 
 
+def test_association_figures_precede_tables() -> None:
+    """Core association figures should appear before the association tables in DOCX."""
+    results, _, _ = _build_fixture()
+    blob = chapter_v_export.generate_docx(results)
+    text = _docx_paragraph_text(blob)
+
+    first_table = text.index("Table ")
+    first_assoc_table = text.index("Association of p27 expression status with Histological type", first_table)
+    for caption in (
+        "p27 expression status by Age",
+        "p27 expression status by Histological type",
+        "p27 expression status by ER",
+        "p27 expression status by PR",
+        "p27 expression status by Molecular subtype",
+        "p27 expression status by AR",
+    ):
+        assert caption in text, f"{caption} figure caption must be present"
+        assert text.index(caption) < first_assoc_table, f"{caption} must appear before association tables"
+
+
 def test_association_tables_aggregate_display_categories() -> None:
     """Generated association tables must aggregate duplicate display categories."""
     results, _, _ = _build_fixture()
@@ -391,6 +424,7 @@ def test_association_tables_aggregate_display_categories() -> None:
     assert "Grade 1" in text and "Grade 2" in text and "Grade 3" in text
     assert "Type 1" not in text and "Type 2" not in text and "Type 3" not in text
     assert "HER2-enriched" in text
+    assert "1.0" not in text and "2.0" not in text and "3.0" not in text
 
 
 # ── 6. category_merges audit sheet completeness ───────────────────────────────
@@ -461,6 +495,46 @@ def test_cleaned_dataset_no_postive() -> None:
     )
     assert "Postive" not in all_text, \
         "cleaned_processed_dataset must not contain the raw typo 'Postive'"
+    assert "Abse" not in all_text, \
+        "cleaned_processed_dataset must not contain the raw LVI typo 'Abse'"
+
+
+def test_lvi_abse_audit_trace_preserved() -> None:
+    """category_merges must preserve the raw LVI Abse -> Absent audit trail."""
+    results, df, meta = _build_fixture()
+    entry = _FakeEntry(df, meta)
+    blob = export.to_xlsx(entry, results, {"outcome": "Positive/ Negative"})
+    wb = load_workbook(io.BytesIO(blob))
+    rows = list(wb["category_merges"].iter_rows(min_row=2, values_only=True))
+    lvi_rows = [r for r in rows if str(r[0]) == "LVI" and str(r[1]) == "Abse" and str(r[2]) == "Absent"]
+    assert lvi_rows, "category_merges must record LVI Abse -> Absent"
+
+
+def test_sparse_caution_deduplicated() -> None:
+    """Sparse-cell caution should appear once, without minimum expected-count dump."""
+    results, _, _ = _build_fixture()
+    blob = chapter_v_export.generate_docx(results)
+    text = _docx_text(blob)
+    caution = "This finding should be interpreted cautiously because some expected cell counts were below 5."
+    assert text.count(caution) == 1, "Sparse-cell caution must appear once for the result"
+    assert "Minimum expected count" not in text
+
+
+def test_significant_key_findings_are_thesis_style() -> None:
+    """Final significant findings should use deterministic thesis-style wording."""
+    results, _, _ = _build_fixture()
+    blob = chapter_v_export.generate_docx(results)
+    text = _docx_text(blob)
+    expected = (
+        "Grade 3 cases were proportionately higher in the p27-negative group.",
+        "p27 positivity was strongly associated with ER positivity.",
+        "p27 positivity was significantly associated with PR positivity.",
+        "Triple-negative phenotype was proportionately enriched among p27-negative cases, while Luminal B predominated among p27-positive cases.",
+        "p27 positivity was significantly associated with AR positivity.",
+    )
+    for phrase in expected:
+        assert phrase in text, f"Missing thesis-style finding: {phrase}"
+    assert "was associated with the primary outcome" not in text
 
 
 # ── 8. Significant findings p-values are separate and correct ─────────────────
@@ -725,6 +799,9 @@ def main() -> None:
     test_significant_association_figures_present()
     print("  [ok] Histological type / ER / PR / Molecular subtype / AR figures present")
 
+    test_association_figures_precede_tables()
+    print("  [ok] Core association figures appear before association tables")
+
     test_association_tables_aggregate_display_categories()
     print("  [ok] Association tables aggregate cleaned display categories")
 
@@ -732,7 +809,16 @@ def main() -> None:
     print("  [ok] category_merges records Postive->Positive and Ki67 normalisation")
 
     test_cleaned_dataset_no_postive()
-    print("  [ok] cleaned_processed_dataset contains no raw typo 'Postive'")
+    print("  [ok] cleaned_processed_dataset contains no raw typo 'Postive' or 'Abse'")
+
+    test_lvi_abse_audit_trace_preserved()
+    print("  [ok] category_merges records LVI Abse->Absent audit trace")
+
+    test_sparse_caution_deduplicated()
+    print("  [ok] Sparse-cell caution is deduplicated")
+
+    test_significant_key_findings_are_thesis_style()
+    print("  [ok] Significant findings use deterministic thesis-style wording")
 
     test_significant_findings_pvalues_separate()
     print("  [ok] Significant findings raw p-value and adjusted p-value are separate")

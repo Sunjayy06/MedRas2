@@ -79,7 +79,7 @@ def _clinical_category_label(variable: Any, category: Any, label_ctx: Optional[D
     if var_key in _PRESENCE_MARKER_VARS:
         if low in {"positive", "postive", "yes", "present"}:
             return "Present"
-        if low in {"negative", "no", "absent"}:
+        if low in {"negative", "no", "absent", "abse"}:
             return "Absent"
     if var_key in _BINARY_MARKER_VARS or any(marker in var_key for marker in _BINARY_MARKER_VARS):
         if low in {"positive", "postive", "yes", "present"}:
@@ -243,6 +243,28 @@ def _is_core_figure(figure: Dict[str, Any], label_ctx: Dict[str, Any], section_i
     return bool(non_outcome_vars.intersection(core) or any(variable and variable in title for variable in core))
 
 
+def _association_figure_sort_key(figure: Dict[str, Any], label_ctx: Dict[str, Any]) -> Tuple[int, str]:
+    title = _text(figure.get("title") or figure.get("caption")).lower()
+    variables = " ".join(_text(item) for item in figure.get("source_variables") or []).lower()
+    haystack = f"{title} {variables}"
+    order = [
+        ("age", 0),
+        ("histological", 1),
+        ("grade", 1),
+        ("er", 2),
+        ("pr", 3),
+        ("molecular", 4),
+        ("ar", 5),
+    ]
+    for token, rank in order:
+        if re.search(rf"(^|[^a-z0-9]){re.escape(token)}([^a-z0-9]|$)", haystack):
+            return rank, title
+    core = {str(item).lower() for item in label_ctx.get("core_figure_variables") or []}
+    if any(item and item in haystack for item in core):
+        return 20, title
+    return 100, title
+
+
 def _normalise_figure_metadata(figure: Dict[str, Any], label_ctx: Dict[str, Any]) -> Dict[str, Any]:
     clone = deepcopy(figure)
     display = _text(label_ctx.get("display"))
@@ -356,14 +378,32 @@ def _clean_interpretation(value: Any, label_ctx: Optional[Dict[str, Any]] = None
         "This finding should be interpreted cautiously because some expected cell counts were below 5.",
     )
     if re.search(r"(sparse|expected cell counts|expected counts below)", text, flags=re.IGNORECASE):
-        text = re.sub(r"\s*Interpret with caution:\s*", " ", text, flags=re.IGNORECASE)
-        text = re.sub(r"\s*Warning:\s*", " ", text, flags=re.IGNORECASE)
+        text = re.sub(r"\s*Interpret with caution[:.]?\s*", " ", text, flags=re.IGNORECASE)
+        text = re.sub(r"\s*Warning[:.]?\s*", " ", text, flags=re.IGNORECASE)
+        text = re.sub(
+            r"\b(?:minimum|min)\s+expected(?:\s+cell)?\s+count(?:\s+was|\s*=|\s*:)?\s*[0-9.]+\.?",
+            "",
+            text,
+            flags=re.IGNORECASE,
+        )
+        text = re.sub(
+            r"\bexpected(?:\s+cell)?\s+counts?\s+(?:were\s+)?(?:below|<)\s*5[^.]*\.",
+            "",
+            text,
+            flags=re.IGNORECASE,
+        )
         text = re.sub(
             r"(?:This finding should be interpreted cautiously because some expected cell counts were below 5\.\s*)+",
             "This finding should be interpreted cautiously because some expected cell counts were below 5. ",
             text,
             flags=re.IGNORECASE,
         )
+        text = re.sub(
+            r"(?:This finding should be interpreted cautiously because some expected cell counts were below 5\.\s*)",
+            "",
+            text,
+            flags=re.IGNORECASE,
+        ).strip()
         if "This finding should be interpreted cautiously because some expected cell counts were below 5." not in text:
             text = text.rstrip(". ") + ". This finding should be interpreted cautiously because some expected cell counts were below 5."
     text = re.sub(r"^(.+?):\s+was ", r"\1 was ", text)
@@ -969,6 +1009,15 @@ def _render_section_docx(
     ]
     used_figures: Set[str] = set()
     tables = _expand_export_tables(_section_tables(section), label_ctx)
+    if section_id == "bivariate_associations":
+        for figure in sorted(figures, key=lambda item: _association_figure_sort_key(item, label_ctx)):
+            figure_id = _text(figure.get("figure_id") or figure.get("title"))
+            if figure_id in used_figures:
+                continue
+            next_no = _add_figure_docx(doc, figure, figure_no, label_ctx)
+            if next_no != figure_no:
+                figure_no = next_no
+                used_figures.add(figure_id)
     for table in tables:
         table_no = _add_table_docx(doc, table, table_no, label_ctx, include_interpretation=False)
         for figure in figures:
@@ -1326,6 +1375,15 @@ def _render_section_pdf(
     ]
     used_figures: Set[str] = set()
     tables = _expand_export_tables(_section_tables(section), label_ctx)
+    if section_id == "bivariate_associations":
+        for figure in sorted(figures, key=lambda item: _association_figure_sort_key(item, label_ctx)):
+            figure_id = _text(figure.get("figure_id") or figure.get("title"))
+            if figure_id in used_figures:
+                continue
+            next_no = _add_pdf_figure(flow, figure, figure_no, label_ctx, body, small)
+            if next_no != figure_no:
+                figure_no = next_no
+                used_figures.add(figure_id)
     for table in tables:
         flow.append(Paragraph(f"<b>{_pdf_escape(_display_value(_clean_table_title(table.get('title')), label_ctx))}</b>", small))
         pdf_table, warning_notes = _pdf_table(table, label_ctx, available_width)

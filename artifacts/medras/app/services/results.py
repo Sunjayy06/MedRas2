@@ -2048,7 +2048,7 @@ def _clinical_display_category(col_name, value):
     if key in _PRESENCE_DISPLAY_VARS:
         if low in {"positive", "postive", "yes", "present"}:
             return "Present"
-        if low in {"negative", "no", "absent"}:
+        if low in {"negative", "no", "absent", "abse"}:
             return "Absent"
     if key in _BINARY_MARKER_DISPLAY_VARS or any(marker in key for marker in _BINARY_MARKER_DISPLAY_VARS):
         if low in {"positive", "postive", "yes", "present"}:

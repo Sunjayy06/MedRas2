@@ -58,6 +58,18 @@ def test_chapter_v_export_normalizes_association_display_categories() -> None:
     assert "Grade {match.group(1)}" in source
     assert "HER2-enriched" in source
     assert "Present" in source and "Absent" in source
+    assert '"abse"' in source
+
+
+def test_chapter_v_renders_core_association_figures_before_tables() -> None:
+    source = _read("app/services/chapter_v_export.py")
+    assert "def _association_figure_sort_key" in source
+    docx_renderer = source[source.index("def _render_section_docx"):source.index("def _blueprint")]
+    pdf_renderer = source[source.index("def _render_section_pdf"):source.index("def generate_pdf")]
+    assert 'if section_id == "bivariate_associations":' in docx_renderer
+    assert 'if section_id == "bivariate_associations":' in pdf_renderer
+    assert "_association_figure_sort_key" in docx_renderer
+    assert "_association_figure_sort_key" in pdf_renderer
 
 
 def test_results_graph_generation_uses_outcome_display_mapping() -> None:
@@ -97,6 +109,14 @@ def test_thesis_interpretation_language_is_not_raw_outcome_phrase() -> None:
     export = _read("app/services/chapter_v_export.py")
     assert "This finding should be interpreted cautiously because some expected cell counts were below 5." in export
     assert "Localization and staining score are presented descriptively" in export
+    assert "Minimum expected count" not in export
+
+
+def test_thesis_significant_findings_use_deterministic_summaries() -> None:
+    blueprint = _read("app/services/thesis_blueprint.py")
+    assert "def _deterministic_key_finding" in blueprint
+    assert "Grade 3 cases were proportionately higher in the p27-negative group." in blueprint
+    assert "Triple-negative phenotype was proportionately enriched among p27-negative cases" in blueprint
 
 
 def main() -> None:
@@ -104,10 +124,12 @@ def main() -> None:
     test_main_export_does_not_append_unmatched_optional_figures()
     test_chapter_v_export_splits_mixed_descriptive_tables()
     test_chapter_v_export_normalizes_association_display_categories()
+    test_chapter_v_renders_core_association_figures_before_tables()
     test_pdf_primary_outcome_applies_expand_tables()
     test_results_graph_generation_uses_outcome_display_mapping()
     test_significant_findings_keep_raw_and_adjusted_p_values_separate()
     test_thesis_interpretation_language_is_not_raw_outcome_phrase()
+    test_thesis_significant_findings_use_deterministic_summaries()
     print("sigma chapter v visible polish checks passed")
 
 
