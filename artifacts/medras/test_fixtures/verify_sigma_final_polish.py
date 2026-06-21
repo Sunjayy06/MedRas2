@@ -44,20 +44,43 @@ def _docx_text(blob: bytes) -> str:
     return "\n".join(paragraphs + cells)
 
 
+def _observed_rows_for(name: str) -> List[List[Any]]:
+    if name == "ER":
+        return [["Postive", 2, 0, 2], ["Positive", 4, 0, 4], ["Negative", 0, 6, 6], ["Total", 6, 6, 12]]
+    if name == "PR":
+        return [["Postive", 1, 0, 1], ["Positive", 5, 0, 5], ["Negative", 0, 6, 6], ["Total", 6, 6, 12]]
+    if name == "AR":
+        return [["Postive", 1, 0, 1], ["Positive", 5, 0, 5], ["Negative", 0, 6, 6], ["Total", 6, 6, 12]]
+    if name == "Histological type":
+        return [["Type 1", 3, 0, 3], ["Type 2", 3, 1, 4], ["Type 3", 0, 5, 5], ["Total", 6, 6, 12]]
+    if name == "Molecular subtype":
+        return [["Luminal A", 3, 0, 3], ["Luminal B", 2, 1, 3], ["Her2neu", 1, 2, 3], ["Triple negative", 0, 3, 3], ["Total", 6, 6, 12]]
+    if name == "Ki67":
+        return [[">=14", 5, 1, 6], [">= 14%", 1, 0, 1], ["<14", 0, 5, 5], ["Total", 6, 6, 12]]
+    return [["Positive", 6, 0, 6], ["Negative", 0, 6, 6], ["Total", 6, 6, 12]]
+
+
 def _assoc_test(name: str, *, p_value: str, adjusted: str, effect: str = "Cramér's V = 0.46") -> Dict[str, Any]:
     return {
         "id": f"{name.lower().replace(' ', '_')}_by_outcome",
         "title": f"{name} vs p27 expression status: Chi-square test",
         "test_type": "chi_square",
         "analysis_family": "bivariate",
-        "tables": [{
-            "title": f"Association of p27 expression status with {name}",
-            "headers": [
-                "Predictor category", "Positive n (%)", "Negative n (%)",
-                "p-value", "Adjusted p-value", "Test applied", "Effect size", "Warnings",
-            ],
-            "rows": [["Positive", "6 (66.7%)", "0 (0.0%)", p_value, adjusted, "Chi-square test", effect, "-"]],
-        }],
+        "tables": [
+            {
+                "title": "Observed counts",
+                "headers": ["Predictor category", "Positive", "Negative", "Total"],
+                "rows": _observed_rows_for(name),
+            },
+            {
+                "title": f"Association of p27 expression status with {name}",
+                "headers": [
+                    "Predictor category", "Positive n (%)", "Negative n (%)",
+                    "p-value", "Adjusted p-value", "Test applied", "Effect size", "Warnings",
+                ],
+                "rows": [["Positive", "6 (66.7%)", "0 (0.0%)", p_value, adjusted, "Chi-square test", effect, "-"]],
+            },
+        ],
         "figures": [{
             "title": f"{name} by p27 expression status",
             "png_data_uri": PNG_1X1,
@@ -343,6 +366,31 @@ def test_significant_association_figures_present() -> None:
     for predictor in ("Histological type", "ER", "PR", "Molecular subtype", "AR"):
         assert f"p27 expression status by {predictor}" in text, \
             f"Figure for {predictor} must be present in main report"
+
+
+def test_association_tables_aggregate_display_categories() -> None:
+    """Generated association tables must aggregate duplicate display categories."""
+    results, _, _ = _build_fixture()
+    blob = chapter_v_export.generate_docx(results)
+    doc = Document(io.BytesIO(blob))
+    text = _docx_text(blob)
+
+    association_tables = []
+    for table in doc.tables:
+        headers = [cell.text for cell in table.rows[0].cells]
+        if headers and headers[0] == "Predictor category":
+            association_tables.append([[cell.text for cell in row.cells] for row in table.rows[1:]])
+
+    assert association_tables, "Expected at least one generated association table"
+    for rows in association_tables:
+        categories = [row[0] for row in rows if row and row[0]]
+        assert len(categories) == len(set(categories)), f"Duplicate display categories found: {categories}"
+
+    assert "Postive" not in text
+    assert "\nYes\n" not in text and "\nNo\n" not in text
+    assert "Grade 1" in text and "Grade 2" in text and "Grade 3" in text
+    assert "Type 1" not in text and "Type 2" not in text and "Type 3" not in text
+    assert "HER2-enriched" in text
 
 
 # ── 6. category_merges audit sheet completeness ───────────────────────────────
@@ -676,6 +724,9 @@ def main() -> None:
 
     test_significant_association_figures_present()
     print("  [ok] Histological type / ER / PR / Molecular subtype / AR figures present")
+
+    test_association_tables_aggregate_display_categories()
+    print("  [ok] Association tables aggregate cleaned display categories")
 
     test_category_merges_records_system_display_typos()
     print("  [ok] category_merges records Postive->Positive and Ki67 normalisation")

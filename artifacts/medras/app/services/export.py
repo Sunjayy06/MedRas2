@@ -357,7 +357,47 @@ def _excel_label_context(results: Dict[str, Any], assignment: Dict[str, Any]) ->
     }
 
 
-def _excel_display_value(value: Any, label_ctx: Dict[str, Any]) -> Any:
+_EXCEL_BINARY_MARKER_VARS = {"er", "pr", "ar", "her2", "her2neu", "egfr"}
+_EXCEL_PRESENCE_MARKER_VARS = {"lvi", "ene", "necrosis", "dcis"}
+
+
+def _excel_var_key(value: Any) -> str:
+    return re.sub(r"[^a-z0-9]+", "", str(value).lower())
+
+
+def _excel_clinical_label(value: Any, variable: Any = "") -> str:
+    text = html.unescape(str(value)).strip()
+    key = _excel_var_key(variable)
+    low = text.lower()
+    compact = re.sub(r"\s+", "", low)
+    text = text.replace("Her2Neu", "HER2").replace("HER2neu", "HER2").replace("Her2neu", "HER2")
+    text = re.sub(r"\bKi67\b", "Ki-67", text)
+    text = re.sub(r"\bpT\b", "Pathological T stage", text)
+    if "histologicaltype" in key or key in {"grade", "histologicalgrade"}:
+        match = re.search(r"(?:type|grade)?\s*([123])(?:\.0)?\b", low, flags=re.IGNORECASE)
+        if match:
+            return f"Grade {match.group(1)}"
+    if "ki67" in key or "ki-67" in str(variable).lower():
+        if compact in {">=14", ">=14%", "=>14", "=>14%"}:
+            return ">=14%"
+        if compact in {"<14", "<14%", "<=14", "<=14%"}:
+            return "<14%"
+    if "molecular" in key and "subtype" in key and compact in {"her2neu", "her2", "her2enriched", "her2-enriched"}:
+        return "HER2-enriched"
+    if key in _EXCEL_PRESENCE_MARKER_VARS:
+        if low in {"positive", "postive", "yes", "present"}:
+            return "Present"
+        if low in {"negative", "no", "absent"}:
+            return "Absent"
+    if key in _EXCEL_BINARY_MARKER_VARS or any(marker in key for marker in _EXCEL_BINARY_MARKER_VARS):
+        if low in {"positive", "postive", "yes", "present"}:
+            return "Positive"
+        if low in {"negative", "no", "absent"}:
+            return "Negative"
+    return text
+
+
+def _excel_display_value(value: Any, label_ctx: Dict[str, Any], variable: Any = "") -> Any:
     if value is None:
         return value
     text = html.unescape(str(value)).strip()
@@ -365,9 +405,13 @@ def _excel_display_value(value: Any, label_ctx: Dict[str, Any]) -> Any:
     text = re.sub(r">\s*=\s*14\s*%?", ">=14%", text)
     text = re.sub(r"^>=\s*14$", ">=14%", text)
     text = re.sub(r"^>=\s*14%$", ">=14%", text)
+    if variable:
+        clinical = _excel_clinical_label(text, variable)
+        if clinical != text:
+            return clinical
     if label_ctx.get("status_like") and text in (label_ctx.get("value_map") or {}):
         return label_ctx["value_map"][text]
-    return text
+    return _excel_clinical_label(text, variable)
 
 
 def _excel_display_dataframe(df: "pd.DataFrame", label_ctx: Dict[str, Any], merge_rows: List[Dict[str, Any]]) -> "pd.DataFrame":
@@ -386,7 +430,7 @@ def _excel_display_dataframe(df: "pd.DataFrame", label_ctx: Dict[str, Any], merg
             replacements = replacement_by_col.get(str(col), {})
             out[col] = out[col].map(
                 lambda value: value if pd.isna(value)
-                else _excel_display_value(replacements.get(str(value), value), label_ctx)
+                else _excel_display_value(replacements.get(str(value), value), label_ctx, variable=col)
             )
     return out
 
@@ -1918,7 +1962,7 @@ def to_xlsx(entry, results: Dict[str, Any], assignment: Dict[str, Any]) -> bytes
             ws.append([
                 row.get("variable", ""),
                 _export_cell(row.get("original_category", "")),
-                _excel_display_value(row.get("cleaned_category", ""), label_ctx),
+                _excel_display_value(row.get("cleaned_category", ""), label_ctx, variable=row.get("variable", "")),
                 row.get("count_affected", ""),
                 row.get("decision_type", ""),
                 row.get("applied_to_dataset", ""),

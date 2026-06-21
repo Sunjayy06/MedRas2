@@ -50,13 +50,24 @@ def test_chapter_v_export_splits_mixed_descriptive_tables() -> None:
     assert '["Parameter", "Category", "n", "%"]' in source
 
 
+def test_chapter_v_export_normalizes_association_display_categories() -> None:
+    source = _read("app/services/chapter_v_export.py")
+    assert "def _clinical_category_label" in source
+    assert "def _association_table_for_export" in source
+    assert "grouped[category][idx]" in source
+    assert "Grade {match.group(1)}" in source
+    assert "HER2-enriched" in source
+    assert "Present" in source and "Absent" in source
+
+
 def test_results_graph_generation_uses_outcome_display_mapping() -> None:
     source = _read("app/services/results.py")
     assert "def _apply_thesis_display_labels_to_graph_df" in source
+    assert "def _clinical_display_category" in source
     assert "graph_outcome = args.get(\"outcome\") or args.get(\"col2\") or args.get(\"col1\")" in source
     assert "outcome_label = str((session or {}).get(\"main_outcome_concept\")" in source
     assert "outcome_label=outcome_label" in source
-    assert '"title": f"{outcome_label or args.get(\'col2\')} by {clean_display_name(args.get(\'col1\'))}"' in source
+    assert '"title": f"{outcome_label or args.get(\'col2\')} by {clinical_display_name(args.get(\'col1\'))}"' in source
 
 
 def test_significant_findings_keep_raw_and_adjusted_p_values_separate() -> None:
@@ -92,6 +103,7 @@ def main() -> None:
     test_chapter_v_export_uses_thesis_display_figures()
     test_main_export_does_not_append_unmatched_optional_figures()
     test_chapter_v_export_splits_mixed_descriptive_tables()
+    test_chapter_v_export_normalizes_association_display_categories()
     test_pdf_primary_outcome_applies_expand_tables()
     test_results_graph_generation_uses_outcome_display_mapping()
     test_significant_findings_keep_raw_and_adjusted_p_values_separate()

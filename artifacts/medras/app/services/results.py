@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import base64
 import io
+import re
 import textwrap
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -221,6 +222,11 @@ def _apply_thesis_display_labels_to_graph_df(
         else value
     ))
     out[outcome] = mapped
+    for col in out.columns:
+        if col == outcome:
+            out[col] = out[col].map(lambda value: _clinical_display_category(col, value))
+        elif str(out[col].dtype) == "object" or out[col].dtype.name == "category":
+            out[col] = out[col].map(lambda value: _clinical_display_category(col, value))
     return out
 
 
@@ -1746,11 +1752,11 @@ def run_plan(
                     args.get("col2"),
                     args.get("col1"),
                     outcome_label=outcome_label,
-                    group_label=clean_display_name(args.get("col1")),
+                    group_label=clinical_display_name(args.get("col1")),
                 )
                 if png:
                     figures.append({
-                        "title": f"{outcome_label or args.get('col2')} by {clean_display_name(args.get('col1'))}",
+                        "title": f"{outcome_label or args.get('col2')} by {clinical_display_name(args.get('col1'))}",
                         "png_data_uri": png,
                         "source_variables": [args.get("col1"), args.get("col2")],
                     })
@@ -1762,12 +1768,12 @@ def run_plan(
                     graph_df,
                     args.get("predictor"),
                     args.get("outcome"),
-                    outcome_label=clean_display_name(args.get("predictor")),
-                    group_label=outcome_label or clean_display_name(args.get("outcome")),
+                    outcome_label=clinical_display_name(args.get("predictor")),
+                    group_label=outcome_label or clinical_display_name(args.get("outcome")),
                 )
                 if png:
                     figures.append({
-                        "title": f"{clean_display_name(args.get('predictor'))} by {outcome_label or args.get('outcome')}",
+                        "title": f"{clinical_display_name(args.get('predictor'))} by {outcome_label or args.get('outcome')}",
                         "png_data_uri": png,
                         "source_variables": [args.get("predictor"), args.get("outcome")],
                     })
@@ -1999,6 +2005,59 @@ def clean_display_name(col_name):
         else:
             result.append(w.capitalize())
     return ' '.join(result)
+
+
+_BINARY_MARKER_DISPLAY_VARS = {"er", "pr", "ar", "her2", "her2neu", "egfr"}
+_PRESENCE_DISPLAY_VARS = {"lvi", "ene", "necrosis", "dcis"}
+
+
+def clinical_display_name(col_name):
+    name = clean_display_name(col_name)
+    replacements = {
+        "Her2neu": "HER2",
+        "Her2 Neu": "HER2",
+        "Ki67": "Ki-67",
+        "Pt": "Pathological T stage",
+    }
+    for raw, clean in replacements.items():
+        name = re.sub(rf"\b{re.escape(raw)}\b", clean, name)
+    return name
+
+
+def _display_var_key(col_name) -> str:
+    return re.sub(r"[^a-z0-9]+", "", str(col_name).lower())
+
+
+def _clinical_display_category(col_name, value):
+    text = str(value).strip()
+    low = text.lower()
+    compact = re.sub(r"\s+", "", low)
+    key = _display_var_key(col_name)
+    if "histologicaltype" in key or key in {"grade", "histologicalgrade"}:
+        match = re.search(r"(?:type|grade)?\s*([123])(?:\.0)?\b", low, flags=re.IGNORECASE)
+        if match:
+            return f"Grade {match.group(1)}"
+    if "ki67" in key or "ki-67" in str(col_name).lower():
+        if compact in {">=14", ">=14%", "=>14", "=>14%"}:
+            return ">=14%"
+        if compact in {"<14", "<14%", "<=14", "<=14%"}:
+            return "<14%"
+    if "molecular" in key and "subtype" in key:
+        if compact in {"her2neu", "her2", "her2enriched", "her2-enriched"}:
+            return "HER2-enriched"
+    if key in _PRESENCE_DISPLAY_VARS:
+        if low in {"positive", "postive", "yes", "present"}:
+            return "Present"
+        if low in {"negative", "no", "absent"}:
+            return "Absent"
+    if key in _BINARY_MARKER_DISPLAY_VARS or any(marker in key for marker in _BINARY_MARKER_DISPLAY_VARS):
+        if low in {"positive", "postive", "yes", "present"}:
+            return "Positive"
+        if low in {"negative", "no", "absent"}:
+            return "Negative"
+    if compact in {"postive"}:
+        return "Positive"
+    return text.replace("Her2Neu", "HER2").replace("HER2neu", "HER2").replace("Her2neu", "HER2")
 
 
 # --- TEST 1: Paired t-test --------------------------------------------------

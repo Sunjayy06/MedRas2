@@ -36,6 +36,59 @@ FORBIDDEN_MAIN_TABLE_TITLES = {
 }
 
 
+_BINARY_MARKER_VARS = {"er", "pr", "ar", "her2", "her2neu", "egfr"}
+_PRESENCE_MARKER_VARS = {"lvi", "ene", "necrosis", "dcis"}
+
+
+def _clean_variable_label(value: Any) -> str:
+    text = _text(value)
+    replacements = {
+        "Her2Neu": "HER2",
+        "HER2neu": "HER2",
+        "Her2neu": "HER2",
+        "Ki67": "Ki-67",
+        "pT": "Pathological T stage",
+        "pt": "Pathological T stage",
+    }
+    for raw, clean in replacements.items():
+        text = re.sub(rf"\b{re.escape(raw)}\b", clean, text)
+    return text
+
+
+def _variable_key(value: Any) -> str:
+    return re.sub(r"[^a-z0-9]+", "", _text(value).lower())
+
+
+def _clinical_category_label(variable: Any, category: Any, label_ctx: Optional[Dict[str, Any]] = None) -> str:
+    var_key = _variable_key(variable)
+    text = _display_value(category, label_ctx) if label_ctx else _text(category)
+    low = text.strip().lower()
+    low_compact = re.sub(r"\s+", "", low)
+    if "histologicaltype" in var_key or var_key in {"grade", "histologicalgrade"}:
+        match = re.search(r"(?:type|grade)?\s*([123])(?:\.0)?\b", low, flags=re.IGNORECASE)
+        if match:
+            return f"Grade {match.group(1)}"
+    if "ki67" in var_key or "ki67" in _text(variable).lower() or "ki-67" in _text(variable).lower():
+        if low_compact in {">=14", ">=14%", "=>14", "=>14%"}:
+            return ">=14%"
+        if low_compact in {"<14", "<14%", "<=14", "<=14%"}:
+            return "<14%"
+    if "molecular" in var_key and "subtype" in var_key:
+        if low_compact in {"her2neu", "her2", "her2enriched", "her2-enriched"}:
+            return "HER2-enriched"
+    if var_key in _PRESENCE_MARKER_VARS:
+        if low in {"positive", "postive", "yes", "present"}:
+            return "Present"
+        if low in {"negative", "no", "absent"}:
+            return "Absent"
+    if var_key in _BINARY_MARKER_VARS or any(marker in var_key for marker in _BINARY_MARKER_VARS):
+        if low in {"positive", "postive", "yes", "present"}:
+            return "Positive"
+        if low in {"negative", "no", "absent"}:
+            return "Negative"
+    return _clean_variable_label(text)
+
+
 def _text(value: Any) -> str:
     if value is None:
         return ""
@@ -128,16 +181,16 @@ def _outcome_label_context(blueprint: Dict[str, Any]) -> Dict[str, Any]:
 def _display_value(value: Any, label_ctx: Optional[Dict[str, Any]]) -> str:
     text = _text(value)
     if not label_ctx:
-        return text
+        return _clean_variable_label(text)
     display = _text(label_ctx.get("display"))
     if not display:
-        return text
+        return _clean_variable_label(text)
     for raw in label_ctx.get("raw_values") or []:
         text = text.replace(raw, display)
     if label_ctx.get("status_like"):
         text = re.sub(r"\bYes\b", "Positive", text)
         text = re.sub(r"\bNo\b", "Negative", text)
-    return text
+    return _clean_variable_label(text)
 
 
 def _clean_finding_text(value: Any) -> str:
@@ -302,6 +355,17 @@ def _clean_interpretation(value: Any, label_ctx: Optional[Dict[str, Any]] = None
         "Sparse categories were detected; interpret with caution.",
         "This finding should be interpreted cautiously because some expected cell counts were below 5.",
     )
+    if re.search(r"(sparse|expected cell counts|expected counts below)", text, flags=re.IGNORECASE):
+        text = re.sub(r"\s*Interpret with caution:\s*", " ", text, flags=re.IGNORECASE)
+        text = re.sub(r"\s*Warning:\s*", " ", text, flags=re.IGNORECASE)
+        text = re.sub(
+            r"(?:This finding should be interpreted cautiously because some expected cell counts were below 5\.\s*)+",
+            "This finding should be interpreted cautiously because some expected cell counts were below 5. ",
+            text,
+            flags=re.IGNORECASE,
+        )
+        if "This finding should be interpreted cautiously because some expected cell counts were below 5." not in text:
+            text = text.rstrip(". ") + ". This finding should be interpreted cautiously because some expected cell counts were below 5."
     text = re.sub(r"^(.+?):\s+was ", r"\1 was ", text)
     text = re.sub(r"\s+", " ", text).strip()
     return text
@@ -366,7 +430,7 @@ def _descriptive_export_table(table: Dict[str, Any], label_ctx: Dict[str, Any]) 
         categories = _parse_category_summary(summary, label_ctx)
         if categories:
             for category, count, pct in categories:
-                key = (variable, _display_value(category, label_ctx))
+                key = (variable, _clinical_category_label(variable, category, label_ctx))
                 if key not in categorical_counts:
                     categorical_order.append(key)
                     categorical_counts[key] = 0.0
@@ -639,6 +703,103 @@ def _compact_table_for_export(table: Dict[str, Any]) -> Tuple[Dict[str, Any], Li
     return clone, list(dict.fromkeys(warnings))
 
 
+def _parse_count_cell(value: Any) -> Optional[float]:
+    text = _text(value)
+    match = re.search(r"([0-9]+(?:\.[0-9]+)?)", text)
+    if not match:
+        return None
+    try:
+        return float(match.group(1))
+    except ValueError:
+        return None
+
+
+def _format_count_pct(count: float, total: float) -> str:
+    count_text = str(int(count)) if float(count).is_integer() else f"{count:g}"
+    pct = (count / total * 100.0) if total else 0.0
+    return f"{count_text} ({pct:.1f}%)"
+
+
+def _association_table_for_export(table: Dict[str, Any], label_ctx: Dict[str, Any]) -> Dict[str, Any]:
+    table_type = str(table.get("table_type") or "").lower()
+    if "association" not in table_type:
+        return table
+    headers, rows = _table_rows(table)
+    if not rows or not headers:
+        return table
+    first_header = headers[0].strip().lower()
+    if first_header not in {"predictor category", "category", "group"}:
+        return table
+
+    source_vars = _source_variables(table)
+    display = _text(label_ctx.get("display"))
+    predictor = next((var for var in source_vars if var and var != display and var not in set(label_ctx.get("raw_values") or [])), "")
+    if not predictor:
+        title = _text(table.get("title"))
+        match = re.search(r"with\s+(.+)$", title, flags=re.IGNORECASE)
+        predictor = match.group(1).strip() if match else ""
+
+    count_indexes = [
+        idx for idx, header in enumerate(headers)
+        if idx > 0 and ("n (%)" in header.lower() or "count" in header.lower())
+    ]
+    if not count_indexes:
+        return table
+
+    grouped: Dict[str, List[Any]] = {}
+    order: List[str] = []
+    for row in rows:
+        if not row:
+            continue
+        category = _clinical_category_label(predictor, row[0], label_ctx)
+        if category not in grouped:
+            order.append(category)
+            grouped[category] = list(row)
+            grouped[category][0] = category
+            for idx in count_indexes:
+                grouped[category][idx] = 0.0
+        for idx in count_indexes:
+            grouped[category][idx] = float(grouped[category][idx] or 0.0) + float(_parse_count_cell(row[idx]) or 0.0)
+
+    if len(order) == len(rows) and all(_text(row[0]) == order[idx] for idx, row in enumerate(rows)):
+        clone = deepcopy(table)
+        clone["columns"] = [_display_value(header, label_ctx) for header in headers]
+        clean_rows = []
+        for row in rows:
+            clean_row = [_display_value(cell, label_ctx) for cell in row]
+            if clean_row:
+                clean_row[0] = _clinical_category_label(predictor, row[0], label_ctx)
+            clean_rows.append(clean_row)
+        clone["rows"] = clean_rows
+        return clone
+
+    out_rows: List[List[str]] = []
+    for category in order:
+        row = grouped[category]
+        total = sum(float(row[idx] or 0.0) for idx in count_indexes)
+        normalized = [_display_value(cell, label_ctx) for cell in row]
+        normalized[0] = category
+        for idx in count_indexes:
+            normalized[idx] = _format_count_pct(float(row[idx] or 0.0), total)
+        out_rows.append(normalized)
+
+    clone = deepcopy(table)
+    clone["columns"] = [_display_value(header, label_ctx) for header in headers]
+    clone["rows"] = out_rows
+    return clone
+
+
+def _normalise_table_for_export(table: Dict[str, Any], label_ctx: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    ctx = label_ctx or {}
+    payload = _association_table_for_export(table, ctx)
+    if payload is table:
+        payload = deepcopy(table)
+        headers, rows = _table_rows(payload)
+        payload["columns"] = [_display_value(header, ctx) for header in headers]
+        payload["rows"] = [[_display_value(cell, ctx) for cell in row] for row in rows]
+    return payload
+
+
 def _table_rows(table: Dict[str, Any]) -> tuple[List[str], List[List[str]]]:
     headers = [_text(header) for header in (table.get("columns") or table.get("headers") or [])]
     rows: List[List[str]] = []
@@ -721,6 +882,7 @@ def _add_table_docx(
     payload = _descriptive_export_table(payload, label_ctx or {})
     if isinstance(payload, list):
         payload = payload[0] if payload else {}
+    payload = _normalise_table_for_export(payload, label_ctx or {})
     payload, warning_notes = _compact_table_for_export(payload)
     headers, rows = _table_rows(payload)
     if not rows:
@@ -1110,6 +1272,7 @@ def _pdf_escape(value: Any) -> str:
 
 
 def _pdf_table(payload: Dict[str, Any], label_ctx: Optional[Dict[str, Any]] = None, width: float = 10.4 * inch) -> Tuple[Table, List[str]]:
+    payload = _normalise_table_for_export(payload, label_ctx or {})
     payload, warning_notes = _compact_table_for_export(payload)
     headers, rows = _table_rows(payload)
     font_size = 6 if len(headers) > 6 else 7
