@@ -377,6 +377,12 @@ def _clean_interpretation(value: Any, label_ctx: Optional[Dict[str, Any]] = None
         "Sparse categories were detected; interpret with caution.",
         "This finding should be interpreted cautiously because some expected cell counts were below 5.",
     )
+    text = re.sub(
+        r"Chi-square test with sparse-cell Chi-square used:\s*some\.?",
+        "This finding should be interpreted cautiously because some expected cell counts were below 5.",
+        text,
+        flags=re.IGNORECASE,
+    )
     if re.search(r"(sparse|expected cell counts|expected counts below)", text, flags=re.IGNORECASE):
         text = re.sub(r"\s*Interpret with caution[:.]?\s*", " ", text, flags=re.IGNORECASE)
         text = re.sub(r"\s*Warning[:.]?\s*", " ", text, flags=re.IGNORECASE)

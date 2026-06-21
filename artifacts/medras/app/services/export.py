@@ -396,6 +396,18 @@ def _excel_clinical_label(value: Any, variable: Any = "") -> str:
     return text
 
 
+def _excel_needs_clinical_display(variable: Any) -> bool:
+    key = _excel_var_key(variable)
+    clinical_keys = _EXCEL_BINARY_MARKER_VARS.union(_EXCEL_PRESENCE_MARKER_VARS).union({
+        "histologicaltype",
+        "histologicalgrade",
+        "grade",
+        "molecularsubtype",
+        "ki67",
+    })
+    return key in clinical_keys or any(marker in key for marker in clinical_keys)
+
+
 def _excel_display_value(value: Any, label_ctx: Dict[str, Any], variable: Any = "") -> Any:
     if value is None:
         return value
@@ -425,7 +437,7 @@ def _excel_display_dataframe(df: "pd.DataFrame", label_ctx: Dict[str, Any], merg
         if col and old is not None and new is not None:
             replacement_by_col.setdefault(col, {})[str(old)] = str(new)
     for col in out.columns:
-        if out[col].dtype == object or str(col) == str(label_ctx.get("outcome")):
+        if out[col].dtype == object or str(col) == str(label_ctx.get("outcome")) or _excel_needs_clinical_display(col):
             replacements = replacement_by_col.get(str(col), {})
             out[col] = out[col].map(
                 lambda value: value if pd.isna(value)

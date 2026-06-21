@@ -202,6 +202,16 @@ def _apply_thesis_display_labels_to_table_one(
     return updated
 
 
+def _needs_clinical_category_display(col_name) -> bool:
+    key = re.sub(r"[^a-z0-9]+", "", str(col_name).lower())
+    clinical_keys = {
+        "histologicaltype", "histologicalgrade", "grade",
+        "molecularsubtype", "ki67", "lvi", "ene", "necrosis", "dcis",
+        "er", "pr", "ar", "her2", "her2neu", "egfr",
+    }
+    return key in clinical_keys or any(marker in key for marker in clinical_keys)
+
+
 def _apply_thesis_display_labels_to_graph_df(
     df: pd.DataFrame,
     outcome: Optional[str],
@@ -225,7 +235,7 @@ def _apply_thesis_display_labels_to_graph_df(
     for col in out.columns:
         if col == outcome:
             out[col] = out[col].map(lambda value: _clinical_display_category(col, value))
-        elif str(out[col].dtype) == "object" or out[col].dtype.name == "category":
+        elif _needs_clinical_category_display(col) or str(out[col].dtype) == "object" or out[col].dtype.name == "category":
             out[col] = out[col].map(lambda value: _clinical_display_category(col, value))
     return out
 

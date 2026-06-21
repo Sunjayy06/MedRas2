@@ -603,7 +603,10 @@ def _safe_interpretation(test: Dict[str, Any], label_ctx: Optional[Dict[str, Any
             else f"{title} did not show a statistically significant association."
         )
     if warning:
-        base += " Interpret with caution: " + warning
+        if re.search(r"(sparse|expected)", warning, flags=re.IGNORECASE):
+            base += " This finding should be interpreted cautiously because some expected cell counts were below 5."
+        else:
+            base += " Interpret with caution: " + warning
     return base
 
 
@@ -966,10 +969,25 @@ def build_thesis_analysis_blueprint(
         if section:
             section["figures"].append(bp_fig)
 
+    core_figure_vars = set()
+    for finding in significant_findings:
+        variable = str((finding or {}).get("variable") or "")
+        for sep in (" vs ", " by "):
+            if sep in variable:
+                core_figure_vars.add(variable.split(sep, 1)[0].strip())
+                break
+    for table in all_tables:
+        if str(table.get("table_type") or "").startswith("continuous_or_group"):
+            for variable in table.get("source_variables") or []:
+                if variable and str(variable) != str(outcome):
+                    core_figure_vars.add(str(variable))
+
     max_default_figures = 8
     for idx, figure in enumerate(all_figures):
         is_primary = figure.get("figure_id") == "primary_outcome_distribution"
-        if idx >= max_default_figures and not is_primary:
+        fig_vars = {str(item) for item in figure.get("source_variables") or [] if item}
+        is_core = bool(fig_vars.intersection(core_figure_vars))
+        if idx >= max_default_figures and not is_primary and not is_core:
             figure["optional"] = True
             figure["detailed_report_only"] = True
             warning_list = list(figure.get("warnings") or [])

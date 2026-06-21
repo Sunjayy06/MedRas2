@@ -75,7 +75,9 @@ def test_chapter_v_renders_core_association_figures_before_tables() -> None:
 def test_results_graph_generation_uses_outcome_display_mapping() -> None:
     source = _read("app/services/results.py")
     assert "def _apply_thesis_display_labels_to_graph_df" in source
+    assert "def _needs_clinical_category_display" in source
     assert "def _clinical_display_category" in source
+    assert "_needs_clinical_category_display(col)" in source
     assert "graph_outcome = args.get(\"outcome\") or args.get(\"col2\") or args.get(\"col1\")" in source
     assert "outcome_label = str((session or {}).get(\"main_outcome_concept\")" in source
     assert "outcome_label=outcome_label" in source
@@ -119,6 +121,13 @@ def test_thesis_significant_findings_use_deterministic_summaries() -> None:
     assert "Triple-negative phenotype was proportionately enriched among p27-negative cases" in blueprint
 
 
+def test_blueprint_keeps_core_significant_figures_in_main_report() -> None:
+    blueprint = _read("app/services/thesis_blueprint.py")
+    assert "core_figure_vars = set()" in blueprint
+    assert "fig_vars.intersection(core_figure_vars)" in blueprint
+    assert "and not is_core" in blueprint
+
+
 def main() -> None:
     test_chapter_v_export_uses_thesis_display_figures()
     test_main_export_does_not_append_unmatched_optional_figures()
@@ -130,6 +139,7 @@ def main() -> None:
     test_significant_findings_keep_raw_and_adjusted_p_values_separate()
     test_thesis_interpretation_language_is_not_raw_outcome_phrase()
     test_thesis_significant_findings_use_deterministic_summaries()
+    test_blueprint_keeps_core_significant_figures_in_main_report()
     print("sigma chapter v visible polish checks passed")
 
 

@@ -114,7 +114,7 @@ def _build_fixture() -> tuple[Dict[str, Any], "pd.DataFrame", Dict[str, Any]]:
         "ER": ["Postive"] * 2 + ["Positive"] * 4 + ["Negative"] * 6,     # 2 typos
         "PR": ["Postive"] * 1 + ["Positive"] * 5 + ["Negative"] * 6,     # 1 typo
         "AR": ["Postive"] * 1 + ["Positive"] * 5 + ["Negative"] * 6,     # 1 typo
-        "Histological type": ["Type 1", "Type 2", "Type 3"] * 4,
+        "Histological type": [1.0, 2.0, 3.0] * 4,
         "Molecular subtype": ["Luminal A", "Luminal B", "HER2neu", "Triple negative"] * 3,
         "Ki67": [">=14"] * 5 + ["<14"] * 7,                               # unnormalised Ki67
         "pT": ["T1", "T2", "T3"] * 4,
@@ -497,6 +497,8 @@ def test_cleaned_dataset_no_postive() -> None:
         "cleaned_processed_dataset must not contain the raw typo 'Postive'"
     assert "Abse" not in all_text, \
         "cleaned_processed_dataset must not contain the raw LVI typo 'Abse'"
+    assert "Grade 1" in all_text and "Grade 2" in all_text and "Grade 3" in all_text, \
+        "cleaned_processed_dataset must show Histological type as Grade 1/2/3"
 
 
 def test_lvi_abse_audit_trace_preserved() -> None:
