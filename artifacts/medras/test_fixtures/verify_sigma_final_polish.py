@@ -121,6 +121,7 @@ def _build_fixture() -> tuple[Dict[str, Any], "pd.DataFrame", Dict[str, Any]]:
         "Ki67": [">=14"] * 5 + ["<14"] * 7,                               # unnormalised Ki67
         "pT": ["T1", "T2", "T3"] * 4,
         "Nodal status": ["N0"] * 5 + ["NO"] + ["N1"] * 3 + ["N2"] * 3,
+        "No of nodes involved": ["0/31", "2026-01-17 00:00:00", "2026-10-12 00:00:00", "2026-04-22 00:00:00"] * 3,
         "LVI": ["Present", "Abse"] * 6,
         "DCIS": ["Negative"] * 6 + ["High grade", "Low grade", "Intermediate grade", "Positive", "Negative", "Negative"],
     })
@@ -138,6 +139,7 @@ def _build_fixture() -> tuple[Dict[str, Any], "pd.DataFrame", Dict[str, Any]]:
         {"column": "Ki67",               "detected_type": "nominal"},
         {"column": "pT",                 "detected_type": "ordinal"},
         {"column": "Nodal status",       "detected_type": "ordinal"},
+        {"column": "No of nodes involved", "detected_type": "nominal"},
         {"column": "LVI",                "detected_type": "nominal"},
         {"column": "DCIS",               "detected_type": "nominal"},
     ]
@@ -430,7 +432,16 @@ def test_association_tables_aggregate_display_categories() -> None:
     assert "Grade 1" in text and "Grade 2" in text and "Grade 3" in text
     assert "Type 1" not in text and "Type 2" not in text and "Type 3" not in text
     assert "HER2-enriched" in text
-    assert "1.0" not in text and "2.0" not in text and "3.0" not in text
+    histological_rows = []
+    for table in doc.tables:
+        headers = [cell.text for cell in table.rows[0].cells]
+        if headers and headers[0] == "Predictor category":
+            rows = [[cell.text for cell in row.cells] for row in table.rows[1:]]
+            if any(row and row[0] in {"Grade 1", "Grade 2", "Grade 3"} for row in rows):
+                histological_rows.extend(rows)
+    histological_categories = [row[0] for row in histological_rows if row]
+    assert {"Grade 1", "Grade 2", "Grade 3"} <= set(histological_categories), histological_categories
+    assert not {"1.0", "2.0", "3.0"} & set(histological_categories), histological_categories
 
 
 def test_manual_style_descriptive_consolidation_docx() -> None:
@@ -499,6 +510,7 @@ def test_category_merges_records_system_display_typos() -> None:
     assert any(str(r[0]) == "Her2Neu" and str(r[1]) == "3+" and str(r[2]) == "Positive (3+)" for r in rows)
     assert any(str(r[0]) == "EGFR" and str(r[1]) == "Patchy positive" and str(r[2]) == "Positive" for r in rows)
     assert any(str(r[0]) == "DCIS" and str(r[1]) == "High grade" and str(r[2]) == "Present" for r in rows)
+    assert any(str(r[0]) == "No of nodes involved" and "2026-01-17" in str(r[1]) and str(r[2]) == "1/17" for r in rows)
 
 
 # ── 7. cleaned_processed_dataset has no raw typos ────────────────────────────
@@ -530,6 +542,8 @@ def test_cleaned_dataset_no_postive() -> None:
     assert "Negative/low" in all_text and "Equivocal (2+)" in all_text and "Positive (3+)" in all_text
     assert "Patchy positive" not in all_text
     assert "High grade" not in all_text and "Low grade" not in all_text and "Intermediate grade" not in all_text
+    assert "2026-" not in all_text
+    assert "1/17" in all_text and "10/12" in all_text and "4/22" in all_text
 
 
 def test_lvi_abse_audit_trace_preserved() -> None:

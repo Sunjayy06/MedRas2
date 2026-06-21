@@ -65,6 +65,7 @@ def test_chapter_v_export_normalizes_association_display_categories() -> None:
     assert "patchy positive" in source
     assert "high grade" in source and "intermediate grade" in source
     assert "Tumour quadrant" in source
+    assert "Tumour quadrant / quadrant" not in source
 
 
 def test_chapter_v_renders_core_association_figures_before_tables() -> None:
@@ -139,6 +140,15 @@ def test_excel_display_consolidates_manual_style_categories() -> None:
     assert "patchy positive" in source
     assert "high grade" in source and "intermediate grade" in source
     assert "Automatic display normalisation" in source
+    assert "def _excel_recover_node_fraction" in source
+    assert "1/17" not in source  # recovery is data-driven, not fixture hardcoded
+
+
+def test_node_fraction_derivation_recovers_date_like_values() -> None:
+    source = _read("app/services/variable_classifier.py")
+    assert "def _recover_node_fraction_from_excel_date" in source
+    assert "Recovered" in source
+    assert "source_values.loc[idx] = f\"{pos}/{total}\"" in source
 
 
 def test_thesis_significant_findings_use_deterministic_summaries() -> None:
@@ -167,6 +177,7 @@ def main() -> None:
     test_significant_findings_keep_raw_and_adjusted_p_values_separate()
     test_thesis_interpretation_language_is_not_raw_outcome_phrase()
     test_excel_display_consolidates_manual_style_categories()
+    test_node_fraction_derivation_recovers_date_like_values()
     test_thesis_significant_findings_use_deterministic_summaries()
     test_blueprint_keeps_core_significant_figures_in_main_report()
     print("sigma chapter v visible polish checks passed")

@@ -571,6 +571,8 @@ def _safe_interpretation(test: Dict[str, Any], label_ctx: Optional[Dict[str, Any
     p = _significance_p_value(test)
     title = _display_text(test.get("title") or "This analysis", label_ctx)
     warning = _clean_text(test.get("warning") or test.get("note"))
+    if warning in {"-", "—", "â€”"}:
+        warning = ""
     family = _test_family(test)
     if p is None:
         base = _clean_text(test.get("narrative")) or f"{title} was completed; review the table for estimates."

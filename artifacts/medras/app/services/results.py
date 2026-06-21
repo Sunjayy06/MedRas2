@@ -2032,7 +2032,8 @@ def clinical_display_name(col_name):
     }
     for raw, clean in replacements.items():
         name = re.sub(rf"\b{re.escape(raw)}\b", clean, name)
-    name = re.sub(r"\bTumou?r site(?:/quadrant)?\b", "Tumour quadrant", name, flags=re.IGNORECASE)
+    name = re.sub(r"\bTumou?r site\s*/\s*quadrant\b", "Tumour quadrant", name, flags=re.IGNORECASE)
+    name = re.sub(r"\bTumou?r site\b", "Tumour quadrant", name, flags=re.IGNORECASE)
     return name
 
 

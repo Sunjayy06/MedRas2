@@ -397,16 +397,30 @@ def verify_service_docx() -> None:
     assert "cross_sectional_association" not in text
     assert "Internal detailed figure" not in text
     doc = Document(io.BytesIO(blob))
+    def _canonical_member(value: str) -> str:
+        text = str(value or "").strip()
+        aliases = {
+            "Her2Neu": "HER2",
+            "Her2neu": "HER2",
+            "HER2neu": "HER2",
+            "Ki67": "Ki-67",
+            "Tumour site / quadrant": "Tumour quadrant",
+            "Tumor site / quadrant": "Tumour quadrant",
+            "Tumour quadrant / quadrant": "Tumour quadrant",
+        }
+        return aliases.get(text, text)
+
     descriptive_table_members = []
     for table in doc.tables[1:6]:
         members = set()
         for row in table.rows[1:]:
             value = row.cells[0].text
             if value:
-                members.add(value)
+                members.add(_canonical_member(value))
         descriptive_table_members.extend(members)
     for variable in ["Age", "ER", "PR", "AR", "pT", "Nodal status", "LVI", "Interpretation-site", "Staining Result"]:
-        assert descriptive_table_members.count(variable) == 1
+        count = descriptive_table_members.count(_canonical_member(variable))
+        assert count == 1, f"{variable} appears {count} time(s) in descriptive sections: {descriptive_table_members}"
 
     regular_word = export.to_docx(FakeEntry(), results, {"outcome": "Positive/ Negative"})
     regular_text = _docx_text(regular_word)

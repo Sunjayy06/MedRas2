@@ -48,9 +48,11 @@ def verify_partial_derivation() -> None:
     assert float(derived.loc[1, "positive_nodes"]) == 2.0
     assert float(derived.loc[1, "total_nodes"]) == 18.0
     assert math.isclose(float(derived.loc[1, "node_ratio"]), 2 / 18)
-    assert derived.loc[5:9, "positive_nodes"].isna().all()
+    assert derived.loc[5:7, "positive_nodes"].notna().all()
+    assert "/" in str(derived.loc[5, "No of nodes involved"])
+    assert derived.loc[8:9, "positive_nodes"].isna().all()
     assert "Excel-corrupted" in notes["No of nodes involved"]
-    assert "left missing" in notes["No of nodes involved"]
+    assert "Recovered" in notes["No of nodes involved"]
     issues = _quality_issues(derived, notes)
     assert any(i["type"] == "node_fraction_corruption" for i in issues)
 

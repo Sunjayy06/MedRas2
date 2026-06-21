@@ -52,7 +52,8 @@ def _clean_variable_label(value: Any) -> str:
     }
     for raw, clean in replacements.items():
         text = re.sub(rf"\b{re.escape(raw)}\b", clean, text)
-    text = re.sub(r"\bTumou?r site(?:/quadrant)?\b", "Tumour quadrant", text, flags=re.IGNORECASE)
+    text = re.sub(r"\bTumou?r site\s*/\s*quadrant\b", "Tumour quadrant", text, flags=re.IGNORECASE)
+    text = re.sub(r"\bTumou?r site\b", "Tumour quadrant", text, flags=re.IGNORECASE)
     return text
 
 

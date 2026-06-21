@@ -191,6 +191,10 @@ _NUMERIC_UNIT_RE = re.compile(
 )
 _NODE_FRACTION_RE = re.compile(r"^\s*(\d+)\s*/\s*(\d+)\s*$")
 _NODE_FRACTION_NAME_RE = re.compile(r"(?:node|nodal|lymph)", re.IGNORECASE)
+_NODE_FRACTION_LIKE_NAME_RE = re.compile(
+    r"(?:nodes?\s+involved|involved\s+nodes?|node\s*fraction|nodal\s*fraction|node\s*ratio|nodal\s*burden|no\.?\s*of\s*nodes)",
+    re.IGNORECASE,
+)
 _DATE_TEXT_RE = re.compile(r"^\s*\d{4}[-/]\d{1,2}[-/]\d{1,2}(?:\s|$)")
 _HER2_NAME_RE = re.compile(r"(?:^|[\W_])(her\s*2|her2|her2neu|her2\s*neu|erbb2)(?:$|[\W_])", re.IGNORECASE)
 _CATEGORICAL_CLINICAL_MARKER_RE = re.compile(
@@ -861,6 +865,36 @@ def _looks_like_excel_date_serial(value: Any) -> bool:
     return bool(np.isfinite(numeric) and numeric.is_integer() and 20000 <= numeric <= 60000)
 
 
+def _recover_node_fraction_from_excel_date(value: Any) -> tuple[int, int] | None:
+    """Recover Excel-corrupted node fractions represented as dates.
+
+    In node-fraction columns, Excel may coerce values such as ``1/17`` into a
+    date like ``2026-01-17``.  The month/day pair is the recoverable fraction.
+    This helper is only called for node-named columns.
+    """
+    parsed = None
+    if isinstance(value, (date, datetime, pd.Timestamp, np.datetime64)):
+        if pd.isna(value):
+            return None
+        parsed = pd.Timestamp(value)
+    elif isinstance(value, str) and _DATE_TEXT_RE.match(value):
+        parsed = pd.to_datetime(value, errors="coerce")
+    else:
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError):
+            return None
+        if np.isfinite(numeric) and numeric.is_integer() and 20000 <= numeric <= 60000:
+            parsed = pd.to_datetime(numeric, unit="D", origin="1899-12-30", errors="coerce")
+    if parsed is None or pd.isna(parsed):
+        return None
+    pos = int(parsed.month)
+    total = int(parsed.day)
+    if total <= 0 or pos > total:
+        return None
+    return pos, total
+
+
 def derive_node_fraction_columns(
     df: pd.DataFrame,
     skip_columns: set[str] | None = None,
@@ -882,8 +916,10 @@ def derive_node_fraction_columns(
         if len(non_null) < 3:
             continue
         node_named = bool(_NODE_FRACTION_NAME_RE.search(str(col)))
+        fraction_like_name = bool(_NODE_FRACTION_LIKE_NAME_RE.search(str(col)))
 
         parsed: Dict[Any, tuple[int, int]] = {}
+        recovered: Dict[Any, tuple[int, int]] = {}
         valid = 0
         likely_excel_dates = 0
         for idx, raw in non_null.items():
@@ -891,6 +927,14 @@ def derive_node_fraction_columns(
             if not m:
                 if node_named and _looks_like_excel_date_serial(raw):
                     likely_excel_dates += 1
+                    recovered_fraction = (
+                        _recover_node_fraction_from_excel_date(raw)
+                        if fraction_like_name else None
+                    )
+                    if recovered_fraction is not None:
+                        parsed[idx] = recovered_fraction
+                        recovered[idx] = recovered_fraction
+                        valid += 1
                 continue
             pos, total = int(m.group(1)), int(m.group(2))
             if total <= 0 or pos > total:
@@ -940,6 +984,12 @@ def derive_node_fraction_columns(
             total_values.loc[idx] = float(total)
             ratio_values.loc[idx] = float(pos) / float(total)
 
+        if recovered:
+            source_values = out[col].astype("object").copy()
+            for idx, (pos, total) in recovered.items():
+                source_values.loc[idx] = f"{pos}/{total}"
+            out[col] = source_values
+
         out[pos_col] = pos_values
         out[total_col] = total_values
         out[ratio_col] = ratio_values
@@ -950,10 +1000,15 @@ def derive_node_fraction_columns(
             f"{', '.join(derived)}. Parsed {valid}/{len(non_null)} non-missing "
             "value(s); unparsed or invalid rows were left missing."
         ))
-        if likely_excel_dates:
+        if recovered:
             notes[col] += (
-                f" Warning: {likely_excel_dates} value(s) look like Excel-corrupted "
-                "dates/date serials and were left missing."
+                f" Recovered {len(recovered)} Excel-corrupted date-like "
+                "value(s) back to node fractions for the processed dataset."
+            )
+        if likely_excel_dates > len(recovered):
+            notes[col] += (
+                f" Warning: {likely_excel_dates - len(recovered)} value(s) look like "
+                "Excel-corrupted dates/date serials and were left missing."
             )
 
     return out, notes, derived_by_source

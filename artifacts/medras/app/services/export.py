@@ -364,15 +364,38 @@ def _excel_var_key(value: Any) -> str:
     return re.sub(r"[^a-z0-9]+", "", str(value).lower())
 
 
+def _excel_recover_node_fraction(value: Any, variable: Any = "") -> str:
+    key = _excel_var_key(variable)
+    if not any(token in key for token in ("node", "nodal", "lymph")):
+        return ""
+    text = html.unescape(str(value)).strip()
+    parsed = None
+    if re.match(r"^\d{4}[-/]\d{1,2}[-/]\d{1,2}(?:\s|$)", text):
+        parsed = pd.to_datetime(text, errors="coerce")
+    elif isinstance(value, (pd.Timestamp,)):
+        parsed = value
+    if parsed is None or pd.isna(parsed):
+        return ""
+    pos = int(parsed.month)
+    total = int(parsed.day)
+    if total <= 0 or pos > total:
+        return ""
+    return f"{pos}/{total}"
+
+
 def _excel_clinical_label(value: Any, variable: Any = "") -> str:
     text = html.unescape(str(value)).strip()
     key = _excel_var_key(variable)
     low = text.lower()
     compact = re.sub(r"\s+", "", low)
+    recovered_fraction = _excel_recover_node_fraction(value, variable)
+    if recovered_fraction:
+        return recovered_fraction
     text = text.replace("Her2Neu", "HER2").replace("HER2neu", "HER2").replace("Her2neu", "HER2")
     text = re.sub(r"\bKi67\b", "Ki-67", text)
     text = re.sub(r"\bpT\b", "Pathological T stage", text)
-    text = re.sub(r"\bTumou?r site(?:/quadrant)?\b", "Tumour quadrant", text, flags=re.IGNORECASE)
+    text = re.sub(r"\bTumou?r site\s*/\s*quadrant\b", "Tumour quadrant", text, flags=re.IGNORECASE)
+    text = re.sub(r"\bTumou?r site\b", "Tumour quadrant", text, flags=re.IGNORECASE)
     if "histologicaltype" in key or key in {"grade", "histologicalgrade"}:
         match = re.search(r"(?:type|grade)?\s*([123])(?:\.0)?\b", low, flags=re.IGNORECASE)
         if match:
@@ -461,7 +484,13 @@ def _excel_display_dataframe(df: "pd.DataFrame", label_ctx: Dict[str, Any], merg
         if col and old is not None and new is not None:
             replacement_by_col.setdefault(col, {})[str(old)] = str(new)
     for col in out.columns:
-        if out[col].dtype == object or str(col) == str(label_ctx.get("outcome")) or _excel_needs_clinical_display(col):
+        node_like = any(token in _excel_var_key(col) for token in ("node", "nodal", "lymph"))
+        if (
+            out[col].dtype == object
+            or str(col) == str(label_ctx.get("outcome"))
+            or _excel_needs_clinical_display(col)
+            or (node_like and pd.api.types.is_datetime64_any_dtype(out[col]))
+        ):
             replacements = replacement_by_col.get(str(col), {})
             out[col] = out[col].map(
                 lambda value: value if pd.isna(value)
@@ -523,9 +552,10 @@ def _system_display_merge_rows(df: "pd.DataFrame") -> List[Dict[str, Any]]:
         return rows
     seen: set = set()
     for col in df.columns:
-        if df[col].dtype != object:
-            continue
         col_str = str(col)
+        node_like = any(token in _excel_var_key(col_str) for token in ("node", "nodal", "lymph"))
+        if df[col].dtype != object and not (node_like and pd.api.types.is_datetime64_any_dtype(df[col])):
+            continue
         values = df[col].dropna().astype(str)
         for raw, cleaned in _SYSTEM_DISPLAY_NORMALIZATIONS:
             count = int((values == raw).sum())

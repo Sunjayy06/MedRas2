@@ -145,7 +145,12 @@ def verify_actual_test_label_and_association_figure():
     })
     sparse_result = results.run_chi_or_fisher("Predictor", "Outcome", {}, sparse_rxc)
     assert sparse_result["actual_test_used"] == "Chi-square test"
-    assert "Interpret with caution" in sparse_result["note"]
+    assert (
+        "This finding should be interpreted cautiously because some expected cell counts were below 5."
+        in sparse_result["note"]
+    )
+    assert "because some." not in sparse_result["note"]
+    assert "Interpret with caution: -" not in sparse_result["note"]
 
     sparse_2x2 = pd.DataFrame({
         "Predictor": ["A"] * 8 + ["B"] * 2,
