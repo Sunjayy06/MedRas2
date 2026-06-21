@@ -978,10 +978,12 @@ def build_thesis_analysis_blueprint(
             if sep in variable:
                 core_figure_vars.add(variable.split(sep, 1)[0].strip())
                 break
+    node_derived_keys = {"positivenodes", "totalnodes", "noderatio"}
     for table in all_tables:
         if str(table.get("table_type") or "").startswith("continuous_or_group"):
             for variable in table.get("source_variables") or []:
-                if variable and str(variable) != str(outcome):
+                variable_key = re.sub(r"[^a-z0-9]+", "", str(variable).lower())
+                if variable and str(variable) != str(outcome) and variable_key not in node_derived_keys:
                     core_figure_vars.add(str(variable))
 
     max_default_figures = 8

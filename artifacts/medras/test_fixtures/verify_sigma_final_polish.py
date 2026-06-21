@@ -159,8 +159,8 @@ def _build_fixture() -> tuple[Dict[str, Any], "pd.DataFrame", Dict[str, Any]]:
                     "p-value", "Adjusted p-value", "Test applied", "Effect size", "Warnings",
                 ],
                 "rows": [
-                    ["p27 Positive", "8", "57.1 ± 18.9", "t = 1.20", "p = 0.240", "p = 0.300", "Welch's t-test", "Cohen's d = 0.42", "-"],
-                    ["p27 Negative", "4", "61.8 ± 22.5", "t = 1.20", "p = 0.240", "p = 0.300", "Welch's t-test", "Cohen's d = 0.42", "-"],
+                    ["p27 Positive", "8", "57.1 ± 18.9", "t = -0.89; df = 27.58011794899391", "p = 0.240", "p = 0.300", "welch_ttest", "Cohen's d = -0.22896609106040972", "-"],
+                    ["p27 Negative", "4", "61.8 ± 22.5", "t = -0.89; df = 27.58011794899391", "p = 0.240", "p = 0.300", "welch_ttest", "Cohen's d = -0.22896609106040972", "-"],
                 ],
             }],
             "figures": [{
@@ -179,6 +179,9 @@ def _build_fixture() -> tuple[Dict[str, Any], "pd.DataFrame", Dict[str, Any]]:
         _assoc_test("pT",          p_value="p = 0.400", adjusted="p = 0.700"),
         _assoc_test("Nodal status", p_value="p = 0.420", adjusted="p = 0.710"),
         _assoc_test("LVI",         p_value="p = 0.500", adjusted="p = 0.750"),
+        _assoc_test("node_ratio",   p_value="p = 0.800", adjusted="p = 0.900"),
+        _assoc_test("positive_nodes", p_value="p = 0.810", adjusted="p = 0.900"),
+        _assoc_test("total_nodes",  p_value="p = 0.820", adjusted="p = 0.900"),
     ]
 
     significant_findings: List[Dict[str, Any]] = [
@@ -569,6 +572,39 @@ def test_sparse_caution_deduplicated() -> None:
     assert "Interpret with caution: -" not in text
 
 
+def test_age_table_formats_internal_values() -> None:
+    results, _, _ = _build_fixture()
+    blob = chapter_v_export.generate_docx(results)
+    text = _docx_text(blob)
+    assert "welch_ttest" not in text
+    assert "Welch's t-test" in text
+    assert "27.58011794899391" not in text
+    assert "df = 27.58" in text
+    assert "-0.22896609106040972" not in text
+    assert "Cohen's d = -0.229" in text
+
+
+def test_node_derived_figures_absent_but_results_retained() -> None:
+    results, _, _ = _build_fixture()
+    word = _docx_text(chapter_v_export.generate_docx(results))
+    pdf = _pdf_text(chapter_v_export.generate_pdf(results))
+    for variable in ("node_ratio", "positive_nodes", "total_nodes"):
+        assert f"p27 expression status by {variable}" not in word
+        assert f"p27 expression status by {variable}" not in pdf
+        assert any(variable in str(test.get("title") or "") for test in results["tests"])
+
+
+def test_marker_acronyms_preserved_in_rendered_captions() -> None:
+    results, _, _ = _build_fixture()
+    word = _docx_text(chapter_v_export.generate_docx(results))
+    pdf = _pdf_text(chapter_v_export.generate_pdf(results))
+    for text in (word, pdf):
+        assert "p27 expression status by ER" in text
+        assert "p27 expression status by AR" in text
+        assert "p27 expression status by Er" not in text
+        assert "p27 expression status by Ar" not in text
+
+
 def test_significant_key_findings_are_thesis_style() -> None:
     """Final significant findings should use deterministic thesis-style wording."""
     results, _, _ = _build_fixture()
@@ -868,6 +904,15 @@ def main() -> None:
 
     test_sparse_caution_deduplicated()
     print("  [ok] Sparse-cell caution is deduplicated")
+
+    test_age_table_formats_internal_values()
+    print("  [ok] Age comparison table formats internal test values")
+
+    test_node_derived_figures_absent_but_results_retained()
+    print("  [ok] Node-derived figures stay out of main report while results remain")
+
+    test_marker_acronyms_preserved_in_rendered_captions()
+    print("  [ok] ER/AR figure labels preserve clinical capitalization")
 
     test_significant_key_findings_are_thesis_style()
     print("  [ok] Significant findings use deterministic thesis-style wording")

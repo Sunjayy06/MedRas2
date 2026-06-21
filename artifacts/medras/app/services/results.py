@@ -2007,7 +2007,7 @@ def clean_display_name(col_name):
     name = name.strip()
     acronyms = ['VAS', 'NRS', 'BMI', 'HHS',
                 'ICC', 'AUC', 'OR', 'HR',
-                'SD', 'IQR', 'CI']
+                'SD', 'IQR', 'CI', 'ER', 'PR', 'AR', 'HER2', 'EGFR']
     words = name.split()
     result = []
     for w in words:

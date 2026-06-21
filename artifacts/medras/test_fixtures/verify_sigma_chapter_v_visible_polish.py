@@ -130,6 +130,9 @@ def test_thesis_interpretation_language_is_not_raw_outcome_phrase() -> None:
     assert "Chi-square test with sparse-cell Chi-square used: some" not in export
     assert "because some." not in export
     assert "Interpret with caution: -" not in export
+    assert "def _format_statistical_display" in export
+    assert "\"welch_ttest\": \"Welch's t-test\"" in export
+    assert "Cohen" in export and "_round_match(match, 3)" in export
 
 
 def test_excel_display_consolidates_manual_style_categories() -> None:
@@ -163,6 +166,13 @@ def test_blueprint_keeps_core_significant_figures_in_main_report() -> None:
     assert "core_figure_vars = set()" in blueprint
     assert "fig_vars.intersection(core_figure_vars)" in blueprint
     assert "and not is_core" in blueprint
+    assert "node_derived_keys" in blueprint
+    assert "\"noderatio\"" in blueprint
+
+
+def test_graph_labels_preserve_clinical_acronyms() -> None:
+    results = _read("app/services/results.py")
+    assert "'ER', 'PR', 'AR', 'HER2', 'EGFR'" in results
 
 
 def main() -> None:
@@ -180,6 +190,7 @@ def main() -> None:
     test_node_fraction_derivation_recovers_date_like_values()
     test_thesis_significant_findings_use_deterministic_summaries()
     test_blueprint_keeps_core_significant_figures_in_main_report()
+    test_graph_labels_preserve_clinical_acronyms()
     print("sigma chapter v visible polish checks passed")
 
 

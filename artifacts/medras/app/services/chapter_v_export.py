@@ -52,6 +52,8 @@ def _clean_variable_label(value: Any) -> str:
     }
     for raw, clean in replacements.items():
         text = re.sub(rf"\b{re.escape(raw)}\b", clean, text)
+    for raw, clean in {"Er": "ER", "Pr": "PR", "Ar": "AR", "Egfr": "EGFR"}.items():
+        text = re.sub(rf"\b{raw}\b", clean, text)
     text = re.sub(r"\bTumou?r site\s*/\s*quadrant\b", "Tumour quadrant", text, flags=re.IGNORECASE)
     text = re.sub(r"\bTumou?r site\b", "Tumour quadrant", text, flags=re.IGNORECASE)
     return text
@@ -179,7 +181,11 @@ def _outcome_label_context(blueprint: Dict[str, Any]) -> Dict[str, Any]:
         for table in section.get("tables") or []:
             if str(table.get("table_type") or "").startswith("continuous_or_group"):
                 for variable in _source_variables(table):
-                    if variable and variable != display and variable.lower() not in outcome_values:
+                    if (
+                        variable and variable != display
+                        and variable.lower() not in outcome_values
+                        and not _is_node_derived_variable(variable)
+                    ):
                         core_figure_variables.add(variable)
         if not isinstance(section, dict) or section.get("section_id") != "primary_outcome_distribution":
             continue
@@ -212,6 +218,41 @@ def _display_value(value: Any, label_ctx: Optional[Dict[str, Any]]) -> str:
         text = re.sub(r"\bYes\b", "Positive", text)
         text = re.sub(r"\bNo\b", "Negative", text)
     return _clean_variable_label(text)
+
+
+def _is_node_derived_variable(value: Any) -> bool:
+    key = re.sub(r"[^a-z0-9]+", "", _text(value).lower())
+    return key in {"positivenodes", "totalnodes", "noderatio"}
+
+
+def _format_statistical_display(value: Any, header: Any = "") -> str:
+    text = _text(value)
+    test_names = {
+        "welch_ttest": "Welch's t-test",
+        "welch_t_test": "Welch's t-test",
+        "mann_whitney": "Mann-Whitney U test",
+        "chi_square": "Chi-square test",
+        "fisher_exact": "Fisher's exact test",
+    }
+    if text.strip().lower() in test_names:
+        text = test_names[text.strip().lower()]
+
+    def _round_match(match: re.Match, digits: int) -> str:
+        number = float(match.group(1))
+        rendered = f"{number:.{digits}f}".rstrip("0").rstrip(".")
+        return match.group(0).replace(match.group(1), rendered)
+
+    text = re.sub(
+        r"(?i)df\s*=\s*(-?\d+(?:\.\d+)?)",
+        lambda match: _round_match(match, 2),
+        text,
+    )
+    text = re.sub(
+        r"(?i)Cohen(?:'|\u2019)s\s+d\s*=\s*(-?\d+(?:\.\d+)?)",
+        lambda match: _round_match(match, 3),
+        text,
+    )
+    return text
 
 
 def _clean_finding_text(value: Any) -> str:
@@ -394,52 +435,39 @@ def _clean_interpretation(value: Any, label_ctx: Optional[Dict[str, Any]] = None
         text,
         flags=re.IGNORECASE,
     )
-    text = text.replace(
-        "Sparse categories were detected; interpret with caution.",
-        "This finding should be interpreted cautiously because some expected cell counts were below 5.",
-    )
-    text = re.sub(
-        r"This finding should be interpreted cautiously because some\.?",
-        "This finding should be interpreted cautiously because some expected cell counts were below 5.",
+    sparse = bool(re.search(
+        r"sparse|expected(?:\s+cell)?\s+counts?|because some(?:\.|\s)|minimum expected",
         text,
         flags=re.IGNORECASE,
-    )
+    ))
     text = re.sub(r"\s*Interpret with caution:\s*-\s*", " ", text, flags=re.IGNORECASE)
-    text = re.sub(
-        r"Chi-square test with sparse-cell Chi-square used:\s*some\.?",
-        "This finding should be interpreted cautiously because some expected cell counts were below 5.",
-        text,
-        flags=re.IGNORECASE,
-    )
-    if re.search(r"(sparse|expected cell counts|expected counts below)", text, flags=re.IGNORECASE):
+    if sparse:
+        caution = "This finding should be interpreted cautiously because some expected cell counts were below 5."
+        text = re.sub(
+            r"This finding should be interpreted cautiously because some(?: expected cell counts were below 5)?\.?",
+            " ",
+            text,
+            flags=re.IGNORECASE,
+        )
+        text = re.sub(
+            r"Sparse (?:cells|categories)(?: were)? detected(?:;?\s*interpret with caution)?\.?",
+            " ",
+            text,
+            flags=re.IGNORECASE,
+        )
         text = re.sub(r"\s*Interpret with caution[:.]?\s*", " ", text, flags=re.IGNORECASE)
         text = re.sub(r"\s*Warning[:.]?\s*", " ", text, flags=re.IGNORECASE)
         text = re.sub(
-            r"\b(?:minimum|min)\s+expected(?:\s+cell)?\s+count(?:\s+was|\s*=|\s*:)?\s*[0-9.]+\.?",
-            "",
+            r"\b(?:minimum|min)\s+expected(?:\s+cell)?\s+count(?:\s+was|\s*=|\s*:)?\s*[0-9.]+(?:\s*<\s*5)?\.?",
+            " ",
             text,
             flags=re.IGNORECASE,
         )
-        text = re.sub(
-            r"\bexpected(?:\s+cell)?\s+counts?\s+(?:were\s+)?(?:below|<)\s*5[^.]*\.",
-            "",
-            text,
-            flags=re.IGNORECASE,
-        )
-        text = re.sub(
-            r"(?:This finding should be interpreted cautiously because some expected cell counts were below 5\.\s*)+",
-            "This finding should be interpreted cautiously because some expected cell counts were below 5. ",
-            text,
-            flags=re.IGNORECASE,
-        )
-        text = re.sub(
-            r"(?:This finding should be interpreted cautiously because some expected cell counts were below 5\.\s*)",
-            "",
-            text,
-            flags=re.IGNORECASE,
-        ).strip()
-        if "This finding should be interpreted cautiously because some expected cell counts were below 5." not in text:
-            text = text.rstrip(". ") + ". This finding should be interpreted cautiously because some expected cell counts were below 5."
+        text = re.sub(r"\b(?:some\s+)?expected(?:\s+cell)?\s+counts?\s+(?:were\s+)?(?:below|<)\s*5[^.]*\.?", " ", text, flags=re.IGNORECASE)
+        text = re.sub(r"Chi-square test with sparse-cell(?:\s+Chi-square used:)?\s*some\.?", " ", text, flags=re.IGNORECASE)
+        text = re.sub(r"\s+", " ", text).strip(" .")
+        text = re.sub(r"\s*:\s*(?:Chi-square test|Fisher's exact test)\.?$", "", text, flags=re.IGNORECASE)
+        text = (text.rstrip(". ") + ". " + caution).strip()
     text = re.sub(r"^(.+?):\s+was ", r"\1 was ", text)
     text = re.sub(r"\s+", " ", text).strip()
     return text
@@ -840,7 +868,10 @@ def _association_table_for_export(table: Dict[str, Any], label_ctx: Dict[str, An
         clone["columns"] = [_display_value(header, label_ctx) for header in headers]
         clean_rows = []
         for row in rows:
-            clean_row = [_display_value(cell, label_ctx) for cell in row]
+            clean_row = [
+                _format_statistical_display(_display_value(cell, label_ctx), headers[idx] if idx < len(headers) else "")
+                for idx, cell in enumerate(row)
+            ]
             if clean_row:
                 clean_row[0] = _clinical_category_label(predictor, row[0], label_ctx)
             clean_rows.append(clean_row)
@@ -851,7 +882,10 @@ def _association_table_for_export(table: Dict[str, Any], label_ctx: Dict[str, An
     for category in order:
         row = grouped[category]
         total = sum(float(row[idx] or 0.0) for idx in count_indexes)
-        normalized = [_display_value(cell, label_ctx) for cell in row]
+        normalized = [
+            _format_statistical_display(_display_value(cell, label_ctx), headers[idx] if idx < len(headers) else "")
+            for idx, cell in enumerate(row)
+        ]
         normalized[0] = category
         for idx in count_indexes:
             normalized[idx] = _format_count_pct(float(row[idx] or 0.0), total)
@@ -870,7 +904,13 @@ def _normalise_table_for_export(table: Dict[str, Any], label_ctx: Optional[Dict[
         payload = deepcopy(table)
         headers, rows = _table_rows(payload)
         payload["columns"] = [_display_value(header, ctx) for header in headers]
-        payload["rows"] = [[_display_value(cell, ctx) for cell in row] for row in rows]
+        payload["rows"] = [
+            [
+                _format_statistical_display(_display_value(cell, ctx), headers[idx] if idx < len(headers) else "")
+                for idx, cell in enumerate(row)
+            ]
+            for row in rows
+        ]
     return payload
 
 
@@ -977,7 +1017,9 @@ def _add_table_docx(
             cells[idx].text = _display_value(value, label_ctx)
     _format_docx_table(table, font_size=8 if len(headers) > 5 else 9)
     for warning in warning_notes:
-        _plain_docx_text(doc, f"Caution: {_display_value(warning, label_ctx)}")
+        cleaned_warning = _clean_interpretation(warning, label_ctx)
+        if cleaned_warning:
+            _plain_docx_text(doc, cleaned_warning)
     interpretation = _clean_interpretation(payload.get("interpretation"), label_ctx)
     if include_interpretation and interpretation:
         _plain_docx_text(doc, interpretation)
@@ -1423,7 +1465,9 @@ def _render_section_pdf(
         pdf_table, warning_notes = _pdf_table(table, label_ctx, available_width)
         flow.append(pdf_table)
         for warning in warning_notes:
-            flow.append(Paragraph(f"Caution: {_pdf_escape(_display_value(warning, label_ctx))}", small))
+            cleaned_warning = _clean_interpretation(warning, label_ctx)
+            if cleaned_warning:
+                flow.append(Paragraph(_pdf_escape(cleaned_warning), small))
         for figure in figures:
             figure_id = _text(figure.get("figure_id") or figure.get("title"))
             if figure_id in used_figures or not _figure_matches_table(figure, table):
@@ -1505,7 +1549,9 @@ def generate_pdf(
             pdf_table, warning_notes = _pdf_table(table, label_ctx, available_width)
             flow.append(pdf_table)
             for warning in warning_notes:
-                flow.append(Paragraph(f"Caution: {_pdf_escape(_display_value(warning, label_ctx))}", small))
+                cleaned_warning = _clean_interpretation(warning, label_ctx)
+                if cleaned_warning:
+                    flow.append(Paragraph(_pdf_escape(cleaned_warning), small))
         rendered_outcome_figure = False
         if outcome_tables:
             generated = _primary_outcome_figure(blueprint, outcome_tables[0], label_ctx)
@@ -1560,7 +1606,9 @@ def generate_pdf(
         }, label_ctx, available_width)
         flow.append(pdf_table)
         for warning in warning_notes:
-            flow.append(Paragraph(f"Caution: {_pdf_escape(_display_value(warning, label_ctx))}", small))
+            cleaned_warning = _clean_interpretation(warning, label_ctx)
+            if cleaned_warning:
+                flow.append(Paragraph(_pdf_escape(cleaned_warning), small))
     else:
         flow.append(Paragraph("No final thesis significant findings were identified among the completed tests.", body))
     flow.append(Paragraph("Warnings and Interpretation Notes", h1))
