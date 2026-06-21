@@ -42,6 +42,10 @@ _PRESENCE_MARKER_VARS = {"lvi", "ene", "necrosis", "dcis"}
 
 def _clean_variable_label(value: Any) -> str:
     text = _text(value)
+    if "_" in text and " " not in text:
+        text = text.replace("_", " ")
+        if text and text[0].islower():
+            text = text[0].upper() + text[1:]
     replacements = {
         "Her2Neu": "HER2",
         "HER2neu": "HER2",
@@ -54,6 +58,7 @@ def _clean_variable_label(value: Any) -> str:
         text = re.sub(rf"\b{re.escape(raw)}\b", clean, text)
     for raw, clean in {"Er": "ER", "Pr": "PR", "Ar": "AR", "Egfr": "EGFR"}.items():
         text = re.sub(rf"\b{raw}\b", clean, text)
+    text = re.sub(r"\bTx\s+infiltrating\s+L\b", "Tumour-infiltrating lymphocytes", text, flags=re.IGNORECASE)
     text = re.sub(r"\bTumou?r site\s*/\s*quadrant\b", "Tumour quadrant", text, flags=re.IGNORECASE)
     text = re.sub(r"\bTumou?r site\b", "Tumour quadrant", text, flags=re.IGNORECASE)
     return text
@@ -208,16 +213,22 @@ def _outcome_label_context(blueprint: Dict[str, Any]) -> Dict[str, Any]:
 def _display_value(value: Any, label_ctx: Optional[Dict[str, Any]]) -> str:
     text = _text(value)
     if not label_ctx:
-        return _clean_variable_label(text)
+        return _format_statistical_display(_clean_variable_label(text))
     display = _text(label_ctx.get("display"))
     if not display:
-        return _clean_variable_label(text)
+        return _format_statistical_display(_clean_variable_label(text))
     for raw in label_ctx.get("raw_values") or []:
         text = text.replace(raw, display)
     if label_ctx.get("status_like"):
         text = re.sub(r"\bYes\b", "Positive", text)
         text = re.sub(r"\bNo\b", "Negative", text)
-    return _clean_variable_label(text)
+    marker = re.sub(r"\b(?:expression\s+status|status|expression|marker)\b.*$", "", display, flags=re.IGNORECASE).strip()
+    marker = marker or "Marker"
+    if re.fullmatch(r"Interpretation\s*[- ]?\s*site", text, flags=re.IGNORECASE):
+        return f"{marker} staining localization"
+    if re.fullmatch(r"Staining\s+Result", text, flags=re.IGNORECASE):
+        return f"{marker} staining score pattern"
+    return _format_statistical_display(_clean_variable_label(text))
 
 
 def _is_node_derived_variable(value: Any) -> bool:
@@ -236,6 +247,8 @@ def _format_statistical_display(value: Any, header: Any = "") -> str:
     }
     if text.strip().lower() in test_names:
         text = test_names[text.strip().lower()]
+    text = re.sub(r"\bwelch[_\s-]*t[\s-]*test\b", "Welch's t-test", text, flags=re.IGNORECASE)
+    text = re.sub(r"\bwelch\s+ttest\b", "Welch's t-test", text, flags=re.IGNORECASE)
 
     def _round_match(match: re.Match, digits: int) -> str:
         number = float(match.group(1))
@@ -255,13 +268,27 @@ def _format_statistical_display(value: Any, header: Any = "") -> str:
     return text
 
 
+def _sanitize_thesis_claims(value: Any) -> str:
+    text = _text(value)
+    replacements = (
+        (r"\bproves?\b", "supports"),
+        (r"\bcauses?\b", "was associated with"),
+        (r"\bpredicts?\b", "was associated with"),
+        (r"\bprognostic significance\b", "statistical association"),
+        (r"\bindependent association\b", "association"),
+    )
+    for pattern, replacement in replacements:
+        text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
+    return text
+
+
 def _clean_finding_text(value: Any) -> str:
     text = _text(value)
     text = text.replace("Chi-square test: Chi-square test", "Chi-square test")
     for token in ("; p =", "; adjusted p", "; Cram", "; Cohen", " p =", " adjusted p"):
         if token in text:
             text = text.split(token, 1)[0].strip()
-    return text
+    return _sanitize_thesis_claims(text)
 
 
 def _is_node_derived_association_insignificant(table: Dict[str, Any]) -> bool:
@@ -283,6 +310,12 @@ def _is_main_table(table: Dict[str, Any]) -> bool:
     if table.get("thesis_ready") is False:
         return False
     if str(table.get("priority") or "").lower() == "detailed_report_only":
+        return False
+    source_keys = {_variable_key(item) for item in table.get("source_variables") or []}
+    table_key = _variable_key(table.get("title"))
+    if ("txinfiltratingl" in source_keys or "txinfiltratingl" in table_key) and (
+        table.get("optional") or str(table.get("priority") or "").lower() == "optional"
+    ):
         return False
     if _is_node_derived_association_insignificant(table):
         return False
@@ -419,6 +452,12 @@ def _clean_interpretation(value: Any, label_ctx: Optional[Dict[str, Any]] = None
     text = text.replace("Chi-square test with sparse-cell warning was", "was")
     text = text.replace("Chi-square test: Chi-square test", "Chi-square test")
     text = re.sub(
+        r":\s*(?:Welch's t-test|Chi-square test|Fisher's exact test)\.(?=\s|$)",
+        ".",
+        text,
+        flags=re.IGNORECASE,
+    )
+    text = re.sub(
         r"^(.+?)\s+vs\s+(.+?):\s+was significantly associated with the outcome\.?$",
         r"\1 showed a statistically significant association with \2.",
         text,
@@ -480,10 +519,11 @@ def _clean_interpretation(value: Any, label_ctx: Optional[Dict[str, Any]] = None
         text = re.sub(r"Chi-square test with sparse-cell(?:\s+Chi-square used:)?\s*some\.?", " ", text, flags=re.IGNORECASE)
         text = re.sub(r"\s+", " ", text).strip(" .")
         text = re.sub(r"\s*:\s*(?:Chi-square test|Fisher's exact test)\.?$", "", text, flags=re.IGNORECASE)
-        text = (text.rstrip(". ") + ". " + caution).strip()
+        stripped = text.rstrip(". ")
+        text = (f"{stripped}. {caution}" if stripped else caution).strip()
     text = re.sub(r"^(.+?):\s+was ", r"\1 was ", text)
     text = re.sub(r"\s+", " ", text).strip()
-    return text
+    return _sanitize_thesis_claims(text)
 
 
 def _parse_category_summary(summary: Any, label_ctx: Optional[Dict[str, Any]] = None) -> List[Tuple[str, str, str]]:
@@ -613,12 +653,12 @@ def _descriptive_export_table(table: Dict[str, Any], label_ctx: Dict[str, Any]) 
         continuous["columns"] = ["Parameter", "n", "Mean ± SD", "Median", "Minimum", "Maximum", "Missing n (%)"]
         continuous["rows"] = continuous_rows
         continuous["title"] = _clean_table_title(continuous.get("title") or "Continuous descriptive findings")
-        continuous["interpretation"] = polish or _descriptive_table_interpretation(continuous)
+        continuous["interpretation"] = polish or _descriptive_table_interpretation(continuous, label_ctx)
         categorical = deepcopy(table)
         categorical["columns"] = ["Parameter", "Category", "n", "%"]
         categorical["rows"] = _build_categorical_rows(categorical_order, categorical_counts, concept)
         categorical["title"] = _clean_table_title(categorical.get("title") or "Categorical descriptive findings")
-        categorical["interpretation"] = polish or _descriptive_table_interpretation(categorical)
+        categorical["interpretation"] = polish or _descriptive_table_interpretation(categorical, label_ctx)
         for item in (continuous, categorical):
             item.pop("headers", None)
         return [continuous, categorical]
@@ -630,7 +670,7 @@ def _descriptive_export_table(table: Dict[str, Any], label_ctx: Dict[str, Any]) 
         clone["rows"] = _build_categorical_rows(categorical_order, categorical_counts, concept)
     clone.pop("headers", None)
     clone["title"] = _clean_table_title(clone.get("title") or "Descriptive findings")
-    clone["interpretation"] = polish or _descriptive_table_interpretation(clone)
+    clone["interpretation"] = polish or _descriptive_table_interpretation(clone, label_ctx)
     return clone
 
 
@@ -641,6 +681,21 @@ def _rows_by_parameter(rows: List[List[str]]) -> "Dict[str, List[List[str]]]":
             continue
         grouped.setdefault(_text(row[0]), []).append(row)
     return grouped
+
+
+def _safe_float(value: Any) -> float:
+    try:
+        return float(str(value).replace(",", "").replace("%", ""))
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _lower_first(text: str) -> str:
+    if not text:
+        return text
+    if text[0].isupper() and (len(text) == 1 or text[1].islower()):
+        return text[0].lower() + text[1:]
+    return text
 
 
 def _mode_rows(rows: List[List[str]]) -> List[List[str]]:
@@ -659,6 +714,11 @@ def _mode_rows(rows: List[List[str]]) -> List[List[str]]:
         elif count == best_count:
             best.append(row)
     return best
+
+
+def _ranked_rows(rows: List[List[str]]) -> List[List[str]]:
+    valid = [row for row in rows if isinstance(row, list) and len(row) >= 4]
+    return sorted(valid, key=lambda row: _safe_float(row[2]), reverse=True)
 
 
 def _join_category_labels(labels: List[str]) -> str:
@@ -697,124 +757,258 @@ def _size_category_to_tstage(category: Any) -> Optional[str]:
     return None
 
 
-def _generic_categorical_sentence(rows: List[List[str]]) -> str:
-    mode = _mode_rows(rows)
-    if not mode:
+def _missingness_sentence(rows: List[List[str]]) -> str:
+    for row in rows:
+        if not isinstance(row, list) or len(row) < 4:
+            continue
+        if _text(row[1]).strip().lower() != "missing":
+            continue
+        count = _safe_float(row[2])
+        if count > 0:
+            noun = "case" if count == 1 else "cases"
+            return f"Missing values were recorded for {_text(row[2])} {noun} ({_text(row[3])})."
+    return ""
+
+
+def _continuous_missingness_sentence(variable: str, missing_text: str) -> str:
+    match = re.match(r"([0-9.]+)\s*\(([0-9.]+)%\)", _text(missing_text))
+    if not match:
         return ""
-    parameter = _text(mode[0][0])
-    labels = _join_category_labels([_text(row[1]) for row in mode])
-    return f"The most frequent category for {parameter} was {labels} ({_text(mode[0][2])}, {_text(mode[0][3])})."
+    var_lower = _lower_first(variable)
+    count = _safe_float(match.group(1))
+    if count <= 0:
+        return f"{variable} had no missing values in this sample."
+    noun = "case" if count == 1 else "cases"
+    return f"Missing data were recorded for {match.group(1)} {noun} ({match.group(2)}%) of {var_lower}."
+
+
+def _association_transition_sentence(subject: str, label_ctx: Optional[Dict[str, Any]]) -> str:
+    outcome = _text((label_ctx or {}).get("display"))
+    if not outcome:
+        return ""
+    if subject.strip().lower() == "ar expression status":
+        return f"AR expression status was subsequently assessed for association with {outcome}."
+    return f"These {subject} were subsequently assessed for association with {outcome}."
+
+
+def _generic_categorical_sentence(rows: List[List[str]]) -> str:
+    named_rows = [row for row in rows if isinstance(row, list) and len(row) >= 4 and _text(row[1]).strip().lower() != "missing"]
+    if not named_rows:
+        return ""
+    grouped = _rows_by_parameter(named_rows)
+    missing = _missingness_sentence(rows)
+    if len(grouped) == 1:
+        parameter, param_rows = next(iter(grouped.items()))
+        ranked = _ranked_rows(param_rows)
+        if not ranked:
+            return ""
+        mode = ranked[0]
+        sentence = (
+            f"This table summarises the distribution of {parameter} in the analysed sample. "
+            f"{_text(mode[1])} was the most common category, accounting for {_text(mode[2])} cases ({_text(mode[3])})"
+        )
+        if len(ranked) > 1 and _safe_float(ranked[1][2]) > 0:
+            second = ranked[1]
+            sentence += f", followed by {_text(second[1])} with {_text(second[2])} cases ({_text(second[3])})."
+        else:
+            sentence += "."
+        if missing:
+            sentence += " " + missing
+        return sentence
+    parts = []
+    for parameter, param_rows in grouped.items():
+        ranked = _ranked_rows(param_rows)
+        if not ranked:
+            continue
+        mode = ranked[0]
+        parts.append(f"{parameter} was most often {_text(mode[1])} ({_text(mode[2])} cases, {_text(mode[3])})")
+    if not parts:
+        return ""
+    sentence = "This table summarises baseline categorical characteristics in the analysed sample. " + "; ".join(parts) + "."
+    if missing:
+        sentence += " " + missing
+    return sentence
+
+
+def _continuous_table_sentence(variable: str, n: str, mean_sd: str, median: str, minimum: str, maximum: str, missing_text: str) -> str:
+    var_lower = _lower_first(variable)
+    sentence = (
+        f"{variable} was summarised as a continuous variable in the analysed sample. "
+        f"The mean {var_lower} was {_text(mean_sd)}, with a median of {_text(median)} "
+        f"and a range from {_text(minimum)} to {_text(maximum)}."
+    )
+    missing_sentence = _continuous_missingness_sentence(variable, missing_text)
+    if missing_sentence:
+        sentence += " " + missing_sentence
+    return sentence
 
 
 def _generic_continuous_sentence(rows: List[List[str]]) -> str:
-    if not rows:
+    valid = [row for row in rows if isinstance(row, list) and len(row) >= 7 and _text(row[0])]
+    if not valid:
         return ""
-    parts = []
-    for row in rows:
-        if not isinstance(row, list) or len(row) < 7 or not row[0]:
-            continue
-        parts.append(
-            f"{_text(row[0])} had a mean of {_text(row[2])} (median {_text(row[3])}; range {_text(row[4])}-{_text(row[5])})."
+    if len(valid) == 1:
+        row = valid[0]
+        return _continuous_table_sentence(_text(row[0]), row[1], row[2], row[3], row[4], row[5], row[6])
+    names = _join_category_labels([_text(row[0]) for row in valid])
+    sentence = f"This table summarises {names} as continuous variables in the analysed sample."
+    for row in valid:
+        var_lower = _lower_first(_text(row[0]))
+        sentence += (
+            f" The mean {var_lower} was {_text(row[2])}, with a median of {_text(row[3])} "
+            f"and a range from {_text(row[4])} to {_text(row[5])}."
         )
-    return " ".join(parts)
+    return sentence
 
 
 def _interpretation_tumour_quadrant(rows: List[List[str]]) -> str:
     named_rows = [row for row in rows if isinstance(row, list) and len(row) >= 4 and _text(row[1]).strip().lower() != "other"]
-    mode = _mode_rows(named_rows)
-    if not mode:
+    ranked = _ranked_rows(named_rows)
+    if not ranked:
         return ""
+    mode = _mode_rows(named_rows)
+    sentence = "This table summarises the distribution of tumour quadrant in the analysed sample. "
     labels = [_text(row[1]).strip().lower() for row in mode]
     n_text = _text(mode[0][2])
     pct_text = _text(mode[0][3])
     if len(mode) > 1:
-        sentence = (
+        sentence += (
             f"The most common tumour locations were {_join_category_labels(labels)} quadrants, "
             f"each accounting for {n_text} cases ({pct_text})."
         )
     else:
-        sentence = (
+        sentence += (
             f"The most common tumour location was the {labels[0]} quadrant, "
-            f"accounting for {n_text} cases ({pct_text})."
+            f"accounting for {n_text} cases ({pct_text})"
         )
+        if len(ranked) > 1 and ranked[1] not in mode and _safe_float(ranked[1][2]) > 0:
+            second = ranked[1]
+            sentence += f", followed by the {_text(second[1]).strip().lower()} quadrant with {_text(second[2])} cases ({_text(second[3])})."
+        else:
+            sentence += "."
     if any(_text(row[1]).strip().lower() == "other" for row in rows):
         sentence += " Less frequent and mixed quadrant locations were grouped under Other for descriptive clarity."
     return sentence
 
 
 def _interpretation_tumour_size(rows: List[List[str]]) -> str:
-    mode = _mode_rows(rows)
-    if not mode:
+    ranked = _ranked_rows(rows)
+    if not ranked:
         return ""
-    category = _text(mode[0][1])
-    sentence = f"Most tumours measured {category}, corresponding to {_text(mode[0][2])} cases ({_text(mode[0][3])})."
+    mode = ranked[0]
+    category = _text(mode[1])
+    sentence = (
+        "This table summarises the distribution of tumour size in the analysed sample. "
+        f"Most tumours measured {category}, corresponding to {_text(mode[2])} cases ({_text(mode[3])})."
+    )
     tstage = _size_category_to_tstage(category)
     if tstage:
         sentence += f" This indicates that {tstage}-sized lesions formed the largest size group in the analysed sample."
+    if len(ranked) > 1:
+        second = ranked[1]
+        sentence += f" The next most frequent size group was {_text(second[1])}, seen in {_text(second[2])} cases ({_text(second[3])})."
     return sentence
 
 
 def _interpretation_pathological_t_stage(rows: List[List[str]]) -> str:
-    mode = _mode_rows(rows)
-    if not mode:
+    ranked = _ranked_rows(rows)
+    if not ranked:
         return ""
-    label = _text(mode[0][1])
-    return f"{label} was the most frequent pathological T stage, seen in {_text(mode[0][2])} cases ({_text(mode[0][3])})."
+    mode = ranked[0]
+    label = _text(mode[1])
+    sentence = (
+        "This table summarises the distribution of pathological T stage in the analysed sample. "
+        f"{label} was the most frequent category, seen in {_text(mode[2])} cases ({_text(mode[3])})."
+    )
+    if len(ranked) > 1:
+        second = ranked[1]
+        sentence += f" {_text(second[1])} was the next most frequent stage, with {_text(second[2])} cases ({_text(second[3])})."
+    return sentence
 
 
 def _interpretation_nodal_status(rows: List[List[str]]) -> str:
-    mode = _mode_rows(rows)
-    if not mode:
+    ranked = _ranked_rows(rows)
+    if not ranked:
         return ""
-    label = _text(mode[0][1])
-    sentence = f"{label} was the most frequent nodal category, seen in {_text(mode[0][2])} cases ({_text(mode[0][3])})."
+    mode = ranked[0]
+    label = _text(mode[1])
+    sentence = (
+        "This table summarises the distribution of nodal status in the analysed sample. "
+        f"{label} was the most frequent nodal category, seen in {_text(mode[2])} cases ({_text(mode[3])})."
+    )
     if label.strip().upper() == "N0":
         sentence += " Node-positive categories together constituted the remaining clinically relevant nodal disease burden."
+    elif len(ranked) > 1:
+        second = ranked[1]
+        sentence += f" {_text(second[1])} was the next most frequent category, with {_text(second[2])} cases ({_text(second[3])})."
     return sentence
 
 
 def _interpretation_nodal_burden(table: Dict[str, Any], rows: List[List[str]]) -> str:
     if rows and isinstance(rows[0], list) and len(rows[0]) >= 7:
         sentence = _generic_continuous_sentence(rows)
-        return sentence or "Nodal burden parameters are summarised descriptively above."
-    return _generic_categorical_sentence(rows) or "Nodal burden categories are summarised descriptively above."
+        return sentence or "Nodal burden parameters are summarised descriptively above using the available counts and ratios."
+    sentence = _generic_categorical_sentence(rows)
+    return sentence or "Nodal burden categories are summarised descriptively above using the available counts."
 
 
 def _interpretation_adverse_features(rows: List[List[str]]) -> str:
     grouped = _rows_by_parameter(rows)
-    sentences = []
+    present: List[Tuple[str, str, str]] = []
     for parameter, param_rows in grouped.items():
-        present = None
         for row in param_rows:
             if _text(row[1]).strip().lower() == "present":
-                present = row
+                present.append((parameter, _text(row[2]), _text(row[3])))
                 break
-        if present:
-            sentences.append(f"{parameter} was present in {_text(present[2])} cases ({_text(present[3])}).")
-    if not sentences:
+    if not present:
         return ""
-    return " ".join(sentences)
+    present.sort(key=lambda item: _safe_float(item[1]), reverse=True)
+    top_count = _safe_float(present[0][1])
+    top_group = [item for item in present if _safe_float(item[1]) == top_count]
+    rest = [item for item in present if _safe_float(item[1]) != top_count]
+    if len(top_group) > 1:
+        names = _join_category_labels([item[0] for item in top_group])
+        clause = f"{names} were each present in {top_group[0][1]} cases ({top_group[0][2]})"
+    else:
+        clause = f"{top_group[0][0]} was present in {top_group[0][1]} cases ({top_group[0][2]})"
+    if rest:
+        rest_clauses = [f"{item[0]} was present in {item[1]} cases ({item[2]})" for item in rest]
+        clause += ", while " + _join_category_labels(rest_clauses)
+    sentence = f"This table summarises adverse pathological features in the analysed sample. {clause}."
+    missing = _missingness_sentence(rows)
+    if missing:
+        sentence += " " + missing
+    return sentence
 
 
-def _interpretation_hormone_receptor(rows: List[List[str]]) -> str:
+def _interpretation_hormone_receptor(rows: List[List[str]], label_ctx: Optional[Dict[str, Any]] = None) -> str:
     grouped = _rows_by_parameter(rows)
     parts = []
+    positive_pcts = []
     for idx, (parameter, param_rows) in enumerate(grouped.items()):
         positive = _category_positive_row(param_rows)
         if not positive:
             continue
+        positive_pcts.append(_safe_float(positive[3]))
         if idx == 0:
             parts.append(f"{parameter} positivity was observed in {_text(positive[2])} cases ({_text(positive[3])})")
         else:
             parts.append(f"{parameter} positivity in {_text(positive[2])} cases ({_text(positive[3])})")
     if not parts:
         return ""
-    return " and ".join(parts) + "."
+    sentence = "This table describes the hormone receptor profile of the analysed sample. "
+    sentence += " and ".join(parts) + "."
+    if positive_pcts and (sum(positive_pcts) / len(positive_pcts)) > 50:
+        sentence += " This indicates that hormone-receptor-positive tumours formed the majority of the sample."
+    transition = _association_transition_sentence("hormone receptor variables", label_ctx)
+    if transition:
+        sentence += " " + transition
+    return sentence
 
 
-def _interpretation_her2_proliferation(rows: List[List[str]]) -> str:
+def _interpretation_her2_proliferation(rows: List[List[str]], label_ctx: Optional[Dict[str, Any]] = None) -> str:
     grouped = _rows_by_parameter(rows)
-    sentences = []
+    sentences = ["This table describes HER2 status and proliferation marker expression in the analysed sample."]
     for parameter, param_rows in grouped.items():
         positive = _category_positive_row(param_rows)
         if not positive:
@@ -826,64 +1020,148 @@ def _interpretation_her2_proliferation(rows: List[List[str]]) -> str:
             sentences.append(f"HER2-positive{qualifier} expression was present in {_text(positive[2])} cases ({_text(positive[3])}).")
         else:
             sentences.append(f"{parameter} positivity was present in {_text(positive[2])} cases ({_text(positive[3])}).")
-    return " ".join(sentences)
+    if len(sentences) == 1:
+        return ""
+    sentence = " ".join(sentences)
+    transition = _association_transition_sentence("HER2 and proliferation markers", label_ctx)
+    if transition:
+        sentence += " " + transition
+    return sentence
 
 
-def _interpretation_ar_expression(rows: List[List[str]]) -> str:
+def _interpretation_ar_expression(rows: List[List[str]], label_ctx: Optional[Dict[str, Any]] = None) -> str:
     positive = _category_positive_row(rows)
     if not positive:
         return ""
-    return f"AR positivity was observed in {_text(positive[2])} cases ({_text(positive[3])})."
+    sentence = (
+        "This table describes AR expression status in the analysed sample. "
+        f"AR positivity was observed in {_text(positive[2])} cases ({_text(positive[3])})."
+    )
+    if _safe_float(positive[3]) > 50:
+        sentence += " This indicates that AR-positive tumours formed the majority of the sample."
+    transition = _association_transition_sentence("AR expression status", label_ctx)
+    if transition:
+        sentence += " " + transition
+    return sentence
 
 
-def _interpretation_molecular_subtype(rows: List[List[str]]) -> str:
-    mode = _mode_rows(rows)
-    if not mode:
+def _interpretation_molecular_subtype(rows: List[List[str]], label_ctx: Optional[Dict[str, Any]] = None) -> str:
+    ranked = _ranked_rows(rows)
+    if not ranked:
         return ""
+    mode = _mode_rows(rows)
     labels = _join_category_labels([_text(row[1]) for row in mode])
-    return f"The most common molecular subtype was {labels}, accounting for {_text(mode[0][2])} cases ({_text(mode[0][3])})."
+    sentence = (
+        "This table describes the distribution of molecular subtype in the analysed sample. "
+        f"The most common molecular subtype was {labels}, accounting for {_text(mode[0][2])} cases ({_text(mode[0][3])})."
+    )
+    if len(ranked) > 1 and ranked[1] not in mode:
+        second = ranked[1]
+        sentence += f" {_text(second[1])} was the next most frequent subtype, with {_text(second[2])} cases ({_text(second[3])})."
+    transition = _association_transition_sentence("molecular subtype groups", label_ctx)
+    if transition:
+        sentence += " " + transition
+    return sentence
 
 
-_MARKER_COMPONENT_NOTE = (
-    "Localization and staining score are presented descriptively as components of the immunohistochemical assessment."
+_MARKER_LOCALIZATION_NOTE = (
+    "Localization is presented descriptively as a component of the immunohistochemical assessment, "
+    "not as an independent prognostic feature."
+)
+_MARKER_SCORE_NOTE = (
+    "Staining score is presented descriptively as a component of the immunohistochemical assessment, "
+    "not as an independent prognostic feature."
 )
 
 
 def _interpretation_marker_localization(rows: List[List[str]]) -> str:
-    mode = _mode_rows(rows)
-    if not mode:
+    ranked = _ranked_rows(rows)
+    if not ranked:
         return ""
-    label = _text(mode[0][1])
-    sentence = f"{label} localization was the most common staining pattern, observed in {_text(mode[0][2])} cases ({_text(mode[0][3])})."
-    return f"{sentence} {_MARKER_COMPONENT_NOTE}"
+    mode = ranked[0]
+    label = _text(mode[1])
+    sentence = (
+        "This table summarises the staining localization pattern of the marker assessment in the analysed sample. "
+        f"{label} localization was the most common pattern, observed in {_text(mode[2])} cases ({_text(mode[3])})."
+    )
+    if len(ranked) > 1:
+        second = ranked[1]
+        sentence += f" {_text(second[1])} localization was the next most frequent pattern, seen in {_text(second[2])} cases ({_text(second[3])})."
+    return f"{sentence} {_MARKER_LOCALIZATION_NOTE}"
 
 
 def _interpretation_marker_score(rows: List[List[str]]) -> str:
-    mode = _mode_rows(rows)
-    if not mode:
+    ranked = _ranked_rows(rows)
+    if not ranked:
         return ""
-    label = _text(mode[0][1])
-    sentence = f"The most common staining score pattern was {label}, observed in {_text(mode[0][2])} cases ({_text(mode[0][3])})."
-    return f"{sentence} {_MARKER_COMPONENT_NOTE}"
+    mode = ranked[0]
+    label = _text(mode[1])
+    sentence = (
+        "This table summarises the staining score pattern of the marker assessment in the analysed sample. "
+        f"The most common staining score pattern was {label}, observed in {_text(mode[2])} cases ({_text(mode[3])})."
+    )
+    if len(ranked) > 1:
+        second = ranked[1]
+        sentence += f" The next most frequent score pattern was {_text(second[1])}, seen in {_text(second[2])} cases ({_text(second[3])})."
+    return f"{sentence} {_MARKER_SCORE_NOTE}"
+
+
+def _interpretation_primary_outcome(rows: List[List[str]], label_ctx: Optional[Dict[str, Any]] = None) -> str:
+    ranked = _ranked_rows(rows)
+    if not ranked:
+        return ""
+    display = _text((label_ctx or {}).get("display")) or _text(ranked[0][0])
+    marker = re.sub(r"\b(?:expression\s+status|status|expression|marker)\b.*$", "", display, flags=re.IGNORECASE).strip()
+    marker = marker or display
+    sentence = f"This table shows the distribution of {display}, which was the primary marker outcome in this analysis."
+    positive = next((row for row in ranked if _text(row[1]).strip().lower().startswith("positive")), None)
+    if positive and len(ranked) > 1:
+        negative = next((row for row in ranked if _text(row[1]).strip().lower().startswith("negative")), None)
+        if negative:
+            sentence += (
+                f" {marker} positivity was observed in {_text(positive[2])} cases ({_text(positive[3])}), "
+                f"while {_text(negative[2])} cases ({_text(negative[3])}) were {marker}-negative."
+            )
+        else:
+            other = [
+                row for row in ranked
+                if row is not positive
+                and _text(row[1]).strip().lower() != "missing"
+                and _safe_float(row[2]) > 0
+            ]
+            if other:
+                other_clause = "; ".join(
+                    f"{_text(row[2])} cases ({_text(row[3])}) were classified as {_text(row[1])}" for row in other
+                )
+                sentence += (
+                    f" {marker} positivity was observed in {_text(positive[2])} cases ({_text(positive[3])}), "
+                    f"while {other_clause}."
+                )
+    else:
+        top = ranked[0]
+        sentence += f" {_text(top[1])} was the most frequent category, observed in {_text(top[2])} cases ({_text(top[3])})."
+    sentence += " This distribution forms the basis for the subsequent association analyses."
+    return sentence
 
 
 _CONCEPT_INTERPRETERS = {
-    "tumour_quadrant": lambda table, rows: _interpretation_tumour_quadrant(rows),
-    "tumour_size": lambda table, rows: _interpretation_tumour_size(rows),
-    "pathological_t_stage": lambda table, rows: _interpretation_pathological_t_stage(rows),
-    "nodal_status": lambda table, rows: _interpretation_nodal_status(rows),
-    "nodal_burden": lambda table, rows: _interpretation_nodal_burden(table, rows),
-    "adverse_features": lambda table, rows: _interpretation_adverse_features(rows),
-    "hormone_receptor": lambda table, rows: _interpretation_hormone_receptor(rows),
-    "her2_proliferation": lambda table, rows: _interpretation_her2_proliferation(rows),
-    "ar_expression": lambda table, rows: _interpretation_ar_expression(rows),
-    "molecular_subtype": lambda table, rows: _interpretation_molecular_subtype(rows),
-    "localization": lambda table, rows: _interpretation_marker_localization(rows),
-    "score": lambda table, rows: _interpretation_marker_score(rows),
+    "tumour_quadrant": lambda table, rows, label_ctx: _interpretation_tumour_quadrant(rows),
+    "tumour_size": lambda table, rows, label_ctx: _interpretation_tumour_size(rows),
+    "pathological_t_stage": lambda table, rows, label_ctx: _interpretation_pathological_t_stage(rows),
+    "nodal_status": lambda table, rows, label_ctx: _interpretation_nodal_status(rows),
+    "nodal_burden": lambda table, rows, label_ctx: _interpretation_nodal_burden(table, rows),
+    "adverse_features": lambda table, rows, label_ctx: _interpretation_adverse_features(rows),
+    "hormone_receptor": lambda table, rows, label_ctx: _interpretation_hormone_receptor(rows, label_ctx),
+    "her2_proliferation": lambda table, rows, label_ctx: _interpretation_her2_proliferation(rows, label_ctx),
+    "ar_expression": lambda table, rows, label_ctx: _interpretation_ar_expression(rows, label_ctx),
+    "molecular_subtype": lambda table, rows, label_ctx: _interpretation_molecular_subtype(rows, label_ctx),
+    "localization": lambda table, rows, label_ctx: _interpretation_marker_localization(rows),
+    "score": lambda table, rows, label_ctx: _interpretation_marker_score(rows),
+    "primary_outcome": lambda table, rows, label_ctx: _interpretation_primary_outcome(rows, label_ctx),
 }
 
 
-def _descriptive_table_interpretation(table: Dict[str, Any]) -> str:
+def _descriptive_table_interpretation(table: Dict[str, Any], label_ctx: Optional[Dict[str, Any]] = None) -> str:
     rows = table.get("rows") or []
     if not rows:
         return ""
@@ -891,7 +1169,7 @@ def _descriptive_table_interpretation(table: Dict[str, Any]) -> str:
     concept = _text(table.get("concept"))
     interpreter = _CONCEPT_INTERPRETERS.get(concept)
     if interpreter:
-        sentence = interpreter(table, rows)
+        sentence = interpreter(table, rows, label_ctx)
         if sentence:
             return sentence
     if is_continuous:
@@ -994,6 +1272,7 @@ def _primary_outcome_tables(blueprint: Dict[str, Any], label_ctx: Dict[str, Any]
                 clone = deepcopy(table)
                 clone["title"] = f"Primary outcome distribution: {display or variable}"
                 clone["table_type"] = "primary_outcome_distribution_table"
+                clone["concept"] = "primary_outcome"
                 clone["rows"] = [row]
                 clone["source_variables"] = [variable]
                 clone["interpretation"] = f"This table reports the distribution of {display or variable}."
@@ -1174,20 +1453,75 @@ def _association_direction_sentence(
     )
 
 
-def _splice_direction_sentence(interpretation: str, direction: str) -> str:
-    if not direction:
+def _splice_sentences(interpretation: str, extra_sentences: List[str]) -> str:
+    extras = [sentence for sentence in extra_sentences if sentence]
+    if not extras:
         return interpretation
+    joined = " ".join(extras)
     for marker in (" This finding should be interpreted cautiously", " Interpret with caution:"):
         idx = interpretation.find(marker)
         if idx != -1:
             head, tail = interpretation[:idx], interpretation[idx:]
-            return f"{head.strip()} {direction}{tail}"
-    return f"{interpretation.strip()} {direction}".strip()
+            return f"{head.strip()} {joined}{tail}"
+    return f"{interpretation.strip()} {joined}".strip()
+
+
+def _effect_size_sentence(headers: List[str], row: List[str]) -> str:
+    idx = next((i for i, header in enumerate(headers) if header.strip().lower() == "effect size"), None)
+    if idx is None or idx >= len(row):
+        return ""
+    text = _text(row[idx]).strip()
+    if not text or text == "-":
+        return ""
+    match = re.match(r"^(.+?)\s*=\s*(.+)$", text)
+    if not match:
+        return ""
+    label, value = match.group(1).strip(), match.group(2).strip()
+    article = "an" if label[:1].lower() in "aeiou" else "a"
+    return f"The association had {article} {label} of {value}."
+
+
+def _test_applied_clause(headers: List[str], row: List[str], significant: bool) -> str:
+    idx = next((i for i, header in enumerate(headers) if header.strip().lower() == "test applied"), None)
+    if idx is None or idx >= len(row):
+        return ""
+    test_name = _text(row[idx]).strip()
+    if not test_name or test_name == "-":
+        return ""
+    qualifier = "" if significant else "not "
+    return f"This difference was {qualifier}statistically significant using {test_name}."
+
+
+def _group_comparison_means_sentence(
+    predictor_label: str, headers: List[str], rows: List[List[str]], label_ctx: Dict[str, Any]
+) -> str:
+    mean_idx = next((i for i, header in enumerate(headers) if "mean" in header.lower()), None)
+    if mean_idx is None or len(rows) < 2:
+        return ""
+    outcome_display = _text(label_ctx.get("display"))
+    marker = re.sub(r"\s+(?:expression\s+)?status$", "", outcome_display, flags=re.IGNORECASE).strip()
+    is_age = _variable_key(predictor_label) == "age"
+    parts = []
+    for row in rows[:2]:
+        if len(row) <= mean_idx:
+            continue
+        group_label = _display_value(row[0], label_ctx)
+        group_key = _variable_key(group_label)
+        if marker and group_key in {"positive", "negative", "p27positive", "p27negative"}:
+            polarity = "positive" if "positive" in group_key else "negative"
+            group_label = f"{marker}-{polarity}"
+        value = _text(row[mean_idx])
+        if is_age and not re.search(r"\byears?\b", value, flags=re.IGNORECASE):
+            value = f"{value} years"
+        parts.append(f"{value} in the {group_label} group")
+    if len(parts) < 2:
+        return ""
+    return f"The mean {_lower_first(predictor_label)} was {parts[0]} and {parts[1]}."
 
 
 def _association_table_for_export(table: Dict[str, Any], label_ctx: Dict[str, Any]) -> Dict[str, Any]:
     table_type = str(table.get("table_type") or "").lower()
-    if "association" not in table_type:
+    if "association" not in table_type and "comparison" not in table_type:
         return table
     headers, rows = _table_rows(table)
     if not rows or not headers:
@@ -1203,6 +1537,27 @@ def _association_table_for_export(table: Dict[str, Any], label_ctx: Dict[str, An
         title = _text(table.get("title"))
         match = re.search(r"with\s+(.+)$", title, flags=re.IGNORECASE)
         predictor = match.group(1).strip() if match else ""
+    predictor_label = _clean_variable_label(predictor)
+    significant = _table_is_significant(headers, rows)
+
+    if first_header == "group":
+        clone = deepcopy(table)
+        clone["columns"] = [_display_value(header, label_ctx) for header in headers]
+        clean_rows = [
+            [
+                _format_statistical_display(_display_value(cell, label_ctx), headers[idx] if idx < len(headers) else "")
+                for idx, cell in enumerate(row)
+            ]
+            for row in rows
+        ]
+        clone["rows"] = clean_rows
+        means = _group_comparison_means_sentence(predictor_label, headers, clean_rows, label_ctx)
+        effect_sentence = _effect_size_sentence(headers, clean_rows[0]) if clean_rows else ""
+        test_clause = _test_applied_clause(headers, clean_rows[0] if clean_rows else [], significant)
+        clone["interpretation"] = _splice_sentences(
+            _text(clone.get("interpretation")), [means, effect_sentence, test_clause]
+        )
+        return clone
 
     count_indexes = [
         idx for idx, header in enumerate(headers)
@@ -1227,10 +1582,8 @@ def _association_table_for_export(table: Dict[str, Any], label_ctx: Dict[str, An
             grouped[category][idx] = float(grouped[category][idx] or 0.0) + float(_parse_count_cell(row[idx]) or 0.0)
 
     direction = ""
-    if _table_is_significant(headers, rows):
-        direction = _association_direction_sentence(
-            _clean_variable_label(predictor), headers, count_indexes, order, grouped, label_ctx
-        )
+    if significant:
+        direction = _association_direction_sentence(predictor_label, headers, count_indexes, order, grouped, label_ctx)
 
     if len(order) == len(rows) and all(_text(row[0]) == order[idx] for idx, row in enumerate(rows)):
         clone = deepcopy(table)
@@ -1245,8 +1598,8 @@ def _association_table_for_export(table: Dict[str, Any], label_ctx: Dict[str, An
                 clean_row[0] = _clinical_category_label(predictor, row[0], label_ctx)
             clean_rows.append(clean_row)
         clone["rows"] = clean_rows
-        if direction:
-            clone["interpretation"] = _splice_direction_sentence(_text(clone.get("interpretation")), direction)
+        effect_sentence = _effect_size_sentence(headers, clean_rows[0]) if clean_rows else ""
+        clone["interpretation"] = _splice_sentences(_text(clone.get("interpretation")), [direction, effect_sentence])
         return clone
 
     out_rows: List[List[str]] = []
@@ -1265,8 +1618,8 @@ def _association_table_for_export(table: Dict[str, Any], label_ctx: Dict[str, An
     clone = deepcopy(table)
     clone["columns"] = [_display_value(header, label_ctx) for header in headers]
     clone["rows"] = out_rows
-    if direction:
-        clone["interpretation"] = _splice_direction_sentence(_text(clone.get("interpretation")), direction)
+    effect_sentence = _effect_size_sentence(headers, out_rows[0]) if out_rows else ""
+    clone["interpretation"] = _splice_sentences(_text(clone.get("interpretation")), [direction, effect_sentence])
     return clone
 
 
@@ -1365,6 +1718,7 @@ def _add_table_docx(
     caption_no: int,
     label_ctx: Optional[Dict[str, Any]] = None,
     include_interpretation: bool = True,
+    include_warnings: bool = True,
 ) -> int:
     payload = _descriptive_export_table(payload, label_ctx or {})
     if isinstance(payload, list):
@@ -1389,10 +1743,11 @@ def _add_table_docx(
         for idx, value in enumerate(row[:len(headers)]):
             cells[idx].text = _display_value(value, label_ctx)
     _format_docx_table(table, font_size=8 if len(headers) > 5 else 9)
-    for warning in warning_notes:
-        cleaned_warning = _clean_interpretation(warning, label_ctx)
-        if cleaned_warning:
-            _plain_docx_text(doc, cleaned_warning)
+    if include_warnings:
+        for warning in warning_notes:
+            cleaned_warning = _clean_interpretation(warning, label_ctx)
+            if cleaned_warning:
+                _plain_docx_text(doc, cleaned_warning)
     interpretation = _clean_interpretation(payload.get("interpretation"), label_ctx)
     if include_interpretation and interpretation:
         _plain_docx_text(doc, interpretation)
@@ -1435,11 +1790,32 @@ def _add_figure_docx(doc: Document, figure: Dict[str, Any], figure_no: int, labe
 def _figure_matches_table(figure: Dict[str, Any], table: Dict[str, Any]) -> bool:
     table_ids = {str(item) for item in table.get("source_test_ids") or [] if item}
     fig_result = str(figure.get("source_result_id") or "")
-    if table_ids and fig_result and fig_result in table_ids:
-        return True
+    if table_ids and fig_result:
+        return fig_result in table_ids
     table_vars = set(_source_variables(table))
     fig_vars = {str(item) for item in figure.get("source_variables") or [] if item}
     return bool(table_vars and fig_vars and table_vars.intersection(fig_vars))
+
+
+def _enrich_figures_from_tables(
+    figures: List[Dict[str, Any]],
+    tables: List[Dict[str, Any]],
+    label_ctx: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    enriched_figures: List[Dict[str, Any]] = []
+    for figure in figures:
+        clone = deepcopy(figure)
+        matched = next((table for table in tables if _figure_matches_table(clone, table)), None)
+        if matched:
+            enriched_table = _normalise_table_for_export(matched, label_ctx)
+            interpretation = _clean_interpretation(enriched_table.get("interpretation"), label_ctx)
+            warnings = " ".join(_text(item) for item in enriched_table.get("warnings") or [] if _text(item))
+            if warnings:
+                interpretation = _clean_interpretation(f"{interpretation} {warnings}", label_ctx)
+            if interpretation:
+                clone["interpretation"] = interpretation
+        enriched_figures.append(clone)
+    return enriched_figures
 
 
 def _render_section_docx(
@@ -1458,6 +1834,7 @@ def _render_section_docx(
     ]
     used_figures: Set[str] = set()
     tables = _expand_export_tables(_section_tables(section), label_ctx)
+    figures = _enrich_figures_from_tables(figures, tables, label_ctx)
     if section_id == "bivariate_associations":
         for figure in sorted(figures, key=lambda item: _association_figure_sort_key(item, label_ctx)):
             figure_id = _text(figure.get("figure_id") or figure.get("title"))
@@ -1468,7 +1845,19 @@ def _render_section_docx(
                 figure_no = next_no
                 used_figures.add(figure_id)
     for table in tables:
-        table_no = _add_table_docx(doc, table, table_no, label_ctx, include_interpretation=False)
+        matched_rendered_figure = section_id == "bivariate_associations" and any(
+            _text(figure.get("figure_id") or figure.get("title")) in used_figures
+            and _figure_matches_table(figure, table)
+            for figure in figures
+        )
+        table_no = _add_table_docx(
+            doc,
+            table,
+            table_no,
+            label_ctx,
+            include_interpretation=False,
+            include_warnings=not matched_rendered_figure,
+        )
         for figure in figures:
             figure_id = _text(figure.get("figure_id") or figure.get("title"))
             if figure_id in used_figures or not _figure_matches_table(figure, table):
@@ -1477,10 +1866,11 @@ def _render_section_docx(
             if next_no != figure_no:
                 figure_no = next_no
                 used_figures.add(figure_id)
-        enriched = _normalise_table_for_export(table, label_ctx)
-        interpretation = _clean_interpretation(enriched.get("interpretation"), label_ctx)
-        if interpretation:
-            _plain_docx_text(doc, interpretation)
+        if not matched_rendered_figure:
+            enriched = _normalise_table_for_export(table, label_ctx)
+            interpretation = _clean_interpretation(enriched.get("interpretation"), label_ctx)
+            if interpretation:
+                _plain_docx_text(doc, interpretation)
     if include_optional_figures:
         for figure in figures[:4]:
             figure_id = _text(figure.get("figure_id") or figure.get("title"))
@@ -1584,6 +1974,47 @@ def _apply_polish_overrides(
     return bp
 
 
+def _hydrate_blueprint_result_warnings(
+    blueprint: Dict[str, Any], results: Dict[str, Any]
+) -> Dict[str, Any]:
+    """Restore executed-result cautions that compact blueprint tables omit."""
+    warnings_by_id: Dict[str, List[str]] = {}
+    for result in results.get("tests") or results.get("results") or []:
+        result_id = _text(result.get("id") or result.get("result_id"))
+        if not result_id:
+            continue
+        warnings: List[str] = []
+        for key in ("warning", "note"):
+            value = _text(result.get(key))
+            if value and value not in {"-", "None"}:
+                warnings.append(value)
+        warnings.extend(_text(item) for item in result.get("warnings") or [] if _text(item))
+        for table in result.get("tables") or []:
+            headers, rows = _table_rows(table)
+            warning_indexes = [
+                idx for idx, header in enumerate(headers)
+                if header.strip().lower() in {"warning", "warnings", "notes/warnings"}
+            ]
+            for row in rows:
+                for idx in warning_indexes:
+                    if idx < len(row) and _text(row[idx]) not in {"", "-", "None"}:
+                        warnings.append(_text(row[idx]))
+        if warnings:
+            warnings_by_id[result_id] = list(dict.fromkeys(warnings))
+
+    if not warnings_by_id:
+        return blueprint
+    hydrated = deepcopy(blueprint)
+    for section in hydrated.get("analysis_sections") or []:
+        for table in section.get("tables") or []:
+            inherited: List[str] = list(table.get("warnings") or [])
+            for source_id in table.get("source_test_ids") or []:
+                inherited.extend(warnings_by_id.get(str(source_id), []))
+            if inherited:
+                table["warnings"] = list(dict.fromkeys(inherited))
+    return hydrated
+
+
 def _section_intro(
     section: Dict[str, Any],
     label_ctx: Dict[str, Any],
@@ -1631,7 +2062,7 @@ def generate_docx(
     include_optional_figures: bool = False,
     polish_overrides: Optional[Dict[str, str]] = None,
 ) -> bytes:
-    blueprint = _blueprint(results)
+    blueprint = _hydrate_blueprint_result_warnings(_blueprint(results), results)
     if polish_overrides:
         blueprint = _apply_polish_overrides(blueprint, polish_overrides)
     label_ctx = _outcome_label_context(blueprint)
@@ -1648,7 +2079,7 @@ def generate_docx(
     _add_summary_docx(doc, blueprint, results)
 
     _add_heading(doc, "5.2 Statistical Methods", 1)
-    methods = _text(blueprint.get("methods_text"))
+    methods = _sanitize_thesis_claims(_format_statistical_display(blueprint.get("methods_text")))
     _plain_docx_text(doc, methods or "Statistical methods were generated from the executed Sigma analysis plan.")
 
     table_no = 1
@@ -1685,7 +2116,8 @@ def generate_docx(
             if intro:
                 _plain_docx_text(doc, intro)
             outcome_tables = _section_tables(section) or _primary_outcome_tables(blueprint, label_ctx)
-            for table in outcome_tables:
+            display_tables = _expand_export_tables(outcome_tables, label_ctx)
+            for table in display_tables:
                 table_no = _add_table_docx(doc, table, table_no, label_ctx, include_interpretation=False)
             rendered_outcome_figure = False
             if outcome_tables:
@@ -1700,7 +2132,7 @@ def generate_docx(
                 next_no = _add_figure_docx(doc, _normalise_figure_metadata(fig, label_ctx), figure_no, label_ctx)
                 rendered_outcome_figure = rendered_outcome_figure or next_no != figure_no
                 figure_no = next_no
-            for table in outcome_tables:
+            for table in display_tables:
                 interpretation = _clean_interpretation(table.get("interpretation"), label_ctx)
                 if interpretation:
                     _plain_docx_text(doc, interpretation)
@@ -1825,6 +2257,7 @@ def _render_section_pdf(
     ]
     used_figures: Set[str] = set()
     tables = _expand_export_tables(_section_tables(section), label_ctx)
+    figures = _enrich_figures_from_tables(figures, tables, label_ctx)
     if section_id == "bivariate_associations":
         for figure in sorted(figures, key=lambda item: _association_figure_sort_key(item, label_ctx)):
             figure_id = _text(figure.get("figure_id") or figure.get("title"))
@@ -1835,13 +2268,19 @@ def _render_section_pdf(
                 figure_no = next_no
                 used_figures.add(figure_id)
     for table in tables:
+        matched_rendered_figure = section_id == "bivariate_associations" and any(
+            _text(figure.get("figure_id") or figure.get("title")) in used_figures
+            and _figure_matches_table(figure, table)
+            for figure in figures
+        )
         flow.append(Paragraph(f"<b>{_pdf_escape(_display_value(_clean_table_title(table.get('title')), label_ctx))}</b>", small))
         pdf_table, warning_notes = _pdf_table(table, label_ctx, available_width)
         flow.append(pdf_table)
-        for warning in warning_notes:
-            cleaned_warning = _clean_interpretation(warning, label_ctx)
-            if cleaned_warning:
-                flow.append(Paragraph(_pdf_escape(cleaned_warning), small))
+        if not matched_rendered_figure:
+            for warning in warning_notes:
+                cleaned_warning = _clean_interpretation(warning, label_ctx)
+                if cleaned_warning:
+                    flow.append(Paragraph(_pdf_escape(cleaned_warning), small))
         for figure in figures:
             figure_id = _text(figure.get("figure_id") or figure.get("title"))
             if figure_id in used_figures or not _figure_matches_table(figure, table):
@@ -1850,10 +2289,11 @@ def _render_section_pdf(
             if next_no != figure_no:
                 figure_no = next_no
                 used_figures.add(figure_id)
-        enriched = _normalise_table_for_export(table, label_ctx)
-        interpretation = _clean_interpretation(enriched.get("interpretation"), label_ctx)
-        if interpretation:
-            flow.append(Paragraph(_pdf_escape(interpretation), body))
+        if not matched_rendered_figure:
+            enriched = _normalise_table_for_export(table, label_ctx)
+            interpretation = _clean_interpretation(enriched.get("interpretation"), label_ctx)
+            if interpretation:
+                flow.append(Paragraph(_pdf_escape(interpretation), body))
         flow.append(Spacer(1, 6))
     if include_optional_figures:
         for figure in figures[:4]:
@@ -1873,7 +2313,7 @@ def generate_pdf(
     include_optional_figures: bool = False,
     polish_overrides: Optional[Dict[str, str]] = None,
 ) -> bytes:
-    blueprint = _blueprint(results)
+    blueprint = _hydrate_blueprint_result_warnings(_blueprint(results), results)
     if polish_overrides:
         blueprint = _apply_polish_overrides(blueprint, polish_overrides)
     label_ctx = _outcome_label_context(blueprint)
@@ -1895,7 +2335,8 @@ def generate_pdf(
     for label, value in _study_summary(blueprint, results):
         flow.append(Paragraph(f"<b>{_pdf_escape(label)}:</b> {_pdf_escape(value)}", body))
     flow.append(Paragraph("5.2 Statistical Methods", h1))
-    flow.append(Paragraph(_pdf_escape(blueprint.get("methods_text") or "Statistical methods were generated from the executed Sigma analysis plan."), body))
+    methods = _sanitize_thesis_claims(_format_statistical_display(blueprint.get("methods_text")))
+    flow.append(Paragraph(_pdf_escape(methods or "Statistical methods were generated from the executed Sigma analysis plan."), body))
 
     main_sections = _main_sections(blueprint)
     descriptive_sections = _dedupe_descriptive_sections([

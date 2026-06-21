@@ -23,6 +23,7 @@ Run:
 from __future__ import annotations
 
 import io
+import re
 from typing import Any, Dict, List
 
 from docx import Document
@@ -116,7 +117,7 @@ def _group_comparison_test(name: str, *, p: float, p_corrected: float) -> Dict[s
 def _table_one() -> Dict[str, Any]:
     rows = [
         ("Positive/ Negative", "n (%)", "Yes: 70 (60.3%); No: 46 (39.7%)"),
-        ("Age", "Mean ± SD", "55.1 ± 12.0 (n=116); Missing: 0 (0.0%)"),
+        ("Age", "Mean ± SD", "55.1 ± 12.0 (n=116); Median: 55.0; Minimum: 30.0; Maximum: 88.0; Missing: 0 (0.0%)"),
         ("Tumour quadrant", "n (%)", (
             "Central: 25 (21.6%); Upper outer: 25 (21.6%); Upper inner: 10 (8.6%); "
             "Lower outer: 15 (12.9%); Lower inner: 10 (8.6%); Axillary tail: 8 (6.9%); "
@@ -172,7 +173,7 @@ def _build_blueprint() -> Dict[str, Any]:
         _chi_square_test(
             "Histological type", p=0.004, p_corrected=0.013,
             observed_rows=[["1", 25, 5, 30], ["2", 20, 20, 40], ["3", 5, 25, 30], ["Total", 50, 50, 100]],
-            warning="Chi-square test was used because some expected cell counts were below 5.",
+            warning="This finding should be interpreted cautiously because some expected cell counts were below 5.",
         ),
         _chi_square_test(
             "ER", p=0.0009, p_corrected=0.005,
@@ -210,6 +211,26 @@ def _build_blueprint() -> Dict[str, Any]:
         _group_comparison_test("positive_nodes", p=0.800, p_corrected=0.900),
         _group_comparison_test("total_nodes", p=0.820, p_corrected=0.900),
         _group_comparison_test("node_ratio", p=0.810, p_corrected=0.900),
+        {
+            "id": "age_vs_outcome",
+            "title": "Age vs Positive/ Negative",
+            "test_type": "welch_ttest",
+            "actual_test_used": "Welch's t-test",
+            "analysis_family": "bivariate",
+            "p": 0.210,
+            "p_corrected": 0.400,
+            "cohens_d": -0.229,
+            "warning": "-",
+            "tables": [{
+                "title": "Comparison of Age by p27 expression status",
+                "headers": ["Group", "n", "Mean ± SD", "Test statistic", "p-value", "Adjusted p-value", "Test applied", "Effect size", "Warnings"],
+                "rows": [
+                    ["Positive", "70", "56.17 ± 12.32", "t = -1.26", "p = 0.210", "p = 0.400", "Welch's t-test", "Cohen's d = -0.229", "-"],
+                    ["Negative", "46", "59.05 ± 13.72", "t = -1.26", "p = 0.210", "p = 0.400", "Welch's t-test", "Cohen's d = -0.229", "-"],
+                ],
+            }],
+            "figures": [],
+        },
     ]
     significant_findings = [
         {
@@ -530,6 +551,110 @@ def test_generic_non_breast_fixture_still_exports() -> None:
     assert "Tumour quadrant" not in text
 
 
+def test_continuous_descriptive_explanation_preserves_exact_numbers() -> None:
+    results = _build_results()
+    text = _docx_text(chapter_v_export.generate_docx(results))
+    age_interp = next(
+        (p for p in text.split("\n") if p.startswith("Age was summarised as a continuous variable")),
+        None,
+    )
+    assert age_interp is not None
+    assert "55.1" in age_interp and "12.0" in age_interp
+    assert "median of 55.0" in age_interp
+    assert "30.0 to 88.0" in age_interp
+    assert "Age had no missing values in this sample." in age_interp
+    assert len([s for s in age_interp.split(".") if s.strip()]) >= 3
+    assert "Negative age values" not in text
+    assert "No age values" not in text
+
+
+def test_continuous_association_explanation_includes_group_means_and_test_clause() -> None:
+    results = _build_results()
+    text = _docx_text(chapter_v_export.generate_docx(results))
+    assert "Age did not show a statistically significant association with p27 expression status." in text
+    assert "56.17" in text and "59.05" in text
+    assert "56.17 ± 12.32 years in the p27-positive group" in text
+    assert "59.05 ± 13.72 years in the p27-negative group" in text
+    assert "Cohen's d of -0.229" in text
+    assert "This difference was not statistically significant using Welch's t-test." in text
+
+
+def test_primary_outcome_explanation_uses_concept_interpreter() -> None:
+    results = _build_results()
+    text = _docx_text(chapter_v_export.generate_docx(results))
+    assert "which was the primary marker outcome in this analysis" in text
+    assert "positivity was observed in 70 cases (60.3%)" in text
+    assert "46 cases (39.7%) were p27-negative" in text
+    assert "This distribution forms the basis for the subsequent association analyses." in text
+    assert "This table reports the distribution of" not in text
+
+
+def test_adverse_features_explanation_ranks_present_categories() -> None:
+    results = _build_results()
+    text = _docx_text(chapter_v_export.generate_docx(results))
+    adverse_interp = next(
+        (p for p in text.split("\n") if p.startswith("This table summarises adverse pathological features")),
+        None,
+    )
+    assert adverse_interp is not None
+    assert "DCIS was present in 40 cases (34.5%)" in adverse_interp
+    assert "while" in adverse_interp
+    assert "LVI was present in 35 cases (30.2%)" in adverse_interp
+
+
+def test_nodal_burden_variable_labels_are_human_readable() -> None:
+    results = _build_results()
+    text = _docx_text(chapter_v_export.generate_docx(results))
+    assert "Positive nodes" in text
+    assert "Total nodes" in text
+    assert "Node ratio" in text
+    assert "positive_nodes" not in text
+    assert "total_nodes" not in text
+    assert "node_ratio" not in text
+
+
+def test_no_overclaiming_or_broken_language() -> None:
+    results = _build_results()
+    blob = chapter_v_export.generate_docx(results)
+    doc = Document(io.BytesIO(blob))
+    paragraphs = [p.text for p in doc.paragraphs if p.text]
+    text = "\n".join(paragraphs)
+    lowered = text.lower()
+    for forbidden in ("proves", "proven", " causes ", "predicts", "prognostic significance", "independent association"):
+        assert forbidden not in lowered, f"forbidden phrase found: {forbidden!r}"
+    assert "because." not in text
+    for paragraph in paragraphs:
+        assert "  " not in paragraph, f"double space found in paragraph: {paragraph!r}"
+
+
+def test_thesis_facing_labels_and_grammar_are_clean() -> None:
+    results = _build_results()
+    text = _docx_text(chapter_v_export.generate_docx(results))
+    assert "p27 staining localization" in text
+    assert "p27 staining score pattern" in text
+    assert "Interpretation-site" not in text
+    assert "Staining Result" not in text
+    assert "Tx infiltrating L" not in text
+    assert "p27 expression status positivity" not in text
+    assert "for 1 cases" not in text
+    assert not re.search(r"\b1 cases\s*\([0-9.]+%\)", text)
+    assert "Welch ttest" not in text
+    assert "Welch t-test" not in text
+    assert "welch_ttest" not in text
+    assert "Welch's t-test" in text
+
+
+def test_sparse_caution_is_canonical_and_not_duplicated() -> None:
+    results = _build_results()
+    text = _docx_text(chapter_v_export.generate_docx(results))
+    caution = "This finding should be interpreted cautiously because some expected cell counts were below 5."
+    assert "because some." not in text
+    assert "because." not in text
+    assert "Interpret with caution: -" not in text
+    for paragraph in text.split("\n"):
+        assert paragraph.count(caution) <= 1
+
+
 def main() -> None:
     test_section_ii_splits_into_focused_tables()
     print("  [ok] Section II splits into focused tables")
@@ -555,6 +680,22 @@ def main() -> None:
     print("  [ok] No duplicate table titles in Word export")
     test_generic_non_breast_fixture_still_exports()
     print("  [ok] Generic non-breast fixture still exports")
+    test_continuous_descriptive_explanation_preserves_exact_numbers()
+    print("  [ok] Continuous descriptive explanation preserves exact numbers")
+    test_continuous_association_explanation_includes_group_means_and_test_clause()
+    print("  [ok] Continuous association explanation includes group means and test clause")
+    test_primary_outcome_explanation_uses_concept_interpreter()
+    print("  [ok] Primary outcome explanation uses concept interpreter, not stub text")
+    test_adverse_features_explanation_ranks_present_categories()
+    print("  [ok] Adverse features explanation ranks present categories")
+    test_nodal_burden_variable_labels_are_human_readable()
+    print("  [ok] Nodal burden variable labels are human readable")
+    test_no_overclaiming_or_broken_language()
+    print("  [ok] No overclaiming or broken language in deterministic explanations")
+    test_thesis_facing_labels_and_grammar_are_clean()
+    print("  [ok] Thesis-facing labels and grammar are clean")
+    test_sparse_caution_is_canonical_and_not_duplicated()
+    print("  [ok] Sparse-cell caution is canonical and deduplicated")
     print("\nSigma Chapter V section-split verification passed.")
 
 

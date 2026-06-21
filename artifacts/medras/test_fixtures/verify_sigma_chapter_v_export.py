@@ -435,6 +435,9 @@ def verify_service_docx() -> None:
             "Tumor site / quadrant": "Tumour quadrant",
             "Tumour quadrant / quadrant": "Tumour quadrant",
             "pT": "Pathological T stage",
+            "Interpretation-site": "p27 staining localization",
+            "Interpretation - site": "p27 staining localization",
+            "Staining Result": "p27 staining score pattern",
         }
         return aliases.get(text, text)
 

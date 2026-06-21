@@ -537,8 +537,12 @@ def test_cleaned_dataset_no_postive() -> None:
     )
     assert "Postive" not in all_text, \
         "cleaned_processed_dataset must not contain the raw typo 'Postive'"
-    assert "Abse" not in all_text, \
-        "cleaned_processed_dataset must not contain the raw LVI typo 'Abse'"
+    assert all(
+        str(v).strip() != "Abse"
+        for row in ws.iter_rows(min_row=2, values_only=True)
+        for v in row
+        if v is not None
+    ), "cleaned_processed_dataset must not contain the raw LVI typo 'Abse'"
     assert "Grade 1" in all_text and "Grade 2" in all_text and "Grade 3" in all_text, \
         "cleaned_processed_dataset must show Histological type as Grade 1/2/3"
     assert "NO" not in all_text and "N0" in all_text
