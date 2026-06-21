@@ -354,17 +354,44 @@ def verify_service_docx() -> None:
     assert "Variable / parameter" in text
     assert "p-value" in text and "Adjusted p-value" in text
     doc = Document(io.BytesIO(blob))
-    continuous_headers = [cell.text for cell in doc.tables[1].rows[0].cells]
-    continuous_values = [cell.text for cell in doc.tables[1].rows[1].cells]
+
+    def _table_rows(table) -> list[list[str]]:
+        return [[cell.text for cell in row.cells] for row in table.rows]
+
+    def _is_descriptive_table(table) -> bool:
+        if not table.rows:
+            return False
+        header = [cell.text for cell in table.rows[0].cells]
+        return header[:2] == ["Parameter", "n"] or header == ["Parameter", "Category", "n", "%"]
+
+    descriptive_tables = [table for table in doc.tables if _is_descriptive_table(table)]
+    continuous_table = next(
+        table for table in descriptive_tables
+        if [cell.text for cell in table.rows[0].cells][:2] == ["Parameter", "n"]
+        and any(row.cells[0].text == "Age" for row in table.rows[1:])
+    )
+    continuous_headers = [cell.text for cell in continuous_table.rows[0].cells]
+    continuous_values = next(
+        [cell.text for cell in row.cells] for row in continuous_table.rows[1:] if row.cells[0].text == "Age"
+    )
     assert continuous_headers[0:2] == ["Parameter", "n"]
     assert continuous_headers[2].startswith("Mean") and "SD" in continuous_headers[2]
     assert continuous_headers[3:] == ["Median", "Minimum", "Maximum", "Missing n (%)"]
     assert continuous_values[0] == "Age" and continuous_values[1] == "12"
     assert "57.2" in continuous_values[2] and "8.6" in continuous_values[2]
     assert continuous_values[-1] == "0 (0.0%)"
-    immuno_rows = [[cell.text for cell in row.cells] for row in doc.tables[3].rows]
+    immuno_rows = [
+        row for table in descriptive_tables
+        for row in _table_rows(table)
+        if row[:1] == ["ER"]
+    ]
     assert ["ER", "Positive", "8", "66.7%"] in immuno_rows
-    assert all(row[0] != "p27 expression status" for row in immuno_rows[1:])
+    outcome_table_count = sum(
+        1
+        for table in descriptive_tables
+        if any(row[0] == "p27 expression status" for row in _table_rows(table)[1:])
+    )
+    assert outcome_table_count == 1
     final_rows = [[cell.text for cell in row.cells] for row in doc.tables[-1].rows]
     histology = next(row for row in final_rows if row[0] == "Histological type vs p27 expression status")
     assert histology[3] == "p = 0.004" and histology[4] == "p = 0.013"
@@ -396,7 +423,7 @@ def verify_service_docx() -> None:
     assert "section_id" not in text and "source_result_id" not in text
     assert "cross_sectional_association" not in text
     assert "Internal detailed figure" not in text
-    doc = Document(io.BytesIO(blob))
+
     def _canonical_member(value: str) -> str:
         text = str(value or "").strip()
         aliases = {
@@ -407,11 +434,12 @@ def verify_service_docx() -> None:
             "Tumour site / quadrant": "Tumour quadrant",
             "Tumor site / quadrant": "Tumour quadrant",
             "Tumour quadrant / quadrant": "Tumour quadrant",
+            "pT": "Pathological T stage",
         }
         return aliases.get(text, text)
 
     descriptive_table_members = []
-    for table in doc.tables[1:6]:
+    for table in descriptive_tables:
         members = set()
         for row in table.rows[1:]:
             value = row.cells[0].text

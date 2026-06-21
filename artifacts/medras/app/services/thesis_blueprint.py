@@ -49,6 +49,57 @@ def _class_lookup(classifications: List[Dict[str, Any]]) -> Dict[str, Dict[str, 
     return {str(row.get("column")): row for row in classifications or [] if row.get("column")}
 
 
+def _compact_key(value: Any) -> str:
+    return re.sub(r"[^a-z0-9]+", "", str(value or "").lower())
+
+
+def _word_match(text: str, token: str) -> bool:
+    return bool(re.search(rf"(^|[^a-z0-9]){re.escape(token)}([^a-z0-9]|$)", text))
+
+
+def _clinical_pathology_concept(variable: Any) -> tuple[str, str]:
+    """Classify a Section II (nodal/prognostic pathology) variable into a thesis sub-table."""
+    key = _compact_key(variable)
+    if "size" in key:
+        return "tumour_size", "Tumour size distribution"
+    if "quadrant" in key or (("tumour" in key or "tumor" in key) and "site" in key):
+        return "tumour_quadrant", "Tumour quadrant distribution"
+    if key == "pt" or "tstage" in key or "pstage" in key:
+        return "pathological_t_stage", "Pathological T stage distribution"
+    if any(token in key for token in ("positivenodes", "totalnodes", "noderatio", "nodesinvolved", "numberofnodes", "nodalburden")):
+        return "nodal_burden", "Nodal burden summary"
+    if "nodal" in key or "node" in key:
+        return "nodal_status", "Nodal status distribution"
+    if any(token in key for token in ("ene", "dcis", "lvi", "necrosis")):
+        return "adverse_features", "Adverse pathological features"
+    return "other_pathology", "Other pathology characteristics"
+
+
+def _immunophenotype_concept(variable: Any) -> tuple[str, str]:
+    """Classify a Section III (immunophenotype) variable into a thesis sub-table."""
+    low = str(variable or "").lower()
+    key = _compact_key(variable)
+    if _word_match(low, "er") or _word_match(low, "pr"):
+        return "hormone_receptor", "Hormone receptor profile"
+    if "her2" in key or "egfr" in key or "ki67" in key:
+        return "her2_proliferation", "HER2 and proliferation marker profile"
+    if _word_match(low, "ar"):
+        return "ar_expression", "AR expression profile"
+    if "molecular" in key and "subtype" in key:
+        return "molecular_subtype", "Molecular subtype distribution"
+    return "other_immunophenotype", "Other immunophenotype characteristics"
+
+
+def _marker_component_concept(variable: Any, marker_label: str = "Marker") -> tuple[str, str]:
+    """Classify a marker/outcome component variable (e.g. p27 staining) into a thesis sub-table."""
+    low = str(variable or "").lower()
+    if any(token in low for token in ("localization", "localisation", "site")):
+        return "localization", f"{marker_label} staining localization"
+    if any(token in low for token in ("score", "result", "pattern", "intensity")):
+        return "score", f"{marker_label} staining score pattern"
+    return "other_component", f"Other {marker_label} component characteristics"
+
+
 def _variable_type(classes: Dict[str, Dict[str, Any]], name: Optional[str]) -> str:
     if not name:
         return ""
@@ -686,44 +737,60 @@ def _domain_profile_sections(table_one: Dict[str, Any], domain_profile: str, lab
             "Clinical and Pathology Characteristics",
             "Summarise tumour and pathology descriptors using the active domain profile.",
             ("tumour", "tumor", "laterality", "site", "pt", "nodal", "node", "lvi", "ene", "necrosis", "dcis", "grade", "stage"),
+            _clinical_pathology_concept,
         ),
         "immunophenotype_characteristics": (
             "Immunophenotype and Marker Characteristics",
             "Summarise receptor, marker, and molecular subtype variables.",
             ("er", "pr", "her2", "her2neu", "ar", "egfr", "ki67", "molecular", "subtype", "marker", "staining", "expression"),
+            _immunophenotype_concept,
         ),
     }
     sections: List[Dict[str, Any]] = []
     headers = list(table_one.get("headers") or [])
     rows = list(table_one.get("rows") or [])
-    for section_id, (title, purpose, keywords) in groups.items():
+    for section_id, (title, purpose, keywords, classifier) in groups.items():
         matched = [
             row for row in rows
             if any(keyword in str(row.get("variable") or "").lower() for keyword in keywords)
         ]
         if not matched:
             continue
-        table = {
-            "table_id": f"{section_id}_table",
-            "title": title,
-            "table_type": "domain_profile_descriptive_table",
-            "columns": headers,
-            "rows": [_display_row(row, label_ctx) for row in matched],
-            "source_variables": [str(row.get("variable")) for row in matched if row.get("variable")],
-            "source_test_ids": [],
-            "interpretation": "This table is organised by the selected domain profile; statistical tests remain generated from variable roles and executed results.",
-            "thesis_ready": True,
-            "priority": "thesis_ready_primary",
-            "optional": False,
-            "detailed_report_only": False,
-            "warnings": [],
-        }
+        buckets: Dict[str, Dict[str, Any]] = {}
+        order: List[str] = []
+        for row in matched:
+            variable = row.get("variable")
+            concept_id, concept_title = classifier(variable)
+            if concept_id not in buckets:
+                buckets[concept_id] = {"title": concept_title, "rows": []}
+                order.append(concept_id)
+            buckets[concept_id]["rows"].append(row)
+        tables: List[Dict[str, Any]] = []
+        for concept_id in order:
+            bucket = buckets[concept_id]
+            bucket_rows = bucket["rows"]
+            tables.append({
+                "table_id": f"{section_id}_{concept_id}",
+                "title": bucket["title"],
+                "table_type": "domain_profile_descriptive_table",
+                "concept": concept_id,
+                "columns": headers,
+                "rows": [_display_row(row, label_ctx) for row in bucket_rows],
+                "source_variables": [str(row.get("variable")) for row in bucket_rows if row.get("variable")],
+                "source_test_ids": [],
+                "interpretation": "This table is organised by the selected domain profile; statistical tests remain generated from variable roles and executed results.",
+                "thesis_ready": True,
+                "priority": "thesis_ready_primary",
+                "optional": False,
+                "detailed_report_only": False,
+                "warnings": [],
+            })
         sections.append({
             "section_id": section_id,
             "title": title,
             "purpose": purpose,
             "source_results": [],
-            "tables": [table],
+            "tables": tables,
             "figures": [],
             "interpretation": "Domain-profile grouping is descriptive and does not change statistical calculations.",
         })
@@ -866,38 +933,50 @@ def build_thesis_analysis_blueprint(
     all_figures: List[Dict[str, Any]] = list(outcome_section["figures"] if outcome_section else [])
     outcome_components = _outcome_component_variables(classifications, outcome, session)
     if outcome_components:
-        component_rows = [
-            _display_row(row, label_ctx)
-            for row in table_one.get("rows") or []
-            if str(row.get("variable") or "") in outcome_components
-        ]
-        component_table = {
-            "table_id": "marker_outcome_components",
-            "title": "Marker / Outcome Component Descriptives",
-            "table_type": "marker_component_descriptive_table",
-            "columns": list(table_one.get("headers") or []),
-            "rows": component_rows,
-            "source_variables": sorted(outcome_components),
-            "source_test_ids": [],
-            "interpretation": "Localization and staining score are presented descriptively as components of the immunohistochemical assessment.",
-            "thesis_ready": bool(component_rows),
-            "priority": "thesis_ready_primary",
-            "optional": False,
-            "detailed_report_only": False,
-            "warnings": [],
-        }
+        marker_label = _clean_text(session.get("main_marker")) or "Marker"
+        component_buckets: Dict[str, Dict[str, Any]] = {}
+        component_order: List[str] = []
+        for row in table_one.get("rows") or []:
+            variable = row.get("variable")
+            if str(variable or "") not in outcome_components:
+                continue
+            concept_id, concept_title = _marker_component_concept(variable, marker_label)
+            if concept_id not in component_buckets:
+                component_buckets[concept_id] = {"title": concept_title, "rows": []}
+                component_order.append(concept_id)
+            component_buckets[concept_id]["rows"].append(row)
+        component_tables: List[Dict[str, Any]] = []
+        for concept_id in component_order:
+            bucket = component_buckets[concept_id]
+            bucket_rows = bucket["rows"]
+            component_tables.append({
+                "table_id": f"marker_outcome_components_{concept_id}",
+                "title": bucket["title"],
+                "table_type": "marker_component_descriptive_table",
+                "concept": concept_id,
+                "columns": list(table_one.get("headers") or []),
+                "rows": [_display_row(row, label_ctx) for row in bucket_rows],
+                "source_variables": [str(row.get("variable")) for row in bucket_rows if row.get("variable")],
+                "source_test_ids": [],
+                "interpretation": "Localization and staining score are presented descriptively as components of the immunohistochemical assessment.",
+                "thesis_ready": bool(bucket_rows),
+                "priority": "thesis_ready_primary",
+                "optional": False,
+                "detailed_report_only": False,
+                "warnings": [],
+            })
         component_section = {
             "section_id": "marker_outcome_components",
             "title": "Marker / Outcome Components",
             "purpose": "Describe variables that contribute to, localise, or qualify the primary marker/outcome.",
             "source_results": [],
-            "tables": [component_table],
+            "tables": component_tables,
             "figures": [],
             "interpretation": "These variables are descriptive components of the primary marker/outcome, not independent prognostic predictors by default.",
         }
         sections_by_id[component_section["section_id"]] = component_section
         sections.append(component_section)
-        all_tables.append(component_table)
+        all_tables.extend(component_tables)
 
     for test in tests:
         family = _test_family(test)

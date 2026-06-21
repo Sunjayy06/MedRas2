@@ -264,6 +264,17 @@ def _clean_finding_text(value: Any) -> str:
     return text
 
 
+def _is_node_derived_association_insignificant(table: Dict[str, Any]) -> bool:
+    variables = table.get("source_variables") or []
+    if not any(_is_node_derived_variable(var) for var in variables):
+        return False
+    table_type = str(table.get("table_type") or "")
+    if "association" not in table_type and "comparison" not in table_type:
+        return False
+    headers, rows = _table_rows(table)
+    return not _table_is_significant(headers, rows)
+
+
 def _is_main_table(table: Dict[str, Any]) -> bool:
     if not isinstance(table, dict):
         return False
@@ -272,6 +283,8 @@ def _is_main_table(table: Dict[str, Any]) -> bool:
     if table.get("thesis_ready") is False:
         return False
     if str(table.get("priority") or "").lower() == "detailed_report_only":
+        return False
+    if _is_node_derived_association_insignificant(table):
         return False
     placement = str(table.get("placement") or "main_thesis").lower()
     if placement and placement not in {"main_thesis", "thesis_preview", "chapter_v"}:
@@ -503,9 +516,58 @@ def _parse_continuous_summary(summary: Any, label_ctx: Optional[Dict[str, Any]] 
     }
 
 
+_QUADRANT_CANONICAL = (
+    ("central", "Central"),
+    ("upper outer", "Upper outer"),
+    ("upper inner", "Upper inner"),
+    ("lower outer", "Lower outer"),
+    ("lower inner", "Lower inner"),
+    ("uoq", "Upper outer"),
+    ("uiq", "Upper inner"),
+    ("loq", "Lower outer"),
+    ("liq", "Lower inner"),
+)
+
+
+def _quadrant_category_label(category: Any) -> str:
+    text = re.sub(r"\bquadrant\b", "", _text(category), flags=re.IGNORECASE).strip().lower()
+    for token, label in _QUADRANT_CANONICAL:
+        if token in text:
+            return label
+    return "Other"
+
+
+def _score_sort_key(category: Any) -> Tuple[int, int, int]:
+    match = re.match(r"^\s*(\d+)\s*\+\s*(\d+)\s*$", _text(category).strip())
+    if match:
+        return (0, int(match.group(1)), int(match.group(2)))
+    return (1, 0, 0)
+
+
+def _build_categorical_rows(
+    categorical_order: List[Tuple[str, str]],
+    categorical_counts: Dict[Tuple[str, str], float],
+    concept: str = "",
+) -> List[List[str]]:
+    totals: Dict[str, float] = {}
+    for variable, _category in categorical_order:
+        totals[variable] = totals.get(variable, 0.0) + categorical_counts[(variable, _category)]
+    rows: List[List[str]] = []
+    for variable, category in categorical_order:
+        count = categorical_counts[(variable, category)]
+        total = totals.get(variable, 0.0)
+        pct = (count / total * 100.0) if total else 0.0
+        count_text = str(int(count)) if float(count).is_integer() else f"{count:g}"
+        rows.append([variable, category, count_text, f"{pct:.1f}%"])
+    if concept == "score":
+        rows.sort(key=lambda row: _score_sort_key(row[1]))
+    return rows
+
+
 def _descriptive_export_table(table: Dict[str, Any], label_ctx: Dict[str, Any]) -> Any:
     if str(table.get("table_type") or "") not in DESCRIPTIVE_TABLE_TYPES:
         return table
+    concept = _text(table.get("concept"))
     categorical_counts: Dict[Tuple[str, str], float] = {}
     categorical_order: List[Tuple[str, str]] = []
     continuous_rows: List[List[str]] = []
@@ -532,7 +594,10 @@ def _descriptive_export_table(table: Dict[str, Any], label_ctx: Dict[str, Any]) 
         categories = _parse_category_summary(summary, label_ctx)
         if categories:
             for category, count, pct in categories:
-                key = (variable, _clinical_category_label(variable, category, label_ctx))
+                clean_category = _clinical_category_label(variable, category, label_ctx)
+                if concept == "tumour_quadrant":
+                    clean_category = _quadrant_category_label(clean_category)
+                key = (variable, clean_category)
                 if key not in categorical_counts:
                     categorical_order.append(key)
                     categorical_counts[key] = 0.0
@@ -550,18 +615,8 @@ def _descriptive_export_table(table: Dict[str, Any], label_ctx: Dict[str, Any]) 
         continuous["title"] = _clean_table_title(continuous.get("title") or "Continuous descriptive findings")
         continuous["interpretation"] = polish or _descriptive_table_interpretation(continuous)
         categorical = deepcopy(table)
-        totals: Dict[str, float] = {}
-        for variable, _category in categorical_order:
-            totals[variable] = totals.get(variable, 0.0) + categorical_counts[(variable, _category)]
-        rows = []
-        for variable, category in categorical_order:
-            count = categorical_counts[(variable, category)]
-            total = totals.get(variable, 0.0)
-            pct = (count / total * 100.0) if total else 0.0
-            count_text = str(int(count)) if float(count).is_integer() else f"{count:g}"
-            rows.append([variable, category, count_text, f"{pct:.1f}%"])
         categorical["columns"] = ["Parameter", "Category", "n", "%"]
-        categorical["rows"] = rows
+        categorical["rows"] = _build_categorical_rows(categorical_order, categorical_counts, concept)
         categorical["title"] = _clean_table_title(categorical.get("title") or "Categorical descriptive findings")
         categorical["interpretation"] = polish or _descriptive_table_interpretation(categorical)
         for item in (continuous, categorical):
@@ -571,48 +626,283 @@ def _descriptive_export_table(table: Dict[str, Any], label_ctx: Dict[str, Any]) 
         clone["columns"] = ["Parameter", "n", "Mean ± SD", "Median", "Minimum", "Maximum", "Missing n (%)"]
         clone["rows"] = continuous_rows
     else:
-        totals: Dict[str, float] = {}
-        for variable, _category in categorical_order:
-            totals[variable] = totals.get(variable, 0.0) + categorical_counts[(variable, _category)]
-        rows = []
-        for variable, category in categorical_order:
-            count = categorical_counts[(variable, category)]
-            total = totals.get(variable, 0.0)
-            pct = (count / total * 100.0) if total else 0.0
-            count_text = str(int(count)) if float(count).is_integer() else f"{count:g}"
-            rows.append([variable, category, count_text, f"{pct:.1f}%"])
         clone["columns"] = ["Parameter", "Category", "n", "%"]
-        clone["rows"] = rows
+        clone["rows"] = _build_categorical_rows(categorical_order, categorical_counts, concept)
     clone.pop("headers", None)
     clone["title"] = _clean_table_title(clone.get("title") or "Descriptive findings")
     clone["interpretation"] = polish or _descriptive_table_interpretation(clone)
     return clone
 
 
-def _descriptive_table_interpretation(table: Dict[str, Any]) -> str:
-    rows = table.get("rows") or []
-    if not rows:
-        return ""
-    first_param = _text(rows[0][0]) if isinstance(rows[0], list) and rows[0] else ""
-    best: Optional[List[str]] = None
+def _rows_by_parameter(rows: List[List[str]]) -> "Dict[str, List[List[str]]]":
+    grouped: Dict[str, List[List[str]]] = {}
+    for row in rows:
+        if not isinstance(row, list) or not row:
+            continue
+        grouped.setdefault(_text(row[0]), []).append(row)
+    return grouped
+
+
+def _mode_rows(rows: List[List[str]]) -> List[List[str]]:
+    best_count = -1.0
+    best: List[List[str]] = []
     for row in rows:
         if not isinstance(row, list) or len(row) < 4:
             continue
         try:
-            current = float(str(row[2]).replace(",", ""))
+            count = float(str(row[2]).replace(",", ""))
         except ValueError:
             continue
-        if best is None:
-            best = row
+        if count > best_count:
+            best_count = count
+            best = [row]
+        elif count == best_count:
+            best.append(row)
+    return best
+
+
+def _join_category_labels(labels: List[str]) -> str:
+    cleaned = [label for label in labels if label]
+    if not cleaned:
+        return ""
+    if len(cleaned) == 1:
+        return cleaned[0]
+    if len(cleaned) == 2:
+        return f"{cleaned[0]} and {cleaned[1]}"
+    return ", ".join(cleaned[:-1]) + f", and {cleaned[-1]}"
+
+
+def _category_positive_row(rows: List[List[str]]) -> Optional[List[str]]:
+    for row in rows:
+        if not isinstance(row, list) or len(row) < 4:
             continue
-        try:
-            previous = float(str(best[2]).replace(",", ""))
-        except ValueError:
-            previous = -1.0
-        if current > previous:
-            best = row
-    if best and len(best) >= 4 and best[1]:
-        return f"The most frequent category for {best[0]} was {best[1]} ({best[2]}, {best[3]})."
+        label = _text(row[1]).strip().lower()
+        if label.startswith("positive") or label == ">=14%":
+            return row
+    return None
+
+
+def _size_category_to_tstage(category: Any) -> Optional[str]:
+    text = _text(category).lower().replace("≤", "<=").replace("≥", ">=")
+    has_gt2 = bool(re.search(r">\s*2\b", text))
+    has_le5 = bool(re.search(r"<=\s*5\b", text))
+    has_le2 = bool(re.search(r"<=\s*2\b", text)) and not has_gt2
+    has_gt5 = bool(re.search(r">\s*5\b", text))
+    if has_le2:
+        return "T1"
+    if has_gt2 and has_le5:
+        return "T2"
+    if has_gt5:
+        return "T3"
+    return None
+
+
+def _generic_categorical_sentence(rows: List[List[str]]) -> str:
+    mode = _mode_rows(rows)
+    if not mode:
+        return ""
+    parameter = _text(mode[0][0])
+    labels = _join_category_labels([_text(row[1]) for row in mode])
+    return f"The most frequent category for {parameter} was {labels} ({_text(mode[0][2])}, {_text(mode[0][3])})."
+
+
+def _generic_continuous_sentence(rows: List[List[str]]) -> str:
+    if not rows:
+        return ""
+    parts = []
+    for row in rows:
+        if not isinstance(row, list) or len(row) < 7 or not row[0]:
+            continue
+        parts.append(
+            f"{_text(row[0])} had a mean of {_text(row[2])} (median {_text(row[3])}; range {_text(row[4])}-{_text(row[5])})."
+        )
+    return " ".join(parts)
+
+
+def _interpretation_tumour_quadrant(rows: List[List[str]]) -> str:
+    named_rows = [row for row in rows if isinstance(row, list) and len(row) >= 4 and _text(row[1]).strip().lower() != "other"]
+    mode = _mode_rows(named_rows)
+    if not mode:
+        return ""
+    labels = [_text(row[1]).strip().lower() for row in mode]
+    n_text = _text(mode[0][2])
+    pct_text = _text(mode[0][3])
+    if len(mode) > 1:
+        sentence = (
+            f"The most common tumour locations were {_join_category_labels(labels)} quadrants, "
+            f"each accounting for {n_text} cases ({pct_text})."
+        )
+    else:
+        sentence = (
+            f"The most common tumour location was the {labels[0]} quadrant, "
+            f"accounting for {n_text} cases ({pct_text})."
+        )
+    if any(_text(row[1]).strip().lower() == "other" for row in rows):
+        sentence += " Less frequent and mixed quadrant locations were grouped under Other for descriptive clarity."
+    return sentence
+
+
+def _interpretation_tumour_size(rows: List[List[str]]) -> str:
+    mode = _mode_rows(rows)
+    if not mode:
+        return ""
+    category = _text(mode[0][1])
+    sentence = f"Most tumours measured {category}, corresponding to {_text(mode[0][2])} cases ({_text(mode[0][3])})."
+    tstage = _size_category_to_tstage(category)
+    if tstage:
+        sentence += f" This indicates that {tstage}-sized lesions formed the largest size group in the analysed sample."
+    return sentence
+
+
+def _interpretation_pathological_t_stage(rows: List[List[str]]) -> str:
+    mode = _mode_rows(rows)
+    if not mode:
+        return ""
+    label = _text(mode[0][1])
+    return f"{label} was the most frequent pathological T stage, seen in {_text(mode[0][2])} cases ({_text(mode[0][3])})."
+
+
+def _interpretation_nodal_status(rows: List[List[str]]) -> str:
+    mode = _mode_rows(rows)
+    if not mode:
+        return ""
+    label = _text(mode[0][1])
+    sentence = f"{label} was the most frequent nodal category, seen in {_text(mode[0][2])} cases ({_text(mode[0][3])})."
+    if label.strip().upper() == "N0":
+        sentence += " Node-positive categories together constituted the remaining clinically relevant nodal disease burden."
+    return sentence
+
+
+def _interpretation_nodal_burden(table: Dict[str, Any], rows: List[List[str]]) -> str:
+    if rows and isinstance(rows[0], list) and len(rows[0]) >= 7:
+        sentence = _generic_continuous_sentence(rows)
+        return sentence or "Nodal burden parameters are summarised descriptively above."
+    return _generic_categorical_sentence(rows) or "Nodal burden categories are summarised descriptively above."
+
+
+def _interpretation_adverse_features(rows: List[List[str]]) -> str:
+    grouped = _rows_by_parameter(rows)
+    sentences = []
+    for parameter, param_rows in grouped.items():
+        present = None
+        for row in param_rows:
+            if _text(row[1]).strip().lower() == "present":
+                present = row
+                break
+        if present:
+            sentences.append(f"{parameter} was present in {_text(present[2])} cases ({_text(present[3])}).")
+    if not sentences:
+        return ""
+    return " ".join(sentences)
+
+
+def _interpretation_hormone_receptor(rows: List[List[str]]) -> str:
+    grouped = _rows_by_parameter(rows)
+    parts = []
+    for idx, (parameter, param_rows) in enumerate(grouped.items()):
+        positive = _category_positive_row(param_rows)
+        if not positive:
+            continue
+        if idx == 0:
+            parts.append(f"{parameter} positivity was observed in {_text(positive[2])} cases ({_text(positive[3])})")
+        else:
+            parts.append(f"{parameter} positivity in {_text(positive[2])} cases ({_text(positive[3])})")
+    if not parts:
+        return ""
+    return " and ".join(parts) + "."
+
+
+def _interpretation_her2_proliferation(rows: List[List[str]]) -> str:
+    grouped = _rows_by_parameter(rows)
+    sentences = []
+    for parameter, param_rows in grouped.items():
+        positive = _category_positive_row(param_rows)
+        if not positive:
+            continue
+        label = _text(positive[1])
+        if "her2" in parameter.lower():
+            match = re.search(r"\(([^)]+)\)", label)
+            qualifier = f" ({match.group(1)})" if match else ""
+            sentences.append(f"HER2-positive{qualifier} expression was present in {_text(positive[2])} cases ({_text(positive[3])}).")
+        else:
+            sentences.append(f"{parameter} positivity was present in {_text(positive[2])} cases ({_text(positive[3])}).")
+    return " ".join(sentences)
+
+
+def _interpretation_ar_expression(rows: List[List[str]]) -> str:
+    positive = _category_positive_row(rows)
+    if not positive:
+        return ""
+    return f"AR positivity was observed in {_text(positive[2])} cases ({_text(positive[3])})."
+
+
+def _interpretation_molecular_subtype(rows: List[List[str]]) -> str:
+    mode = _mode_rows(rows)
+    if not mode:
+        return ""
+    labels = _join_category_labels([_text(row[1]) for row in mode])
+    return f"The most common molecular subtype was {labels}, accounting for {_text(mode[0][2])} cases ({_text(mode[0][3])})."
+
+
+_MARKER_COMPONENT_NOTE = (
+    "Localization and staining score are presented descriptively as components of the immunohistochemical assessment."
+)
+
+
+def _interpretation_marker_localization(rows: List[List[str]]) -> str:
+    mode = _mode_rows(rows)
+    if not mode:
+        return ""
+    label = _text(mode[0][1])
+    sentence = f"{label} localization was the most common staining pattern, observed in {_text(mode[0][2])} cases ({_text(mode[0][3])})."
+    return f"{sentence} {_MARKER_COMPONENT_NOTE}"
+
+
+def _interpretation_marker_score(rows: List[List[str]]) -> str:
+    mode = _mode_rows(rows)
+    if not mode:
+        return ""
+    label = _text(mode[0][1])
+    sentence = f"The most common staining score pattern was {label}, observed in {_text(mode[0][2])} cases ({_text(mode[0][3])})."
+    return f"{sentence} {_MARKER_COMPONENT_NOTE}"
+
+
+_CONCEPT_INTERPRETERS = {
+    "tumour_quadrant": lambda table, rows: _interpretation_tumour_quadrant(rows),
+    "tumour_size": lambda table, rows: _interpretation_tumour_size(rows),
+    "pathological_t_stage": lambda table, rows: _interpretation_pathological_t_stage(rows),
+    "nodal_status": lambda table, rows: _interpretation_nodal_status(rows),
+    "nodal_burden": lambda table, rows: _interpretation_nodal_burden(table, rows),
+    "adverse_features": lambda table, rows: _interpretation_adverse_features(rows),
+    "hormone_receptor": lambda table, rows: _interpretation_hormone_receptor(rows),
+    "her2_proliferation": lambda table, rows: _interpretation_her2_proliferation(rows),
+    "ar_expression": lambda table, rows: _interpretation_ar_expression(rows),
+    "molecular_subtype": lambda table, rows: _interpretation_molecular_subtype(rows),
+    "localization": lambda table, rows: _interpretation_marker_localization(rows),
+    "score": lambda table, rows: _interpretation_marker_score(rows),
+}
+
+
+def _descriptive_table_interpretation(table: Dict[str, Any]) -> str:
+    rows = table.get("rows") or []
+    if not rows:
+        return ""
+    is_continuous = isinstance(rows[0], list) and len(rows[0]) >= 7
+    concept = _text(table.get("concept"))
+    interpreter = _CONCEPT_INTERPRETERS.get(concept)
+    if interpreter:
+        sentence = interpreter(table, rows)
+        if sentence:
+            return sentence
+    if is_continuous:
+        sentence = _generic_continuous_sentence(rows)
+        if sentence:
+            return sentence
+    else:
+        sentence = _generic_categorical_sentence(rows)
+        if sentence:
+            return sentence
+    first_param = _text(rows[0][0]) if isinstance(rows[0], list) and rows[0] else ""
     if first_param:
         return f"This table summarises {first_param} in the analysed sample."
     return "This table summarises the analysed sample."
@@ -822,6 +1112,79 @@ def _format_count_pct(count: float, total: float) -> str:
     return f"{count_text} ({pct:.1f}%)"
 
 
+def _table_is_significant(headers: List[str], rows: List[List[str]]) -> bool:
+    p_idx = next((idx for idx, header in enumerate(headers) if header.strip().lower() == "p-value"), None)
+    if p_idx is None or not rows:
+        return False
+    text = _text(rows[0][p_idx]) if p_idx < len(rows[0]) else ""
+    match = re.search(r"([0-9]*\.?[0-9]+)", text)
+    if not match:
+        return False
+    try:
+        return float(match.group(1)) < 0.05
+    except ValueError:
+        return False
+
+
+def _qualified_category_label(predictor_label: str, category: Any) -> str:
+    text = _text(category).strip()
+    low = text.lower()
+    if low in {"positive", "negative"}:
+        return f"{predictor_label}-{low}"
+    if low in {"present", "absent", "yes", "no"}:
+        return f"{predictor_label} {low}"
+    return text
+
+
+def _association_direction_sentence(
+    predictor_label: str,
+    headers: List[str],
+    count_indexes: List[int],
+    order: List[str],
+    grouped: Dict[str, List[Any]],
+    label_ctx: Dict[str, Any],
+) -> str:
+    if len(count_indexes) != 2 or len(order) < 2:
+        return ""
+    outcome_labels = []
+    for idx in count_indexes:
+        label = _display_value(headers[idx], label_ctx)
+        label = re.sub(r"\s*n\s*\(%\)\s*$", "", label, flags=re.IGNORECASE).strip()
+        outcome_labels.append(label)
+    col_totals = [sum(float(grouped[category][idx] or 0.0) for category in order) for idx in count_indexes]
+    if not all(col_totals):
+        return ""
+    dominant: List[Optional[str]] = []
+    for col_pos, idx in enumerate(count_indexes):
+        best_category, best_share = None, -1.0
+        for category in order:
+            share = float(grouped[category][idx] or 0.0) / col_totals[col_pos]
+            if share > best_share:
+                best_share = share
+                best_category = category
+        dominant.append(best_category)
+    dominant_first, dominant_last = dominant[0], dominant[-1]
+    if not dominant_first or not dominant_last or dominant_first == dominant_last:
+        return ""
+    dominant_first = _qualified_category_label(predictor_label, dominant_first)
+    dominant_last = _qualified_category_label(predictor_label, dominant_last)
+    return (
+        f"{dominant_last} cases were proportionately higher in the {outcome_labels[-1]} group, "
+        f"while {dominant_first} cases were more commonly {outcome_labels[0]}."
+    )
+
+
+def _splice_direction_sentence(interpretation: str, direction: str) -> str:
+    if not direction:
+        return interpretation
+    for marker in (" This finding should be interpreted cautiously", " Interpret with caution:"):
+        idx = interpretation.find(marker)
+        if idx != -1:
+            head, tail = interpretation[:idx], interpretation[idx:]
+            return f"{head.strip()} {direction}{tail}"
+    return f"{interpretation.strip()} {direction}".strip()
+
+
 def _association_table_for_export(table: Dict[str, Any], label_ctx: Dict[str, Any]) -> Dict[str, Any]:
     table_type = str(table.get("table_type") or "").lower()
     if "association" not in table_type:
@@ -863,6 +1226,12 @@ def _association_table_for_export(table: Dict[str, Any], label_ctx: Dict[str, An
         for idx in count_indexes:
             grouped[category][idx] = float(grouped[category][idx] or 0.0) + float(_parse_count_cell(row[idx]) or 0.0)
 
+    direction = ""
+    if _table_is_significant(headers, rows):
+        direction = _association_direction_sentence(
+            _clean_variable_label(predictor), headers, count_indexes, order, grouped, label_ctx
+        )
+
     if len(order) == len(rows) and all(_text(row[0]) == order[idx] for idx, row in enumerate(rows)):
         clone = deepcopy(table)
         clone["columns"] = [_display_value(header, label_ctx) for header in headers]
@@ -876,6 +1245,8 @@ def _association_table_for_export(table: Dict[str, Any], label_ctx: Dict[str, An
                 clean_row[0] = _clinical_category_label(predictor, row[0], label_ctx)
             clean_rows.append(clean_row)
         clone["rows"] = clean_rows
+        if direction:
+            clone["interpretation"] = _splice_direction_sentence(_text(clone.get("interpretation")), direction)
         return clone
 
     out_rows: List[List[str]] = []
@@ -894,6 +1265,8 @@ def _association_table_for_export(table: Dict[str, Any], label_ctx: Dict[str, An
     clone = deepcopy(table)
     clone["columns"] = [_display_value(header, label_ctx) for header in headers]
     clone["rows"] = out_rows
+    if direction:
+        clone["interpretation"] = _splice_direction_sentence(_text(clone.get("interpretation")), direction)
     return clone
 
 
@@ -1104,7 +1477,8 @@ def _render_section_docx(
             if next_no != figure_no:
                 figure_no = next_no
                 used_figures.add(figure_id)
-        interpretation = _clean_interpretation(table.get("interpretation"), label_ctx)
+        enriched = _normalise_table_for_export(table, label_ctx)
+        interpretation = _clean_interpretation(enriched.get("interpretation"), label_ctx)
         if interpretation:
             _plain_docx_text(doc, interpretation)
     if include_optional_figures:
@@ -1476,7 +1850,8 @@ def _render_section_pdf(
             if next_no != figure_no:
                 figure_no = next_no
                 used_figures.add(figure_id)
-        interpretation = _clean_interpretation(table.get("interpretation"), label_ctx)
+        enriched = _normalise_table_for_export(table, label_ctx)
+        interpretation = _clean_interpretation(enriched.get("interpretation"), label_ctx)
         if interpretation:
             flow.append(Paragraph(_pdf_escape(interpretation), body))
         flow.append(Spacer(1, 6))
