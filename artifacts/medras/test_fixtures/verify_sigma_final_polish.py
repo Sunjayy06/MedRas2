@@ -116,10 +116,13 @@ def _build_fixture() -> tuple[Dict[str, Any], "pd.DataFrame", Dict[str, Any]]:
         "AR": ["Postive"] * 1 + ["Positive"] * 5 + ["Negative"] * 6,     # 1 typo
         "Histological type": [1.0, 2.0, 3.0] * 4,
         "Molecular subtype": ["Luminal A", "Luminal B", "HER2neu", "Triple negative"] * 3,
+        "Her2Neu": ["Negative"] * 4 + ["1"] * 2 + ["2+"] * 2 + ["3+"] * 3 + ["Positive"],
+        "EGFR": ["Negative"] * 7 + ["Patchy positive"] * 2 + ["Positive"] * 3,
         "Ki67": [">=14"] * 5 + ["<14"] * 7,                               # unnormalised Ki67
         "pT": ["T1", "T2", "T3"] * 4,
-        "Nodal status": ["N0", "N1", "N2"] * 4,
+        "Nodal status": ["N0"] * 5 + ["NO"] + ["N1"] * 3 + ["N2"] * 3,
         "LVI": ["Present", "Abse"] * 6,
+        "DCIS": ["Negative"] * 6 + ["High grade", "Low grade", "Intermediate grade", "Positive", "Negative", "Negative"],
     })
 
     classifications = [
@@ -130,10 +133,13 @@ def _build_fixture() -> tuple[Dict[str, Any], "pd.DataFrame", Dict[str, Any]]:
         {"column": "AR",                 "detected_type": "nominal"},
         {"column": "Histological type",  "detected_type": "nominal"},
         {"column": "Molecular subtype",  "detected_type": "nominal"},
+        {"column": "Her2Neu",            "detected_type": "ordinal"},
+        {"column": "EGFR",               "detected_type": "nominal"},
         {"column": "Ki67",               "detected_type": "nominal"},
         {"column": "pT",                 "detected_type": "ordinal"},
         {"column": "Nodal status",       "detected_type": "ordinal"},
         {"column": "LVI",                "detected_type": "nominal"},
+        {"column": "DCIS",               "detected_type": "nominal"},
     ]
 
     table_one = build_table_one(df, classifications, group=None)
@@ -427,6 +433,20 @@ def test_association_tables_aggregate_display_categories() -> None:
     assert "1.0" not in text and "2.0" not in text and "3.0" not in text
 
 
+def test_manual_style_descriptive_consolidation_docx() -> None:
+    """Main descriptive tables should consolidate common breast pathology fragments."""
+    results, _, _ = _build_fixture()
+    blob = chapter_v_export.generate_docx(results)
+    text = _docx_text(blob)
+    assert "N0" in text and "NO" not in text
+    assert "Negative/low" in text
+    assert "Equivocal (2+)" in text
+    assert "Positive (3+)" in text
+    assert "Patchy positive" not in text
+    assert "High grade" not in text and "Low grade" not in text and "Intermediate grade" not in text
+    assert "Tumour quadrant" in text or "Tumour site" not in text
+
+
 # ── 6. category_merges audit sheet completeness ───────────────────────────────
 
 class _FakeEntry:
@@ -473,6 +493,13 @@ def test_category_merges_records_system_display_typos() -> None:
     assert ar_rows, "AR / Postive row must be present in category_merges"
     assert ar_rows[0][3] == 1, f"AR Postive count_affected must be 1, got {ar_rows[0][3]}"
 
+    assert any(str(r[0]) == "Nodal status" and str(r[1]) == "NO" and str(r[2]) == "N0" for r in rows)
+    assert any(str(r[0]) == "Her2Neu" and str(r[1]) == "1" and str(r[2]) == "Negative/low" for r in rows)
+    assert any(str(r[0]) == "Her2Neu" and str(r[1]) == "2+" and str(r[2]) == "Equivocal (2+)" for r in rows)
+    assert any(str(r[0]) == "Her2Neu" and str(r[1]) == "3+" and str(r[2]) == "Positive (3+)" for r in rows)
+    assert any(str(r[0]) == "EGFR" and str(r[1]) == "Patchy positive" and str(r[2]) == "Positive" for r in rows)
+    assert any(str(r[0]) == "DCIS" and str(r[1]) == "High grade" and str(r[2]) == "Present" for r in rows)
+
 
 # ── 7. cleaned_processed_dataset has no raw typos ────────────────────────────
 
@@ -499,6 +526,10 @@ def test_cleaned_dataset_no_postive() -> None:
         "cleaned_processed_dataset must not contain the raw LVI typo 'Abse'"
     assert "Grade 1" in all_text and "Grade 2" in all_text and "Grade 3" in all_text, \
         "cleaned_processed_dataset must show Histological type as Grade 1/2/3"
+    assert "NO" not in all_text and "N0" in all_text
+    assert "Negative/low" in all_text and "Equivocal (2+)" in all_text and "Positive (3+)" in all_text
+    assert "Patchy positive" not in all_text
+    assert "High grade" not in all_text and "Low grade" not in all_text and "Intermediate grade" not in all_text
 
 
 def test_lvi_abse_audit_trace_preserved() -> None:
@@ -520,6 +551,8 @@ def test_sparse_caution_deduplicated() -> None:
     caution = "This finding should be interpreted cautiously because some expected cell counts were below 5."
     assert text.count(caution) == 1, "Sparse-cell caution must appear once for the result"
     assert "Minimum expected count" not in text
+    assert "because some." not in text
+    assert "Interpret with caution: -" not in text
 
 
 def test_significant_key_findings_are_thesis_style() -> None:
@@ -807,8 +840,11 @@ def main() -> None:
     test_association_tables_aggregate_display_categories()
     print("  [ok] Association tables aggregate cleaned display categories")
 
+    test_manual_style_descriptive_consolidation_docx()
+    print("  [ok] Manual-style descriptive category consolidation appears in DOCX")
+
     test_category_merges_records_system_display_typos()
-    print("  [ok] category_merges records Postive->Positive and Ki67 normalisation")
+    print("  [ok] category_merges records display normalisation audit rows")
 
     test_cleaned_dataset_no_postive()
     print("  [ok] cleaned_processed_dataset contains no raw typo 'Postive' or 'Abse'")

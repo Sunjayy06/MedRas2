@@ -207,7 +207,8 @@ def _needs_clinical_category_display(col_name) -> bool:
     clinical_keys = {
         "histologicaltype", "histologicalgrade", "grade",
         "molecularsubtype", "ki67", "lvi", "ene", "necrosis", "dcis",
-        "er", "pr", "ar", "her2", "her2neu", "egfr",
+        "er", "pr", "ar", "her2", "her2neu", "egfr", "nodalstatus", "nodal",
+        "tumoursite", "tumorquadrant",
     }
     return key in clinical_keys or any(marker in key for marker in clinical_keys)
 
@@ -2031,6 +2032,7 @@ def clinical_display_name(col_name):
     }
     for raw, clean in replacements.items():
         name = re.sub(rf"\b{re.escape(raw)}\b", clean, name)
+    name = re.sub(r"\bTumou?r site(?:/quadrant)?\b", "Tumour quadrant", name, flags=re.IGNORECASE)
     return name
 
 
@@ -2055,6 +2057,25 @@ def _clinical_display_category(col_name, value):
     if "molecular" in key and "subtype" in key:
         if compact in {"her2neu", "her2", "her2enriched", "her2-enriched"}:
             return "HER2-enriched"
+    if "nodal" in key and compact in {"no", "n0"}:
+        return "N0"
+    if "her2" in key:
+        if compact in {"negative", "neg", "no", "0", "1", "1+", "low"}:
+            return "Negative/low"
+        if compact in {"2", "2+", "equivocal"}:
+            return "Equivocal (2+)"
+        if compact in {"3", "3+", "positive", "postive", "yes", "present"}:
+            return "Positive (3+)"
+    if "egfr" in key:
+        if low in {"positive", "postive", "yes", "present", "patchy positive"}:
+            return "Positive"
+        if low in {"negative", "no", "absent"}:
+            return "Negative"
+    if key == "dcis":
+        if low in {"positive", "postive", "yes", "present", "high grade", "low grade", "intermediate grade"}:
+            return "Present"
+        if low in {"negative", "no", "absent"}:
+            return "Absent"
     if key in _PRESENCE_DISPLAY_VARS:
         if low in {"positive", "postive", "yes", "present"}:
             return "Present"
@@ -2295,11 +2316,120 @@ def run_friedman(cols, session, df):
 
 
 # --- TEST 6: Chi-square OR Fisher exact -----------------------------------
+def _category_key(value) -> str:
+    return re.sub(r"[^a-z0-9]+", "", str(value or "").lower())
+
+
+def _normalise_category_for_association(col_name, value, session=None):
+    text = str(value).strip()
+    low = text.lower()
+    compact = re.sub(r"\s+", "", low)
+    key = _category_key(col_name)
+    session = session or {}
+    assignment = session.get("assignment") if isinstance(session.get("assignment"), dict) else {}
+    outcome = str(session.get("outcome") or session.get("main_outcome") or session.get("confirmed_outcome_col") or assignment.get("outcome") or "")
+    concept = str(session.get("main_outcome_concept") or session.get("main_marker") or "")
+    status_like = (
+        str(col_name) == outcome
+        or any(token in f"{col_name} {concept}".lower() for token in ("expression", "status", "positive", "negative"))
+    )
+    receptor_like = key in {"er", "pr", "ar", "egfr"} or any(marker in key for marker in ("er", "pr", "ar", "egfr"))
+
+    if "histologicaltype" in key or key in {"grade", "histologicalgrade"}:
+        match = re.search(r"(?:type|grade)?\s*([123])(?:\.0)?\b", low, flags=re.IGNORECASE)
+        if match:
+            return f"Grade {match.group(1)}"
+    if "ki67" in key or "ki-67" in str(col_name).lower():
+        if compact in {">=14", ">=14%", "=>14", "=>14%"}:
+            return ">=14%"
+        if compact in {"<14", "<14%", "<=14", "<=14%"}:
+            return "<14%"
+    if "nodal" in key and compact in {"no", "n0"}:
+        return "N0"
+    if "her2" in key:
+        if compact in {"negative", "neg", "no", "0", "1", "1+", "low"}:
+            return "Negative/low"
+        if compact in {"2", "2+", "equivocal"}:
+            return "Equivocal (2+)"
+        if compact in {"3", "3+", "positive", "postive", "yes", "present"}:
+            return "Positive (3+)"
+    if "egfr" in key:
+        if low in {"positive", "postive", "yes", "present", "patchy positive"}:
+            return "Positive"
+        if low in {"negative", "no", "absent"}:
+            return "Negative"
+    if key == "dcis":
+        if low in {"positive", "postive", "yes", "present", "high grade", "low grade", "intermediate grade"}:
+            return "Present"
+        if low in {"negative", "no", "absent"}:
+            return "Absent"
+    if key in {"lvi", "ene", "necrosis", "dcis"}:
+        if low in {"positive", "postive", "yes", "present"}:
+            return "Present"
+        if low in {"negative", "no", "absent", "abse"}:
+            return "Absent"
+    if receptor_like or status_like:
+        if low in {"positive", "postive", "yes", "present"} or (receptor_like and "positive" in low and "negative" not in low):
+            return "Positive"
+        if low in {"negative", "no", "absent"} or (receptor_like and "negative" in low):
+            return "Negative"
+    return text.replace("Postive", "Positive").replace("Her2Neu", "HER2").replace("HER2neu", "HER2").replace("Her2neu", "HER2")
+
+
+def _record_pretest_category_merges(session, col_name, raw_values, clean_values):
+    if session is None:
+        return
+    try:
+        actions = session.setdefault("category_merge_actions", [])
+    except Exception:
+        return
+    existing = {
+        (
+            str(item.get("variable")),
+            str(item.get("original_category")),
+            str(item.get("cleaned_category")),
+            str(item.get("decision_type")),
+        )
+        for item in actions if isinstance(item, dict)
+    }
+    counts = {}
+    for raw, clean in zip(raw_values, clean_values):
+        raw_s = str(raw).strip()
+        clean_s = str(clean).strip()
+        if raw_s == clean_s:
+            continue
+        counts[(raw_s, clean_s)] = counts.get((raw_s, clean_s), 0) + 1
+    for (raw_s, clean_s), count in counts.items():
+        key = (str(col_name), raw_s, clean_s, "pretest_category_normalization")
+        if key in existing:
+            continue
+        actions.append({
+            "variable": str(col_name),
+            "original_category": raw_s,
+            "cleaned_category": clean_s,
+            "count_affected": count,
+            "decision_type": "pretest_category_normalization",
+            "applied_to_dataset": False,
+            "notes_warnings": "Safe category consolidation applied before categorical association testing. Raw uploaded values were preserved.",
+        })
+
+
+def _normalise_categorical_association_data(data, col1, col2, session=None):
+    out = data.copy()
+    for col in (col1, col2):
+        raw = out[col].tolist()
+        clean = [_normalise_category_for_association(col, value, session) for value in raw]
+        out[col] = clean
+        _record_pretest_category_merges(session, col, raw, clean)
+    return out
+
+
 def run_chi_or_fisher(col1, col2, session, df):
     from scipy.stats import chi2_contingency, fisher_exact
     import math
 
     data = df[[col1, col2]].dropna()
+    data = _normalise_categorical_association_data(data, col1, col2, session)
     table = pd.crosstab(data[col1], data[col2])
 
     chi2, p_chi, dof, expected = chi2_contingency(table, correction=False)
@@ -2312,18 +2442,16 @@ def run_chi_or_fisher(col1, col2, session, df):
         test_name = "Fisher's exact test"
         test_type = 'fisher_exact'
         stat = float(odds_ratio)
-        note = (f'Fisher exact used: minimum expected count = '
-                f'{min_expected:.1f} < 5')
+        note = "Fisher's exact test was used because some expected cell counts were below 5."
     else:
         correction = (True if is_2x2 and min_expected < 5 else False)
         chi2, p, dof, expected = chi2_contingency(table, correction=correction)
         stat = float(chi2)
         test_name = 'Chi-square test'
         test_type = 'chi_square'
-        note = f'Chi-square used: minimum expected count = {min_expected:.1f}'
+        note = "-"
         if not is_2x2 and min_expected < 5:
-            note += ('. Warning: some expected counts below 5. '
-                     'Interpret with caution.')
+            note = "This finding should be interpreted cautiously because some expected cell counts were below 5."
 
     validation_stat = (
         0.0
@@ -2356,6 +2484,7 @@ def run_chi_or_fisher(col1, col2, session, df):
         'cramers_v': round(cramers_v, 3),
         'min_expected': round(min_expected, 2),
         'note': note,
+        'pretest_category_normalization': True,
         'expected_table': expected.tolist(),
         'observed_table': table.values.tolist(),
         'row_labels': table.index.astype(str).tolist(),

@@ -372,6 +372,7 @@ def _excel_clinical_label(value: Any, variable: Any = "") -> str:
     text = text.replace("Her2Neu", "HER2").replace("HER2neu", "HER2").replace("Her2neu", "HER2")
     text = re.sub(r"\bKi67\b", "Ki-67", text)
     text = re.sub(r"\bpT\b", "Pathological T stage", text)
+    text = re.sub(r"\bTumou?r site(?:/quadrant)?\b", "Tumour quadrant", text, flags=re.IGNORECASE)
     if "histologicaltype" in key or key in {"grade", "histologicalgrade"}:
         match = re.search(r"(?:type|grade)?\s*([123])(?:\.0)?\b", low, flags=re.IGNORECASE)
         if match:
@@ -383,6 +384,25 @@ def _excel_clinical_label(value: Any, variable: Any = "") -> str:
             return "<14%"
     if "molecular" in key and "subtype" in key and compact in {"her2neu", "her2", "her2enriched", "her2-enriched"}:
         return "HER2-enriched"
+    if "nodal" in key and compact in {"no", "n0"}:
+        return "N0"
+    if "her2" in key:
+        if compact in {"negative", "neg", "no", "0", "1", "1+", "low"}:
+            return "Negative/low"
+        if compact in {"2", "2+", "equivocal"}:
+            return "Equivocal (2+)"
+        if compact in {"3", "3+", "positive", "postive", "yes", "present"}:
+            return "Positive (3+)"
+    if "egfr" in key:
+        if low in {"positive", "postive", "yes", "present", "patchy positive"}:
+            return "Positive"
+        if low in {"negative", "no", "absent"}:
+            return "Negative"
+    if key == "dcis":
+        if low in {"positive", "postive", "yes", "present", "high grade", "low grade", "intermediate grade"}:
+            return "Present"
+        if low in {"negative", "no", "absent"}:
+            return "Absent"
     if key in _EXCEL_PRESENCE_MARKER_VARS:
         if low in {"positive", "postive", "yes", "present"}:
             return "Present"
@@ -404,6 +424,10 @@ def _excel_needs_clinical_display(variable: Any) -> bool:
         "grade",
         "molecularsubtype",
         "ki67",
+        "nodalstatus",
+        "nodal",
+        "tumoursite",
+        "tumorquadrant",
     })
     return key in clinical_keys or any(marker in key for marker in clinical_keys)
 
@@ -534,6 +558,25 @@ def _system_display_merge_rows(df: "pd.DataFrame") -> List[Dict[str, Any]]:
                     "applied_to_dataset": True,
                     "notes_warnings": "Automatic display normalisation: 'Abse' -> 'Absent'. Raw value retained in source.",
                 })
+        for raw in sorted(values.unique()):
+            raw_text = str(raw).strip()
+            cleaned = _excel_clinical_label(raw_text, col_str)
+            if cleaned == raw_text:
+                continue
+            key = (col_str, raw_text, cleaned)
+            if key in seen:
+                continue
+            count = int((values == raw_text).sum())
+            seen.add(key)
+            rows.append({
+                "variable": col_str,
+                "original_category": raw_text,
+                "cleaned_category": cleaned,
+                "count_affected": count,
+                "decision_type": "system_display",
+                "applied_to_dataset": True,
+                "notes_warnings": f"Automatic display normalisation: {raw_text!r} -> {cleaned!r}. Raw value retained in source.",
+            })
     return rows
 
 

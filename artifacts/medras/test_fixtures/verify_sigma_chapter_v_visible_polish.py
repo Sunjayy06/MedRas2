@@ -59,6 +59,12 @@ def test_chapter_v_export_normalizes_association_display_categories() -> None:
     assert "HER2-enriched" in source
     assert "Present" in source and "Absent" in source
     assert '"abse"' in source
+    assert "Negative/low" in source
+    assert "Equivocal (2+)" in source
+    assert "Positive (3+)" in source
+    assert "patchy positive" in source
+    assert "high grade" in source and "intermediate grade" in source
+    assert "Tumour quadrant" in source
 
 
 def test_chapter_v_renders_core_association_figures_before_tables() -> None:
@@ -82,6 +88,14 @@ def test_results_graph_generation_uses_outcome_display_mapping() -> None:
     assert "outcome_label = str((session or {}).get(\"main_outcome_concept\")" in source
     assert "outcome_label=outcome_label" in source
     assert '"title": f"{outcome_label or args.get(\'col2\')} by {clinical_display_name(args.get(\'col1\'))}"' in source
+
+
+def test_categorical_runner_normalizes_before_contingency_table() -> None:
+    source = _read("app/services/results.py")
+    assert "def _normalise_categorical_association_data" in source
+    assert "data = _normalise_categorical_association_data(data, col1, col2, session)" in source
+    assert "pretest_category_normalization" in source
+    assert "Fisher's exact test was used because some expected cell counts were below 5." in source
 
 
 def test_significant_findings_keep_raw_and_adjusted_p_values_separate() -> None:
@@ -112,6 +126,19 @@ def test_thesis_interpretation_language_is_not_raw_outcome_phrase() -> None:
     assert "This finding should be interpreted cautiously because some expected cell counts were below 5." in export
     assert "Localization and staining score are presented descriptively" in export
     assert "Minimum expected count" not in export
+    assert "Chi-square test with sparse-cell Chi-square used: some" not in export
+    assert "because some." not in export
+    assert "Interpret with caution: -" not in export
+
+
+def test_excel_display_consolidates_manual_style_categories() -> None:
+    source = _read("app/services/export.py")
+    assert "Negative/low" in source
+    assert "Equivocal (2+)" in source
+    assert "Positive (3+)" in source
+    assert "patchy positive" in source
+    assert "high grade" in source and "intermediate grade" in source
+    assert "Automatic display normalisation" in source
 
 
 def test_thesis_significant_findings_use_deterministic_summaries() -> None:
@@ -136,8 +163,10 @@ def main() -> None:
     test_chapter_v_renders_core_association_figures_before_tables()
     test_pdf_primary_outcome_applies_expand_tables()
     test_results_graph_generation_uses_outcome_display_mapping()
+    test_categorical_runner_normalizes_before_contingency_table()
     test_significant_findings_keep_raw_and_adjusted_p_values_separate()
     test_thesis_interpretation_language_is_not_raw_outcome_phrase()
+    test_excel_display_consolidates_manual_style_categories()
     test_thesis_significant_findings_use_deterministic_summaries()
     test_blueprint_keeps_core_significant_figures_in_main_report()
     print("sigma chapter v visible polish checks passed")

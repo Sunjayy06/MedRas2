@@ -52,6 +52,7 @@ def _clean_variable_label(value: Any) -> str:
     }
     for raw, clean in replacements.items():
         text = re.sub(rf"\b{re.escape(raw)}\b", clean, text)
+    text = re.sub(r"\bTumou?r site(?:/quadrant)?\b", "Tumour quadrant", text, flags=re.IGNORECASE)
     return text
 
 
@@ -76,6 +77,25 @@ def _clinical_category_label(variable: Any, category: Any, label_ctx: Optional[D
     if "molecular" in var_key and "subtype" in var_key:
         if low_compact in {"her2neu", "her2", "her2enriched", "her2-enriched"}:
             return "HER2-enriched"
+    if "nodal" in var_key and low_compact in {"no", "n0"}:
+        return "N0"
+    if "her2" in var_key:
+        if low_compact in {"negative", "neg", "no", "0", "1", "1+", "low"}:
+            return "Negative/low"
+        if low_compact in {"2", "2+", "equivocal"}:
+            return "Equivocal (2+)"
+        if low_compact in {"3", "3+", "positive", "postive", "yes", "present"}:
+            return "Positive (3+)"
+    if "egfr" in var_key:
+        if low in {"positive", "postive", "yes", "present", "patchy positive"}:
+            return "Positive"
+        if low in {"negative", "no", "absent"}:
+            return "Negative"
+    if var_key == "dcis":
+        if low in {"positive", "postive", "yes", "present", "high grade", "low grade", "intermediate grade"}:
+            return "Present"
+        if low in {"negative", "no", "absent"}:
+            return "Absent"
     if var_key in _PRESENCE_MARKER_VARS:
         if low in {"positive", "postive", "yes", "present"}:
             return "Present"
@@ -377,6 +397,13 @@ def _clean_interpretation(value: Any, label_ctx: Optional[Dict[str, Any]] = None
         "Sparse categories were detected; interpret with caution.",
         "This finding should be interpreted cautiously because some expected cell counts were below 5.",
     )
+    text = re.sub(
+        r"This finding should be interpreted cautiously because some\.?",
+        "This finding should be interpreted cautiously because some expected cell counts were below 5.",
+        text,
+        flags=re.IGNORECASE,
+    )
+    text = re.sub(r"\s*Interpret with caution:\s*-\s*", " ", text, flags=re.IGNORECASE)
     text = re.sub(
         r"Chi-square test with sparse-cell Chi-square used:\s*some\.?",
         "This finding should be interpreted cautiously because some expected cell counts were below 5.",
