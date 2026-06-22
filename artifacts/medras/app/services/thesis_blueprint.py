@@ -364,12 +364,20 @@ def _fmt_value(value: Any) -> str:
     return "-" if text.strip() in {"", "None", "nan"} else text
 
 
+_TEST_TYPE_CANONICAL_NAMES = {
+    "welch_ttest": "Welch's t-test",
+    "welch_t_test": "Welch's t-test",
+}
+
+
 def _test_applied(test: Dict[str, Any]) -> str:
     summary = _summary_lookup(test)
+    test_type_key = str(test.get("test_type") or "").strip().lower()
     value = (
         summary.get("test used")
         or test.get("actual_test_used")
         or test.get("test")
+        or _TEST_TYPE_CANONICAL_NAMES.get(test_type_key)
         or test.get("test_type")
         or test.get("title")
         or "Statistical test"
@@ -1178,11 +1186,13 @@ def build_thesis_analysis_blueprint(
             figure["warnings"] = warning_list
 
     thesis_findings = []
+    component_findings: List[Dict[str, Any]] = []
     for finding in significant_findings:
         variable = str(finding.get("variable") or "")
         if variable in excluded:
             continue
         if any(variable == comp or variable.startswith(f"{comp} vs ") or variable.startswith(f"{comp} by ") for comp in outcome_components):
+            component_findings.append(finding)
             continue
         displayed = dict(finding)
         for key in ("variable", "key_finding", "test_applied", "effect_size", "notes_warnings"):
@@ -1296,7 +1306,7 @@ def build_thesis_analysis_blueprint(
         sig_section["interpretation"] = "Statistically significant findings should be interpreted in the context of study design and multiplicity."
         sections.append(sig_section)
         all_tables.append(sig_table)
-    elif outcome_components and significant_findings:
+    if component_findings:
         warnings.append(
             "Some significant detailed results were outcome/marker components and were omitted from the final thesis findings table by default."
         )

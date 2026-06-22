@@ -359,6 +359,11 @@ def _excel_label_context(results: Dict[str, Any], assignment: Dict[str, Any]) ->
 _EXCEL_BINARY_MARKER_VARS = {"er", "pr", "ar", "her2", "her2neu", "egfr"}
 _EXCEL_PRESENCE_MARKER_VARS = {"lvi", "ene", "necrosis", "dcis"}
 
+_EXCEL_AUDIT_SHEET_NOTICE = (
+    "Audit/statistician detail — variable names and categories below may be raw/internal coding. "
+    "See Table 1 / Significant Findings Highlight for the clinical display version."
+)
+
 
 def _excel_var_key(value: Any) -> str:
     return re.sub(r"[^a-z0-9]+", "", str(value).lower())
@@ -630,6 +635,36 @@ def _system_display_merge_rows(df: "pd.DataFrame") -> List[Dict[str, Any]]:
 
 def _normalise_sheet_values(rows: List[List[Any]], label_ctx: Dict[str, Any]) -> List[List[str]]:
     return [[_export_cell(_excel_display_value(cell, label_ctx)) for cell in row] for row in rows]
+
+
+def _find_blueprint_table(blueprint: Dict[str, Any], table_id: str) -> Optional[Dict[str, Any]]:
+    for section in blueprint.get("analysis_sections") or []:
+        for table in section.get("tables") or []:
+            if table.get("table_id") == table_id:
+                return table
+    return None
+
+
+def _excel_descriptive_table_blocks(payload: Any) -> List[Tuple[List[str], List[List[Any]]]]:
+    """Normalise chapter_v_export's cleaned descriptive table payload into
+    (headers, rows) blocks suitable for direct Excel sheet rendering."""
+    items = payload if isinstance(payload, list) else [payload]
+    blocks: List[Tuple[List[str], List[List[Any]]]] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        rows = item.get("rows") or []
+        columns = item.get("columns")
+        if columns:
+            blocks.append((list(columns), [list(row) for row in rows if isinstance(row, (list, tuple))]))
+        else:
+            headers = list(item.get("headers") or ["Variable", "Type", "Overall"])
+            legacy_rows = [
+                [row.get("variable", ""), row.get("type", "")] + list(row.get("cells") or [])
+                for row in rows if isinstance(row, dict)
+            ]
+            blocks.append((headers, legacy_rows))
+    return blocks
 
 
 def _format_workbook(wb: Workbook) -> None:
@@ -2006,6 +2041,14 @@ def to_xlsx(entry, results: Dict[str, Any], assignment: Dict[str, Any]) -> bytes
                  ("Generated at", session["generated_at"]), ("Domain profile", session["domain_profile"]),
                  ("Patients", session["n_rows"]), ("Variables", session["n_cols"])):
         s.append([k, v])
+    s.append([])
+    s.append(["Sheet guide", (
+        "Table 1, tested_associations, significant_findings, analysis_summary, and Narrative use "
+        "clinical display labels. Detailed per-test result tabs and audit sheets (detailed_results, "
+        "category_merges, cleaning_decisions, missing_data_decisions, excluded_variables, "
+        "variable_classification) retain raw/internal variable names and codes for statistician "
+        "traceability — see the 'Audit/statistician detail' note at the top of each such sheet."
+    )])
 
     # Current analysis-ready data. This is the processed dataframe held by the
     # active Sigma session, not a reload of the original uploaded workbook.
@@ -2192,6 +2235,8 @@ def to_xlsx(entry, results: Dict[str, Any], assignment: Dict[str, Any]) -> bytes
             ])
 
     ws = wb.create_sheet("detailed_results")
+    ws.append([_EXCEL_AUDIT_SHEET_NOTICE])
+    ws.append([])
     ws.append(["Result", "Test used", "Table / Metric", "Value"])
     for result in session["results"]:
         title = _excel_display_value(result.get("title") or result.get("plan_name") or result.get("id") or "Result", label_ctx)
@@ -2230,15 +2275,31 @@ def to_xlsx(entry, results: Dict[str, Any], assignment: Dict[str, Any]) -> bytes
     else:
         ws.append(["Information", "Dataset", "No preprocessing actions or quality warnings were recorded."])
 
-    # Table 1
+    # Table 1 — mirrors the same clinical display labels used in Word/PDF
+    # Chapter V (Grade 1/2/3, N0, Positive/Negative, etc.) rather than the
+    # raw internal categories held in session["table_one"].
     ws = wb.create_sheet("Table 1")
-    t1 = session.get("table_one") or {}
-    if t1.get("headers"):
-        ws.append(list(t1["headers"]))
-        for row in t1.get("rows") or []:
-            dname = session["variables"].get(row.get("variable", ""), {}).get(
-                "display_name") or clean_display_name(row.get("variable", ""))
-            ws.append(_normalise_sheet_values([[dname, row.get("type", "")] + list(row.get("cells") or [])], label_ctx)[0])
+    table_one_table = _find_blueprint_table(blueprint, "table_one")
+    blocks: List[Tuple[List[str], List[List[Any]]]] = []
+    if table_one_table is not None:
+        thesis_label_ctx = chapter_v_export._outcome_label_context(blueprint)
+        payload = chapter_v_export._descriptive_export_table(table_one_table, thesis_label_ctx)
+        blocks = [block for block in _excel_descriptive_table_blocks(payload) if block[1]]
+    if blocks:
+        for index, (headers, rows) in enumerate(blocks):
+            if index:
+                ws.append([])
+            ws.append(headers)
+            for row in rows:
+                ws.append(_normalise_sheet_values([row], label_ctx)[0])
+    else:
+        t1 = session.get("table_one") or {}
+        if t1.get("headers"):
+            ws.append(list(t1["headers"]))
+            for row in t1.get("rows") or []:
+                dname = session["variables"].get(row.get("variable", ""), {}).get(
+                    "display_name") or clean_display_name(row.get("variable", ""))
+                ws.append(_normalise_sheet_values([[dname, row.get("type", "")] + list(row.get("cells") or [])], label_ctx)[0])
 
     # Normality
     if session["normality_results"]:
@@ -2257,6 +2318,8 @@ def to_xlsx(entry, results: Dict[str, Any], assignment: Dict[str, Any]) -> bytes
         for index, payload in enumerate(table_payloads):
             raw_title = result_title if index == 0 else f"{result_title} {payload['title']}"
             ws = wb.create_sheet(_safe_sheet_title(wb, raw_title))
+            ws.append([_EXCEL_AUDIT_SHEET_NOTICE])
+            ws.append([])
             ws.append(["Result", _excel_display_value(result_title, label_ctx)])
             ws.append(["Test used", _excel_display_value(t.get("actual_test_used") or t.get("test") or t.get("test_type", ""), label_ctx)])
             if t.get("warning"):

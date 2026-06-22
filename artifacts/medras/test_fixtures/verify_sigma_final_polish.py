@@ -936,6 +936,150 @@ def test_pvalues_unchanged_by_polish() -> None:
             "Adjusted p-value must be present regardless of polish"
 
 
+# ── 13. "No" label-vs-value cleaning bug ──────────────────────────────────────
+
+def test_node_label_never_corrupted_to_negative() -> None:
+    """'No of nodes involved' is a column-name abbreviation for 'Number of',
+    not a Yes/No category value, and must never render as 'Negative of
+    nodes involved' in Word, PDF, or Excel user-facing output."""
+    results, df, meta = _build_fixture()
+
+    word_text = _docx_text(chapter_v_export.generate_docx(results))
+    pdf_text = _pdf_text(chapter_v_export.generate_pdf(results))
+    for label, text in (("Word", word_text), ("PDF", pdf_text)):
+        assert "Negative of nodes involved" not in text, \
+            f"{label} must never show 'Negative of nodes involved'"
+        assert "No of nodes involved" not in text, \
+            f"{label} must not show the raw column name 'No of nodes involved'"
+        assert "Number of nodes involved" in text, \
+            f"{label} must show the doctor-friendly label 'Number of nodes involved'"
+
+    class _FakeEntry:
+        def __init__(self, df, meta):
+            self.df = df
+            self.meta = meta
+
+    workbook = load_workbook(io.BytesIO(export.to_xlsx(
+        _FakeEntry(df, meta), results, {"outcome": "Positive/ Negative"}
+    )))
+    ws = workbook["Table 1"]
+    table_one_text = " ".join(
+        str(v) for row in ws.iter_rows(values_only=True) for v in row if v is not None
+    )
+    assert "Negative of nodes involved" not in table_one_text, \
+        "Excel Table 1 must never show 'Negative of nodes involved'"
+    assert "No of nodes involved" not in table_one_text, \
+        "Excel Table 1 must not show the raw column name 'No of nodes involved'"
+    assert "Number of nodes involved" in table_one_text, \
+        "Excel Table 1 must show the doctor-friendly label 'Number of nodes involved'"
+
+
+def test_node_fraction_categories_not_collapsed_to_00() -> None:
+    """Excel-corrupted node-fraction dates must each recover to their own
+    distinct fraction (1/17, 10/12, 4/22), not collapse into a single bogus
+    '00' bucket that silently merges unrelated categories together."""
+    results, df, meta = _build_fixture()
+    blob = chapter_v_export.generate_docx(results)
+    doc = Document(io.BytesIO(blob))
+
+    node_rows: list[list[str]] = []
+    for table in doc.tables:
+        headers = [c.text for c in table.rows[0].cells]
+        if headers == ["Parameter", "Category", "n", "%"]:
+            for row in table.rows[1:]:
+                cells = [c.text for c in row.cells]
+                if cells and cells[0] == "Number of nodes involved":
+                    node_rows.append(cells)
+
+    assert node_rows, "Expected a 'Number of nodes involved' categorical table in Word output"
+    categories = {row[1] for row in node_rows}
+    assert {"1/17", "10/12", "4/22", "0/31"} <= categories, categories
+    assert "00" not in categories, categories
+    counts = {row[1]: row[2] for row in node_rows}
+    assert counts.get("1/17") == "3" and counts.get("10/12") == "3" and counts.get("4/22") == "3", counts
+
+    pdf_text = _pdf_text(chapter_v_export.generate_pdf(results))
+    assert "1/17" in pdf_text and "10/12" in pdf_text and "4/22" in pdf_text, \
+        "PDF must show each recovered node fraction distinctly"
+
+    class _FakeEntry:
+        def __init__(self, df, meta):
+            self.df = df
+            self.meta = meta
+
+    workbook = load_workbook(io.BytesIO(export.to_xlsx(
+        _FakeEntry(df, meta), results, {"outcome": "Positive/ Negative"}
+    )))
+    ws = workbook["Table 1"]
+    rows = [row for row in ws.iter_rows(values_only=True) if row and row[0] == "Number of nodes involved"]
+    categories = {str(row[1]) for row in rows}
+    assert {"1/17", "10/12", "4/22", "0/31"} <= categories, categories
+    assert "00" not in categories, categories
+    counts = {str(row[1]): row[2] for row in rows}
+    assert counts.get("1/17") == "3" and counts.get("10/12") == "3" and counts.get("4/22") == "3", counts
+
+
+def test_derived_node_variable_labels_are_doctor_friendly() -> None:
+    """Synthetic derived node columns must render as 'Positive nodes',
+    'Total nodes', and 'Node ratio' wherever they are shown as a label."""
+    from app.services.chapter_v_export import _clean_variable_label
+
+    assert _clean_variable_label("positive_nodes") == "Positive nodes"
+    assert _clean_variable_label("total_nodes") == "Total nodes"
+    assert _clean_variable_label("node_ratio") == "Node ratio"
+
+
+def test_binary_marker_values_still_normalize() -> None:
+    """Standalone Yes/No category values for binary receptor/pathology
+    markers must still normalize to Positive/Negative, even though variable
+    labels containing 'No' as a word fragment must not."""
+    from app.services.chapter_v_export import _display_value
+
+    status_ctx = {
+        "display": "p27 expression status",
+        "raw_values": [],
+        "status_like": True,
+    }
+    # Standalone category values still convert.
+    assert _display_value("Yes", status_ctx) == "Positive"
+    assert _display_value("No", status_ctx) == "Negative"
+    # Joined category-summary bits still convert per-bit.
+    joined = _display_value("Yes: 8 (66.7%); No: 4 (33.3%); Missing: 0 (0.0%)", status_ctx)
+    assert joined == "Positive: 8 (66.7%); Negative: 4 (33.3%); Missing: 0 (0.0%)"
+    # Variable/parameter labels containing "No" as a word fragment are untouched.
+    assert _display_value("No of nodes involved", status_ctx) == "Number of nodes involved"
+    assert "Negative" not in _display_value("No of nodes involved", status_ctx)
+
+
+def test_audit_sheet_preserves_raw_node_values() -> None:
+    """category_merges (audit) may keep the raw corrupted-date values and the
+    raw column name for traceability, even though Table 1 (user-facing)
+    shows only the cleaned fraction and the doctor-friendly column label."""
+    results, df, meta = _build_fixture()
+
+    class _FakeEntry:
+        def __init__(self, df, meta):
+            self.df = df
+            self.meta = meta
+
+    workbook = load_workbook(io.BytesIO(export.to_xlsx(
+        _FakeEntry(df, meta), results, {"outcome": "Positive/ Negative"}
+    )))
+    merge_rows = list(workbook["category_merges"].iter_rows(min_row=2, values_only=True))
+    assert any(
+        row[0] == "No of nodes involved" and "2026-01-17" in str(row[1]) and row[2] == "1/17"
+        for row in merge_rows
+    ), "category_merges must preserve the raw column name and raw corrupted date for audit traceability"
+
+    ws = workbook["Table 1"]
+    table_one_text = " ".join(
+        str(v) for row in ws.iter_rows(values_only=True) for v in row if v is not None
+    )
+    assert "2026-01-17" not in table_one_text, \
+        "Table 1 (user-facing) must not show the raw corrupted date"
+    assert "Number of nodes involved" in table_one_text
+
+
 # ── runner ────────────────────────────────────────────────────────────────────
 
 def main() -> None:
@@ -1028,6 +1172,21 @@ def main() -> None:
 
     test_pvalues_unchanged_by_polish()
     print("  [ok] p-values are unchanged by narrative polish")
+
+    test_node_label_never_corrupted_to_negative()
+    print("  [ok] 'No of nodes involved' never renders as 'Negative of nodes involved'")
+
+    test_node_fraction_categories_not_collapsed_to_00()
+    print("  [ok] Node-fraction dates recover distinctly, not collapsed into '00'")
+
+    test_derived_node_variable_labels_are_doctor_friendly()
+    print("  [ok] Derived node variables render as Positive/Total nodes and Node ratio")
+
+    test_binary_marker_values_still_normalize()
+    print("  [ok] Binary marker Yes/No category values still normalize correctly")
+
+    test_audit_sheet_preserves_raw_node_values()
+    print("  [ok] Audit sheet preserves raw node values; Table 1 stays clean")
 
     print("\nSigma final polish verification passed.")
 

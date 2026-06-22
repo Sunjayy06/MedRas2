@@ -1416,13 +1416,21 @@ def _row_lookup(test: Dict[str, Any]) -> Dict[str, str]:
     return out
 
 
+_TEST_TYPE_CANONICAL_NAMES = {
+    "welch_ttest": "Welch's t-test",
+    "welch_t_test": "Welch's t-test",
+}
+
+
 def _test_used(test: Dict[str, Any]) -> str:
     rows = _row_lookup(test)
+    test_type_key = str(test.get("test_type") or "").strip().lower()
     return (
         rows.get("test used")
         or test.get("actual_test_used")
         or test.get("test_name")
         or test.get("test")
+        or _TEST_TYPE_CANONICAL_NAMES.get(test_type_key)
         or test.get("title")
         or test.get("test_type")
         or "Statistical test"
@@ -1536,9 +1544,22 @@ def _significant_findings(test_results: List[Dict[str, Any]]) -> List[Dict[str, 
             "uncorrected_p_value": _fmt_p(raw_p) if raw_p is not None else "-",
             "test_applied": _test_used(test),
             "effect_size": _effect_text(test) or "-",
-            "notes_warnings": _warning_text(test) or "-",
+            "notes_warnings": _compact_notes(test, _significance_status(raw_p, adjusted_p)),
         })
     return findings
+
+
+def _compact_notes(test: Dict[str, Any], significance_status: str = "") -> str:
+    """Build a compact Notes/warnings entry shared by the tested-associations
+    summary and the significant-findings highlight, so both surfaces report
+    the same sparse-cell and nominal-significance cautions consistently."""
+    warning = _warning_text(test)
+    notes: List[str] = []
+    if "expected" in warning.lower() or "sparse" in warning.lower():
+        notes.append("Sparse expected cell counts; interpret cautiously.")
+    if significance_status.startswith("Nominally significant"):
+        notes.append("Nominal before adjustment; not significant after correction.")
+    return " ".join(notes) or "-"
 
 
 def _significance_status(raw_p: Optional[float], adjusted_p: Optional[float]) -> str:
@@ -1578,12 +1599,6 @@ def _tested_associations(test_results: List[Dict[str, Any]], outcome: Optional[s
                     break
             predictor = predictor.strip()
         significance_status = _significance_status(raw_p, adjusted_p)
-        warning = _warning_text(test)
-        notes: List[str] = []
-        if "expected" in warning.lower() or "sparse" in warning.lower():
-            notes.append("Sparse expected cell counts; interpret cautiously.")
-        if significance_status.startswith("Nominally significant"):
-            notes.append("Nominal before adjustment; not significant after correction.")
         summaries.append({
             "source_result_id": str(test.get("id") or ""),
             "predictor": predictor,
@@ -1593,7 +1608,7 @@ def _tested_associations(test_results: List[Dict[str, Any]], outcome: Optional[s
             "adjusted_p_value": _fmt_p(adjusted_p) if adjusted_p is not None else "-",
             "effect_size": _effect_text(test) or "-",
             "significance_status": significance_status,
-            "notes_warnings": " ".join(notes) or "-",
+            "notes_warnings": _compact_notes(test, significance_status),
             "p_numeric": raw_p,
             "p_corrected_numeric": adjusted_p,
         })

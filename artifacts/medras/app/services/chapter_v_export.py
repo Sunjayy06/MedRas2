@@ -12,6 +12,7 @@ import html
 import io
 import re
 from copy import deepcopy
+from datetime import date as _date
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from docx import Document
@@ -43,6 +44,35 @@ _T4B_DISPLAY_PATTERN = re.compile(
     flags=re.IGNORECASE,
 )
 
+_NODE_VARIABLE_NAME_RE = re.compile(r"(?:node|nodal|lymph)", re.IGNORECASE)
+_DATE_TEXT_RE = re.compile(r"^\s*(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?:\s|$)")
+_DERIVED_NODE_LABELS = {
+    "positivenodes": "Positive nodes",
+    "totalnodes": "Total nodes",
+    "noderatio": "Node ratio",
+}
+
+
+def _recover_node_fraction(value: Any, variable: Any = "") -> str:
+    """Recover Excel-corrupted node fractions stored as dates (e.g. ``1/17``
+    saved as ``2026-01-17``) for display. Mirrors export.py's
+    ``_excel_recover_node_fraction`` so Word/PDF/Excel show the same cleaned
+    fraction instead of a raw date or a colon-truncated label fragment."""
+    if not _NODE_VARIABLE_NAME_RE.search(_text(variable)):
+        return ""
+    match = _DATE_TEXT_RE.match(_text(value))
+    if not match:
+        return ""
+    year, month, day = (int(part) for part in match.groups())
+    try:
+        _date(year, month, day)
+    except ValueError:
+        return ""
+    pos, total = month, day
+    if total <= 0 or pos > total:
+        return ""
+    return f"{pos}/{total}"
+
 
 def _clean_variable_label(value: Any) -> str:
     text = _text(value)
@@ -51,6 +81,13 @@ def _clean_variable_label(value: Any) -> str:
         text = text.replace("_", " ")
         if text and text[0].islower():
             text = text[0].upper() + text[1:]
+    key = _variable_key(text)
+    if key in _DERIVED_NODE_LABELS:
+        return _DERIVED_NODE_LABELS[key]
+    # "No of nodes involved" is a column-name abbreviation for "Number of",
+    # not a Yes/No category value — must not be confused with the
+    # value-level Yes/No -> Positive/Negative substitution in _display_value.
+    text = re.sub(r"\bNo\.?\s+of\b", "Number of", text, flags=re.IGNORECASE)
     replacements = {
         "Her2Neu": "HER2",
         "HER2neu": "HER2",
@@ -76,6 +113,9 @@ def _variable_key(value: Any) -> str:
 def _clinical_category_label(variable: Any, category: Any, label_ctx: Optional[Dict[str, Any]] = None) -> str:
     var_key = _variable_key(variable)
     text = _display_value(category, label_ctx) if label_ctx else _text(category)
+    recovered_fraction = _recover_node_fraction(text, variable)
+    if recovered_fraction:
+        return recovered_fraction
     low = text.strip().lower()
     low_compact = re.sub(r"\s+", "", low)
     if "histologicaltype" in var_key or var_key in {"grade", "histologicalgrade"}:
@@ -225,8 +265,13 @@ def _display_value(value: Any, label_ctx: Optional[Dict[str, Any]]) -> str:
     for raw in label_ctx.get("raw_values") or []:
         text = text.replace(raw, display)
     if label_ctx.get("status_like"):
-        text = re.sub(r"\bYes\b", "Positive", text)
-        text = re.sub(r"\bNo\b", "Negative", text)
+        # Only convert "Yes"/"No" when they are a self-contained category
+        # token (the whole text, or immediately followed by the ": "/"; "
+        # bit-separator used to join category summaries), never when they
+        # are part of a longer label/phrase such as "No of nodes involved"
+        # or prose like "No significant association was found".
+        text = re.sub(r"\bYes(?=\s*[:;]|\s*$)", "Positive", text)
+        text = re.sub(r"\bNo(?=\s*[:;]|\s*$)", "Negative", text)
     marker = re.sub(r"\b(?:expression\s+status|status|expression|marker)\b.*$", "", display, flags=re.IGNORECASE).strip()
     marker = marker or "Marker"
     if re.fullmatch(r"Interpretation\s*[- ]?\s*site", text, flags=re.IGNORECASE):
@@ -549,10 +594,28 @@ def _clean_interpretation(value: Any, label_ctx: Optional[Dict[str, Any]] = None
     return _sanitize_thesis_claims(text)
 
 
+_CATEGORY_BIT_RE = re.compile(
+    r"^(.*):\s*([0-9]+(?:\.[0-9]+)?)\s*\(([0-9]+(?:\.[0-9]+)?)%\)$"
+)
+
+
 def _parse_category_summary(summary: Any, label_ctx: Optional[Dict[str, Any]] = None) -> List[Tuple[str, str, str]]:
     text = _display_value(summary, label_ctx) if label_ctx else _text(summary)
     rows: List[Tuple[str, str, str]] = []
-    for label, count, pct in re.findall(r"([^:;]+):\s*([0-9]+(?:\.[0-9]+)?)\s*\(([0-9]+(?:\.[0-9]+)?)%\)", text):
+    # Split on the "; " bit separator first, then greedily match the LAST
+    # colon in each bit as the label/count boundary. This is required
+    # because a category label may itself contain colons (e.g. a corrupted
+    # timestamp like "2026-01-17 00:00:00"); a non-greedy/charclass split
+    # on the first colon would otherwise truncate the label to a fragment
+    # like "00" and silently merge unrelated categories together.
+    for bit in text.split(";"):
+        bit = bit.strip()
+        if not bit:
+            continue
+        match = _CATEGORY_BIT_RE.match(bit)
+        if not match:
+            continue
+        label, count, pct = match.groups()
         rows.append((_text(label).strip(), str(int(float(count))) if float(count).is_integer() else count, f"{pct}%"))
     return rows
 
