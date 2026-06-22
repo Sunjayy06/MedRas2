@@ -96,7 +96,7 @@ def test_categorical_runner_normalizes_before_contingency_table() -> None:
     assert "def _normalise_categorical_association_data" in source
     assert "data = _normalise_categorical_association_data(data, col1, col2, session)" in source
     assert "pretest_category_normalization" in source
-    assert "Fisher's exact test was used because some expected cell counts were below 5." in source
+    assert "Fisher's exact test was used because sparse expected cell counts were present." in source
 
 
 def test_significant_findings_keep_raw_and_adjusted_p_values_separate() -> None:

@@ -1556,7 +1556,13 @@ def _compact_notes(test: Dict[str, Any], significance_status: str = "") -> str:
     warning = _warning_text(test)
     notes: List[str] = []
     if "expected" in warning.lower() or "sparse" in warning.lower():
-        notes.append("Sparse expected cell counts; interpret cautiously.")
+        test_type = str(test.get("test_type") or "").lower()
+        actual_used = str(test.get("actual_test_used") or test.get("test") or "").lower()
+        is_fisher = test_type == "fisher_exact" or "fisher" in actual_used
+        if is_fisher:
+            notes.append("Fisher's exact test was used because sparse expected cell counts were present.")
+        else:
+            notes.append("Sparse expected cell counts; interpret cautiously.")
     if significance_status.startswith("Nominally significant"):
         notes.append("Nominal before adjustment; not significant after correction.")
     return " ".join(notes) or "-"
@@ -2135,8 +2141,13 @@ def _clinical_display_category(col_name, value):
         if compact in {"<14", "<14%", "<=14", "<=14%"}:
             return "<14%"
     if "molecular" in key and "subtype" in key:
+        # Return early: molecular subtype categories (Luminal A/B,
+        # HER2-enriched, Triple negative) must never fall through to the
+        # generic binary-marker checks below, which would otherwise treat
+        # "Triple negative" as a bare "Negative" value.
         if compact in {"her2neu", "her2", "her2enriched", "her2-enriched"}:
             return "HER2-enriched"
+        return text.replace("Postive", "Positive")
     if "nodal" in key and compact in {"no", "n0"}:
         return "N0"
     if "her2" in key:
@@ -2426,6 +2437,17 @@ def _normalise_category_for_association(col_name, value, session=None):
             return "<14%"
     if "nodal" in key and compact in {"no", "n0"}:
         return "N0"
+    if "molecular" in key and "subtype" in key:
+        # Return early: molecular subtype categories (Luminal A/B,
+        # HER2-enriched, Triple negative) are not binary Yes/No values.
+        # Returning here keeps them out of the receptor_like/status_like
+        # Positive/Negative collapse below, which would otherwise match
+        # "negative" as a substring of "Triple negative" and merge that
+        # category into a bare "Negative" bucket in the contingency table
+        # actually used by the chi-square/Fisher test.
+        if compact in {"her2neu", "her2", "her2enriched", "her2-enriched"}:
+            return "HER2-enriched"
+        return text.replace("Postive", "Positive")
     if "her2" in key:
         if compact in {"negative", "neg", "no", "0", "1", "1+", "low"}:
             return "Negative/low"
@@ -2522,7 +2544,7 @@ def run_chi_or_fisher(col1, col2, session, df):
         test_name = "Fisher's exact test"
         test_type = 'fisher_exact'
         stat = float(odds_ratio)
-        note = "Fisher's exact test was used because some expected cell counts were below 5."
+        note = "Fisher's exact test was used because sparse expected cell counts were present."
     else:
         correction = (True if is_2x2 and min_expected < 5 else False)
         chi2, p, dof, expected = chi2_contingency(table, correction=correction)
@@ -3352,7 +3374,7 @@ def _run_chi_or_fisher(
             stat = float(odds_ratio)
             test_name = "Fisher's exact test"
             df_val = None
-            note = "Fisher's exact test was used because some expected cell counts were below 5."
+            note = "Fisher's exact test was used because sparse expected cell counts were present."
         else:
             chi2, p, df_val, _ = _ss.chi2_contingency(ct, correction=False)
             stat = float(chi2)

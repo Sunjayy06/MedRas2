@@ -208,6 +208,12 @@ def test_nominal_egfr_and_marker_component_reporting() -> None:
         },
     ]
     associations = results._tested_associations(tests, "p27 expression status")
+    methods_text = (
+        "Categorical associations were tested using chi-square or Fisher's exact test as appropriate. "
+        "Multiple-testing adjustment used the Benjamini-Hochberg FDR method across 24 inferential tests; "
+        "adjusted p-values were used to determine significance after correction. "
+        "All tests are two-sided with a significance threshold of 0.05."
+    )
     blueprint = build_thesis_analysis_blueprint(
         df_shape=(100, 3),
         classifications=[
@@ -218,6 +224,7 @@ def test_nominal_egfr_and_marker_component_reporting() -> None:
         assignment={"outcome": "p27 expression status"},
         tests=tests,
         tested_associations=associations,
+        methods_text=methods_text,
         session={
             "study_type": "association",
             "main_marker": "p27",
@@ -235,11 +242,21 @@ def test_nominal_egfr_and_marker_component_reporting() -> None:
         "EGFR was nominally significant before adjustment, but this did not remain significant "
         "after Benjamini-Hochberg FDR correction."
     ) in egfr_interpretation
+
+    # Issue 2: the methods note must explain why the FDR test count (24)
+    # exceeds the number of clinically interpreted rows shown below it.
+    assert "across 24 inferential tests, including detailed marker-component tests." in blueprint["methods_text"]
+    assert (
+        "marker-component variables were summarized descriptively and excluded from "
+        "clinical association interpretation" in blueprint["methods_text"]
+    )
+
     text = _docx_text(chapter_v_export.generate_docx({"thesis_analysis_blueprint": blueprint, "tests": tests}))
     assert "Chi-square test with sparse-cell Grade" not in text
     assert "Chi-square test with sparse-cell The distribution" not in text
     assert "Interpretation-site" not in text.split("Section VI - Summary of Tested Associations", 1)[1]
     assert "Marker-component variables were summarized descriptively" in text
+    assert "across 24 inferential tests, including detailed marker-component tests." in text
 
 
 def test_run_plan_projects_each_canonical_result_once() -> None:

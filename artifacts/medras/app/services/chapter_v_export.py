@@ -1430,11 +1430,13 @@ def _primary_outcome_figure(blueprint: Dict[str, Any], table: Dict[str, Any], la
     }
 
 
-def _compact_table_for_export(table: Dict[str, Any]) -> Tuple[Dict[str, Any], List[str]]:
+def _compact_table_for_export(
+    table: Dict[str, Any], keep_notes_column: bool = False
+) -> Tuple[Dict[str, Any], List[str]]:
     clone = deepcopy(table)
     headers = [_text(header) for header in (clone.get("columns") or clone.get("headers") or [])]
     warnings: List[str] = list(clone.get("warnings") or [])
-    warning_indexes = [
+    warning_indexes = [] if keep_notes_column else [
         idx for idx, header in enumerate(headers)
         if header.strip().lower() in {"warning", "warnings", "notes/warnings"}
     ]
@@ -1578,9 +1580,15 @@ def _association_direction_sentence(
         return ""
     dominant_first = _qualified_category_label(predictor_label, dominant_first)
     dominant_last = _qualified_category_label(predictor_label, dominant_last)
+    # Qualify the outcome group labels with the marker name too (e.g.
+    # "p27-positive group"), not bare "Positive"/"Negative" — otherwise the
+    # sentence reads ambiguously, as if the predictor's own category were
+    # being repeated as the group name.
+    qualified_last_outcome = _qualified_category_label(marker, outcome_labels[-1])
+    qualified_first_outcome = _qualified_category_label(marker, outcome_labels[0])
     return (
-        f"{dominant_last} cases were proportionately higher in the {outcome_labels[-1]} group, "
-        f"while {dominant_first} cases were more commonly {outcome_labels[0]}."
+        f"{dominant_last} cases were proportionately higher in the {qualified_last_outcome} group, "
+        f"while {dominant_first} cases contributed a larger share of the {qualified_first_outcome} group."
     )
 
 
@@ -1850,12 +1858,13 @@ def _add_table_docx(
     label_ctx: Optional[Dict[str, Any]] = None,
     include_interpretation: bool = True,
     include_warnings: bool = True,
+    keep_notes_column: bool = False,
 ) -> int:
     payload = _descriptive_export_table(payload, label_ctx or {})
     if isinstance(payload, list):
         payload = payload[0] if payload else {}
     payload = _normalise_table_for_export(payload, label_ctx or {})
-    payload, warning_notes = _compact_table_for_export(payload)
+    payload, warning_notes = _compact_table_for_export(payload, keep_notes_column=keep_notes_column)
     headers, rows = _table_rows(payload)
     if not rows:
         return caption_no
@@ -2379,7 +2388,7 @@ def generate_docx(
             "interpretation": "These findings are filtered for thesis-facing reporting and exclude marker/outcome components by default.",
             "warnings": [],
         }
-        table_no = _add_table_docx(doc, sig_table, table_no, label_ctx)
+        table_no = _add_table_docx(doc, sig_table, table_no, label_ctx, keep_notes_column=True)
     else:
         _plain_docx_text(doc, "No final thesis significant findings were identified among the completed tests.")
 
@@ -2395,9 +2404,14 @@ def _pdf_escape(value: Any) -> str:
     return _text(value).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
-def _pdf_table(payload: Dict[str, Any], label_ctx: Optional[Dict[str, Any]] = None, width: float = 10.4 * inch) -> Tuple[Table, List[str]]:
+def _pdf_table(
+    payload: Dict[str, Any],
+    label_ctx: Optional[Dict[str, Any]] = None,
+    width: float = 10.4 * inch,
+    keep_notes_column: bool = False,
+) -> Tuple[Table, List[str]]:
     payload = _normalise_table_for_export(payload, label_ctx or {})
-    payload, warning_notes = _compact_table_for_export(payload)
+    payload, warning_notes = _compact_table_for_export(payload, keep_notes_column=keep_notes_column)
     headers, rows = _table_rows(payload)
     font_size = 6 if len(headers) > 6 else 7
     style = ParagraphStyle("Cell", fontName="Helvetica", fontSize=font_size, leading=font_size + 2)
@@ -2623,7 +2637,7 @@ def generate_pdf(
                 ]
                 for row in blueprint.get("significant_findings") or []
             ],
-        }, label_ctx, available_width)
+        }, label_ctx, available_width, keep_notes_column=True)
         flow.append(pdf_table)
         for warning in warning_notes:
             cleaned_warning = _clean_interpretation(warning, label_ctx)

@@ -28,6 +28,8 @@ from openpyxl import load_workbook
 
 from app.services import chapter_v_export, export
 from app.services.results import build_table_one
+from app.services.results import _significant_findings as _real_significant_findings
+from app.services.results import _tested_associations as _real_tested_associations
 from app.services.thesis_blueprint import build_thesis_analysis_blueprint
 
 
@@ -629,6 +631,31 @@ def test_association_direction_wording_is_semantically_valid() -> None:
     assert "Molecular subtype-negative" not in text
 
 
+def test_marker_group_wording_uses_qualified_p27_groups() -> None:
+    """ER/PR/AR (and any other binary-marker predictor) direction sentences
+    must name the outcome groups as 'p27-positive group' / 'p27-negative
+    group', not the ambiguous bare 'Positive group' / 'more commonly
+    Negative' phrasing, which reads as if the predictor's own category were
+    the group name."""
+    headers = ["Predictor category", "Positive n (%)", "Negative n (%)"]
+    count_indexes = [1, 2]
+    order = ["Positive", "Negative"]
+    label_ctx = {"display": "p27 expression status"}
+    for marker in ("ER", "PR", "AR"):
+        grouped = {
+            "Positive": [None, 6, 0],
+            "Negative": [None, 0, 6],
+        }
+        sentence = chapter_v_export._association_direction_sentence(
+            marker, headers, count_indexes, order, grouped, label_ctx
+        )
+        assert "p27-positive group" in sentence, sentence
+        assert "p27-negative group" in sentence, sentence
+        assert "higher in the Positive group" not in sentence, sentence
+        assert "more commonly Negative" not in sentence, sentence
+        assert f"{marker}-positive" in sentence and f"{marker}-negative" in sentence, sentence
+
+
 def test_sparse_caution_deduplicated() -> None:
     """Sparse-cell caution should appear once, without minimum expected-count dump."""
     results, _, _ = _build_fixture()
@@ -638,7 +665,110 @@ def test_sparse_caution_deduplicated() -> None:
     assert text.count(caution) == 1, "Sparse-cell caution must appear once for the result"
     assert "Minimum expected count" not in text
     assert "because some." not in text
+
+
+def test_significant_findings_highlight_has_per_row_sparse_notes() -> None:
+    """Significant Findings Highlight must keep its Notes/warnings column intact
+    (not stripped into a detached footnote list) and the sparse-cell caution
+    must be attached to the specific rows that earned it (Histological type,
+    Molecular subtype), not shown as a generic paragraph below the table or
+    duplicated outside the table cells."""
+    tests = [
+        {
+            "id": "histology",
+            "title": "Histological type vs p27 expression status: Chi-square test with sparse-cell warning",
+            "analysis_family": "bivariate", "test_type": "chi_square",
+            "actual_test_used": "Chi-square test", "statistic": 8.4, "dof": 2,
+            "p": 0.004, "p_corrected": 0.013, "cramers_v": 0.46,
+            "note": "This finding should be interpreted cautiously because some expected cell counts were below 5.",
+        },
+        {
+            "id": "molecular",
+            "title": "Molecular subtype vs p27 expression status: Chi-square test with sparse-cell warning",
+            "analysis_family": "bivariate", "test_type": "chi_square",
+            "actual_test_used": "Chi-square test", "statistic": 9.1, "dof": 3,
+            "p": 0.006, "p_corrected": 0.019, "cramers_v": 0.40,
+            "note": "This finding should be interpreted cautiously because some expected cell counts were below 5.",
+        },
+        {
+            "id": "er",
+            "title": "ER vs p27 expression status: Chi-square test",
+            "analysis_family": "bivariate", "test_type": "chi_square",
+            "actual_test_used": "Chi-square test", "statistic": 5.0, "dof": 1,
+            "p": 0.005, "p_corrected": 0.018, "cramers_v": 0.46,
+            "note": "-",
+        },
+    ]
+    associations = _real_tested_associations(tests, "p27 expression status")
+    significant = _real_significant_findings(tests)
+    blueprint = build_thesis_analysis_blueprint(
+        df_shape=(100, 4),
+        classifications=[
+            {"column": "p27 expression status", "detected_type": "nominal"},
+            {"column": "Histological type", "detected_type": "nominal"},
+            {"column": "Molecular subtype", "detected_type": "nominal"},
+            {"column": "ER", "detected_type": "nominal"},
+        ],
+        assignment={"outcome": "p27 expression status"},
+        tests=tests,
+        tested_associations=associations,
+        significant_findings=significant,
+        session={"study_type": "association", "main_marker": "p27", "main_outcome_concept": "p27 expression status"},
+    )
+    doc_results = {"thesis_analysis_blueprint": blueprint, "tests": tests}
+    text = _docx_text(chapter_v_export.generate_docx(doc_results))
+    doc = Document(io.BytesIO(chapter_v_export.generate_docx(doc_results)))
+    sig_table = next(
+        table for table in doc.tables
+        if [cell.text for cell in table.rows[0].cells] == [
+            "Variable / parameter", "Key finding", "Test statistic", "p-value",
+            "Adjusted p-value", "Test applied", "Effect size", "Notes/warnings",
+        ]
+    )
+    notes_by_variable = {row.cells[0].text: row.cells[-1].text for row in sig_table.rows[1:]}
+    caution = "Sparse expected cell counts; interpret cautiously."
+    assert caution in notes_by_variable["Histological type vs p27 expression status"]
+    assert caution in notes_by_variable["Molecular subtype vs p27 expression status"]
+    assert notes_by_variable["ER vs p27 expression status"] in {"-", "", "—"}
+
+    paragraphs = [p.text for p in Document(io.BytesIO(chapter_v_export.generate_docx(doc_results))).paragraphs]
+    assert not any(p.strip() == caution for p in paragraphs), (
+        "Sparse-cell caution must not also appear as a detached paragraph below the table"
+    )
+
+    pdf_text_bytes = chapter_v_export.generate_pdf(doc_results)
+    assert pdf_text_bytes, "PDF must still generate with the Notes/warnings column preserved"
     assert "Interpret with caution: -" not in text
+
+
+def test_fisher_sparse_note_distinct_from_chi_square_sparse_note() -> None:
+    """Issue 5: a 2x2 Fisher's exact test gets test-specific sparse wording;
+    a larger RxC chi-square sparse test keeps the existing generic wording.
+    Test selection and p-values must be unaffected — only the note text."""
+    fisher_test = {
+        "id": "egfr", "title": "EGFR vs p27 expression status: Fisher's exact test",
+        "analysis_family": "bivariate", "test_type": "fisher_exact",
+        "actual_test_used": "Fisher's exact test", "statistic": 1.0, "dof": None,
+        "p": 0.03, "p_corrected": 0.04,
+        "note": "Fisher's exact test was used because sparse expected cell counts were present.",
+    }
+    chi_square_test = {
+        "id": "histology", "title": "Histological type vs p27 expression status: Chi-square test",
+        "analysis_family": "bivariate", "test_type": "chi_square",
+        "actual_test_used": "Chi-square test", "statistic": 8.4, "dof": 2,
+        "p": 0.004, "p_corrected": 0.013,
+        "note": "This finding should be interpreted cautiously because some expected cell counts were below 5.",
+    }
+    findings = _real_significant_findings([fisher_test, chi_square_test])
+    notes = {f["variable"]: f["notes_warnings"] for f in findings}
+    assert notes["EGFR vs p27 expression status"] == (
+        "Fisher's exact test was used because sparse expected cell counts were present."
+    ), notes
+    assert notes["Histological type vs p27 expression status"] == (
+        "Sparse expected cell counts; interpret cautiously."
+    ), notes
+    # Statistics and p-values must be untouched by the wording change.
+    assert fisher_test["p"] == 0.03 and chi_square_test["p"] == 0.004
 
 
 def test_age_table_formats_internal_values() -> None:
@@ -1125,8 +1255,17 @@ def main() -> None:
     test_association_direction_wording_is_semantically_valid()
     print("  [ok] Association direction wording is semantically valid")
 
+    test_marker_group_wording_uses_qualified_p27_groups()
+    print("  [ok] ER/PR/AR direction sentences use qualified p27-positive/p27-negative group wording")
+
     test_sparse_caution_deduplicated()
     print("  [ok] Sparse-cell caution is deduplicated")
+
+    test_significant_findings_highlight_has_per_row_sparse_notes()
+    print("  [ok] Significant Findings Highlight Notes column attaches sparse caution per row")
+
+    test_fisher_sparse_note_distinct_from_chi_square_sparse_note()
+    print("  [ok] Fisher sparse note distinct from chi-square sparse note")
 
     test_age_table_formats_internal_values()
     print("  [ok] Age comparison table formats internal test values")

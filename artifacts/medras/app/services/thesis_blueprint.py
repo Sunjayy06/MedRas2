@@ -945,6 +945,33 @@ def _section_template(section_id: str, title: str, purpose: str) -> Dict[str, An
     }
 
 
+_MULTIPLE_TESTING_SENTENCE_RE = re.compile(
+    r"(Multiple-testing adjustment used the .*? method across \d+ inferential tests)"
+    r"(?:;\s*adjusted p-values were used to determine significance after correction\.)?",
+)
+
+
+def _clarify_marker_component_test_count(methods_text: str, component_count: int) -> str:
+    """When marker-component tests are counted toward the multiple-testing
+    correction but excluded from the clinical tested-associations summary,
+    make that explicit in the methods note (Option B) instead of leaving
+    readers to wonder why the FDR test count exceeds the visible clinical
+    rows."""
+    if not component_count or not methods_text:
+        return methods_text
+    if "marker-component" in methods_text.lower():
+        return methods_text  # already explained; avoid duplicating the note
+    match = _MULTIPLE_TESTING_SENTENCE_RE.search(methods_text)
+    if not match:
+        return methods_text
+    replacement = (
+        f"{match.group(1)}, including detailed marker-component tests. "
+        "Clinically interpreted associations are summarized below; marker-component "
+        "variables were summarized descriptively and excluded from clinical association interpretation."
+    )
+    return _MULTIPLE_TESTING_SENTENCE_RE.sub(replacement, methods_text, count=1)
+
+
 _FAMILY_SECTIONS = {
     "bivariate": ("bivariate_associations", "Bivariate Associations / Group Comparisons", "Summarise predictor-by-outcome tests."),
     "correlation": ("correlation_analysis", "Correlation Analysis", "Summarise pairwise correlation results."),
@@ -1388,7 +1415,9 @@ def build_thesis_analysis_blueprint(
         "figures": all_figures,
         "significant_findings": thesis_findings,
         "tested_associations": displayed_associations,
-        "methods_text": _display_text(methods_text, label_ctx),
+        "methods_text": _clarify_marker_component_test_count(
+            _display_text(methods_text, label_ctx), len(component_associations)
+        ),
         "results_narrative": _display_text(results_narrative, label_ctx),
         "warnings": list(dict.fromkeys(
             warning for warning in (_clean_report_warning(item) for item in warnings) if warning
