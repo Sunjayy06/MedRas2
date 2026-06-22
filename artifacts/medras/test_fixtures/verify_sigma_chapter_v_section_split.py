@@ -478,15 +478,19 @@ def test_association_interpretations_mention_direction() -> None:
     text = _docx_text(blob)
 
     assert "Histological type showed a statistically significant association" in text
-    assert "proportionately higher in the Negative group" in text
-    assert "more commonly Positive" in text
+    assert (
+        "Grade 3 tumours had a higher proportion of p27-negative cases "
+        "compared with Grade 1 and Grade 2 tumours."
+    ) in text
     assert "This finding should be interpreted cautiously because some expected cell counts were below 5." in text
 
     assert "ER showed a statistically significant association" in text
     assert "ER-positive cases were more commonly Positive" in text or "ER-negative cases were proportionately higher" in text
 
     assert "Molecular subtype showed a statistically significant association" in text
-    assert "Triple negative cases were proportionately higher in the Negative group" in text
+    assert "Molecular subtype-negative" not in text
+    assert "varied across molecular subtype categories" in text
+    assert "forming the largest p27-positive subgroup" in text
 
     assert "PR showed a statistically significant association" in text
     assert "AR showed a statistically significant association" in text

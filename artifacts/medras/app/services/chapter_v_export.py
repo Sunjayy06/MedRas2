@@ -438,6 +438,14 @@ def _clean_table_title(title: Any) -> str:
 
 def _clean_interpretation(value: Any, label_ctx: Optional[Dict[str, Any]] = None) -> str:
     text = _display_value(value, label_ctx) if label_ctx else _text(value)
+    if re.search(r"Molecular subtype-negative cases were more commonly Negative", text, flags=re.IGNORECASE):
+        outcome = _text((label_ctx or {}).get("display")) or "the primary outcome"
+        text = re.sub(
+            r"Molecular subtype-negative cases were more commonly Negative\.?",
+            f"The distribution of {outcome} varied across molecular subtype categories.",
+            text,
+            flags=re.IGNORECASE,
+        )
     blocked = (
         "Domain-profile grouping is descriptive",
         "statistical tests remain generated from variable roles",
@@ -1430,6 +1438,51 @@ def _association_direction_sentence(
         label = _display_value(headers[idx], label_ctx)
         label = re.sub(r"\s*n\s*\(%\)\s*$", "", label, flags=re.IGNORECASE).strip()
         outcome_labels.append(label)
+    predictor_key = _variable_key(predictor_label)
+    marker = re.sub(
+        r"\s+(?:expression\s+)?status$",
+        "",
+        _text(label_ctx.get("display")),
+        flags=re.IGNORECASE,
+    ).strip() or "outcome"
+    negative_pos = next(
+        (pos for pos, label in enumerate(outcome_labels) if "negative" in label.lower()),
+        None,
+    )
+    if predictor_key in {"histologicaltype", "histologicalgrade", "grade"} and negative_pos is not None:
+        grade_rates: Dict[int, float] = {}
+        for category in order:
+            match = re.search(r"(?:grade\s*)?([123])(?:\.0)?$", _text(category), flags=re.IGNORECASE)
+            counts = [float(grouped[category][idx] or 0.0) for idx in count_indexes]
+            if match and sum(counts):
+                grade_rates[int(match.group(1))] = counts[negative_pos] / sum(counts)
+        if all(grade in grade_rates for grade in (1, 2, 3)) and grade_rates[3] > max(grade_rates[1], grade_rates[2]):
+            return (
+                f"Grade 3 tumours had a higher proportion of {marker}-negative cases "
+                "compared with Grade 1 and Grade 2 tumours."
+            )
+    if predictor_key == "molecularsubtype":
+        valid_categories = [
+            category for category in order
+            if _text(category).strip().lower() not in {"positive", "negative", "present", "absent", "yes", "no"}
+        ]
+        positive_pos = next(
+            (pos for pos, label in enumerate(outcome_labels) if "positive" in label.lower()),
+            0,
+        )
+        if valid_categories:
+            largest = max(
+                valid_categories,
+                key=lambda category: float(grouped[category][count_indexes[positive_pos]] or 0.0),
+            )
+            return (
+                f"The distribution of {_text(label_ctx.get('display')) or 'the primary outcome'} varied across "
+                f"molecular subtype categories, with {_text(largest)} forming the largest {marker}-positive subgroup."
+            )
+        return (
+            f"The distribution of {_text(label_ctx.get('display')) or 'the primary outcome'} varied across "
+            "molecular subtype categories."
+        )
     col_totals = [sum(float(grouped[category][idx] or 0.0) for category in order) for idx in count_indexes]
     if not all(col_totals):
         return ""

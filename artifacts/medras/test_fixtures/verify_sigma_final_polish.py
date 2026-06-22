@@ -18,6 +18,7 @@ Run from artifacts/medras:
 from __future__ import annotations
 
 import io
+import re
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -564,6 +565,42 @@ def test_lvi_abse_audit_trace_preserved() -> None:
     assert lvi_rows, "category_merges must record LVI Abse -> Absent"
 
 
+def test_abse_is_confined_to_excel_audit_trace() -> None:
+    """Raw Abse may remain in audit trace, never in user-facing workbook sheets."""
+    results, df, meta = _build_fixture()
+    workbook = load_workbook(io.BytesIO(export.to_xlsx(
+        _FakeEntry(df, meta), results, {"outcome": "Positive/ Negative"}
+    )))
+    audit_sheets = {"category_merges", "cleaning_decisions", "Data Cleaning Log"}
+    exposed = []
+    invalid_molecular_wording = []
+    for sheet in workbook.worksheets:
+        if sheet.title in audit_sheets:
+            continue
+        for row in sheet.iter_rows():
+            for cell in row:
+                if re.search(r"\bAbse\b", str(cell.value or "")):
+                    exposed.append((sheet.title, cell.coordinate, cell.value))
+                if "Molecular subtype-negative" in str(cell.value or ""):
+                    invalid_molecular_wording.append((sheet.title, cell.coordinate, cell.value))
+    assert not exposed, f"Raw Abse leaked into user-facing Excel sheets: {exposed}"
+    assert not invalid_molecular_wording, (
+        f"Invalid molecular-subtype wording leaked into Excel: {invalid_molecular_wording}"
+    )
+    audit_values = [
+        cell.value
+        for row in workbook["category_merges"].iter_rows()
+        for cell in row
+    ]
+    assert "Abse" in audit_values, "Raw Abse must remain traceable in category_merges"
+
+
+def test_association_direction_wording_is_semantically_valid() -> None:
+    results, _, _ = _build_fixture()
+    text = _docx_text(chapter_v_export.generate_docx(results))
+    assert "Molecular subtype-negative" not in text
+
+
 def test_sparse_caution_deduplicated() -> None:
     """Sparse-cell caution should appear once, without minimum expected-count dump."""
     results, _, _ = _build_fixture()
@@ -717,6 +754,7 @@ def test_primary_outcome_table_format_pdf() -> None:
         "PDF primary outcome table must contain 'Parameter' column header"
     assert "Category" in text, \
         "PDF primary outcome table must contain 'Category' column header"
+    assert "Molecular subtype-negative" not in text
 
 
 # ── 10. PDF non-significant figures absent ───────────────────────────────────
@@ -905,6 +943,12 @@ def main() -> None:
 
     test_lvi_abse_audit_trace_preserved()
     print("  [ok] category_merges records LVI Abse->Absent audit trace")
+
+    test_abse_is_confined_to_excel_audit_trace()
+    print("  [ok] Raw Abse is confined to Excel audit trace")
+
+    test_association_direction_wording_is_semantically_valid()
+    print("  [ok] Association direction wording is semantically valid")
 
     test_sparse_caution_deduplicated()
     print("  [ok] Sparse-cell caution is deduplicated")

@@ -460,8 +460,7 @@ def _excel_display_value(value: Any, label_ctx: Dict[str, Any], variable: Any = 
         return value
     text = html.unescape(str(value)).strip()
     text = text.replace("Postive", "Positive")
-    if text.lower() == "abse":
-        text = "Absent"
+    text = re.sub(r"\bAbse\b", "Absent", text, flags=re.IGNORECASE)
     text = re.sub(r"\bwelch[_\s-]*t[\s-]*test\b", "Welch's t-test", text, flags=re.IGNORECASE)
     text = re.sub(r"\bwelch\s+ttest\b", "Welch's t-test", text, flags=re.IGNORECASE)
     text = re.sub(r">\s*=\s*14\s*%?", ">=14%", text)
