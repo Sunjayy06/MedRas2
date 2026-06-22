@@ -253,6 +253,13 @@ def _fallback_tested_associations(
                 adjusted_p = candidate
                 break
         predictor, _ = _result_pair(test, outcome)
+        significance_status = _report_significance_status(raw_p, adjusted_p)
+        warning = _warning_for_table(test)
+        notes: List[str] = []
+        if "expected" in warning.lower() or "sparse" in warning.lower():
+            notes.append("Sparse expected cell counts; interpret cautiously.")
+        if significance_status.startswith("Nominally significant"):
+            notes.append("Nominal before adjustment; not significant after correction.")
         rows.append({
             "source_result_id": str(test.get("id") or ""),
             "predictor": predictor,
@@ -261,8 +268,8 @@ def _fallback_tested_associations(
             "p_value": _p_display(test),
             "adjusted_p_value": _p_display(test, adjusted=True),
             "effect_size": _effect_for_table(test),
-            "significance_status": _report_significance_status(raw_p, adjusted_p),
-            "notes_warnings": _warning_for_table(test),
+            "significance_status": significance_status,
+            "notes_warnings": " ".join(notes) or "-",
             "p_numeric": raw_p,
             "p_corrected_numeric": adjusted_p,
         })
@@ -687,7 +694,14 @@ def _outcome_component_variables(
 def _safe_interpretation(test: Dict[str, Any], label_ctx: Optional[Dict[str, Any]] = None) -> str:
     label_ctx = label_ctx or {}
     p = _significance_p_value(test)
+    raw_p = _p_value(test)
     title = _display_text(test.get("title") or "This analysis", label_ctx)
+    relation_title = re.sub(
+        r":\s*(?:Chi-square test(?: with sparse-cell warning)?|Fisher's exact test|Welch's t-test|Mann-Whitney U test).*$",
+        "",
+        title,
+        flags=re.IGNORECASE,
+    ).strip()
     warning = _clean_text(test.get("warning") or test.get("note"))
     if warning in {"-", "—", "â€”"}:
         warning = ""
@@ -709,22 +723,38 @@ def _safe_interpretation(test: Dict[str, Any], label_ctx: Optional[Dict[str, Any
     else:
         relation = ""
         for sep in (" vs ", " by "):
-            if sep in title:
-                left, right = title.split(sep, 1)
-                relation = (
-                    f"{left.strip()} showed a statistically significant association with {right.strip()}."
-                    if p < 0.05
-                    else f"{left.strip()} did not show a statistically significant association with {right.strip()}."
-                )
+            if sep in relation_title:
+                left, right = relation_title.split(sep, 1)
+                correction = str(test.get("correction_method") or "multiple-testing").strip()
+                if raw_p is not None and raw_p < 0.05 <= p:
+                    relation = (
+                        f"{left.strip()} was nominally significant before adjustment, but this did not remain "
+                        f"significant after {correction} correction."
+                    )
+                else:
+                    relation = (
+                        f"{left.strip()} showed a statistically significant association with {right.strip()}."
+                        if p < 0.05
+                        else f"{left.strip()} did not show a statistically significant association with {right.strip()}."
+                    )
                 break
         base = relation or (
             f"{title} showed a statistically significant association."
             if p < 0.05
             else f"{title} did not show a statistically significant association."
         )
+    test_name = _test_applied(test)
+    if "chi-square" in test_name.lower():
+        if warning and re.search(r"(sparse|expected)", warning, flags=re.IGNORECASE):
+            base += " A chi-square test was used, and sparse expected cell counts were noted."
+        else:
+            base += " A chi-square test was used."
+    elif "fisher" in test_name.lower():
+        base += " Fisher's exact test was used."
     if warning:
         if re.search(r"(sparse|expected)", warning, flags=re.IGNORECASE):
-            base += " This finding should be interpreted cautiously because some expected cell counts were below 5."
+            if "sparse expected cell counts were noted" not in base.lower():
+                base += " This finding should be interpreted cautiously because some expected cell counts were below 5."
         else:
             base += " Interpret with caution: " + warning
     return base
@@ -1163,7 +1193,17 @@ def build_thesis_analysis_blueprint(
 
     canonical_associations = tested_associations or _fallback_tested_associations(tests, outcome)
     displayed_associations: List[Dict[str, Any]] = []
+    component_associations: List[Dict[str, Any]] = []
     for association in canonical_associations:
+        predictor = str(association.get("predictor") or "")
+        if any(
+            predictor == component
+            or predictor.startswith(f"{component} vs ")
+            or predictor.startswith(f"{component} by ")
+            for component in outcome_components
+        ):
+            component_associations.append(dict(association))
+            continue
         displayed = dict(association)
         for key in (
             "predictor", "test_applied", "test_statistic", "effect_size",
@@ -1172,6 +1212,11 @@ def build_thesis_analysis_blueprint(
             displayed[key] = _display_text(displayed.get(key) or "", label_ctx)
         displayed_associations.append(displayed)
 
+    if component_associations:
+        warnings.append(
+            "Marker-component variables were summarized descriptively and excluded from clinical association interpretation."
+        )
+
     if displayed_associations:
         association_summary_table = {
             "table_id": "tested_associations_summary",
@@ -1179,7 +1224,7 @@ def build_thesis_analysis_blueprint(
             "table_type": "tested_associations_summary",
             "columns": [
                 "Predictor", "Test applied", "Test statistic", "p-value",
-                "Adjusted p-value", "Effect size", "Significance status",
+                "Adjusted p-value", "Effect size", "Significance status", "Notes",
             ],
             "rows": [[
                 row.get("predictor") or "",
@@ -1189,6 +1234,7 @@ def build_thesis_analysis_blueprint(
                 row.get("adjusted_p_value") or "-",
                 row.get("effect_size") or "-",
                 row.get("significance_status") or "",
+                row.get("notes_warnings") or "-",
             ] for row in displayed_associations],
             "source_variables": [row.get("predictor") for row in displayed_associations],
             "source_test_ids": [row.get("source_result_id") for row in displayed_associations],

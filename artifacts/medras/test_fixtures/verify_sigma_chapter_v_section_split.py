@@ -482,7 +482,9 @@ def test_association_interpretations_mention_direction() -> None:
         "Grade 3 tumours had a higher proportion of p27-negative cases "
         "compared with Grade 1 and Grade 2 tumours."
     ) in text
-    assert "This finding should be interpreted cautiously because some expected cell counts were below 5." in text
+    assert "A chi-square test was used, and sparse expected cell counts were noted." in text
+    assert "Chi-square test with sparse-cell Grade 3 tumours" not in text
+    assert "Chi-square test with sparse-cell The distribution" not in text
 
     assert "ER showed a statistically significant association" in text
     assert "ER-positive cases were more commonly Positive" in text or "ER-negative cases were proportionately higher" in text

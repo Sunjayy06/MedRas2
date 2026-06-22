@@ -37,6 +37,11 @@ PNG_1X1 = (
     "/x8AAwMCAO+/p9sAAAAASUVORK5CYII="
 )
 
+T4B_LONG_LABEL = (
+    "Ulceration and / or ipsilateral satellite nodules and / or edema of the skin "
+    "which does not meet the criteria for inflammatory carcinoma"
+)
+
 
 def _docx_text(blob: bytes) -> str:
     doc = Document(io.BytesIO(blob))
@@ -122,6 +127,7 @@ def _build_fixture() -> tuple[Dict[str, Any], "pd.DataFrame", Dict[str, Any]]:
         "Ki67": [">=14"] * 5 + ["<14"] * 7,                               # unnormalised Ki67
         "pT": ["T1", "T2", "T3"] * 4,
         "Nodal status": ["N0"] * 5 + ["NO"] + ["N1"] * 3 + ["N2"] * 3,
+        "Tumour size": [T4B_LONG_LABEL] * 2 + ["2-5 cm"] * 10,
         "No of nodes involved": ["0/31", "2026-01-17 00:00:00", "2026-10-12 00:00:00", "2026-04-22 00:00:00"] * 3,
         "LVI": ["Present", "Abse"] * 6,
         "DCIS": ["Negative"] * 6 + ["High grade", "Low grade", "Intermediate grade", "Positive", "Negative", "Negative"],
@@ -140,6 +146,7 @@ def _build_fixture() -> tuple[Dict[str, Any], "pd.DataFrame", Dict[str, Any]]:
         {"column": "Ki67",               "detected_type": "nominal"},
         {"column": "pT",                 "detected_type": "ordinal"},
         {"column": "Nodal status",       "detected_type": "ordinal"},
+        {"column": "Tumour size",        "detected_type": "nominal"},
         {"column": "No of nodes involved", "detected_type": "nominal"},
         {"column": "LVI",                "detected_type": "nominal"},
         {"column": "DCIS",               "detected_type": "nominal"},
@@ -595,6 +602,27 @@ def test_abse_is_confined_to_excel_audit_trace() -> None:
     assert "Abse" in audit_values, "Raw Abse must remain traceable in category_merges"
 
 
+def test_t4b_definition_is_display_normalized_with_audit_trace() -> None:
+    results, df, meta = _build_fixture()
+    docx_text = _docx_text(chapter_v_export.generate_docx(results))
+    assert T4B_LONG_LABEL not in docx_text
+    assert "Skin involvement / T4b features" in docx_text
+
+    workbook = load_workbook(io.BytesIO(export.to_xlsx(
+        _FakeEntry(df, meta), results, {"outcome": "Positive/ Negative"}
+    )))
+    audit_sheets = {"category_merges", "cleaning_decisions", "Data Cleaning Log"}
+    exposed = [
+        (sheet.title, cell.coordinate)
+        for sheet in workbook.worksheets if sheet.title not in audit_sheets
+        for row in sheet.iter_rows() for cell in row
+        if T4B_LONG_LABEL in str(cell.value or "")
+    ]
+    assert not exposed, f"Long T4b definition leaked into user-facing Excel sheets: {exposed}"
+    merge_rows = list(workbook["category_merges"].iter_rows(min_row=2, values_only=True))
+    assert any(row[0] == "Tumour size" and row[1] == T4B_LONG_LABEL for row in merge_rows)
+
+
 def test_association_direction_wording_is_semantically_valid() -> None:
     results, _, _ = _build_fixture()
     text = _docx_text(chapter_v_export.generate_docx(results))
@@ -946,6 +974,9 @@ def main() -> None:
 
     test_abse_is_confined_to_excel_audit_trace()
     print("  [ok] Raw Abse is confined to Excel audit trace")
+
+    test_t4b_definition_is_display_normalized_with_audit_trace()
+    print("  [ok] Long T4b definition is normalized with audit trace")
 
     test_association_direction_wording_is_semantically_valid()
     print("  [ok] Association direction wording is semantically valid")

@@ -333,7 +333,8 @@ def verify_service_docx() -> None:
     assert "Section III - Immunophenotype" in text
     assert "Section IV - p27 expression status / Marker Expression" in text
     assert "Section V - Statistical Associations" in text
-    assert "Section VI - Significant Findings Summary" in text
+    assert "Section VI - Summary of Tested Associations" in text
+    assert "Significant Findings Highlight" in text
     assert "p27 expression status" in text
     assert "Positive\n9\n75.0%" in text
     assert "No:" not in text and "Yes:" not in text
@@ -413,7 +414,7 @@ def verify_service_docx() -> None:
     assert "p27 expression status by Nodal status" not in text
     assert "p27 expression status by LVI" not in text
     assert "Graph preview not generated yet" not in text
-    final_section = text.split("Section VI - Significant Findings Summary", 1)[1].split("Warnings and Interpretation Notes", 1)[0]
+    final_section = text.split("Section VI - Summary of Tested Associations", 1)[1].split("Warnings and Interpretation Notes", 1)[0]
     assert "Interpretation-site" not in final_section
     assert "Staining Result" not in final_section
     assert "Observed counts" not in text

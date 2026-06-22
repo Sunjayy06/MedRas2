@@ -38,10 +38,15 @@ FORBIDDEN_MAIN_TABLE_TITLES = {
 
 _BINARY_MARKER_VARS = {"er", "pr", "ar", "her2", "her2neu", "egfr"}
 _PRESENCE_MARKER_VARS = {"lvi", "ene", "necrosis", "dcis"}
+_T4B_DISPLAY_PATTERN = re.compile(
+    r"Ulceration\s+and\s*/\s*or\s+ipsilateral satellite nodules\s+and\s*/\s*or\s+(?:edema|oedema)[^;|:]*",
+    flags=re.IGNORECASE,
+)
 
 
 def _clean_variable_label(value: Any) -> str:
     text = _text(value)
+    text = _T4B_DISPLAY_PATTERN.sub("Skin involvement / T4b features", text)
     if "_" in text and " " not in text:
         text = text.replace("_", " ")
         if text and text[0].islower():
@@ -460,6 +465,12 @@ def _clean_interpretation(value: Any, label_ctx: Optional[Dict[str, Any]] = None
     text = text.replace("Chi-square test with sparse-cell warning was", "was")
     text = text.replace("Chi-square test: Chi-square test", "Chi-square test")
     text = re.sub(
+        r"Chi-square test with sparse-cell(?: warning)?\s+(?=[A-Z])",
+        "A chi-square test was used, and sparse expected cell counts were noted. ",
+        text,
+        flags=re.IGNORECASE,
+    )
+    text = re.sub(
         r":\s*(?:Welch's t-test|Chi-square test|Fisher's exact test)\.(?=\s|$)",
         ".",
         text,
@@ -503,6 +514,7 @@ def _clean_interpretation(value: Any, label_ctx: Optional[Dict[str, Any]] = None
     text = re.sub(r"\s*Interpret with caution:\s*-\s*", " ", text, flags=re.IGNORECASE)
     if sparse:
         caution = "This finding should be interpreted cautiously because some expected cell counts were below 5."
+        has_clean_sparse_clause = "sparse expected cell counts were noted" in text.lower()
         text = re.sub(
             r"This finding should be interpreted cautiously because some(?: expected cell counts were below 5)?\.?",
             " ",
@@ -528,7 +540,10 @@ def _clean_interpretation(value: Any, label_ctx: Optional[Dict[str, Any]] = None
         text = re.sub(r"\s+", " ", text).strip(" .")
         text = re.sub(r"\s*:\s*(?:Chi-square test|Fisher's exact test)\.?$", "", text, flags=re.IGNORECASE)
         stripped = text.rstrip(". ")
-        text = (f"{stripped}. {caution}" if stripped else caution).strip()
+        if has_clean_sparse_clause:
+            text = f"{stripped}." if stripped else ""
+        else:
+            text = (f"{stripped}. {caution}" if stripped else caution).strip()
     text = re.sub(r"^(.+?):\s+was ", r"\1 was ", text)
     text = re.sub(r"\s+", " ", text).strip()
     return _sanitize_thesis_claims(text)
@@ -2030,7 +2045,7 @@ def _tested_associations_table(blueprint: Dict[str, Any]) -> Optional[Dict[str, 
         "title": "Summary of tested associations",
         "columns": [
             "Predictor", "Test applied", "Test statistic", "p-value",
-            "Adjusted p-value", "Effect size", "Significance status",
+            "Adjusted p-value", "Effect size", "Significance status", "Notes",
         ],
         "rows": [[
             row.get("predictor") or "",
@@ -2040,6 +2055,7 @@ def _tested_associations_table(blueprint: Dict[str, Any]) -> Optional[Dict[str, 
             row.get("adjusted_p_value") or "-",
             row.get("effect_size") or "-",
             row.get("significance_status") or "",
+            row.get("notes_warnings") or "-",
         ] for row in rows],
         "interpretation": (
             "This table reports every completed predictor-versus-outcome association, including "
@@ -2269,7 +2285,7 @@ def generate_docx(
             doc, section, table_no, figure_no, label_ctx, include_optional_figures
         )
 
-    _add_heading(doc, "Section VI - Significant Findings Summary", 1)
+    _add_heading(doc, "Section VI - Summary of Tested Associations", 1)
     association_summary = _tested_associations_table(blueprint)
     if association_summary:
         table_no = _add_table_docx(doc, association_summary, table_no, label_ctx)
@@ -2513,7 +2529,7 @@ def generate_pdf(
         figure_no = _render_section_pdf(
             flow, section, figure_no, label_ctx, available_width, body, small, include_optional_figures
         )
-    flow.append(Paragraph("Section VI - Significant Findings Summary", h1))
+    flow.append(Paragraph("Section VI - Summary of Tested Associations", h1))
     association_summary = _tested_associations_table(blueprint)
     if association_summary:
         pdf_table, warning_notes = _pdf_table(association_summary, label_ctx, available_width)

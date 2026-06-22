@@ -145,6 +145,9 @@ def test_canonical_summary_and_adjusted_status() -> None:
     )
     assert canonical["predictor_b"]["significance_status"] == "Not significant after multiple-testing correction"
     assert canonical["predictor_c"]["significance_status"] == "Significant after multiple-testing correction"
+    assert canonical["predictor_a"]["notes_warnings"] == (
+        "Nominal before adjustment; not significant after correction."
+    )
 
 
 def test_section_vi_and_excel_report_all_associations() -> None:
@@ -154,6 +157,7 @@ def test_section_vi_and_excel_report_all_associations() -> None:
     assert "Predictor A" in docx_text and "Predictor B" in docx_text and "Predictor C" in docx_text
     assert "Nominally significant before adjustment" in docx_text
     assert "Significant Findings Highlight" in docx_text
+    assert "Notes" in docx_text
     assert "Add only after confirming predictors" not in docx_text
     assert "Run separately under the Correlation objective" not in docx_text
     assert "A multivariable model was not added because predictor selection was not confirmed." in docx_text
@@ -171,6 +175,71 @@ def test_section_vi_and_excel_report_all_associations() -> None:
         assert row[3] == association["p_value"]
         assert row[4] == association["adjusted_p_value"]
         assert row[5] == association["effect_size"]
+
+
+def test_nominal_egfr_and_marker_component_reporting() -> None:
+    tests = [
+        {
+            "id": "egfr",
+            "title": "EGFR vs p27 expression status: Chi-square test",
+            "analysis_family": "bivariate",
+            "test_type": "chi_square",
+            "actual_test_used": "Chi-square test",
+            "statistic": 4.1,
+            "dof": 1,
+            "p": 0.043,
+            "p_corrected": 0.081,
+            "correction_method": "Benjamini-Hochberg FDR",
+            "cramers_v": 0.19,
+            "note": "-",
+        },
+        {
+            "id": "marker_component",
+            "title": "Interpretation-site vs p27 expression status: Chi-square test with sparse-cell warning",
+            "analysis_family": "bivariate",
+            "test_type": "chi_square",
+            "actual_test_used": "Chi-square test",
+            "statistic": 5.2,
+            "dof": 2,
+            "p": 0.021,
+            "p_corrected": 0.042,
+            "cramers_v": 0.24,
+            "note": "This finding should be interpreted cautiously because some expected cell counts were below 5.",
+        },
+    ]
+    associations = results._tested_associations(tests, "p27 expression status")
+    blueprint = build_thesis_analysis_blueprint(
+        df_shape=(100, 3),
+        classifications=[
+            {"column": "p27 expression status", "detected_type": "nominal"},
+            {"column": "EGFR", "detected_type": "nominal"},
+            {"column": "Interpretation-site", "detected_type": "nominal"},
+        ],
+        assignment={"outcome": "p27 expression status"},
+        tests=tests,
+        tested_associations=associations,
+        session={
+            "study_type": "association",
+            "main_marker": "p27",
+            "main_outcome_concept": "p27 expression status",
+        },
+    )
+    assert [row["predictor"] for row in blueprint["tested_associations"]] == ["EGFR"]
+    assert any("Marker-component variables were summarized descriptively" in warning for warning in blueprint["warnings"])
+    egfr_interpretation = next(
+        table["interpretation"]
+        for section in blueprint["analysis_sections"] if section["section_id"] == "bivariate_associations"
+        for table in section["tables"] if "EGFR" in table["title"]
+    )
+    assert (
+        "EGFR was nominally significant before adjustment, but this did not remain significant "
+        "after Benjamini-Hochberg FDR correction."
+    ) in egfr_interpretation
+    text = _docx_text(chapter_v_export.generate_docx({"thesis_analysis_blueprint": blueprint, "tests": tests}))
+    assert "Chi-square test with sparse-cell Grade" not in text
+    assert "Chi-square test with sparse-cell The distribution" not in text
+    assert "Interpretation-site" not in text.split("Section VI - Summary of Tested Associations", 1)[1]
+    assert "Marker-component variables were summarized descriptively" in text
 
 
 def test_run_plan_projects_each_canonical_result_once() -> None:
@@ -240,6 +309,7 @@ def main() -> None:
     test_contingency_selection_policy()
     test_canonical_summary_and_adjusted_status()
     test_section_vi_and_excel_report_all_associations()
+    test_nominal_egfr_and_marker_component_reporting()
     test_run_plan_projects_each_canonical_result_once()
     print("Sigma association reporting policy verification passed.")
 

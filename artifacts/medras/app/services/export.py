@@ -388,6 +388,13 @@ def _excel_clinical_label(value: Any, variable: Any = "") -> str:
     key = _excel_var_key(variable)
     low = text.lower()
     compact = re.sub(r"\s+", "", low)
+    if "tumoursize" in key or "tumorsize" in key:
+        if re.search(
+            r"Ulceration\s+and\s*/\s*or\s+ipsilateral satellite nodules\s+and\s*/\s*or\s+(?:edema|oedema)",
+            text,
+            flags=re.IGNORECASE,
+        ):
+            return "Skin involvement / T4b features"
     recovered_fraction = _excel_recover_node_fraction(value, variable)
     if recovered_fraction:
         return recovered_fraction
@@ -451,6 +458,8 @@ def _excel_needs_clinical_display(variable: Any) -> bool:
         "nodal",
         "tumoursite",
         "tumorquadrant",
+        "tumoursize",
+        "tumorsize",
     })
     return key in clinical_keys or any(marker in key for marker in clinical_keys)
 
@@ -459,6 +468,12 @@ def _excel_display_value(value: Any, label_ctx: Dict[str, Any], variable: Any = 
     if value is None:
         return value
     text = html.unescape(str(value)).strip()
+    text = re.sub(
+        r"Ulceration\s+and\s*/\s*or\s+ipsilateral satellite nodules\s+and\s*/\s*or\s+(?:edema|oedema)[^;|:]*",
+        "Skin involvement / T4b features",
+        text,
+        flags=re.IGNORECASE,
+    )
     text = text.replace("Postive", "Positive")
     text = re.sub(r"\bAbse\b", "Absent", text, flags=re.IGNORECASE)
     text = re.sub(r"\bwelch[_\s-]*t[\s-]*test\b", "Welch's t-test", text, flags=re.IGNORECASE)

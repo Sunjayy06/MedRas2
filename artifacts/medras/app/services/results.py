@@ -1577,6 +1577,13 @@ def _tested_associations(test_results: List[Dict[str, Any]], outcome: Optional[s
                     predictor = right if outcome and left.strip() == outcome else left
                     break
             predictor = predictor.strip()
+        significance_status = _significance_status(raw_p, adjusted_p)
+        warning = _warning_text(test)
+        notes: List[str] = []
+        if "expected" in warning.lower() or "sparse" in warning.lower():
+            notes.append("Sparse expected cell counts; interpret cautiously.")
+        if significance_status.startswith("Nominally significant"):
+            notes.append("Nominal before adjustment; not significant after correction.")
         summaries.append({
             "source_result_id": str(test.get("id") or ""),
             "predictor": predictor,
@@ -1585,8 +1592,8 @@ def _tested_associations(test_results: List[Dict[str, Any]], outcome: Optional[s
             "p_value": _fmt_p(raw_p),
             "adjusted_p_value": _fmt_p(adjusted_p) if adjusted_p is not None else "-",
             "effect_size": _effect_text(test) or "-",
-            "significance_status": _significance_status(raw_p, adjusted_p),
-            "notes_warnings": _warning_text(test) or "-",
+            "significance_status": significance_status,
+            "notes_warnings": " ".join(notes) or "-",
             "p_numeric": raw_p,
             "p_corrected_numeric": adjusted_p,
         })
