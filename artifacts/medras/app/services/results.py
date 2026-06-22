@@ -385,45 +385,33 @@ def _kruskal_wallis(df, outcome, group) -> Dict[str, Any]:
 
 
 def _chi_square(df, outcome, group) -> Dict[str, Any]:
-    ct = pd.crosstab(df[outcome].astype(str), df[group].astype(str))
-    chi2, p, dof, expected = stats.chi2_contingency(ct.values)
-    n = ct.values.sum()
-    cramers_v = float(np.sqrt(chi2 / (n * (min(ct.shape) - 1)))) if n and min(ct.shape) > 1 else 0.0
-    rows = [
-        _row("χ² statistic", float(chi2)),
-        _row("Degrees of freedom", int(dof)),
-        _row("Cramér's V", cramers_v),
-        _row("p-value", _fmt_p(float(p))),
-    ]
-    if (expected < 5).any():
-        rows.append(_row("Note", "Some expected cells < 5; consider Fisher's exact."))
-    min_expected = float(expected.min()) if expected.size else None
-    note = (
-        "Some expected cells < 5; consider Fisher's exact."
-        if min_expected is not None and min_expected < 5
-        else f"Minimum expected count = {_fmt_num(min_expected)}."
-    )
-    narrative = (
-        f"A chi-square test of independence assessed the association between "
-        f"{outcome} and {group} (χ²({int(dof)}, N = {int(n)}) = "
-        f"{_fmt_num(float(chi2))}, {_fmt_p(float(p))}, Cramér's V = "
-        f"{_fmt_num(cramers_v)})."
-    )
-    return {
-        "rows": rows, "narrative": narrative, "p_value": float(p),
-        "effect_size": cramers_v, "effect_label": "Cramér's V",
-        "ci_lo": None, "ci_hi": None,
-        "test": "Chi-square test",
-        "statistic": float(chi2),
-        "dof": int(dof),
-        "cramers_v": cramers_v,
-        "min_expected": min_expected,
-        "note": note,
-        "observed_table": ct.values.tolist(),
-        "expected_table": expected.tolist(),
-        "row_labels": ct.index.astype(str).tolist(),
-        "col_labels": ct.columns.astype(str).tolist(),
-    }
+    result = run_chi_or_fisher(outcome, group, {}, df)
+    if result.get("error"):
+        return result
+    rows = [_row("Test used", result["actual_test_used"])]
+    if result["test_type"] == "fisher_exact":
+        rows.append(_row("Odds ratio", result.get("odds_ratio", result.get("statistic"))))
+    else:
+        rows.extend([
+            _row("χ² statistic", result.get("statistic")),
+            _row("Degrees of freedom", result.get("dof")),
+        ])
+    rows.extend([
+        _row("Cramér's V", result.get("cramers_v")),
+        _row("p-value", result.get("p_display")),
+    ])
+    if result.get("note") not in {None, "", "-"}:
+        rows.append(_row("Note", result["note"]))
+    result.update({
+        "rows": rows,
+        "narrative": result.get("interpretation"),
+        "p_value": result.get("p"),
+        "effect_size": result.get("cramers_v"),
+        "effect_label": "Cramér's V",
+        "ci_lo": None,
+        "ci_hi": None,
+    })
+    return result
 
 
 def _descriptive(df, outcome, _group) -> Dict[str, Any]:
@@ -1459,6 +1447,8 @@ def _statistic_text(test: Dict[str, Any]) -> str:
         label = "statistic"
         if "chi" in test_type:
             label = "chi-square"
+        elif "fisher" in test_type:
+            label = "odds ratio"
         elif "welch" in test_type or "ttest" in test_type or "t_test" in test_type:
             label = "t"
         elif "mann" in test_type:
@@ -1549,6 +1539,58 @@ def _significant_findings(test_results: List[Dict[str, Any]]) -> List[Dict[str, 
             "notes_warnings": _warning_text(test) or "-",
         })
     return findings
+
+
+def _significance_status(raw_p: Optional[float], adjusted_p: Optional[float]) -> str:
+    if raw_p is None:
+        return "Not evaluated"
+    if adjusted_p is not None:
+        if adjusted_p < 0.05:
+            return "Significant after multiple-testing correction"
+        if raw_p < 0.05:
+            return (
+                "Nominally significant before adjustment, not significant after "
+                "multiple-testing correction."
+            )
+        return "Not significant after multiple-testing correction"
+    return "Statistically significant" if raw_p < 0.05 else "Not statistically significant"
+
+
+def _tested_associations(test_results: List[Dict[str, Any]], outcome: Optional[str]) -> List[Dict[str, Any]]:
+    summaries: List[Dict[str, Any]] = []
+    for test in test_results:
+        if str(test.get("analysis_family") or "").lower() != "bivariate":
+            continue
+        raw_p = _result_raw_p_value(test)
+        if raw_p is None:
+            continue
+        adjusted_p = _result_adjusted_p_value(test)
+        variables = [str(value) for value in test.get("columns") or [] if value]
+        if len(variables) >= 2:
+            predictor = variables[1] if outcome and variables[0] == outcome else variables[0]
+        else:
+            title = str(test.get("title") or test.get("plan_name") or "Variable")
+            predictor = title.split(":", 1)[0]
+            for separator in (" vs ", " by "):
+                if separator in predictor:
+                    left, right = predictor.split(separator, 1)
+                    predictor = right if outcome and left.strip() == outcome else left
+                    break
+            predictor = predictor.strip()
+        summaries.append({
+            "source_result_id": str(test.get("id") or ""),
+            "predictor": predictor,
+            "test_applied": _test_used(test),
+            "test_statistic": _statistic_text(test) or "-",
+            "p_value": _fmt_p(raw_p),
+            "adjusted_p_value": _fmt_p(adjusted_p) if adjusted_p is not None else "-",
+            "effect_size": _effect_text(test) or "-",
+            "significance_status": _significance_status(raw_p, adjusted_p),
+            "notes_warnings": _warning_text(test) or "-",
+            "p_numeric": raw_p,
+            "p_corrected_numeric": adjusted_p,
+        })
+    return summaries
 
 
 def run_plan(
@@ -1735,7 +1777,11 @@ def run_plan(
                 elif actual_name.lower() in {"fisher's exact", "fisher exact"}:
                     actual_name = "Fisher's exact test"
                 warning_text = str(r.get("note") or r.get("warning") or "").lower()
-                sparse = "sparse" in warning_text or "expected counts below" in warning_text
+                sparse = (
+                    "sparse" in warning_text
+                    or "expected cell counts" in warning_text
+                    or (r.get("min_expected") is not None and float(r["min_expected"]) < 5)
+                )
                 if sparse and "chi-square" in actual_name.lower():
                     actual_name = "Chi-square test with sparse-cell warning"
                 r["title"] = (
@@ -1814,7 +1860,9 @@ def run_plan(
             }
         r.update({"id": t["id"], "title": t["title"]})
         # Tag with test_type so multiple-testing correction can find it.
-        r["test_type"] = _LEGACY_TEST_TYPE.get(t["id"])
+        r["test_type"] = r.get("test_type") or _LEGACY_TEST_TYPE.get(t["id"])
+        if t["id"] == "chi_square" and r.get("actual_test_used"):
+            r["title"] = f"{outcome} vs {group}: {r['actual_test_used']}"
         r["analysis_family"] = t.get("analysis_family", "bivariate")
         # Mirror p_value into 'p' so the correction helper picks it up.
         if r.get("p_value") is not None and r.get("p") is None:
@@ -1829,6 +1877,7 @@ def run_plan(
     for result in test_results:
         result["compact_summary"] = _compact_result_summary(result)
     significant_findings = _significant_findings(test_results)
+    tested_associations = _tested_associations(test_results, outcome)
 
     # Run graphs -------------------------------------------------------------
     graph_results: List[Dict[str, Any]] = []
@@ -1876,6 +1925,12 @@ def run_plan(
         methods_lines.append(
             "Categorical associations were tested using chi-square or Fisher's exact test as appropriate."
         )
+    if correction_info:
+        methods_lines.append(
+            f"Multiple-testing adjustment used the {correction_info['method']} method across "
+            f"{correction_info['n_tests']} inferential tests; adjusted p-values were used to "
+            "determine significance after correction."
+        )
     methods_lines.append("All tests are two-sided with α = 0.05.")
     methods_md = " ".join(methods_lines)
 
@@ -1915,6 +1970,7 @@ def run_plan(
         tests=test_results,
         graphs=graph_results,
         significant_findings=significant_findings,
+        tested_associations=tested_associations,
         methods_text=methods_md,
         results_narrative=results_md,
         session=session,
@@ -1929,6 +1985,7 @@ def run_plan(
         "plan_mismatch": plan_mismatch,
         "correction_info": correction_info,
         "significant_findings": significant_findings,
+        "tested_associations": tested_associations,
         "thesis_analysis_blueprint": thesis_blueprint,
         "summary": {
             "outcome": outcome,
@@ -2479,6 +2536,7 @@ def run_chi_or_fisher(col1, col2, session, df):
             else '-Infinity' if math.isinf(stat)
             else round(stat, 3)
         ),
+        'odds_ratio': float(odds_ratio) if test_type == 'fisher_exact' else None,
         'p': float(p),
         'p_display': fmt_p(float(p)),
         'dof': int(dof) if test_name != "Fisher's exact test" else None,
@@ -3143,7 +3201,7 @@ def nagelkerke_r2(result, n):
 # --- Multiple-testing correction (R8 baked in) -----------------------------
 INFERENTIAL_TEST_TYPES = {
     't_test_independent', 't_test_paired',
-    'welch_t_test', 'mann_whitney',
+    'welch_t_test', 'welch_ttest', 'mann_whitney',
     'wilcoxon', 'anova_oneway',
     'kruskal_wallis', 'friedman',
     'rm_anova', 'mixed_anova',
@@ -3258,35 +3316,34 @@ def _run_chi_or_fisher(
     """Chi-square with automatic fallback to Fisher's exact."""
     import scipy.stats as _ss
     sub = df[[predictor, outcome]].dropna()
+    sub = _normalise_categorical_association_data(sub, predictor, outcome, None)
     ct = pd.crosstab(sub[predictor].astype(str), sub[outcome].astype(str))
     if ct.empty or ct.shape[0] < 2 or ct.shape[1] < 2:
         return {"error": "Insufficient categories for chi-square."}
-    # Use Fisher if 2×2 or expected cells < 5
-    use_fisher = ct.shape == (2, 2)
-    if not use_fisher:
-        from scipy.stats.contingency import expected_freq
-        try:
-            exp = expected_freq(ct.values)
-            if (exp < 5).mean() > 0.2:
-                use_fisher = ct.shape == (2, 2)
-        except Exception:
-            pass
+    chi2_for_effect, _, _, expected = _ss.chi2_contingency(ct.values, correction=False)
+    sparse = bool(np.any(expected < 5))
+    use_fisher = ct.shape == (2, 2) and sparse
     try:
         if use_fisher and ct.shape == (2, 2):
             arr = ct.values.astype(float)
-            _, p = _ss.fisher_exact(arr)
-            stat = None
-            test_name = "Fisher's exact"
+            odds_ratio, p = _ss.fisher_exact(arr)
+            stat = float(odds_ratio)
+            test_name = "Fisher's exact test"
             df_val = None
+            note = "Fisher's exact test was used because some expected cell counts were below 5."
         else:
-            chi2, p, df_val, _ = _ss.chi2_contingency(ct)
+            chi2, p, df_val, _ = _ss.chi2_contingency(ct, correction=False)
             stat = float(chi2)
-            test_name = "Chi-square"
+            test_name = "Chi-square test"
             df_val = int(df_val)
+            note = (
+                "This finding should be interpreted cautiously because some expected cell counts were below 5."
+                if sparse else "-"
+            )
         # Cramér's V
         n = int(sub.shape[0])
-        if stat is not None and n > 0:
-            phi2 = stat / n
+        if n > 0:
+            phi2 = float(chi2_for_effect) / n
             r, k = ct.shape
             cramers_v = float(np.sqrt(phi2 / min(r - 1, k - 1))) if min(r - 1, k - 1) > 0 else None
         else:
@@ -3298,6 +3355,12 @@ def _run_chi_or_fisher(
             "p": float(p),
             "df": df_val,
             "cramers_v": cramers_v,
+            "min_expected": float(expected.min()),
+            "note": note,
+            "observed_table": ct.values.tolist(),
+            "expected_table": expected.tolist(),
+            "row_labels": ct.index.astype(str).tolist(),
+            "col_labels": ct.columns.astype(str).tolist(),
             "n": n,
         }
     except Exception as exc:
@@ -3522,11 +3585,12 @@ def _corr_interpretation(
         df_val = test_result.get("df")
         crv = test_result.get("cramers_v")
         effect_str = f", Cramér's V = {crv:.3f}" if crv is not None else ""
-        stat_str = (
-            f"{test_name}: χ² = {stat_val:.3f}, df = {df_val}, p = {fmt_p(p)}{effect_str}"
-            if stat_val is not None
-            else f"{test_name}: p = {fmt_p(p)}{effect_str}"
-        )
+        if "fisher" in str(test_name).lower() and stat_val is not None:
+            stat_str = f"{test_name}: odds ratio = {stat_val:.3f}, p = {fmt_p(p)}{effect_str}"
+        elif stat_val is not None:
+            stat_str = f"{test_name}: χ² = {stat_val:.3f}, df = {df_val}, p = {fmt_p(p)}{effect_str}"
+        else:
+            stat_str = f"{test_name}: p = {fmt_p(p)}{effect_str}"
         text = (
             f"Of the {n_all} patients studied"
             + (f", {outcome_desc}" if outcome_desc else "")

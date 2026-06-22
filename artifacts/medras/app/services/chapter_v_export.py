@@ -1969,7 +1969,7 @@ def _add_summary_docx(doc: Document, blueprint: Dict[str, Any], results: Dict[st
 
 
 def _main_sections(blueprint: Dict[str, Any]) -> List[Dict[str, Any]]:
-    skipped = {"significant_findings_summary"}
+    skipped = {"tested_associations_summary", "significant_findings_summary"}
     return [
         section for section in blueprint.get("analysis_sections") or []
         if isinstance(section, dict)
@@ -1996,6 +1996,57 @@ def _section_export_title(section_id: str, fallback: Any, label_ctx: Dict[str, A
         "other_analyses": "Section V - Statistical Analyses",
     }
     return titles.get(section_id, _text(fallback) or "Results")
+
+
+def _user_facing_warning(value: Any) -> str:
+    text = re.sub(r"\s+", " ", _text(value)).strip(" .")
+    lower = text.lower()
+    if not text:
+        return ""
+    if "add only after confirming predictors" in lower:
+        return "A multivariable model was not added because predictor selection was not confirmed."
+    if "run separately under the correlation objective" in lower:
+        return "Correlation analysis was not included in the selected analysis objective."
+    if "duplicate" in lower and "predictor" in lower:
+        return "Some predictor labels appeared duplicated after cleaning; category grouping should be reviewed."
+    if not re.search(r"[.!?]$", text):
+        text += "."
+    return text
+
+
+def _unavailable_warning(item: Any) -> str:
+    if isinstance(item, dict):
+        text = f"{_text(item.get('title') or item.get('analysis') or 'Analysis')}: {_text(item.get('reason'))}"
+    else:
+        text = _text(item)
+    return _user_facing_warning(text)
+
+
+def _tested_associations_table(blueprint: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    rows = [row for row in blueprint.get("tested_associations") or [] if isinstance(row, dict)]
+    if not rows:
+        return None
+    return {
+        "title": "Summary of tested associations",
+        "columns": [
+            "Predictor", "Test applied", "Test statistic", "p-value",
+            "Adjusted p-value", "Effect size", "Significance status",
+        ],
+        "rows": [[
+            row.get("predictor") or "",
+            row.get("test_applied") or "",
+            row.get("test_statistic") or "-",
+            row.get("p_value") or "-",
+            row.get("adjusted_p_value") or "-",
+            row.get("effect_size") or "-",
+            row.get("significance_status") or "",
+        ] for row in rows],
+        "interpretation": (
+            "This table reports every completed predictor-versus-outcome association, including "
+            "non-significant and nominally significant results."
+        ),
+        "warnings": [],
+    }
 
 
 def _apply_polish_overrides(
@@ -2096,13 +2147,17 @@ def _add_warnings_docx(doc: Document, blueprint: Dict[str, Any]) -> None:
     if not warnings and not unavailable:
         _plain_docx_text(doc, "No major thesis-reporting cautions were recorded.")
         return
+    rendered = set()
     for warning in warnings:
-        _plain_docx_text(doc, _text(warning), style="List Bullet")
+        cleaned = _user_facing_warning(warning)
+        if cleaned and cleaned not in rendered:
+            _plain_docx_text(doc, cleaned, style="List Bullet")
+            rendered.add(cleaned)
     for item in unavailable:
-        if isinstance(item, dict):
-            _plain_docx_text(doc, f"{_text(item.get('analysis')) or 'Analysis'}: {_text(item.get('reason'))}", style="List Bullet")
-        else:
-            _plain_docx_text(doc, _text(item), style="List Bullet")
+        cleaned = _unavailable_warning(item)
+        if cleaned and cleaned not in rendered:
+            _plain_docx_text(doc, cleaned, style="List Bullet")
+            rendered.add(cleaned)
     _plain_docx_text(
         doc,
         "Associations should not be interpreted as causal effects. Independent prognostic value should only be claimed when an adjusted model was actually performed.",
@@ -2215,8 +2270,14 @@ def generate_docx(
         )
 
     _add_heading(doc, "Section VI - Significant Findings Summary", 1)
+    association_summary = _tested_associations_table(blueprint)
+    if association_summary:
+        table_no = _add_table_docx(doc, association_summary, table_no, label_ctx)
+    else:
+        _plain_docx_text(doc, "No completed predictor-versus-outcome associations were available.")
     findings = list(blueprint.get("significant_findings") or [])
     if findings:
+        _add_heading(doc, "Significant Findings Highlight", 2)
         sig_table = {
             "title": "Final thesis significant findings",
             "columns": [
@@ -2453,7 +2514,18 @@ def generate_pdf(
             flow, section, figure_no, label_ctx, available_width, body, small, include_optional_figures
         )
     flow.append(Paragraph("Section VI - Significant Findings Summary", h1))
+    association_summary = _tested_associations_table(blueprint)
+    if association_summary:
+        pdf_table, warning_notes = _pdf_table(association_summary, label_ctx, available_width)
+        flow.append(pdf_table)
+        for warning in warning_notes:
+            cleaned_warning = _clean_interpretation(warning, label_ctx)
+            if cleaned_warning:
+                flow.append(Paragraph(_pdf_escape(cleaned_warning), small))
+    else:
+        flow.append(Paragraph("No completed predictor-versus-outcome associations were available.", body))
     if blueprint.get("significant_findings"):
+        flow.append(Paragraph("Significant Findings Highlight", h2))
         pdf_table, warning_notes = _pdf_table({
             "columns": [
                 "Variable / parameter", "Key finding", "Test statistic", "p-value",
@@ -2485,10 +2557,17 @@ def generate_pdf(
     unavailable = list(blueprint.get("unavailable_or_recommended_only") or [])
     if not warnings and not unavailable:
         flow.append(Paragraph("No major thesis-reporting cautions were recorded.", body))
+    rendered_warnings = set()
     for warning in warnings:
-        flow.append(Paragraph(f"• {_pdf_escape(warning)}", body))
+        cleaned = _user_facing_warning(warning)
+        if cleaned and cleaned not in rendered_warnings:
+            flow.append(Paragraph(f"• {_pdf_escape(cleaned)}", body))
+            rendered_warnings.add(cleaned)
     for item in unavailable:
-        flow.append(Paragraph(f"• {_pdf_escape(item)}", body))
+        cleaned = _unavailable_warning(item)
+        if cleaned and cleaned not in rendered_warnings:
+            flow.append(Paragraph(f"• {_pdf_escape(cleaned)}", body))
+            rendered_warnings.add(cleaned)
     flow.append(Paragraph("Associations should not be interpreted as causal effects. Independent prognostic value should only be claimed when an adjusted model was actually performed.", body))
     doc.build(flow)
     return out.getvalue()

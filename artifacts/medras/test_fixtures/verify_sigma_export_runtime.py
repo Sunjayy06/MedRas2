@@ -224,7 +224,7 @@ async def _verify_endpoints():
             "cleaned_processed_dataset", "variable_classification",
             "cleaning_decisions", "category_merges", "missing_data_decisions",
             "excluded_variables", "analysis_summary", "significant_findings",
-            "detailed_results", "Table 1", "Data Cleaning Log", "Narrative",
+            "tested_associations", "detailed_results", "Table 1", "Data Cleaning Log", "Narrative",
         } <= set(wb.sheetnames)
         assert list(next(wb["cleaned_processed_dataset"].iter_rows(values_only=True))) == ["PR", "ER"]
         result_sheets = [
@@ -234,7 +234,7 @@ async def _verify_endpoints():
                 "cleaned_processed_dataset", "variable_classification",
                 "cleaning_decisions", "category_merges", "missing_data_decisions",
                 "excluded_variables", "analysis_summary", "significant_findings",
-                "detailed_results",
+                "tested_associations", "detailed_results",
             }
         ]
         assert result_sheets

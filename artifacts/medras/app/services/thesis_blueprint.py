@@ -202,6 +202,73 @@ def _significance_p_value(test: Dict[str, Any]) -> Optional[float]:
     return None
 
 
+def _report_significance_status(raw_p: Optional[float], adjusted_p: Optional[float]) -> str:
+    if raw_p is None:
+        return "Not evaluated"
+    if adjusted_p is not None:
+        if adjusted_p < 0.05:
+            return "Significant after multiple-testing correction"
+        if raw_p < 0.05:
+            return (
+                "Nominally significant before adjustment, not significant after "
+                "multiple-testing correction."
+            )
+        return "Not significant after multiple-testing correction"
+    return "Statistically significant" if raw_p < 0.05 else "Not statistically significant"
+
+
+def _clean_report_warning(value: Any) -> str:
+    text = re.sub(r"\s+", " ", str(value or "")).strip(" .")
+    lower = text.lower()
+    if not text:
+        return ""
+    if "add only after confirming predictors" in lower:
+        return "A multivariable model was not added because predictor selection was not confirmed."
+    if "run separately under the correlation objective" in lower:
+        return "Correlation analysis was not included in the selected analysis objective."
+    if "duplicate" in lower and "predictor" in lower:
+        return "Some predictor labels appeared duplicated after cleaning; category grouping should be reviewed."
+    if not re.search(r"[.!?]$", text):
+        text += "."
+    return text
+
+
+def _fallback_tested_associations(
+    tests: List[Dict[str, Any]], outcome: Optional[str]
+) -> List[Dict[str, Any]]:
+    rows: List[Dict[str, Any]] = []
+    for test in tests:
+        if _test_family(test) != "bivariate":
+            continue
+        raw_p = _p_value(test)
+        if raw_p is None:
+            continue
+        adjusted_p = None
+        for key in ("p_corrected", "adjusted_p_value", "p_adjusted", "q_value"):
+            try:
+                candidate = float(test.get(key))
+            except (TypeError, ValueError):
+                continue
+            if candidate == candidate:
+                adjusted_p = candidate
+                break
+        predictor, _ = _result_pair(test, outcome)
+        rows.append({
+            "source_result_id": str(test.get("id") or ""),
+            "predictor": predictor,
+            "test_applied": _test_applied(test),
+            "test_statistic": _statistic_for_table(test),
+            "p_value": _p_display(test),
+            "adjusted_p_value": _p_display(test, adjusted=True),
+            "effect_size": _effect_for_table(test),
+            "significance_status": _report_significance_status(raw_p, adjusted_p),
+            "notes_warnings": _warning_for_table(test),
+            "p_numeric": raw_p,
+            "p_corrected_numeric": adjusted_p,
+        })
+    return rows
+
+
 def _test_family(test: Dict[str, Any]) -> str:
     family = str(test.get("analysis_family") or "").lower()
     test_type = str(test.get("test_type") or "").lower()
@@ -862,6 +929,7 @@ def build_thesis_analysis_blueprint(
     tests: Optional[List[Dict[str, Any]]] = None,
     graphs: Optional[List[Dict[str, Any]]] = None,
     significant_findings: Optional[List[Dict[str, Any]]] = None,
+    tested_associations: Optional[List[Dict[str, Any]]] = None,
     methods_text: str = "",
     results_narrative: str = "",
     session: Optional[Dict[str, Any]] = None,
@@ -906,7 +974,9 @@ def build_thesis_analysis_blueprint(
     for suggestion in plan.get("suggestions") or []:
         warning = suggestion.get("warning") or suggestion.get("title")
         if warning:
-            warnings.append(str(warning))
+            cleaned_warning = _clean_report_warning(warning)
+            if cleaned_warning:
+                warnings.append(cleaned_warning)
     eligible_count = int(plan_debug.get("eligible_predictor_count") or 0)
     bivariate_count = int(plan_debug.get("bivariate_test_count") or 0)
     descriptive_only = any(str(test.get("id")) == "descriptive_only" for test in tests)
@@ -1091,6 +1161,57 @@ def build_thesis_analysis_blueprint(
         displayed["key_finding"] = _deterministic_key_finding(displayed, label_ctx)
         thesis_findings.append(displayed)
 
+    canonical_associations = tested_associations or _fallback_tested_associations(tests, outcome)
+    displayed_associations: List[Dict[str, Any]] = []
+    for association in canonical_associations:
+        displayed = dict(association)
+        for key in (
+            "predictor", "test_applied", "test_statistic", "effect_size",
+            "significance_status", "notes_warnings",
+        ):
+            displayed[key] = _display_text(displayed.get(key) or "", label_ctx)
+        displayed_associations.append(displayed)
+
+    if displayed_associations:
+        association_summary_table = {
+            "table_id": "tested_associations_summary",
+            "title": "Summary of tested associations",
+            "table_type": "tested_associations_summary",
+            "columns": [
+                "Predictor", "Test applied", "Test statistic", "p-value",
+                "Adjusted p-value", "Effect size", "Significance status",
+            ],
+            "rows": [[
+                row.get("predictor") or "",
+                row.get("test_applied") or "",
+                row.get("test_statistic") or "-",
+                row.get("p_value") or "-",
+                row.get("adjusted_p_value") or "-",
+                row.get("effect_size") or "-",
+                row.get("significance_status") or "",
+            ] for row in displayed_associations],
+            "source_variables": [row.get("predictor") for row in displayed_associations],
+            "source_test_ids": [row.get("source_result_id") for row in displayed_associations],
+            "interpretation": (
+                "All completed predictor-versus-outcome tests are shown, including non-significant "
+                "and nominally significant results."
+            ),
+            "thesis_ready": True,
+            "priority": "thesis_ready_primary",
+            "optional": False,
+            "detailed_report_only": False,
+            "warnings": [],
+        }
+        association_summary_section = _section_template(
+            "tested_associations_summary",
+            "Summary of Tested Associations",
+            "Report every completed predictor-versus-outcome association transparently.",
+        )
+        association_summary_section["tables"].append(association_summary_table)
+        association_summary_section["interpretation"] = association_summary_table["interpretation"]
+        sections.append(association_summary_section)
+        all_tables.append(association_summary_table)
+
     if thesis_findings:
         rows = [
             [
@@ -1210,8 +1331,11 @@ def build_thesis_analysis_blueprint(
         "tables": all_tables,
         "figures": all_figures,
         "significant_findings": thesis_findings,
+        "tested_associations": displayed_associations,
         "methods_text": _display_text(methods_text, label_ctx),
         "results_narrative": _display_text(results_narrative, label_ctx),
-        "warnings": list(dict.fromkeys(warnings)),
+        "warnings": list(dict.fromkeys(
+            warning for warning in (_clean_report_warning(item) for item in warnings) if warning
+        )),
         "unavailable_or_recommended_only": unavailable,
     }

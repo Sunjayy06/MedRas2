@@ -2139,6 +2139,24 @@ def to_xlsx(entry, results: Dict[str, Any], assignment: Dict[str, Any]) -> bytes
     for warning in blueprint.get("warnings") or []:
         ws.append(["Warning", _export_cell(warning)])
 
+    ws = wb.create_sheet("tested_associations")
+    ws.append([
+        "Predictor", "Test applied", "Test statistic", "p-value",
+        "Adjusted p-value", "Effect size", "Significance status", "Notes/warnings",
+    ])
+    for row in blueprint.get("tested_associations") or results.get("tested_associations") or []:
+        if isinstance(row, dict):
+            ws.append([
+                _excel_display_value(row.get("predictor", ""), label_ctx),
+                _excel_display_value(row.get("test_applied", ""), label_ctx),
+                _excel_display_value(row.get("test_statistic", ""), label_ctx),
+                _excel_display_value(row.get("p_value", ""), label_ctx),
+                _excel_display_value(row.get("adjusted_p_value", ""), label_ctx),
+                _excel_display_value(row.get("effect_size", ""), label_ctx),
+                _excel_display_value(row.get("significance_status", ""), label_ctx),
+                _excel_display_value(row.get("notes_warnings", ""), label_ctx),
+            ])
+
     ws = wb.create_sheet("significant_findings")
     sig_headers = [
         "Variable / parameter", "Key finding", "Test statistic", "p-value",
