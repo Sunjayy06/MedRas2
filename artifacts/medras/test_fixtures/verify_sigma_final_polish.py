@@ -422,6 +422,25 @@ def test_association_figures_precede_tables() -> None:
         assert text.index(caption) < first_assoc_table, f"{caption} must appear before association tables"
 
 
+def test_detailed_association_tables_heading_separates_figures_from_tables() -> None:
+    """Issue 5 (thesis-readability polish, batch 2): the detailed
+    association tables in Section V should sit under a clear 'Detailed
+    Association Tables' subheading after the figures + concise
+    interpretation, instead of running on directly from the figures
+    without any visual separation."""
+    results, _, _ = _build_fixture()
+    text = _docx_paragraph_text(chapter_v_export.generate_docx(results))
+    assert "Detailed Association Tables" in text
+    heading_idx = text.index("Detailed Association Tables")
+    last_figure_idx = text.index("p27 expression status by AR")
+    first_table_idx = text.index("Table ", heading_idx)
+    assert last_figure_idx < heading_idx < first_table_idx
+
+    pdf_bytes = chapter_v_export.generate_pdf(results)
+    pdf_text = _pdf_text(pdf_bytes)
+    assert "Detailed Association Tables" in pdf_text
+
+
 def test_association_tables_aggregate_display_categories() -> None:
     """Generated association tables must aggregate duplicate display categories."""
     results, _, _ = _build_fixture()
@@ -1333,6 +1352,82 @@ def test_results_synthesis_paragraph_present_and_clean() -> None:
     assert isinstance(pdf_bytes, bytes) and len(pdf_bytes) > 0
 
 
+def test_results_synthesis_uses_doctor_facing_predictor_labels() -> None:
+    """Issue 1 (thesis-readability polish): predictor names pulled into the
+    Results Synthesis significant/non-significant sentences must be
+    doctor-facing labels, not raw/abbreviated internal names such as
+    'pT', 'Ki67', 'Her2Neu', 'Tx infiltrating L', or the derived node
+    variable names."""
+    tested_associations = [
+        {
+            "source_result_id": "pt", "predictor": "pT", "test_applied": "Chi-square test",
+            "test_statistic": "chi-square = 4.10", "p_value": "p = 0.043", "adjusted_p_value": "p = 0.300",
+            "effect_size": "Cramér's V = 0.19", "significance_status": "Not significant after multiple-testing correction",
+            "notes_warnings": "-",
+        },
+        {
+            "source_result_id": "ki67", "predictor": "Ki67", "test_applied": "Chi-square test",
+            "test_statistic": "chi-square = 12.00", "p_value": "p < 0.001", "adjusted_p_value": "p = 0.005",
+            "effect_size": "Cramér's V = 0.55", "significance_status": "Significant after multiple-testing correction",
+            "notes_warnings": "-",
+        },
+        {
+            "source_result_id": "her2neu", "predictor": "Her2Neu", "test_applied": "Chi-square test",
+            "test_statistic": "chi-square = 1.10", "p_value": "p = 0.500", "adjusted_p_value": "p = 0.800",
+            "effect_size": "Cramér's V = 0.05", "significance_status": "Not significant after multiple-testing correction",
+            "notes_warnings": "-",
+        },
+        {
+            "source_result_id": "til", "predictor": "Tx infiltrating L", "test_applied": "Chi-square test",
+            "test_statistic": "chi-square = 0.90", "p_value": "p = 0.600", "adjusted_p_value": "p = 0.850",
+            "effect_size": "Cramér's V = 0.04", "significance_status": "Not significant after multiple-testing correction",
+            "notes_warnings": "-",
+        },
+        {
+            "source_result_id": "node_ratio", "predictor": "node_ratio", "test_applied": "Welch's t-test",
+            "test_statistic": "t = -0.40", "p_value": "p = 0.700", "adjusted_p_value": "p = 0.900",
+            "effect_size": "Cohen's d = -0.10", "significance_status": "Not significant after multiple-testing correction",
+            "notes_warnings": "-",
+        },
+    ]
+    blueprint = build_thesis_analysis_blueprint(
+        df_shape=(116, 6),
+        classifications=[
+            {"column": "Positive/ Negative", "detected_type": "nominal"},
+            {"column": "pT", "detected_type": "ordinal"},
+            {"column": "Ki67", "detected_type": "nominal"},
+            {"column": "Her2Neu", "detected_type": "ordinal"},
+            {"column": "Tx infiltrating L", "detected_type": "nominal"},
+            {"column": "node_ratio", "detected_type": "scale"},
+        ],
+        assignment={"outcome": "Positive/ Negative"},
+        tests=[],
+        tested_associations=tested_associations,
+        methods_text="Multiple-testing adjustment used the Benjamini-Hochberg FDR method across 24 inferential tests.",
+        session={
+            "study_type": "association", "domain_profile": "breast_pathology",
+            "main_marker": "p27", "main_outcome_concept": "p27 expression status",
+        },
+    )
+    synthesis = blueprint.get("results_synthesis") or ""
+    for raw in ("pT", "Ki67", "Her2Neu", "Tx infiltrating L", "positive_nodes", "total_nodes", "node_ratio"):
+        assert raw not in synthesis, f"raw label '{raw}' leaked into results synthesis: {synthesis!r}"
+    assert "Pathological T stage" in synthesis
+    assert "Ki-67" in synthesis
+    assert "HER2" in synthesis
+    assert "Tumour-infiltrating lymphocytes" in synthesis
+    assert "Node ratio" in synthesis
+
+    docx_text = _docx_text(chapter_v_export.generate_docx({"thesis_analysis_blueprint": blueprint, "tests": []}))
+    for raw in ("pT", "Ki67", "Her2Neu", "positive_nodes", "total_nodes", "node_ratio"):
+        assert re.search(rf"\b{re.escape(raw)}\b", docx_text) is None, f"raw label '{raw}' leaked into Word export"
+    assert "Tx infiltrating L" not in docx_text
+    assert "Tx Infiltrating L" not in docx_text
+
+    pdf_bytes = chapter_v_export.generate_pdf({"thesis_analysis_blueprint": blueprint, "tests": []})
+    assert isinstance(pdf_bytes, bytes) and len(pdf_bytes) > 0
+
+
 def main() -> None:
     test_age_baseline_min_max()
     print("  [ok] Age baseline min/max")
@@ -1351,6 +1446,9 @@ def main() -> None:
 
     test_association_figures_precede_tables()
     print("  [ok] Core association figures appear before association tables")
+
+    test_detailed_association_tables_heading_separates_figures_from_tables()
+    print("  [ok] 'Detailed Association Tables' heading separates figures from tables in Word/PDF")
 
     test_association_tables_aggregate_display_categories()
     print("  [ok] Association tables aggregate cleaned display categories")
@@ -1453,6 +1551,9 @@ def main() -> None:
 
     test_results_synthesis_paragraph_present_and_clean()
     print("  [ok] Results Synthesis paragraph present, deterministic, and forbidden-wording-free")
+
+    test_results_synthesis_uses_doctor_facing_predictor_labels()
+    print("  [ok] Results Synthesis uses doctor-facing predictor labels, no raw/internal names")
 
     print("\nSigma final polish verification passed.")
 

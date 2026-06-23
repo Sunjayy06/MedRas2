@@ -103,6 +103,11 @@ def _clean_variable_label(value: Any) -> str:
     text = re.sub(r"\bTx\s+infiltrating\s+L\b", "Tumour-infiltrating lymphocytes", text, flags=re.IGNORECASE)
     text = re.sub(r"\bTumou?r site\s*/\s*quadrant\b", "Tumour quadrant", text, flags=re.IGNORECASE)
     text = re.sub(r"\bTumou?r site\b", "Tumour quadrant", text, flags=re.IGNORECASE)
+    text = re.sub(
+        r"\bUpfront\s*/?\s*(?:vs\.?|versus)?\s*post[\s-]*chemo(?:therapy)?\b",
+        "Treatment timing / upfront versus post-chemotherapy status",
+        text, flags=re.IGNORECASE,
+    )
     return text
 
 
@@ -458,6 +463,12 @@ def _expand_export_tables(tables: List[Dict[str, Any]], label_ctx: Dict[str, Any
 
 BASELINE_TERMS = ("age", "sex", "gender", "laterality", "side", "group", "cohort")
 
+_PERCENTAGE_DENOMINATOR_NOTE = (
+    "Percentages in detailed association tables are calculated within predictor categories "
+    "unless otherwise stated. Percentages in the Significant Findings Highlight describe "
+    "marker/category distribution within p27 expression groups."
+)
+
 DESCRIPTIVE_TABLE_TYPES = {
     "descriptive_table",
     "domain_profile_descriptive_table",
@@ -695,6 +706,31 @@ def _build_categorical_rows(
     return rows
 
 
+_GENERIC_DESCRIPTIVE_TITLES = {
+    "baseline and study characteristics",
+    "descriptive findings",
+    "continuous descriptive findings",
+    "categorical descriptive findings",
+    "other pathology characteristics",
+    "other immunophenotype characteristics",
+}
+
+
+def _specific_or_generic_title(base_title: str, variables: List[str], fallback: str) -> str:
+    """When a descriptive table's title is one of the known generic
+    catch-all titles (e.g. 'Baseline and study characteristics') and the
+    table describes exactly one variable, replace it with a specific
+    '<Variable> distribution' title (e.g. 'Age distribution',
+    'Laterality distribution') instead of letting Table 1 and Table 2
+    share the same vague base title. Already-specific titles (set by the
+    domain-profile concept classifiers) are left untouched."""
+    base = _text(base_title).strip()
+    unique = list(dict.fromkeys(_text(var) for var in variables if _text(var)))
+    if base.lower() in _GENERIC_DESCRIPTIVE_TITLES and len(unique) == 1:
+        return f"{unique[0]} distribution"
+    return base or fallback
+
+
 def _descriptive_export_table(table: Dict[str, Any], label_ctx: Dict[str, Any]) -> Any:
     if str(table.get("table_type") or "") not in DESCRIPTIVE_TABLE_TYPES:
         return table
@@ -743,12 +779,18 @@ def _descriptive_export_table(table: Dict[str, Any], label_ctx: Dict[str, Any]) 
         continuous = deepcopy(table)
         continuous["columns"] = ["Parameter", "n", "Mean ± SD", "Median", "Minimum", "Maximum", "Missing n (%)"]
         continuous["rows"] = continuous_rows
-        continuous["title"] = _clean_table_title(continuous.get("title") or "Continuous descriptive findings")
+        continuous["title"] = _specific_or_generic_title(
+            _clean_table_title(continuous.get("title")), [row[0] for row in continuous_rows],
+            "Continuous descriptive findings",
+        )
         continuous["interpretation"] = polish or _descriptive_table_interpretation(continuous, label_ctx)
         categorical = deepcopy(table)
         categorical["columns"] = ["Parameter", "Category", "n", "%"]
         categorical["rows"] = _build_categorical_rows(categorical_order, categorical_counts, concept)
-        categorical["title"] = _clean_table_title(categorical.get("title") or "Categorical descriptive findings")
+        categorical["title"] = _specific_or_generic_title(
+            _clean_table_title(categorical.get("title")), [key[0] for key in categorical_order],
+            "Categorical descriptive findings",
+        )
         categorical["interpretation"] = polish or _descriptive_table_interpretation(categorical, label_ctx)
         for item in (continuous, categorical):
             item.pop("headers", None)
@@ -756,11 +798,15 @@ def _descriptive_export_table(table: Dict[str, Any], label_ctx: Dict[str, Any]) 
     if continuous_rows and not categorical_counts:
         clone["columns"] = ["Parameter", "n", "Mean ± SD", "Median", "Minimum", "Maximum", "Missing n (%)"]
         clone["rows"] = continuous_rows
+        title_variables = [row[0] for row in continuous_rows]
     else:
         clone["columns"] = ["Parameter", "Category", "n", "%"]
         clone["rows"] = _build_categorical_rows(categorical_order, categorical_counts, concept)
+        title_variables = [key[0] for key in categorical_order]
     clone.pop("headers", None)
-    clone["title"] = _clean_table_title(clone.get("title") or "Descriptive findings")
+    clone["title"] = _specific_or_generic_title(
+        _clean_table_title(clone.get("title")), title_variables, "Descriptive findings"
+    )
     clone["interpretation"] = polish or _descriptive_table_interpretation(clone, label_ctx)
     return clone
 
@@ -1989,6 +2035,8 @@ def _render_section_docx(
             if next_no != figure_no:
                 figure_no = next_no
                 used_figures.add(figure_id)
+        if tables:
+            _add_heading(doc, "Detailed Association Tables", 2)
     for table in tables:
         matched_rendered_figure = section_id == "bivariate_associations" and any(
             _text(figure.get("figure_id") or figure.get("title")) in used_figures
@@ -2096,9 +2144,12 @@ def _user_facing_warning(value: Any) -> str:
     if not text:
         return ""
     if "add only after confirming predictors" in lower:
-        return "A multivariable model was not added because predictor selection was not confirmed."
+        # Objective-routing/implementation detail: not clinically actionable
+        # for a thesis reader. Keep out of main Word/PDF; raw text remains
+        # in the Excel "Data Cleaning Log" audit sheet.
+        return ""
     if "run separately under the correlation objective" in lower:
-        return "Correlation analysis was not included in the selected analysis objective."
+        return ""
     if "duplicate" in lower and "predictor" in lower:
         # A non-specific duplicate-predictor-labels warning reaching this far
         # (the blueprint-level cleanup normally already makes it specific or
@@ -2379,6 +2430,9 @@ def generate_docx(
             doc, section, table_no, figure_no, label_ctx, include_optional_figures
         )
 
+    if inferential_sections:
+        _plain_docx_text(doc, _PERCENTAGE_DENOMINATOR_NOTE)
+
     _add_heading(doc, "Section VI - Summary of Tested Associations", 1)
     association_summary = _tested_associations_table(blueprint)
     if association_summary:
@@ -2414,7 +2468,7 @@ def generate_docx(
     else:
         _plain_docx_text(doc, "No final thesis significant findings were identified among the completed tests.")
 
-    results_synthesis = str(blueprint.get("results_synthesis") or "").strip()
+    results_synthesis = _clean_interpretation(blueprint.get("results_synthesis"), label_ctx)
     if results_synthesis:
         _add_heading(doc, "Results Synthesis", 2)
         _plain_docx_text(doc, results_synthesis)
@@ -2483,6 +2537,7 @@ def _render_section_pdf(
     small,
     include_optional_figures: bool = False,
     table_no: int = 1,
+    h2: Any = None,
 ) -> Tuple[int, int]:
     section_id = str(section.get("section_id") or "")
     figures = [
@@ -2502,6 +2557,8 @@ def _render_section_pdf(
             if next_no != figure_no:
                 figure_no = next_no
                 used_figures.add(figure_id)
+        if tables and h2 is not None:
+            flow.append(Paragraph("Detailed Association Tables", h2))
     for table in tables:
         matched_rendered_figure = section_id == "bivariate_associations" and any(
             _text(figure.get("figure_id") or figure.get("title")) in used_figures
@@ -2633,15 +2690,18 @@ def generate_pdf(
         )
 
     inferential_ids = {"bivariate_associations", "correlation_analysis", "regression_adjusted_analysis", "diagnostic_accuracy", "reliability_agreement", "survival_analysis", "repeated_measures", "other_analyses"}
-    for section in [section for section in main_sections if section.get("section_id") in inferential_ids]:
+    pdf_inferential_sections = [section for section in main_sections if section.get("section_id") in inferential_ids]
+    for section in pdf_inferential_sections:
         flow.append(Paragraph(_pdf_escape(_section_export_title(str(section.get("section_id") or ""), section.get("title"), label_ctx)), h1))
         intro = _section_intro(section, label_ctx, polish_overrides)
         if intro:
             flow.append(Paragraph(_pdf_escape(intro), body))
         figure_no, table_no = _render_section_pdf(
             flow, section, figure_no, label_ctx, available_width, body, small, include_optional_figures,
-            table_no=table_no,
+            table_no=table_no, h2=h2,
         )
+    if pdf_inferential_sections:
+        flow.append(Paragraph(_pdf_escape(_PERCENTAGE_DENOMINATOR_NOTE), small))
     flow.append(Paragraph("Section VI - Summary of Tested Associations", h1))
     association_summary = _tested_associations_table(blueprint)
     if association_summary:
@@ -2685,7 +2745,7 @@ def generate_pdf(
                 flow.append(Paragraph(_pdf_escape(cleaned_warning), small))
     else:
         flow.append(Paragraph("No final thesis significant findings were identified among the completed tests.", body))
-    results_synthesis = str(blueprint.get("results_synthesis") or "").strip()
+    results_synthesis = _clean_interpretation(blueprint.get("results_synthesis"), label_ctx)
     if results_synthesis:
         flow.append(Paragraph("Results Synthesis", h2))
         flow.append(Paragraph(_pdf_escape(results_synthesis), body))

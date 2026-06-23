@@ -161,8 +161,12 @@ def test_section_vi_and_excel_report_all_associations() -> None:
     assert "Notes" in docx_text
     assert "Add only after confirming predictors" not in docx_text
     assert "Run separately under the Correlation objective" not in docx_text
-    assert "A multivariable model was not added because predictor selection was not confirmed." in docx_text
-    assert "Correlation analysis was not included in the selected analysis objective." in docx_text
+    # Issue 4 (thesis-readability polish, batch 2): objective-routing
+    # suggestions are not clinically actionable for a thesis reader and
+    # must not appear in the main Word/PDF report at all (moved to the
+    # Excel audit log instead — see test_objective_routing_warnings_move_to_excel_audit_log_only).
+    assert "A multivariable model was not added because predictor selection was not confirmed." not in docx_text
+    assert "Correlation analysis was not included in the selected analysis objective." not in docx_text
 
     workbook = load_workbook(io.BytesIO(export.to_xlsx(FakeEntry(), payload, {"outcome": "Outcome"})))
     assert "tested_associations" in workbook.sheetnames
@@ -528,6 +532,78 @@ def test_outcome_duplicate_and_generic_technical_warnings_are_specific_or_droppe
     assert dropped_blueprint["warnings"] == []
 
 
+def test_objective_routing_warnings_move_to_excel_audit_log_only() -> None:
+    """Issue 4 (thesis-readability polish, batch 2): 'A multivariable model
+    was not added...' and 'Correlation analysis was not included...' are
+    objective-routing/implementation-detail notes, not clinically
+    actionable for a thesis reader. They must be dropped from the main
+    Word/PDF report (test_section_vi_and_excel_report_all_associations
+    covers that) while the raw suggestion text is preserved in the Excel
+    'Data Cleaning Log' audit sheet."""
+    payload = _payload()
+    docx_text = _docx_text(chapter_v_export.generate_docx(payload))
+    assert "A multivariable model was not added" not in docx_text
+    assert "Correlation analysis was not included" not in docx_text
+
+    class _EntryWithPlan:
+        def __init__(self):
+            self.df = FakeEntry().df
+            self.meta = dict(FakeEntry().meta)
+            self.meta["plan"] = {"suggestions": [
+                {"warning": "Add only after confirming predictors and checking event counts and separation risk."},
+                {"warning": "Run separately under the Correlation objective; it is not part of the main outcome association results."},
+            ]}
+
+    workbook = load_workbook(io.BytesIO(export.to_xlsx(_EntryWithPlan(), payload, {"outcome": "Outcome"})))
+    log_rows = list(workbook["Data Cleaning Log"].iter_rows(min_row=2, values_only=True))
+    log_text = " ".join(str(cell) for row in log_rows for cell in row if cell)
+    assert "Add only after confirming predictors" in log_text
+    assert "Run separately under the Correlation objective" in log_text
+
+
+def test_percentage_denominator_note_appears_in_word_pdf_excel() -> None:
+    """Issue 3 (thesis-readability polish): detailed association tables use
+    within-predictor-category percentages while the Significant Findings
+    Highlight uses within-p27-expression-group percentages. A clear
+    footnote explaining this must appear near Section V/VI in Word and
+    PDF, and on the Excel Cover sheet, whenever tested associations exist."""
+    note = (
+        "Percentages in detailed association tables are calculated within predictor categories "
+        "unless otherwise stated. Percentages in the Significant Findings Highlight describe "
+        "marker/category distribution within p27 expression groups."
+    )
+    tests = [
+        {
+            "id": "er", "title": "ER vs Positive/ Negative: Chi-square test",
+            "analysis_family": "bivariate", "test_type": "chi_square",
+            "actual_test_used": "Chi-square test", "statistic": 12.0, "dof": 1,
+            "p": 0.0005, "p_corrected": 0.0015, "cramers_v": 0.55, "note": "-",
+        },
+    ]
+    associations = results._tested_associations(tests, "Positive/ Negative")
+    blueprint = build_thesis_analysis_blueprint(
+        df_shape=(100, 2),
+        classifications=[
+            {"column": "Positive/ Negative", "detected_type": "nominal"},
+            {"column": "ER", "detected_type": "nominal"},
+        ],
+        assignment={"outcome": "Positive/ Negative"},
+        tests=tests,
+        tested_associations=associations,
+        session={"study_type": "association"},
+    )
+    payload = {"tests": tests, "tested_associations": associations, "thesis_analysis_blueprint": blueprint}
+    docx_text = _docx_text(chapter_v_export.generate_docx(payload))
+    assert note in docx_text
+
+    pdf_bytes = chapter_v_export.generate_pdf(payload)
+    assert isinstance(pdf_bytes, bytes) and len(pdf_bytes) > 0
+
+    workbook = load_workbook(io.BytesIO(export.to_xlsx(FakeEntry(), payload, {"outcome": "Positive/ Negative"})))
+    cover_rows = list(workbook["Cover"].iter_rows(values_only=True))
+    assert any(note in str(cell) for row in cover_rows for cell in row if cell)
+
+
 def main() -> None:
     test_contingency_selection_policy()
     test_canonical_summary_and_adjusted_status()
@@ -537,6 +613,8 @@ def main() -> None:
     test_duplicate_predictor_warning_is_specific_or_dropped()
     test_thesis_conservative_exact_mode()
     test_outcome_duplicate_and_generic_technical_warnings_are_specific_or_dropped()
+    test_objective_routing_warnings_move_to_excel_audit_log_only()
+    test_percentage_denominator_note_appears_in_word_pdf_excel()
     print("Sigma association reporting policy verification passed.")
 
 

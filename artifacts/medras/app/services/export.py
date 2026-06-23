@@ -234,11 +234,21 @@ def _build_cleaning_log(
         )
 
     for suggestion in (meta.get("plan") or {}).get("suggestions") or []:
-        if suggestion.get("blocking") or not str(suggestion.get("id", "")).startswith(
-            "predictor_duplicate_labels_"
-        ):
+        if suggestion.get("blocking"):
             continue
-        add("Quality warning", "Predictor categories", suggestion.get("warning"))
+        warning = suggestion.get("warning")
+        if not warning:
+            continue
+        suggestion_id = str(suggestion.get("id", ""))
+        if suggestion_id.startswith("predictor_duplicate_labels_"):
+            add("Quality warning", "Predictor categories", warning)
+        else:
+            # Objective-routing / implementation-detail suggestions (e.g.
+            # "add a multivariable model"/"run under Correlation objective")
+            # are not shown in the main Word/PDF report (not actionable for
+            # a thesis reader there), but the raw detail must still be
+            # available to a statistician via this audit log.
+            add("Analysis note", suggestion.get("title") or "Dataset", warning)
 
     for c in classifications:
         if c.get("auto_strip_count"):
@@ -2055,6 +2065,13 @@ def to_xlsx(entry, results: Dict[str, Any], assignment: Dict[str, Any]) -> bytes
         "variable_classification) retain raw/internal variable names and codes for statistician "
         "traceability — see the 'Audit/statistician detail' note at the top of each such sheet."
     )])
+    if blueprint.get("tested_associations"):
+        s.append([])
+        s.append(["Percentage denominators", (
+            "Percentages in detailed association tables are calculated within predictor categories "
+            "unless otherwise stated. Percentages in the Significant Findings Highlight describe "
+            "marker/category distribution within p27 expression groups."
+        )])
 
     # Current analysis-ready data. This is the processed dataframe held by the
     # active Sigma session, not a reload of the original uploaded workbook.

@@ -348,9 +348,12 @@ def _clean_report_warning(value: Any, suggestion_id: str = "", suggestion_title:
     if not text:
         return ""
     if "add only after confirming predictors" in lower:
-        return "A multivariable model was not added because predictor selection was not confirmed."
+        # Objective-routing/implementation detail: not clinically actionable
+        # for a thesis reader. Drop from the main report; the raw suggestion
+        # text remains in the Excel "Data Cleaning Log" audit sheet.
+        return ""
     if "run separately under the correlation objective" in lower:
-        return "Correlation analysis was not included in the selected analysis objective."
+        return ""
     if "duplicate" in lower and "predictor" in lower:
         # Prefer a specific, actionable warning naming the predictor and the
         # raw duplicate category labels that were merged, instead of a
@@ -1244,16 +1247,29 @@ _SYNTHESIS_DERIVED_NODE_LABELS = {
     "positivenodes": "Positive nodes",
     "totalnodes": "Total nodes",
     "noderatio": "Node ratio",
+    "her2neu": "HER2",
+    "ki67": "Ki-67",
+    "pt": "Pathological T stage",
 }
+
+_SYNTHESIS_TX_INFILTRATING_RE = re.compile(r"^tx\s*infiltrating\s*l$", re.IGNORECASE)
+_SYNTHESIS_UPFRONT_POST_CHEMO_RE = re.compile(
+    r"^upfront\s*/?\s*(?:vs\.?|versus)?\s*post[\s-]*chemo(?:therapy)?$", re.IGNORECASE
+)
 
 
 def _clean_predictor_label(name: str) -> str:
-    """Map known internal derived-variable names to their doctor-facing
+    """Map known internal/abbreviated variable names to their doctor-facing
     labels before they are joined into the Results Synthesis paragraph.
-    Mirrors chapter_v_export._DERIVED_NODE_LABELS' small, known mapping
+    Mirrors chapter_v_export._clean_variable_label's small, known mapping
     without importing chapter_v_export (thesis_blueprint stays dependency
     -light by design)."""
-    key = re.sub(r"[^a-z0-9]+", "", str(name or "").lower())
+    raw = str(name or "")
+    if _SYNTHESIS_TX_INFILTRATING_RE.match(raw.strip()):
+        return "Tumour-infiltrating lymphocytes"
+    if _SYNTHESIS_UPFRONT_POST_CHEMO_RE.match(raw.strip()):
+        return "Treatment timing / upfront versus post-chemotherapy status"
+    key = re.sub(r"[^a-z0-9]+", "", raw.lower())
     return _SYNTHESIS_DERIVED_NODE_LABELS.get(key, name)
 
 

@@ -51,6 +51,27 @@ def _docx_text(blob: bytes) -> str:
     return "\n".join(paragraphs + cells)
 
 
+def _pdf_text(blob: bytes) -> str:
+    try:
+        import pdfplumber
+    except ImportError:
+        pdfplumber = None
+    if pdfplumber is not None:
+        pages = []
+        with pdfplumber.open(io.BytesIO(blob)) as pdf:
+            for page in pdf.pages:
+                pages.append(page.extract_text() or "")
+        text = "\n".join(pages)
+        if text.strip():
+            return text
+    try:
+        from pypdf import PdfReader
+    except ImportError:
+        from PyPDF2 import PdfReader  # type: ignore[no-redef]
+    reader = PdfReader(io.BytesIO(blob))
+    return "\n".join((page.extract_text() or "") for page in reader.pages)
+
+
 def _observed(rows: List[List[Any]], headers: List[str]) -> Dict[str, Any]:
     return {"title": "Observed counts", "headers": headers, "rows": rows}
 
@@ -598,6 +619,53 @@ def test_domain_profile_tables_avoid_generic_duplicate_titles() -> None:
     assert "Other pathology characteristics" not in text
 
 
+def test_baseline_table_splits_into_age_and_laterality_titles() -> None:
+    """Issue 2 (thesis-readability polish): table_one combines baseline
+    demographic rows (Age, Laterality) into one table_type='descriptive_table'
+    table titled 'Table 1. Baseline and study characteristics'.
+    _descriptive_export_table already splits it into a continuous (Age)
+    table and a categorical (Laterality) table when domain sections are
+    present, but both halves previously kept the same generic base title,
+    so the rendered captions were 'Table 1. Baseline and study
+    characteristics' / 'Table 2. Baseline and study characteristics'.
+    They must now read 'Table 1. Age distribution' / 'Table 2. Laterality
+    distribution', with numbering staying sequential afterwards."""
+    table_one = {
+        "headers": ["Variable", "Type", "Overall"],
+        "rows": [
+            {"variable": "Age", "type": "Mean ± SD", "cells": ["58.5 ± 16.9 (n=116); Median: 58.5; Minimum: 30.0; Maximum: 89.0; Missing: 0 (0.0%)"]},
+            {"variable": "Laterality", "type": "n (%)", "cells": ["Left: 58 (50.0%); Right: 58 (50.0%)"]},
+            {"variable": "ER", "type": "n (%)", "cells": ["Positive: 74 (63.8%); Negative: 42 (36.2%)"]},
+        ],
+    }
+    classifications = [
+        {"column": "Age", "detected_type": "scale"},
+        {"column": "Laterality", "detected_type": "nominal"},
+        {"column": "ER", "detected_type": "nominal"},
+    ]
+    blueprint = build_thesis_analysis_blueprint(
+        df_shape=(116, 3),
+        classifications=classifications,
+        assignment={"outcome": None},
+        table_one=table_one,
+        tests=[],
+        session={"domain_profile": "breast_pathology"},
+    )
+    blob = chapter_v_export.generate_docx({"thesis_analysis_blueprint": blueprint, "tests": []})
+    text = _docx_text(blob)
+    assert "Table 1. Age distribution" in text
+    assert "Table 2. Laterality distribution" in text
+    assert "Table 1. Baseline and study characteristics" not in text
+    assert "Table 2. Baseline and study characteristics" not in text
+    # Numbering keeps incrementing sequentially past the split baseline tables.
+    assert "Table 3. Hormone receptor profile" in text
+
+    pdf_bytes = chapter_v_export.generate_pdf({"thesis_analysis_blueprint": blueprint, "tests": []})
+    pdf_text = _pdf_text(pdf_bytes)
+    assert "Table 1. Age distribution" in pdf_text
+    assert "Table 2. Laterality distribution" in pdf_text
+
+
 def test_generic_non_breast_fixture_still_exports() -> None:
     blueprint = build_thesis_analysis_blueprint(
         df_shape=(20, 2),
@@ -756,6 +824,8 @@ def main() -> None:
     print("  [ok] No duplicate table titles in Word export")
     test_domain_profile_tables_avoid_generic_duplicate_titles()
     print("  [ok] Domain-profile tables avoid generic duplicate titles (Laterality distribution)")
+    test_baseline_table_splits_into_age_and_laterality_titles()
+    print("  [ok] Baseline table splits into 'Table 1. Age distribution' / 'Table 2. Laterality distribution'")
     test_generic_non_breast_fixture_still_exports()
     print("  [ok] Generic non-breast fixture still exports")
     test_continuous_descriptive_explanation_preserves_exact_numbers()
