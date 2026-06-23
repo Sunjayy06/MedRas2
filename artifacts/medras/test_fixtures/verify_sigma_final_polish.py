@@ -1428,6 +1428,53 @@ def test_results_synthesis_uses_doctor_facing_predictor_labels() -> None:
     assert isinstance(pdf_bytes, bytes) and len(pdf_bytes) > 0
 
 
+def test_results_synthesis_treatment_timing_label_not_duplicated() -> None:
+    """Issue 1 (thesis-readability polish, batch 3): the 'Upfront / post
+    chemo' predictor name must be cleaned to a single, non-duplicated
+    'Treatment timing / upfront versus post-chemotherapy status' label.
+    Previously the render-time label cleaner re-matched its own output
+    (since thesis_blueprint.py already cleans predictor names before the
+    Results Synthesis sentence is rendered through the same cleaner again
+    in chapter_v_export), producing 'Treatment timing / Treatment timing /
+    upfront versus post-chemotherapy status status'."""
+    tested_associations = [
+        {
+            "source_result_id": "timing", "predictor": "Upfront / post chemo", "test_applied": "Chi-square test",
+            "test_statistic": "chi-square = 9.00", "p_value": "p = 0.003", "adjusted_p_value": "p = 0.012",
+            "effect_size": "Cramér's V = 0.40", "significance_status": "Significant after multiple-testing correction",
+            "notes_warnings": "-",
+        },
+    ]
+    blueprint = build_thesis_analysis_blueprint(
+        df_shape=(116, 2),
+        classifications=[
+            {"column": "Positive/ Negative", "detected_type": "nominal"},
+            {"column": "Upfront / post chemo", "detected_type": "nominal"},
+        ],
+        assignment={"outcome": "Positive/ Negative"},
+        tests=[],
+        tested_associations=tested_associations,
+        session={
+            "study_type": "association", "domain_profile": "breast_pathology",
+            "main_marker": "p27", "main_outcome_concept": "p27 expression status",
+        },
+    )
+    synthesis = blueprint.get("results_synthesis") or ""
+    assert "Treatment timing / Treatment timing" not in synthesis
+    assert "status status" not in synthesis
+    assert "Upfront / post chemo" not in synthesis
+    assert "Treatment timing" in synthesis
+
+    docx_text = _docx_text(chapter_v_export.generate_docx({"thesis_analysis_blueprint": blueprint, "tests": []}))
+    assert "Treatment timing / Treatment timing" not in docx_text
+    assert "status status" not in docx_text
+    assert "Upfront / post chemo" not in docx_text
+
+    pdf_text = _pdf_text(chapter_v_export.generate_pdf({"thesis_analysis_blueprint": blueprint, "tests": []}))
+    assert "Treatment timing / Treatment timing" not in pdf_text
+    assert "status status" not in pdf_text
+
+
 def main() -> None:
     test_age_baseline_min_max()
     print("  [ok] Age baseline min/max")
@@ -1554,6 +1601,9 @@ def main() -> None:
 
     test_results_synthesis_uses_doctor_facing_predictor_labels()
     print("  [ok] Results Synthesis uses doctor-facing predictor labels, no raw/internal names")
+
+    test_results_synthesis_treatment_timing_label_not_duplicated()
+    print("  [ok] Treatment timing label is not duplicated in Results Synthesis / Word / PDF")
 
     print("\nSigma final polish verification passed.")
 

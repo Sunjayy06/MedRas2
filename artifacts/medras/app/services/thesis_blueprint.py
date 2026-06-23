@@ -1641,7 +1641,7 @@ def build_thesis_analysis_blueprint(
 
     if component_associations:
         warnings.append(
-            "Marker-component variables were summarized descriptively and excluded from clinical association interpretation."
+            "Marker-component variables were summarized descriptively and were not interpreted as independent clinical associations."
         )
 
     results_synthesis = _build_results_synthesis(
@@ -1730,7 +1730,7 @@ def build_thesis_analysis_blueprint(
         all_tables.append(sig_table)
     if component_findings:
         warnings.append(
-            "Some significant detailed results were outcome/marker components and were omitted from the final thesis findings table by default."
+            "Marker-component variables were summarized descriptively and were not interpreted as independent clinical associations."
         )
 
     bivariate_section = sections_by_id.get("bivariate_associations")

@@ -21,6 +21,34 @@ def _docx_text(blob: bytes) -> str:
     return "\n".join(paragraphs + cells)
 
 
+def _pdf_text(blob: bytes) -> str:
+    """Extract plain text from a PDF blob using an available PDF reader."""
+    try:
+        import pdfplumber
+    except ImportError:
+        pdfplumber = None
+    if pdfplumber is not None:
+        pages = []
+        with pdfplumber.open(io.BytesIO(blob)) as pdf:
+            for page in pdf.pages:
+                t = page.extract_text() or ""
+                pages.append(t)
+        text = "\n".join(pages)
+        if text.strip():
+            return text
+
+    try:
+        from pypdf import PdfReader
+    except ImportError:
+        try:
+            from PyPDF2 import PdfReader  # type: ignore[no-redef]
+        except ImportError as exc:
+            raise AssertionError("PDF text extraction requires pdfplumber, pypdf, or PyPDF2") from exc
+
+    reader = PdfReader(io.BytesIO(blob))
+    return "\n".join((page.extract_text() or "") for page in reader.pages)
+
+
 def test_contingency_selection_policy() -> None:
     sparse_2x2 = pd.DataFrame({
         "Predictor": ["A"] * 8 + ["B"] * 4,
@@ -604,6 +632,116 @@ def test_percentage_denominator_note_appears_in_word_pdf_excel() -> None:
     assert any(note in str(cell) for row in cover_rows for cell in row if cell)
 
 
+def test_marker_component_warning_uses_clean_thesis_wording_once() -> None:
+    """Issue 2 (thesis-readability polish, batch 3): the old product/audit
+    -like wording ('Some significant detailed results were outcome/marker
+    components and were omitted from the final thesis findings table by
+    default.') must not appear anywhere in the main Word/PDF report. The
+    cleaner thesis-facing sentence ('Marker-component variables were
+    summarized descriptively and were not interpreted as independent
+    clinical associations.') must appear, and only once even though both
+    the tested-associations exclusion and the significant-findings
+    exclusion can independently trigger a marker-component note."""
+    tests = [
+        {
+            "id": "egfr", "title": "EGFR vs p27 expression status: Chi-square test",
+            "analysis_family": "bivariate", "test_type": "chi_square", "actual_test_used": "Chi-square test",
+            "statistic": 4.1, "dof": 1, "p": 0.043, "p_corrected": 0.081,
+            "correction_method": "Benjamini-Hochberg FDR", "cramers_v": 0.19, "note": "-",
+        },
+        {
+            "id": "marker_component", "title": "Interpretation-site vs p27 expression status: Chi-square test",
+            "analysis_family": "bivariate", "test_type": "chi_square", "actual_test_used": "Chi-square test",
+            "statistic": 5.2, "dof": 2, "p": 0.021, "p_corrected": 0.042, "cramers_v": 0.24, "note": "-",
+        },
+    ]
+    associations = results._tested_associations(tests, "p27 expression status")
+    significant_findings = results._significant_findings(tests)
+    blueprint = build_thesis_analysis_blueprint(
+        df_shape=(100, 3),
+        classifications=[
+            {"column": "p27 expression status", "detected_type": "nominal"},
+            {"column": "EGFR", "detected_type": "nominal"},
+            {"column": "Interpretation-site", "detected_type": "nominal"},
+        ],
+        assignment={"outcome": "p27 expression status"},
+        tests=tests,
+        tested_associations=associations,
+        significant_findings=significant_findings,
+        session={"study_type": "association", "main_marker": "p27", "main_outcome_concept": "p27 expression status"},
+    )
+    clean_sentence = (
+        "Marker-component variables were summarized descriptively and were not "
+        "interpreted as independent clinical associations."
+    )
+    matches = [w for w in blueprint["warnings"] if clean_sentence in w]
+    assert len(matches) == 1, f"expected exactly one marker-component warning, got {matches!r}"
+
+    docx_text = _docx_text(chapter_v_export.generate_docx({"thesis_analysis_blueprint": blueprint, "tests": tests}))
+    assert "omitted from the final thesis findings table by default" not in docx_text
+    assert "Some significant detailed results were outcome/marker components" not in docx_text
+    assert docx_text.count(clean_sentence) == 1
+
+    pdf_text = _pdf_text(chapter_v_export.generate_pdf({"thesis_analysis_blueprint": blueprint, "tests": tests}))
+    assert "omitted from the final thesis findings table by default" not in pdf_text
+    assert "Some significant detailed results were outcome/marker components" not in pdf_text
+
+
+def test_final_association_only_caution_wording() -> None:
+    """Issue 3 (thesis-readability polish, batch 3): the static closing
+    caution in the main Word/PDF 'Warnings and Interpretation Notes'
+    section must use the association-only/non-causal/non-prognostic
+    disclaimer wording, and the report must never assert any of the
+    forbidden causal/prognostic claim phrases. Uses a fixture with at
+    least one triggered warning, since the caution sentence only renders
+    inside the populated branch of the warnings section (an empty
+    warnings/unavailable list short-circuits to a different message)."""
+    tests = [
+        {
+            "id": "egfr", "title": "EGFR vs p27 expression status: Chi-square test",
+            "analysis_family": "bivariate", "test_type": "chi_square", "actual_test_used": "Chi-square test",
+            "statistic": 4.1, "dof": 1, "p": 0.043, "p_corrected": 0.081,
+            "correction_method": "Benjamini-Hochberg FDR", "cramers_v": 0.19, "note": "-",
+        },
+        {
+            "id": "marker_component", "title": "Interpretation-site vs p27 expression status: Chi-square test",
+            "analysis_family": "bivariate", "test_type": "chi_square", "actual_test_used": "Chi-square test",
+            "statistic": 5.2, "dof": 2, "p": 0.021, "p_corrected": 0.042, "cramers_v": 0.24, "note": "-",
+        },
+    ]
+    associations = results._tested_associations(tests, "p27 expression status")
+    blueprint = build_thesis_analysis_blueprint(
+        df_shape=(100, 3),
+        classifications=[
+            {"column": "p27 expression status", "detected_type": "nominal"},
+            {"column": "EGFR", "detected_type": "nominal"},
+            {"column": "Interpretation-site", "detected_type": "nominal"},
+        ],
+        assignment={"outcome": "p27 expression status"},
+        tests=tests,
+        tested_associations=associations,
+        session={"study_type": "association", "main_marker": "p27", "main_outcome_concept": "p27 expression status"},
+    )
+    payload = {"tests": tests, "tested_associations": associations, "thesis_analysis_blueprint": blueprint}
+    caution = (
+        "These are association analyses only; no causal, prognostic, or independent-effect "
+        "conclusions should be drawn without an appropriate adjusted model and outcome data."
+    )
+    docx_text = _docx_text(chapter_v_export.generate_docx(payload))
+    assert caution in docx_text
+
+    pdf_text = _pdf_text(chapter_v_export.generate_pdf(payload))
+    assert caution in pdf_text
+
+    forbidden = (
+        "proves", "causes", "predicts", "prognostic significance",
+        "independent association", "survival benefit", "mortality", "risk factor",
+    )
+    lowered = docx_text.lower()
+    for phrase in forbidden:
+        assert phrase not in lowered, f"forbidden claim phrase {phrase!r} found in Word output"
+
+
 def main() -> None:
     test_contingency_selection_policy()
     test_canonical_summary_and_adjusted_status()
@@ -615,6 +753,8 @@ def main() -> None:
     test_outcome_duplicate_and_generic_technical_warnings_are_specific_or_dropped()
     test_objective_routing_warnings_move_to_excel_audit_log_only()
     test_percentage_denominator_note_appears_in_word_pdf_excel()
+    test_marker_component_warning_uses_clean_thesis_wording_once()
+    test_final_association_only_caution_wording()
     print("Sigma association reporting policy verification passed.")
 
 

@@ -103,11 +103,12 @@ def _clean_variable_label(value: Any) -> str:
     text = re.sub(r"\bTx\s+infiltrating\s+L\b", "Tumour-infiltrating lymphocytes", text, flags=re.IGNORECASE)
     text = re.sub(r"\bTumou?r site\s*/\s*quadrant\b", "Tumour quadrant", text, flags=re.IGNORECASE)
     text = re.sub(r"\bTumou?r site\b", "Tumour quadrant", text, flags=re.IGNORECASE)
-    text = re.sub(
-        r"\bUpfront\s*/?\s*(?:vs\.?|versus)?\s*post[\s-]*chemo(?:therapy)?\b",
-        "Treatment timing / upfront versus post-chemotherapy status",
-        text, flags=re.IGNORECASE,
-    )
+    if "treatment timing" not in text.lower():
+        text = re.sub(
+            r"\bUpfront\s*/?\s*(?:vs\.?|versus)?\s*post[\s-]*chemo(?:therapy)?\b",
+            "Treatment timing / upfront versus post-chemotherapy status",
+            text, flags=re.IGNORECASE,
+        )
     return text
 
 
@@ -2321,7 +2322,7 @@ def _add_warnings_docx(doc: Document, blueprint: Dict[str, Any]) -> None:
             rendered.add(cleaned)
     _plain_docx_text(
         doc,
-        "Associations should not be interpreted as causal effects. Independent prognostic value should only be claimed when an adjusted model was actually performed.",
+        "These are association analyses only; no causal, prognostic, or independent-effect conclusions should be drawn without an appropriate adjusted model and outcome data.",
     )
 
 
@@ -2765,6 +2766,6 @@ def generate_pdf(
         if cleaned and cleaned not in rendered_warnings:
             flow.append(Paragraph(f"• {_pdf_escape(cleaned)}", body))
             rendered_warnings.add(cleaned)
-    flow.append(Paragraph("Associations should not be interpreted as causal effects. Independent prognostic value should only be claimed when an adjusted model was actually performed.", body))
+    flow.append(Paragraph("These are association analyses only; no causal, prognostic, or independent-effect conclusions should be drawn without an appropriate adjusted model and outcome data.", body))
     doc.build(flow)
     return out.getvalue()
