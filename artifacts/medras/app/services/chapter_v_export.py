@@ -38,7 +38,7 @@ FORBIDDEN_MAIN_TABLE_TITLES = {
 
 
 _BINARY_MARKER_VARS = {"er", "pr", "ar", "her2", "her2neu", "egfr"}
-_PRESENCE_MARKER_VARS = {"lvi", "ene", "necrosis", "dcis"}
+_PRESENCE_MARKER_VARS = {"lvi", "ene", "necrosis", "dcis", "txinfiltratingl", "tumourinfiltratinglymphocytes"}
 _T4B_DISPLAY_PATTERN = re.compile(
     r"Ulceration\s+and\s*/\s*or\s+ipsilateral satellite nodules\s+and\s*/\s*or\s+(?:edema|oedema)[^;|:]*",
     flags=re.IGNORECASE,
@@ -155,6 +155,11 @@ def _clinical_category_label(variable: Any, category: Any, label_ctx: Optional[D
             return "Present"
         if low in {"negative", "no", "absent"}:
             return "Absent"
+    if "treatmenttiming" in var_key or "upfrontpostchemo" in var_key:
+        if low_compact == "upfront" or low in {"negative", "no"}:
+            return "Upfront"
+        if low_compact in {"postchemo", "postchemotherapy"} or low in {"positive", "postive", "yes"}:
+            return "Post-chemotherapy"
     if var_key in _PRESENCE_MARKER_VARS:
         if low in {"positive", "postive", "yes", "present"}:
             return "Present"
@@ -194,6 +199,24 @@ def _text(value: Any) -> str:
     text = text.replace("Postive", "Positive")
     text = re.sub(r">=\s*14%?", ">=14%", text)
     return text
+
+
+def _text_preserve_raw_labels(value: Any) -> str:
+    """Same cleanup as _text() (encoding fixes, "Postive" typo fix) but
+    without the blanket ">=14%" category-value normalisation, which would
+    otherwise collapse deliberately distinct raw duplicate labels (e.g.
+    ">=14%", ">=14", ">= 14%" quoted together in a duplicate-labels
+    warning) into one repeated-looking value."""
+    if value is None:
+        return ""
+    text = html.unescape(str(value)).strip()
+    replacements = {
+        "Â±": "±", "ą": "±", "â‰¤": "≤", "â‰¥": "≥", "â€”": "—", "â€“": "–",
+        "â€¢": "•", "Cramer's V": "Cramér's V", "Cramer’s V": "Cramér's V",
+    }
+    for raw, clean in replacements.items():
+        text = text.replace(raw, clean)
+    return text.replace("Postive", "Positive")
 
 
 def _label(value: Any) -> str:
@@ -681,10 +704,17 @@ def _is_tumour_quadrant_variable(variable: Any) -> bool:
 
 
 def _score_sort_key(category: Any) -> Tuple[int, int, int]:
-    match = re.match(r"^\s*(\d+)\s*\+\s*(\d+)\s*$", _text(category).strip())
+    text = _text(category).strip()
+    match = re.match(r"^\s*(\d+)\s*\+\s*(\d+)\s*$", text)
     if match:
         return (0, int(match.group(1)), int(match.group(2)))
+    if text.lower() == "missing":
+        return (2, 0, 0)
     return (1, 0, 0)
+
+
+def _categories_look_like_score_pattern(categories: List[str]) -> bool:
+    return any(re.match(r"^\s*\d+\s*\+\s*\d+\s*$", _text(category).strip()) for category in categories)
 
 
 def _build_categorical_rows(
@@ -693,17 +723,36 @@ def _build_categorical_rows(
     concept: str = "",
 ) -> List[List[str]]:
     totals: Dict[str, float] = {}
-    for variable, _category in categorical_order:
-        totals[variable] = totals.get(variable, 0.0) + categorical_counts[(variable, _category)]
-    rows: List[List[str]] = []
+    variable_order: List[str] = []
+    variable_categories: Dict[str, List[str]] = {}
     for variable, category in categorical_order:
-        count = categorical_counts[(variable, category)]
+        totals[variable] = totals.get(variable, 0.0) + categorical_counts[(variable, category)]
+        if variable not in variable_categories:
+            variable_order.append(variable)
+            variable_categories[variable] = []
+        variable_categories[variable].append(category)
+
+    # Score-pattern categories (e.g. "1+1".."5+3") must sort in their
+    # logical numeric order rather than insertion order, regardless of
+    # whether other variables sharing this table are score patterns —
+    # multi-variable descriptive tables (e.g. Excel's unsplit "Table 1")
+    # mix score-pattern rows with ordinary categorical rows, so the sort
+    # is applied per-variable instead of gating on the whole table's
+    # "concept" (which only the dedicated single-variable score tables
+    # used in Word/PDF set to "score").
+    for variable in variable_order:
+        categories = variable_categories[variable]
+        if concept == "score" or _categories_look_like_score_pattern(categories):
+            variable_categories[variable] = sorted(categories, key=_score_sort_key)
+
+    rows: List[List[str]] = []
+    for variable in variable_order:
         total = totals.get(variable, 0.0)
-        pct = (count / total * 100.0) if total else 0.0
-        count_text = str(int(count)) if float(count).is_integer() else f"{count:g}"
-        rows.append([variable, category, count_text, f"{pct:.1f}%"])
-    if concept == "score":
-        rows.sort(key=lambda row: _score_sort_key(row[1]))
+        for category in variable_categories[variable]:
+            count = categorical_counts[(variable, category)]
+            pct = (count / total * 100.0) if total else 0.0
+            count_text = str(int(count)) if float(count).is_integer() else f"{count:g}"
+            rows.append([variable, category, count_text, f"{pct:.1f}%"])
     return rows
 
 
@@ -2140,6 +2189,14 @@ def _section_export_title(section_id: str, fallback: Any, label_ctx: Dict[str, A
 
 
 def _user_facing_warning(value: Any) -> str:
+    raw_text = re.sub(r"\s+", " ", str(value or "")).strip(" .")
+    if raw_text.startswith("Duplicate raw ") and "category labels (" in raw_text:
+        # Already fully formatted by thesis_blueprint._clean_report_warning.
+        # Skip the generic _text() cleanup below — its blanket ">=14%"
+        # category-value normalisation would otherwise collapse the
+        # deliberately distinct raw duplicate labels quoted here (e.g.
+        # ">=14%", ">=14", ">= 14%") into one repeated-looking value.
+        return f"{raw_text}." if raw_text else ""
     text = re.sub(r"\s+", " ", _text(value)).strip(" .")
     lower = text.lower()
     if not text:
@@ -2313,7 +2370,10 @@ def _add_warnings_docx(doc: Document, blueprint: Dict[str, Any]) -> None:
     for warning in warnings:
         cleaned = _user_facing_warning(warning)
         if cleaned and cleaned not in rendered:
-            _plain_docx_text(doc, cleaned, style="List Bullet")
+            if cleaned.startswith("Duplicate raw ") and "category labels (" in cleaned:
+                doc.add_paragraph(style="List Bullet").add_run(_text_preserve_raw_labels(cleaned))
+            else:
+                _plain_docx_text(doc, cleaned, style="List Bullet")
             rendered.add(cleaned)
     for item in unavailable:
         cleaned = _unavailable_warning(item)
@@ -2759,7 +2819,11 @@ def generate_pdf(
     for warning in warnings:
         cleaned = _user_facing_warning(warning)
         if cleaned and cleaned not in rendered_warnings:
-            flow.append(Paragraph(f"• {_pdf_escape(cleaned)}", body))
+            if cleaned.startswith("Duplicate raw ") and "category labels (" in cleaned:
+                escaped = _text_preserve_raw_labels(cleaned).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                flow.append(Paragraph(f"• {escaped}", body))
+            else:
+                flow.append(Paragraph(f"• {_pdf_escape(cleaned)}", body))
             rendered_warnings.add(cleaned)
     for item in unavailable:
         cleaned = _unavailable_warning(item)

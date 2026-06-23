@@ -360,7 +360,14 @@ def test_duplicate_predictor_warning_is_specific_or_dropped() -> None:
     predictor and the raw labels that were merged, instead of a generic
     'category grouping should be reviewed' sentence that doesn't say which
     variable is involved. When the predictor cannot be identified, the
-    warning must not appear in the main report at all."""
+    warning must not appear in the main report at all.
+
+    Issue 4 (Excel/user-facing category polish, batch 4): for Ki-67
+    specifically, the warning must show the cleaned 'Ki-67' label (not the
+    raw 'Ki67' column name), list the distinct raw duplicate labels with a
+    clear comma separator (not a mix of '/' and ';' that can look like
+    repeated labels), and state which two canonical groups they were
+    merged into (>=14% and <14%)."""
     plan_with_specific_suggestion = {
         "suggestions": [{
             "id": "predictor_duplicate_labels_Ki67",
@@ -368,7 +375,7 @@ def test_duplicate_predictor_warning_is_specific_or_dropped() -> None:
             "requires_confirmation": True,
             "blocking": False,
             "warning": (
-                "Likely duplicate predictor labels were detected: >=14 / >= 14%. "
+                "Likely duplicate predictor labels were detected: >=14% / >=14 / >= 14%. "
                 "Analysis can continue, but split categories may affect estimates and should be reviewed."
             ),
         }],
@@ -381,12 +388,17 @@ def test_duplicate_predictor_warning_is_specific_or_dropped() -> None:
         plan=plan_with_specific_suggestion,
         session={"study_type": "association"},
     )
-    assert any("Duplicate raw Ki67 category labels" in warning for warning in blueprint["warnings"]), blueprint["warnings"]
-    assert any(">=14 / >= 14%" in warning for warning in blueprint["warnings"]), blueprint["warnings"]
+    expected = (
+        "Duplicate raw Ki-67 category labels (>=14%, >=14, >= 14%) were merged "
+        "into >=14% and <14% groups before analysis."
+    )
+    assert expected in blueprint["warnings"], blueprint["warnings"]
+    assert not any("Ki67 category labels" in warning for warning in blueprint["warnings"]), blueprint["warnings"]
     assert not any("should be reviewed" in warning for warning in blueprint["warnings"]), blueprint["warnings"]
 
     text = _docx_text(chapter_v_export.generate_docx({"thesis_analysis_blueprint": blueprint, "tests": []}))
-    assert "Duplicate raw Ki67 category labels" in text
+    assert expected in text
+    assert "Ki67 category labels" not in text
     assert "Some predictor labels appeared duplicated after cleaning" not in text
 
     # A suggestion id that doesn't match the expected pattern can't be

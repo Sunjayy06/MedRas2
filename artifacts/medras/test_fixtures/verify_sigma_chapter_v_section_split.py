@@ -666,6 +666,82 @@ def test_baseline_table_splits_into_age_and_laterality_titles() -> None:
     assert "Table 2. Laterality distribution" in pdf_text
 
 
+def test_excel_table_one_uses_clean_categories_and_score_order() -> None:
+    """Issues 1-3 (Excel/user-facing category polish, batch 4): Excel's
+    "Table 1" sheet pulls the unfiltered table_one blueprint table directly
+    (table_id == "table_one"), bypassing the Word/PDF-only
+    _dedupe_descriptive_sections filtering that drops marker-component-like
+    variables (Treatment timing, Tumour-infiltrating lymphocytes, p27
+    staining score pattern) from the main report. That meant Excel showed
+    these variables with their raw, uncleaned category labels and in
+    insertion order rather than logical order, even though the same
+    variables never appear in Word/PDF to expose the same bug there.
+    """
+    table_one = {
+        "headers": ["Variable", "Type", "Overall"],
+        "rows": [
+            {"variable": "Age", "type": "Mean ± SD", "cells": ["58.5 ± 16.9 (n=116); Median: 58.5; Minimum: 30.0; Maximum: 89.0; Missing: 0 (0.0%)"]},
+            {"variable": "Upfront / post chemo", "type": "n (%)", "cells": ["Positive: 58 (50.0%); Negative: 58 (50.0%)"]},
+            {"variable": "Tx infiltrating L", "type": "n (%)", "cells": ["Positive: 45 (38.8%); Negative: 71 (61.2%)"]},
+            {
+                "variable": "Staining Result", "type": "n (%)", "cells": [
+                    "Missing: 8 (6.9%); 0: 8 (6.9%); 5+3: 8 (6.9%); 4+1: 8 (6.9%); 1+1: 9 (7.8%); "
+                    "2+1: 9 (7.8%); 2+2: 9 (7.8%); 3+1: 9 (7.8%); 3+2: 8 (6.9%); 3+3: 8 (6.9%); "
+                    "4+2: 8 (6.9%); 4+3: 8 (6.9%); 5+1: 8 (6.9%); 5+2: 8 (6.9%)"
+                ],
+            },
+        ],
+    }
+    classifications = [
+        {"column": "Age", "detected_type": "scale"},
+        {"column": "Upfront / post chemo", "detected_type": "nominal"},
+        {"column": "Tx infiltrating L", "detected_type": "nominal"},
+        {"column": "Staining Result", "detected_type": "nominal"},
+    ]
+    blueprint = build_thesis_analysis_blueprint(
+        df_shape=(116, 4),
+        classifications=classifications,
+        assignment={"outcome": None},
+        table_one=table_one,
+        tests=[],
+        session={"domain_profile": "breast_pathology"},
+    )
+
+    class _FakeEntry:
+        def __init__(self):
+            self.df = pd.DataFrame({"Age": [60] * 116})
+            self.meta = {
+                "filename": "table1-categories.xlsx",
+                "domain_profile": "breast_pathology",
+                "assignment": {"outcome": None},
+                "classifications": classifications,
+                "data_version": 0,
+            }
+
+    results = {"thesis_analysis_blueprint": blueprint, "tests": []}
+    blob = export.to_xlsx(_FakeEntry(), results, {"outcome": None})
+    wb = load_workbook(io.BytesIO(blob))
+    ws = wb["Table 1"]
+    rows = list(ws.iter_rows(values_only=True))
+
+    timing_rows = [r for r in rows if r and r[0] and "Treatment timing" in str(r[0])]
+    timing_categories = [r[1] for r in timing_rows]
+    assert "Negative" not in timing_categories and "Positive" not in timing_categories
+    assert set(timing_categories) >= {"Upfront", "Post-chemotherapy"}
+
+    til_rows = [r for r in rows if r and r[0] and "Tumour-infiltrating lymphocytes" in str(r[0])]
+    til_categories = [r[1] for r in til_rows]
+    assert "Negative" not in til_categories and "Positive" not in til_categories
+    assert set(til_categories) >= {"Present", "Absent"}
+
+    score_rows = [r for r in rows if r and r[0] and str(r[0]) in {"Staining Result", "p27 staining score pattern"}]
+    score_categories = [r[1] for r in score_rows]
+    assert score_categories == [
+        "1+1", "2+1", "2+2", "3+1", "3+2", "3+3", "4+1", "4+2", "4+3",
+        "5+1", "5+2", "5+3", "0", "Missing",
+    ], score_categories
+
+
 def test_generic_non_breast_fixture_still_exports() -> None:
     blueprint = build_thesis_analysis_blueprint(
         df_shape=(20, 2),
@@ -826,6 +902,8 @@ def main() -> None:
     print("  [ok] Domain-profile tables avoid generic duplicate titles (Laterality distribution)")
     test_baseline_table_splits_into_age_and_laterality_titles()
     print("  [ok] Baseline table splits into 'Table 1. Age distribution' / 'Table 2. Laterality distribution'")
+    test_excel_table_one_uses_clean_categories_and_score_order()
+    print("  [ok] Excel Table 1 shows clean Treatment timing/TIL categories and logical score-pattern order")
     test_generic_non_breast_fixture_still_exports()
     print("  [ok] Generic non-breast fixture still exports")
     test_continuous_descriptive_explanation_preserves_exact_numbers()

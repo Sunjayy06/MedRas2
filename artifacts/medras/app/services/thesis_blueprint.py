@@ -366,7 +366,19 @@ def _clean_report_warning(value: Any, suggestion_id: str = "", suggestion_title:
         labels_match = _DUPLICATE_LABELS_DETECTED_RE.search(text)
         if predictor_match and labels_match:
             predictor = predictor_match.group(1).strip()
-            labels = labels_match.group(1).strip()
+            # Raw label groups are joined with " / " within a group and "; "
+            # between groups by the upstream duplicate detector; normalise
+            # both to ", " so distinct raw variants (e.g. ">=14%", ">=14",
+            # ">= 14%") read as a clear, comma-separated list rather than a
+            # mix of separators that can look like repeated labels.
+            raw_labels = re.split(r"\s*/\s*|\s*;\s*", labels_match.group(1).strip())
+            labels = ", ".join(dict.fromkeys(label.strip() for label in raw_labels if label.strip()))
+            predictor_key = re.sub(r"[^a-z0-9]+", "", predictor.lower())
+            if predictor_key == "ki67":
+                return (
+                    f"Duplicate raw Ki-67 category labels ({labels}) were merged "
+                    "into >=14% and <14% groups before analysis."
+                )
             return f"Duplicate raw {predictor} category labels ({labels}) were merged before analysis."
         return ""
     if "duplicate" in lower and "outcome" in lower:

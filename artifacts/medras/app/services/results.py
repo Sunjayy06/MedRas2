@@ -2116,7 +2116,7 @@ def clean_display_name(col_name):
 
 
 _BINARY_MARKER_DISPLAY_VARS = {"er", "pr", "ar", "her2", "her2neu", "egfr"}
-_PRESENCE_DISPLAY_VARS = {"lvi", "ene", "necrosis", "dcis"}
+_PRESENCE_DISPLAY_VARS = {"lvi", "ene", "necrosis", "dcis", "txinfiltratingl", "tumourinfiltratinglymphocytes"}
 
 
 def clinical_display_name(col_name):
@@ -2179,6 +2179,11 @@ def _clinical_display_category(col_name, value):
             return "Present"
         if low in {"negative", "no", "absent"}:
             return "Absent"
+    if "treatmenttiming" in key or "upfrontpostchemo" in key:
+        if compact == "upfront" or low in {"negative", "no"}:
+            return "Upfront"
+        if compact in {"postchemo", "postchemotherapy"} or low in {"positive", "postive", "yes"}:
+            return "Post-chemotherapy"
     if key in _PRESENCE_DISPLAY_VARS:
         if low in {"positive", "postive", "yes", "present"}:
             return "Present"
