@@ -805,20 +805,43 @@ def test_marker_acronyms_preserved_in_rendered_captions() -> None:
 
 
 def test_significant_key_findings_are_thesis_style() -> None:
-    """Final significant findings should use deterministic thesis-style wording."""
+    """Final significant findings should use deterministic, percentage-based
+    thesis-style wording derived from each test's own observed-counts table
+    (Issue 4), not vague unqualified phrases."""
     results, _, _ = _build_fixture()
     blob = chapter_v_export.generate_docx(results)
     text = _docx_text(blob)
     expected = (
-        "Grade 3 cases were proportionately higher in the p27-negative group.",
-        "p27 positivity was strongly associated with ER positivity.",
-        "p27 positivity was significantly associated with PR positivity.",
-        "Triple-negative phenotype was proportionately enriched among p27-negative cases, while Luminal B predominated among p27-positive cases.",
-        "p27 positivity was significantly associated with AR positivity.",
+        "Grade 3 tumours contributed a larger share of p27-negative cases (83.3%) than p27-positive cases (0.0%).",
+        "Among p27-positive cases, ER positivity was 100.0% (more frequent than among p27-negative cases at 0.0%).",
+        "Among p27-positive cases, PR positivity was 100.0% (more frequent than among p27-negative cases at 0.0%).",
+        "Among p27-positive cases, AR positivity was 100.0% (more frequent than among p27-negative cases at 0.0%).",
     )
     for phrase in expected:
         assert phrase in text, f"Missing thesis-style finding: {phrase}"
     assert "was associated with the primary outcome" not in text
+    assert re.search(r"(Luminal A|Triple negative) cases contributed a larger share of p27-(positive|negative) cases \(\d", text)
+
+
+def test_excel_significant_findings_includes_p27_percentage_wording() -> None:
+    """Issue 4: the Excel significant_findings sheet must carry the same
+    percentage-based p27-group wording shown in Word/PDF, not a generic
+    'was associated with' placeholder."""
+    results, df, meta = _build_fixture()
+
+    class _FakeEntry:
+        def __init__(self, df, meta):
+            self.df = df
+            self.meta = meta
+
+    workbook = load_workbook(io.BytesIO(export.to_xlsx(
+        _FakeEntry(df, meta), results, {"outcome": "Positive/ Negative"}
+    )))
+    ws = workbook["significant_findings"]
+    key_findings = [row[1] for row in ws.iter_rows(min_row=2, values_only=True) if row and row[1]]
+    assert any("Among p27-positive cases" in text and "%" in text for text in key_findings), key_findings
+    assert any("contributed a larger share of p27-" in text and "%" in text for text in key_findings), key_findings
+    assert not any(text == "was associated with the primary outcome" for text in key_findings)
 
 
 # ── 8. Significant findings p-values are separate and correct ─────────────────
@@ -1212,6 +1235,104 @@ def test_audit_sheet_preserves_raw_node_values() -> None:
 
 # ── runner ────────────────────────────────────────────────────────────────────
 
+def test_results_synthesis_paragraph_present_and_clean() -> None:
+    """Issue 3: a short deterministic 'Results synthesis' paragraph should
+    appear near the end of Chapter V, after the Summary of Tested
+    Associations / Significant Findings Highlight, summarising only
+    computed facts (p27 positivity, localization/staining pattern,
+    significant vs non-significant associations) without forbidden
+    causal/prognostic wording."""
+    table_one = {
+        "headers": ["Variable", "Summary", "Overall"],
+        "rows": [
+            {
+                "variable": "Positive/ Negative", "type": "n (%)",
+                "cells": ["Positive: 95 (81.9%); Negative: 21 (18.1%); Missing: 0 (0.0%)"],
+            },
+            {
+                "variable": "Interpretation-site", "type": "n (%)",
+                "cells": ["Nuclear: 59 (50.9%); Cytoplasmic: 57 (49.1%); Missing: 0 (0.0%)"],
+            },
+            {
+                "variable": "Staining Result", "type": "n (%)",
+                "cells": ["4+2: 59 (50.9%); 3+1: 57 (49.1%); Missing: 0 (0.0%)"],
+            },
+        ],
+    }
+    tested_associations = [
+        {
+            "source_result_id": "er", "predictor": "ER", "test_applied": "Chi-square test",
+            "test_statistic": "chi-square = 12.00", "p_value": "p < 0.001", "adjusted_p_value": "p = 0.005",
+            "effect_size": "Cramér's V = 0.55", "significance_status": "Significant after multiple-testing correction",
+            "notes_warnings": "-",
+        },
+        {
+            "source_result_id": "pr", "predictor": "PR", "test_applied": "Chi-square test",
+            "test_statistic": "chi-square = 9.30", "p_value": "p = 0.002", "adjusted_p_value": "p = 0.009",
+            "effect_size": "Cramér's V = 0.50", "significance_status": "Significant after multiple-testing correction",
+            "notes_warnings": "-",
+        },
+        {
+            "source_result_id": "age", "predictor": "Age", "test_applied": "Welch's t-test",
+            "test_statistic": "t = -0.89", "p_value": "p = 0.400", "adjusted_p_value": "p = 0.700",
+            "effect_size": "Cohen's d = -0.23", "significance_status": "Not significant after multiple-testing correction",
+            "notes_warnings": "-",
+        },
+    ]
+    blueprint = build_thesis_analysis_blueprint(
+        df_shape=(116, 5),
+        classifications=[
+            {"column": "Positive/ Negative", "detected_type": "nominal"},
+            {"column": "Interpretation-site", "detected_type": "nominal"},
+            {"column": "Staining Result", "detected_type": "nominal"},
+            {"column": "ER", "detected_type": "nominal"},
+            {"column": "PR", "detected_type": "nominal"},
+            {"column": "Age", "detected_type": "scale"},
+        ],
+        assignment={"outcome": "Positive/ Negative"},
+        table_one=table_one,
+        tests=[],
+        tested_associations=tested_associations,
+        methods_text=(
+            "Multiple-testing adjustment used the Benjamini-Hochberg FDR method across 24 inferential tests."
+        ),
+        session={
+            "study_type": "association",
+            "domain_profile": "breast_pathology",
+            "main_marker": "p27",
+            "main_outcome_concept": "p27 expression status",
+        },
+    )
+    synthesis = blueprint.get("results_synthesis") or ""
+    assert "Overall, p27 positivity was observed in 95 of 116 cases (81.9%)." in synthesis
+    assert "Nuclear localization was the most common staining pattern, observed in 59 cases (50.9%)" in synthesis
+    assert "the most frequent staining score pattern was 4+2" in synthesis
+    assert "After Benjamini-Hochberg FDR correction, ER, and PR" in synthesis or "After Benjamini-Hochberg FDR correction, ER" in synthesis
+    assert "Age did not remain statistically significant after correction." in synthesis
+    assert (
+        "These findings describe associations only and should not be interpreted as causal or prognostic conclusions."
+        in synthesis
+    )
+    forbidden = [
+        "proves", "causes", "predicts", "prognostic significance",
+        "independent association", "survival", "mortality", "risk factor",
+    ]
+    lowered = synthesis.lower()
+    for word in forbidden:
+        assert word not in lowered, f"forbidden wording '{word}' found in results synthesis"
+
+    docx_text = _docx_text(chapter_v_export.generate_docx({"thesis_analysis_blueprint": blueprint, "tests": []}))
+    assert "Results Synthesis" in docx_text
+    assert synthesis in docx_text
+    summary_idx = docx_text.index("Section VI - Summary of Tested Associations")
+    synthesis_idx = docx_text.index("Results Synthesis")
+    warnings_idx = docx_text.index("Warnings and Interpretation Notes")
+    assert summary_idx < synthesis_idx < warnings_idx
+
+    pdf_bytes = chapter_v_export.generate_pdf({"thesis_analysis_blueprint": blueprint, "tests": []})
+    assert isinstance(pdf_bytes, bytes) and len(pdf_bytes) > 0
+
+
 def main() -> None:
     test_age_baseline_min_max()
     print("  [ok] Age baseline min/max")
@@ -1279,6 +1400,9 @@ def main() -> None:
     test_significant_key_findings_are_thesis_style()
     print("  [ok] Significant findings use deterministic thesis-style wording")
 
+    test_excel_significant_findings_includes_p27_percentage_wording()
+    print("  [ok] Excel significant_findings sheet includes p27-group percentage wording")
+
     test_significant_findings_pvalues_separate()
     print("  [ok] Significant findings raw p-value and adjusted p-value are separate")
 
@@ -1326,6 +1450,9 @@ def main() -> None:
 
     test_audit_sheet_preserves_raw_node_values()
     print("  [ok] Audit sheet preserves raw node values; Table 1 stays clean")
+
+    test_results_synthesis_paragraph_present_and_clean()
+    print("  [ok] Results Synthesis paragraph present, deterministic, and forbidden-wording-free")
 
     print("\nSigma final polish verification passed.")
 

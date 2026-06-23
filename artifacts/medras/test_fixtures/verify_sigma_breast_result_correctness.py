@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 from pathlib import Path
+import io
+import re
 
 import pandas as pd
+from docx import Document
+from openpyxl import load_workbook
 
-from app.services import category_merger, plan, results, variable_classifier
+from app.services import category_merger, chapter_v_export, export, plan, results, variable_classifier
 
 
 def _classes(df):
@@ -237,11 +241,106 @@ def verify_missing_exclusion_and_significant_summary():
     assert any(row["variable"].startswith("PR vs Positive/ Negative") for row in output["significant_findings"])
 
 
+def _docx_text(blob: bytes) -> str:
+    doc = Document(io.BytesIO(blob))
+    paragraphs = [p.text for p in doc.paragraphs]
+    cells = [cell.text for table in doc.tables for row in table.rows for cell in row.cells]
+    return "\n".join(paragraphs + cells)
+
+
+def verify_age_receives_adjusted_pvalue_in_fdr_family():
+    """Issue 1: Age is dispatched through the phase-B run_pairwise_welch
+    runner, which only sets 'p_value' (not 'p'). apply_correction_if_needed
+    filters strictly on 'p', so Age was silently excluded from the FDR
+    family while chi-square predictors (which natively set 'p') were
+    corrected — Age showed a raw p-value but '-' for adjusted p-value
+    in Word/PDF/Excel. Verify Age now receives an adjusted p-value
+    everywhere, and that the FDR test count matches the methods text."""
+    n = 40
+    df = pd.DataFrame({
+        "Positive/ Negative": ["Yes"] * 24 + ["No"] * 16,
+        "Age": list(range(30, 54)) + list(range(55, 71)),
+        "ER": (["Positive"] * 20 + ["Negative"] * 4) + (["Positive"] * 4 + ["Negative"] * 12),
+        "PR": (["Positive"] * 19 + ["Negative"] * 5) + (["Positive"] * 5 + ["Negative"] * 11),
+    })
+    classes = [
+        {"column": "Positive/ Negative", "detected_type": "nominal"},
+        {"column": "Age", "detected_type": "scale"},
+        {"column": "ER", "detected_type": "nominal"},
+        {"column": "PR", "detected_type": "nominal"},
+    ]
+    session = {
+        "study_type": "association",
+        "study_type_confirmed": True,
+        "analysis_predictors": ["Age", "ER", "PR"],
+        "domain_profile": "breast_pathology",
+        "main_marker": "p27",
+        "main_outcome_concept": "p27 expression status",
+    }
+    assignment = {"outcome": "Positive/ Negative", "group": None, "covariates": []}
+    sigma_plan = plan.generate_plan(df, classes, assignment, _normality("Age"), session)
+    output = results.run_plan(df, classes, assignment, sigma_plan, session=session)
+
+    age_test = next(test for test in output["tests"] if test.get("test_type") == "welch_ttest")
+    assert age_test.get("p") is not None, "Age test must carry a 'p' key for FDR correction to find it"
+    assert age_test.get("p_corrected") is not None, "Age must receive an adjusted p-value like every other completed inferential test"
+
+    completed = [
+        row for row in output["tested_associations"]
+        if row.get("p_value") not in (None, "-", "")
+    ]
+    assert len(completed) >= 3
+    for row in completed:
+        assert row.get("adjusted_p_value") not in (None, "-", ""), (
+            f"{row['predictor']} is a completed inferential test but has no adjusted p-value: {row}"
+        )
+    age_row = next(row for row in completed if row["predictor"] == "Age")
+    assert age_row["adjusted_p_value"] != "-"
+
+    correction_info = session.get("correction_info") or {}
+    n_tests_methods_match = re.search(r"across (\d+) inferential tests", output.get("methods_md") or "")
+    if n_tests_methods_match:
+        assert int(n_tests_methods_match.group(1)) == correction_info.get("n_tests") == len(completed)
+
+    blueprint = output["thesis_analysis_blueprint"]
+    doc_bytes = chapter_v_export.generate_docx({
+        "thesis_analysis_blueprint": blueprint, "tests": output["tests"],
+    })
+    doc = Document(io.BytesIO(doc_bytes))
+    tested_assoc_table = next(
+        table for table in doc.tables
+        if [cell.text for cell in table.rows[0].cells][:1] == ["Predictor"]
+    )
+    age_docx_row = next(
+        [cell.text for cell in row.cells] for row in tested_assoc_table.rows[1:]
+        if row.cells[0].text == "Age"
+    )
+    assert age_docx_row[4] != "-", age_docx_row
+
+    class _FakeEntry:
+        def __init__(self, df):
+            self.df = df
+            self.meta = {
+                "filename": "age_fdr.xlsx", "domain_profile": "breast_pathology",
+                "assignment": assignment,
+                "classifications": classes,
+                "data_version": 0,
+            }
+
+    xlsx_blob = export.to_xlsx(_FakeEntry(df), output, assignment)
+    workbook = load_workbook(io.BytesIO(xlsx_blob))
+    ws = workbook["tested_associations"]
+    rows = list(ws.iter_rows(min_row=2, values_only=True))
+    age_excel_row = next(row for row in rows if row[0] == "Age")
+    assert age_excel_row[4] not in (None, "-", ""), age_excel_row
+
+
 def main():
     verify_outcome_typo_blocks_then_routes_binary()
     verify_clinical_labels_and_protected_merges()
     verify_actual_test_label_and_association_figure()
     verify_missing_exclusion_and_significant_summary()
+    verify_age_receives_adjusted_pvalue_in_fdr_family()
     root = Path(__file__).resolve().parents[1]
     js_source = (root / "public/js/analysis.js").read_text(encoding="utf-8")
     api_source = (root / "app/api/stats.py").read_text(encoding="utf-8")

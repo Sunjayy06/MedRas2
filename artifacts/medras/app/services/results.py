@@ -1791,6 +1791,13 @@ def run_plan(
             r.setdefault("rows", [])
             r.setdefault("narrative", narrative)
             r.setdefault("p_value", r.get("p"))
+            # Mirror p_value into 'p' (some phase-B runners such as
+            # _ttest_independent only set 'p_value') so apply_correction_if_needed,
+            # which filters on 'p', does not silently skip this test and leave
+            # its adjusted p-value as "-" while every chi-square/Fisher test
+            # (which already returns 'p' natively) gets corrected.
+            if r.get("p_value") is not None and r.get("p") is None:
+                r["p"] = r.get("p_value")
             r.setdefault("effect_size", None)
             r.setdefault("effect_label", "—")
             r.setdefault("ci_lo", None)
@@ -1952,6 +1959,11 @@ def run_plan(
     if any(t.get("test_type") in ("chi_square", "fisher_exact") for t in test_results):
         methods_lines.append(
             "Categorical associations were tested using chi-square or Fisher's exact test as appropriate."
+        )
+    if _thesis_conservative_exact_enabled(session):
+        methods_lines.append(
+            "In thesis-conservative mode, Fisher's exact test was used for 2×2 clinical "
+            "categorical associations."
         )
     if correction_info:
         methods_lines.append(
@@ -2526,6 +2538,35 @@ def _normalise_categorical_association_data(data, col1, col2, session=None):
     return out
 
 
+def _is_marker_component_column(name: Any) -> bool:
+    """Heuristic match for marker/outcome-component descriptive-only
+    variables (e.g. staining localization/score columns), mirroring
+    thesis_blueprint._marker_component_concept's keyword set. Thesis
+    -conservative exact-test mode must not be forced onto these."""
+    low = str(name or "").lower()
+    return any(
+        token in low
+        for token in (
+            "localization", "localisation", "site", "score", "result",
+            "pattern", "intensity", "staining", "interpretation",
+        )
+    )
+
+
+def _thesis_conservative_exact_enabled(session: Optional[Dict[str, Any]]) -> bool:
+    """Resolve the thesis-conservative exact-test toggle. An explicit
+    session override (used by callers/tests) takes precedence over the
+    SIGMA_THESIS_CONSERVATIVE_EXACT env-backed global default, which is
+    OFF unless explicitly enabled."""
+    if isinstance(session, dict) and "thesis_conservative_exact" in session:
+        return bool(session.get("thesis_conservative_exact"))
+    try:
+        from app.core.config import settings as _settings
+        return bool(_settings.sigma_thesis_conservative_exact)
+    except Exception:
+        return False
+
+
 def run_chi_or_fisher(col1, col2, session, df):
     from scipy.stats import chi2_contingency, fisher_exact
     import math
@@ -2537,14 +2578,24 @@ def run_chi_or_fisher(col1, col2, session, df):
     chi2, p_chi, dof, expected = chi2_contingency(table, correction=False)
     min_expected = float(expected.min())
     is_2x2 = (table.shape == (2, 2))
-    use_fisher = min_expected < 5
+    sparse = min_expected < 5
+    conservative = (
+        is_2x2
+        and not _is_marker_component_column(col1)
+        and not _is_marker_component_column(col2)
+        and _thesis_conservative_exact_enabled(session)
+    )
+    use_fisher = sparse or conservative
 
     if use_fisher and is_2x2:
         odds_ratio, p = fisher_exact(table, alternative='two-sided')
         test_name = "Fisher's exact test"
         test_type = 'fisher_exact'
         stat = float(odds_ratio)
-        note = "Fisher's exact test was used because sparse expected cell counts were present."
+        if sparse:
+            note = "Fisher's exact test was used because sparse expected cell counts were present."
+        else:
+            note = "In thesis-conservative mode, Fisher's exact test was used for 2×2 clinical categorical associations."
     else:
         correction = (True if is_2x2 and min_expected < 5 else False)
         chi2, p, dof, expected = chi2_contingency(table, correction=correction)

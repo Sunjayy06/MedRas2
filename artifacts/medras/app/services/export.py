@@ -2026,6 +2026,12 @@ def to_xlsx(entry, results: Dict[str, Any], assignment: Dict[str, Any]) -> bytes
     df = getattr(entry, "df", pd.DataFrame())
     blueprint = results.get("thesis_analysis_blueprint") or {}
     label_ctx = _excel_label_context(results, assignment)
+    # Reuse chapter_v_export's outcome label context (raw outcome name ->
+    # clinical display name substring substitution, plus generic variable
+    # label cleanup) so predictor/variable columns match the Word/PDF
+    # clinical display exactly instead of showing raw internal names like
+    # "positive_nodes" or "X vs Positive/ Negative".
+    thesis_label_ctx = chapter_v_export._outcome_label_context(blueprint)
     category_merge_rows = _category_merge_rows(meta)
     system_merges = _system_display_merge_rows(df)
     existing_merge_keys = {(r.get("variable"), r.get("original_category")) for r in category_merge_rows}
@@ -2205,7 +2211,7 @@ def to_xlsx(entry, results: Dict[str, Any], assignment: Dict[str, Any]) -> bytes
     for row in blueprint.get("tested_associations") or results.get("tested_associations") or []:
         if isinstance(row, dict):
             ws.append([
-                _excel_display_value(row.get("predictor", ""), label_ctx),
+                chapter_v_export._display_value(row.get("predictor", ""), thesis_label_ctx),
                 _excel_display_value(row.get("test_applied", ""), label_ctx),
                 _excel_display_value(row.get("test_statistic", ""), label_ctx),
                 _excel_display_value(row.get("p_value", ""), label_ctx),
@@ -2224,7 +2230,7 @@ def to_xlsx(entry, results: Dict[str, Any], assignment: Dict[str, Any]) -> bytes
     for row in blueprint.get("significant_findings") or results.get("significant_findings") or []:
         if isinstance(row, dict):
             ws.append([
-                _excel_display_value(row.get("variable", ""), label_ctx),
+                chapter_v_export._display_value(row.get("variable", ""), thesis_label_ctx),
                 _excel_display_value(row.get("key_finding", ""), label_ctx),
                 _excel_display_value(row.get("test_statistic", ""), label_ctx),
                 _excel_display_value(row.get("p_value", ""), label_ctx),
@@ -2282,7 +2288,6 @@ def to_xlsx(entry, results: Dict[str, Any], assignment: Dict[str, Any]) -> bytes
     table_one_table = _find_blueprint_table(blueprint, "table_one")
     blocks: List[Tuple[List[str], List[List[Any]]]] = []
     if table_one_table is not None:
-        thesis_label_ctx = chapter_v_export._outcome_label_context(blueprint)
         payload = chapter_v_export._descriptive_export_table(table_one_table, thesis_label_ctx)
         blocks = [block for block in _excel_descriptive_table_blocks(payload) if block[1]]
     if blocks:

@@ -72,6 +72,10 @@ def _clinical_pathology_concept(variable: Any) -> tuple[str, str]:
         return "nodal_status", "Nodal status distribution"
     if any(token in key for token in ("ene", "dcis", "lvi", "necrosis")):
         return "adverse_features", "Adverse pathological features"
+    if "laterality" in key:
+        return "laterality", "Laterality distribution"
+    if "grade" in key:
+        return "histological_grade", "Histological grade distribution"
     return "other_pathology", "Other pathology characteristics"
 
 
@@ -156,11 +160,120 @@ def _display_text(value: Any, label_ctx: Dict[str, Any]) -> str:
     return str(_apply_display_labels(value, label_ctx))
 
 
-def _deterministic_key_finding(finding: Dict[str, Any], label_ctx: Dict[str, Any]) -> str:
+def _finding_observed_counts_table(raw_test: Optional[Dict[str, Any]]) -> tuple:
+    if not isinstance(raw_test, dict):
+        return [], []
+    for table in raw_test.get("tables") or []:
+        if str(table.get("title") or "").strip().lower() == "observed counts":
+            headers = list(table.get("headers") or [])
+            rows = [row for row in (table.get("rows") or []) if isinstance(row, (list, tuple))]
+            return headers, rows
+    return [], []
+
+
+def _finding_category_key(label: str) -> str:
+    return re.sub(r"\s+", " ", str(label or "").strip().lower()).replace("postive", "positive")
+
+
+def _finding_grade_label(key: str, raw_label: str) -> str:
+    match = re.match(r"^(?:grade\s*)?([123])(?:\.0)?$", key)
+    if match:
+        return f"Grade {match.group(1)}"
+    return str(raw_label).strip()
+
+
+def _marker_group_percentage_sentence(
+    predictor_label: str, variable_lower: str, raw_test: Optional[Dict[str, Any]], marker: str
+) -> str:
+    """Build a deterministic key-finding sentence from the predictor's own
+    observed-counts table (already computed by the executed test), comparing
+    the marker-positive and marker-negative outcome columns by percentage.
+    Returns "" when the observed-counts breakdown is unavailable/unusable,
+    so callers can fall back to a generic summary."""
+    headers, rows = _finding_observed_counts_table(raw_test)
+    if not headers or not rows or len(headers) < 3:
+        return ""
+    pos_idx = neg_idx = None
+    for idx, header in enumerate(headers):
+        if idx == 0:
+            continue
+        low = str(header).strip().lower()
+        if pos_idx is None and "positive" in low:
+            pos_idx = idx
+        elif neg_idx is None and "negative" in low:
+            neg_idx = idx
+    if pos_idx is None or neg_idx is None:
+        return ""
+    merged: Dict[str, List[Any]] = {}
+    order: List[str] = []
+    for row in rows:
+        if not row or str(row[0]).strip().lower() == "total":
+            continue
+        key = _finding_category_key(row[0])
+        if key not in merged:
+            merged[key] = [0.0, 0.0, row[0]]
+            order.append(key)
+        try:
+            merged[key][0] += float(row[pos_idx])
+            merged[key][1] += float(row[neg_idx])
+        except (TypeError, ValueError, IndexError):
+            return ""
+    total_pos = sum(item[0] for item in merged.values())
+    total_neg = sum(item[1] for item in merged.values())
+    if not total_pos or not total_neg:
+        return ""
+    if len(merged) == 2 and any(key in {"positive", "present", "yes"} for key in merged):
+        predictor_key = next(key for key in merged if key in {"positive", "present", "yes"})
+        pct_pos = merged[predictor_key][0] / total_pos * 100.0
+        pct_neg = merged[predictor_key][1] / total_neg * 100.0
+        if pct_pos == pct_neg:
+            return ""
+        comparator = "more frequent" if pct_pos > pct_neg else "less frequent"
+        noun = "positivity" if predictor_key == "positive" else "presence"
+        return (
+            f"Among {marker}-positive cases, {predictor_label} {noun} was {pct_pos:.1f}% "
+            f"({comparator} than among {marker}-negative cases at {pct_neg:.1f}%)."
+        )
+    best_key, best_gap, best_side = None, -1.0, None
+    for key, (cnt_pos, cnt_neg, raw_label) in merged.items():
+        pct_pos = cnt_pos / total_pos * 100.0
+        pct_neg = cnt_neg / total_neg * 100.0
+        gap = abs(pct_neg - pct_pos)
+        if gap > best_gap:
+            best_gap = gap
+            best_key = key
+            best_side = ("negative", pct_neg, pct_pos) if pct_neg > pct_pos else ("positive", pct_pos, pct_neg)
+    if best_key is None or best_gap <= 0:
+        return ""
+    larger_side, larger_pct, smaller_pct = best_side
+    smaller_side = "negative" if larger_side == "positive" else "positive"
+    raw_label = merged[best_key][2]
+    label = _finding_grade_label(best_key, raw_label) if (
+        "histological" in variable_lower or "grade" in variable_lower
+    ) else str(raw_label).strip()
+    noun = "tumours" if "histological" in variable_lower or "grade" in variable_lower else "cases"
+    return (
+        f"{label} {noun} contributed a larger share of {marker}-{larger_side} cases "
+        f"({larger_pct:.1f}%) than {marker}-{smaller_side} cases ({smaller_pct:.1f}%)."
+    )
+
+
+def _deterministic_key_finding(
+    finding: Dict[str, Any], label_ctx: Dict[str, Any], raw_test: Optional[Dict[str, Any]] = None
+) -> str:
     variable = _display_text(finding.get("variable") or "", label_ctx).lower()
     outcome_display = str(label_ctx.get("display_outcome") or label_ctx.get("outcome") or "").lower()
     if "p27" not in outcome_display:
         return _display_text(finding.get("key_finding") or "", label_ctx)
+    marker = re.sub(r"\s+(?:expression\s+)?status$", "", str(label_ctx.get("display_outcome") or "p27"), flags=re.IGNORECASE).strip() or "p27"
+    predictor_label = str(finding.get("variable") or "").strip()
+    for sep in (" vs ", " by "):
+        if sep in predictor_label:
+            predictor_label = predictor_label.split(sep, 1)[0].strip()
+            break
+    percentage_sentence = _marker_group_percentage_sentence(predictor_label, variable, raw_test, marker)
+    if percentage_sentence:
+        return percentage_sentence
     if "histological" in variable or "grade" in variable:
         return "Grade 3 cases were proportionately higher in the p27-negative group."
     if re.search(r"(^|[^a-z0-9])er([^a-z0-9]|$)", variable):
@@ -217,7 +330,19 @@ def _report_significance_status(raw_p: Optional[float], adjusted_p: Optional[flo
     return "Statistically significant" if raw_p < 0.05 else "Not statistically significant"
 
 
-def _clean_report_warning(value: Any) -> str:
+_DUPLICATE_PREDICTOR_LABELS_RE = re.compile(r"^predictor_duplicate_labels_(.+)$")
+_DUPLICATE_OUTCOME_TITLE_RE = re.compile(r"duplicate labels in outcome\s+(.+)$", re.IGNORECASE)
+_DUPLICATE_LABELS_DETECTED_RE = re.compile(
+    r"duplicate (?:predictor |outcome )?labels were detected:\s*(.+?)\.\s*(?:Analysis can continue|Merge or)",
+    re.IGNORECASE,
+)
+_GENERIC_TECHNICAL_WARNING_MARKERS = (
+    "phase_b", "phase-b", "_phase_b", "objective_routing", "debug:",
+    "internal qa", "implementation hint", "trigger entry",
+)
+
+
+def _clean_report_warning(value: Any, suggestion_id: str = "", suggestion_title: str = "") -> str:
     text = re.sub(r"\s+", " ", str(value or "")).strip(" .")
     lower = text.lower()
     if not text:
@@ -227,7 +352,37 @@ def _clean_report_warning(value: Any) -> str:
     if "run separately under the correlation objective" in lower:
         return "Correlation analysis was not included in the selected analysis objective."
     if "duplicate" in lower and "predictor" in lower:
-        return "Some predictor labels appeared duplicated after cleaning; category grouping should be reviewed."
+        # Prefer a specific, actionable warning naming the predictor and the
+        # raw duplicate category labels that were merged, instead of a
+        # generic "category grouping should be reviewed" sentence that does
+        # not say which variable/labels are involved. When the predictor
+        # name and raw labels cannot both be recovered, drop the warning
+        # from the main report — the raw suggestion text is preserved
+        # verbatim in the Excel "Data Cleaning Log" audit sheet regardless.
+        predictor_match = _DUPLICATE_PREDICTOR_LABELS_RE.match(str(suggestion_id or ""))
+        labels_match = _DUPLICATE_LABELS_DETECTED_RE.search(text)
+        if predictor_match and labels_match:
+            predictor = predictor_match.group(1).strip()
+            labels = labels_match.group(1).strip()
+            return f"Duplicate raw {predictor} category labels ({labels}) were merged before analysis."
+        return ""
+    if "duplicate" in lower and "outcome" in lower:
+        # Same specific-or-drop policy as predictor duplicates, but for the
+        # outcome variable. The outcome name is not in the suggestion id
+        # (there is only one outcome), so it is recovered from the
+        # suggestion title instead ("...duplicate labels in outcome X").
+        outcome_match = _DUPLICATE_OUTCOME_TITLE_RE.search(str(suggestion_title or ""))
+        labels_match = _DUPLICATE_LABELS_DETECTED_RE.search(text)
+        if outcome_match and labels_match:
+            outcome_name = outcome_match.group(1).strip()
+            labels = labels_match.group(1).strip()
+            return f"Duplicate raw {outcome_name} category labels ({labels}) were merged before analysis."
+        return ""
+    if any(marker in lower for marker in _GENERIC_TECHNICAL_WARNING_MARKERS):
+        # Internal QA / implementation-detail wording is not actionable for
+        # a thesis reader and is not specific enough to rewrite; drop it
+        # from the main report (raw text remains in the Excel audit log).
+        return ""
     if not re.search(r"[.!?]$", text):
         text += "."
     return text
@@ -834,6 +989,17 @@ def _baseline_section(table_one: Dict[str, Any], classes: Dict[str, Dict[str, An
     }
 
 
+def _domain_section_keyword_match(text_lower: str, keyword: str) -> bool:
+    """Substring match for long, unambiguous keywords; word-boundary match
+    for short tokens (e.g. 'er', 'pr', 'ar', 'pt') that would otherwise
+    false-positive-match unrelated variable names (e.g. 'Laterality'
+    contains 'er'; 'Receptor' contains 'pt'), causing the same variable
+    to be duplicated into the wrong domain section under a generic title."""
+    if len(keyword) <= 3:
+        return _word_match(text_lower, keyword)
+    return keyword in text_lower
+
+
 def _domain_profile_sections(table_one: Dict[str, Any], domain_profile: str, label_ctx: Dict[str, Any]) -> List[Dict[str, Any]]:
     if domain_profile != "breast_pathology":
         return []
@@ -857,7 +1023,10 @@ def _domain_profile_sections(table_one: Dict[str, Any], domain_profile: str, lab
     for section_id, (title, purpose, keywords, classifier) in groups.items():
         matched = [
             row for row in rows
-            if any(keyword in str(row.get("variable") or "").lower() for keyword in keywords)
+            if any(
+                _domain_section_keyword_match(str(row.get("variable") or "").lower(), keyword)
+                for keyword in keywords
+            )
         ]
         if not matched:
             continue
@@ -972,6 +1141,193 @@ def _clarify_marker_component_test_count(methods_text: str, component_count: int
     return _MULTIPLE_TESTING_SENTENCE_RE.sub(replacement, methods_text, count=1)
 
 
+def _parse_table_one_categorical_cell(cell: Any) -> List[tuple]:
+    """Parse a table_one 'Category: n (pct%); ...' cell string into
+    (label, count, percentage) tuples, dropping the 'Missing' bucket."""
+    parsed: List[tuple] = []
+    for segment in str(cell or "").split(";"):
+        segment = segment.strip()
+        if not segment:
+            continue
+        match = re.match(r"^(.+?):\s*(\d+)\s*\(([\d.]+)%\)$", segment)
+        if not match:
+            continue
+        label = match.group(1).strip()
+        if label.lower() == "missing":
+            continue
+        parsed.append((label, int(match.group(2)), float(match.group(3))))
+    return parsed
+
+
+def _table_one_single_cell_row(table_one: Dict[str, Any], variable: str) -> List[tuple]:
+    for row in table_one.get("rows") or []:
+        if str(row.get("variable") or "") != variable or row.get("type") != "n (%)":
+            continue
+        cells = row.get("cells") or []
+        if len(cells) != 1:
+            return []
+        return _parse_table_one_categorical_cell(cells[0])
+    return []
+
+
+def _outcome_positivity_sentence(
+    table_one: Dict[str, Any], outcome: Optional[str], marker: str, label_ctx: Dict[str, Any]
+) -> str:
+    """'Overall, p27 positivity was observed in 95 of 116 cases (81.9%).'
+    Computed only from the outcome's own table_one n (%) breakdown."""
+    if not outcome:
+        return ""
+    # table_one may have been relabelled to the display outcome concept
+    # (e.g. raw column "Positive/ Negative" -> "p27 expression status") by
+    # _apply_thesis_display_labels_to_table_one before reaching here.
+    display_outcome = str(label_ctx.get("display_outcome") or label_ctx.get("outcome") or "")
+    parsed = _table_one_single_cell_row(table_one, str(outcome))
+    if not parsed and display_outcome:
+        parsed = _table_one_single_cell_row(table_one, display_outcome)
+    if not parsed:
+        return ""
+    positive = next((item for item in parsed if item[0].strip().lower() in {"positive", "present", "yes"}), None)
+    if not positive:
+        return ""
+    label, count, pct = positive
+    total = sum(item[1] for item in parsed)
+    if not total:
+        return ""
+    marker_label = _clean_text(marker) or str(label_ctx.get("display_outcome") or label_ctx.get("outcome") or outcome)
+    return f"Overall, {marker_label} positivity was observed in {count} of {total} cases ({pct:.1f}%)."
+
+
+def _marker_component_pattern_sentence(
+    table_one: Dict[str, Any], outcome_components: List[str]
+) -> str:
+    """'Nuclear localization was the most common staining pattern, observed
+    in 59 cases (50.9%), and the most frequent staining score pattern was
+    4+2.' Computed only from each marker-component variable's table_one
+    n (%) breakdown (the category with the highest observed count)."""
+    localization_phrase = ""
+    score_phrase = ""
+    for variable in outcome_components:
+        parsed = _table_one_single_cell_row(table_one, variable)
+        if not parsed:
+            continue
+        top_label, top_count, top_pct = max(parsed, key=lambda item: item[1])
+        low_variable = variable.lower()
+        if not localization_phrase and any(
+            token in low_variable for token in ("localization", "localisation", "site")
+        ):
+            localization_phrase = (
+                f"{top_label} localization was the most common staining pattern, "
+                f"observed in {top_count} cases ({top_pct:.1f}%)"
+            )
+        elif not score_phrase and any(
+            token in low_variable for token in ("score", "result", "pattern", "intensity")
+        ):
+            score_phrase = f"the most frequent staining score pattern was {top_label}"
+    if localization_phrase and score_phrase:
+        return f"{localization_phrase}, and {score_phrase}."
+    if localization_phrase:
+        return f"{localization_phrase}."
+    if score_phrase:
+        return f"For staining score, {score_phrase}."
+    return ""
+
+
+_METHODS_CORRECTION_NAME_RE = re.compile(r"adjustment used the (.+?) method")
+
+
+def _correction_method_label(methods_text: str) -> str:
+    match = _METHODS_CORRECTION_NAME_RE.search(methods_text or "")
+    return match.group(1).strip() if match else "multiple-testing"
+
+
+_SYNTHESIS_DERIVED_NODE_LABELS = {
+    "positivenodes": "Positive nodes",
+    "totalnodes": "Total nodes",
+    "noderatio": "Node ratio",
+}
+
+
+def _clean_predictor_label(name: str) -> str:
+    """Map known internal derived-variable names to their doctor-facing
+    labels before they are joined into the Results Synthesis paragraph.
+    Mirrors chapter_v_export._DERIVED_NODE_LABELS' small, known mapping
+    without importing chapter_v_export (thesis_blueprint stays dependency
+    -light by design)."""
+    key = re.sub(r"[^a-z0-9]+", "", str(name or "").lower())
+    return _SYNTHESIS_DERIVED_NODE_LABELS.get(key, name)
+
+
+def _join_predictor_names(names: List[str]) -> str:
+    names = list(dict.fromkeys(_clean_predictor_label(name) for name in names if name))
+    if not names:
+        return ""
+    if len(names) == 1:
+        return names[0]
+    return ", ".join(names[:-1]) + ", and " + names[-1]
+
+
+def _build_results_synthesis(
+    table_one: Dict[str, Any],
+    outcome: Optional[str],
+    outcome_components: List[str],
+    displayed_associations: List[Dict[str, Any]],
+    methods_text: str,
+    marker: str,
+    label_ctx: Dict[str, Any],
+    warnings: List[str],
+) -> str:
+    """Deterministic 'Results synthesis' paragraph summarising only
+    already-computed facts (outcome positivity, marker-component staining
+    pattern, significant/non-significant tested associations). Does not
+    invent values, cite literature, or claim causality/prognosis."""
+    sentences: List[str] = []
+    positivity = _outcome_positivity_sentence(table_one, outcome, marker, label_ctx)
+    if positivity:
+        sentences.append(positivity)
+    pattern = _marker_component_pattern_sentence(table_one, outcome_components)
+    if pattern:
+        sentences.append(pattern)
+
+    outcome_label = str(label_ctx.get("display_outcome") or label_ctx.get("outcome") or outcome or "the outcome")
+    significant = [
+        row.get("predictor") for row in displayed_associations
+        if row.get("significance_status") == "Significant after multiple-testing correction"
+    ]
+    nominal_only = [
+        row.get("predictor") for row in displayed_associations
+        if str(row.get("significance_status") or "").startswith("Nominally significant")
+    ]
+    non_significant = [
+        row.get("predictor") for row in displayed_associations
+        if row.get("significance_status") == "Not significant after multiple-testing correction"
+    ]
+    if significant:
+        method = _correction_method_label(methods_text)
+        sentences.append(
+            f"After {method} correction, {_join_predictor_names(significant)} showed statistically "
+            f"significant associations with {outcome_label}."
+        )
+    if non_significant:
+        sentences.append(
+            f"{_join_predictor_names(non_significant)} did not remain statistically significant after correction."
+        )
+    if nominal_only:
+        sentences.append(
+            f"{_join_predictor_names(nominal_only)} {'were' if len(nominal_only) > 1 else 'was'} nominally "
+            "significant before adjustment but did not remain significant after correction."
+        )
+    if any("sparse" in warning.lower() or "expected cell" in warning.lower() for warning in warnings):
+        sentences.append(
+            "Some tested associations had sparse expected cell counts and should be interpreted with caution."
+        )
+    if not sentences:
+        return ""
+    sentences.append(
+        "These findings describe associations only and should not be interpreted as causal or prognostic conclusions."
+    )
+    return " ".join(sentences)
+
+
 _FAMILY_SECTIONS = {
     "bivariate": ("bivariate_associations", "Bivariate Associations / Group Comparisons", "Summarise predictor-by-outcome tests."),
     "correlation": ("correlation_analysis", "Correlation Analysis", "Summarise pairwise correlation results."),
@@ -1039,7 +1395,9 @@ def build_thesis_analysis_blueprint(
     for suggestion in plan.get("suggestions") or []:
         warning = suggestion.get("warning") or suggestion.get("title")
         if warning:
-            cleaned_warning = _clean_report_warning(warning)
+            cleaned_warning = _clean_report_warning(
+                warning, str(suggestion.get("id") or ""), str(suggestion.get("title") or "")
+            )
             if cleaned_warning:
                 warnings.append(cleaned_warning)
     eligible_count = int(plan_debug.get("eligible_predictor_count") or 0)
@@ -1212,6 +1570,16 @@ def build_thesis_analysis_blueprint(
             warning_list.append("Held for detailed report to keep the thesis blueprint concise.")
             figure["warnings"] = warning_list
 
+    tests_by_predictor: Dict[str, Dict[str, Any]] = {}
+    for raw_test in tests or []:
+        title_prefix = str(raw_test.get("title") or "").split(":", 1)[0].strip()
+        for sep in (" vs ", " by "):
+            if sep in title_prefix:
+                title_prefix = title_prefix.split(sep, 1)[0].strip()
+                break
+        if title_prefix and title_prefix not in tests_by_predictor:
+            tests_by_predictor[title_prefix] = raw_test
+
     thesis_findings = []
     component_findings: List[Dict[str, Any]] = []
     for finding in significant_findings:
@@ -1225,7 +1593,13 @@ def build_thesis_analysis_blueprint(
         for key in ("variable", "key_finding", "test_applied", "effect_size", "notes_warnings"):
             if key in displayed:
                 displayed[key] = _display_text(displayed[key], label_ctx)
-        displayed["key_finding"] = _deterministic_key_finding(displayed, label_ctx)
+        finding_predictor = variable
+        for sep in (" vs ", " by "):
+            if sep in finding_predictor:
+                finding_predictor = finding_predictor.split(sep, 1)[0].strip()
+                break
+        raw_test = tests_by_predictor.get(finding_predictor)
+        displayed["key_finding"] = _deterministic_key_finding(displayed, label_ctx, raw_test)
         thesis_findings.append(displayed)
 
     canonical_associations = tested_associations or _fallback_tested_associations(tests, outcome)
@@ -1253,6 +1627,11 @@ def build_thesis_analysis_blueprint(
         warnings.append(
             "Marker-component variables were summarized descriptively and excluded from clinical association interpretation."
         )
+
+    results_synthesis = _build_results_synthesis(
+        table_one, outcome, outcome_components, displayed_associations,
+        methods_text, str(session.get("main_marker") or ""), label_ctx, warnings,
+    )
 
     if displayed_associations:
         association_summary_table = {
@@ -1419,6 +1798,7 @@ def build_thesis_analysis_blueprint(
             _display_text(methods_text, label_ctx), len(component_associations)
         ),
         "results_narrative": _display_text(results_narrative, label_ctx),
+        "results_synthesis": results_synthesis,
         "warnings": list(dict.fromkeys(
             warning for warning in (_clean_report_warning(item) for item in warnings) if warning
         )),

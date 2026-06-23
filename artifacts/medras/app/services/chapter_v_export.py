@@ -663,6 +663,11 @@ def _quadrant_category_label(category: Any) -> str:
     return "Other"
 
 
+def _is_tumour_quadrant_variable(variable: Any) -> bool:
+    key = _variable_key(variable)
+    return "quadrant" in key or (("tumour" in key or "tumor" in key) and "site" in key)
+
+
 def _score_sort_key(category: Any) -> Tuple[int, int, int]:
     match = re.match(r"^\s*(\d+)\s*\+\s*(\d+)\s*$", _text(category).strip())
     if match:
@@ -721,7 +726,7 @@ def _descriptive_export_table(table: Dict[str, Any], label_ctx: Dict[str, Any]) 
         if categories:
             for category, count, pct in categories:
                 clean_category = _clinical_category_label(variable, category, label_ctx)
-                if concept == "tumour_quadrant":
+                if concept == "tumour_quadrant" or _is_tumour_quadrant_variable(variable):
                     clean_category = _quadrant_category_label(clean_category)
                 key = (variable, clean_category)
                 if key not in categorical_counts:
@@ -2095,7 +2100,24 @@ def _user_facing_warning(value: Any) -> str:
     if "run separately under the correlation objective" in lower:
         return "Correlation analysis was not included in the selected analysis objective."
     if "duplicate" in lower and "predictor" in lower:
-        return "Some predictor labels appeared duplicated after cleaning; category grouping should be reviewed."
+        # A non-specific duplicate-predictor-labels warning reaching this far
+        # (the blueprint-level cleanup normally already makes it specific or
+        # drops it) is not actionable without naming the variable/labels
+        # involved — keep it out of the main Word/PDF report rather than
+        # showing a vague "category grouping should be reviewed" sentence.
+        # The raw detail remains available in the Excel audit sheets.
+        return ""
+    if any(
+        marker in lower
+        for marker in (
+            "phase_b", "phase-b", "_phase_b", "objective_routing", "debug:",
+            "internal qa", "implementation hint", "trigger entry",
+        )
+    ):
+        # Internal QA / implementation-detail wording is not actionable for
+        # a thesis reader; keep it out of the main Word/PDF report. The raw
+        # text remains available in the Excel audit sheets.
+        return ""
     if not re.search(r"[.!?]$", text):
         text += "."
     return text
@@ -2392,6 +2414,11 @@ def generate_docx(
     else:
         _plain_docx_text(doc, "No final thesis significant findings were identified among the completed tests.")
 
+    results_synthesis = str(blueprint.get("results_synthesis") or "").strip()
+    if results_synthesis:
+        _add_heading(doc, "Results Synthesis", 2)
+        _plain_docx_text(doc, results_synthesis)
+
     _add_heading(doc, "Warnings and Interpretation Notes", 1)
     _add_warnings_docx(doc, blueprint)
 
@@ -2455,7 +2482,8 @@ def _render_section_pdf(
     body,
     small,
     include_optional_figures: bool = False,
-) -> int:
+    table_no: int = 1,
+) -> Tuple[int, int]:
     section_id = str(section.get("section_id") or "")
     figures = [
         _normalise_figure_metadata(figure, label_ctx)
@@ -2480,7 +2508,9 @@ def _render_section_pdf(
             and _figure_matches_table(figure, table)
             for figure in figures
         )
-        flow.append(Paragraph(f"<b>{_pdf_escape(_display_value(_clean_table_title(table.get('title')), label_ctx))}</b>", small))
+        clean_title = _display_value(_clean_table_title(table.get('title')), label_ctx)
+        flow.append(Paragraph(f"<b>{_pdf_escape(f'Table {table_no}. {clean_title}')}</b>", small))
+        table_no += 1
         pdf_table, warning_notes = _pdf_table(table, label_ctx, available_width)
         flow.append(pdf_table)
         if not matched_rendered_figure:
@@ -2511,7 +2541,7 @@ def _render_section_pdf(
             if next_no != figure_no:
                 figure_no = next_no
                 used_figures.add(figure_id)
-    return figure_no
+    return figure_no, table_no
 
 
 def generate_pdf(
@@ -2535,6 +2565,7 @@ def generate_pdf(
     small = ParagraphStyle("Small", parent=body, fontSize=8, leading=10)
     flow: List[Any] = []
     figure_no = 1
+    table_no = 1
 
     flow.append(Paragraph("CHAPTER V<br/>OBSERVATION AND RESULTS", styles["Title"]))
     flow.append(Spacer(1, 10))
@@ -2555,8 +2586,9 @@ def generate_pdf(
         intro = _section_intro(section, label_ctx, polish_overrides)
         if intro:
             flow.append(Paragraph(_pdf_escape(intro), body))
-        figure_no = _render_section_pdf(
-            flow, section, figure_no, label_ctx, available_width, body, small, include_optional_figures
+        figure_no, table_no = _render_section_pdf(
+            flow, section, figure_no, label_ctx, available_width, body, small, include_optional_figures,
+            table_no=table_no,
         )
 
     flow.append(Paragraph(_pdf_escape(_section_export_title("primary_outcome_distribution", "Marker Expression", label_ctx)), h1))
@@ -2568,7 +2600,9 @@ def generate_pdf(
         outcome_tables = _primary_outcome_tables(blueprint, label_ctx) or _section_tables(section)
         display_tables = _expand_export_tables(outcome_tables, label_ctx)
         for table in display_tables:
-            flow.append(Paragraph(f"<b>{_pdf_escape(_display_value(_clean_table_title(table.get('title')), label_ctx))}</b>", small))
+            clean_title = _display_value(_clean_table_title(table.get('title')), label_ctx)
+            flow.append(Paragraph(f"<b>{_pdf_escape(f'Table {table_no}. {clean_title}')}</b>", small))
+            table_no += 1
             pdf_table, warning_notes = _pdf_table(table, label_ctx, available_width)
             flow.append(pdf_table)
             for warning in warning_notes:
@@ -2593,8 +2627,9 @@ def generate_pdf(
             if interpretation:
                 flow.append(Paragraph(_pdf_escape(interpretation), body))
     for section in [s for s in descriptive_sections if s.get("section_id") == "marker_outcome_components"]:
-        figure_no = _render_section_pdf(
-            flow, section, figure_no, label_ctx, available_width, body, small, include_optional_figures
+        figure_no, table_no = _render_section_pdf(
+            flow, section, figure_no, label_ctx, available_width, body, small, include_optional_figures,
+            table_no=table_no,
         )
 
     inferential_ids = {"bivariate_associations", "correlation_analysis", "regression_adjusted_analysis", "diagnostic_accuracy", "reliability_agreement", "survival_analysis", "repeated_measures", "other_analyses"}
@@ -2603,12 +2638,15 @@ def generate_pdf(
         intro = _section_intro(section, label_ctx, polish_overrides)
         if intro:
             flow.append(Paragraph(_pdf_escape(intro), body))
-        figure_no = _render_section_pdf(
-            flow, section, figure_no, label_ctx, available_width, body, small, include_optional_figures
+        figure_no, table_no = _render_section_pdf(
+            flow, section, figure_no, label_ctx, available_width, body, small, include_optional_figures,
+            table_no=table_no,
         )
     flow.append(Paragraph("Section VI - Summary of Tested Associations", h1))
     association_summary = _tested_associations_table(blueprint)
     if association_summary:
+        flow.append(Paragraph(f"<b>{_pdf_escape(f'Table {table_no}. Summary of tested associations')}</b>", small))
+        table_no += 1
         pdf_table, warning_notes = _pdf_table(association_summary, label_ctx, available_width)
         flow.append(pdf_table)
         for warning in warning_notes:
@@ -2619,6 +2657,8 @@ def generate_pdf(
         flow.append(Paragraph("No completed predictor-versus-outcome associations were available.", body))
     if blueprint.get("significant_findings"):
         flow.append(Paragraph("Significant Findings Highlight", h2))
+        flow.append(Paragraph(f"<b>{_pdf_escape(f'Table {table_no}. Final thesis significant findings')}</b>", small))
+        table_no += 1
         pdf_table, warning_notes = _pdf_table({
             "columns": [
                 "Variable / parameter", "Key finding", "Test statistic", "p-value",
@@ -2645,6 +2685,10 @@ def generate_pdf(
                 flow.append(Paragraph(_pdf_escape(cleaned_warning), small))
     else:
         flow.append(Paragraph("No final thesis significant findings were identified among the completed tests.", body))
+    results_synthesis = str(blueprint.get("results_synthesis") or "").strip()
+    if results_synthesis:
+        flow.append(Paragraph("Results Synthesis", h2))
+        flow.append(Paragraph(_pdf_escape(results_synthesis), body))
     flow.append(Paragraph("Warnings and Interpretation Notes", h1))
     warnings = list(blueprint.get("warnings") or [])
     unavailable = list(blueprint.get("unavailable_or_recommended_only") or [])

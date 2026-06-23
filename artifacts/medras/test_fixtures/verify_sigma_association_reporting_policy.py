@@ -9,6 +9,7 @@ from docx import Document
 from openpyxl import load_workbook
 
 from app.services import chapter_v_export, export, results
+from app.services import plan as sigma_plan
 from app.services.thesis_blueprint import build_thesis_analysis_blueprint
 from test_fixtures.verify_sigma_chapter_v_export import FakeEntry
 
@@ -322,12 +323,220 @@ def test_run_plan_projects_each_canonical_result_once() -> None:
     assert canonical.keys() <= figure_ids
 
 
+def test_duplicate_predictor_warning_is_specific_or_dropped() -> None:
+    """Issue 5: a duplicate-predictor-labels warning must name the actual
+    predictor and the raw labels that were merged, instead of a generic
+    'category grouping should be reviewed' sentence that doesn't say which
+    variable is involved. When the predictor cannot be identified, the
+    warning must not appear in the main report at all."""
+    plan_with_specific_suggestion = {
+        "suggestions": [{
+            "id": "predictor_duplicate_labels_Ki67",
+            "title": "Review likely duplicate labels in predictor Ki67",
+            "requires_confirmation": True,
+            "blocking": False,
+            "warning": (
+                "Likely duplicate predictor labels were detected: >=14 / >= 14%. "
+                "Analysis can continue, but split categories may affect estimates and should be reviewed."
+            ),
+        }],
+    }
+    blueprint = build_thesis_analysis_blueprint(
+        df_shape=(50, 2),
+        classifications=[{"column": "Positive/ Negative", "detected_type": "nominal"}],
+        assignment={"outcome": "Positive/ Negative"},
+        tests=[],
+        plan=plan_with_specific_suggestion,
+        session={"study_type": "association"},
+    )
+    assert any("Duplicate raw Ki67 category labels" in warning for warning in blueprint["warnings"]), blueprint["warnings"]
+    assert any(">=14 / >= 14%" in warning for warning in blueprint["warnings"]), blueprint["warnings"]
+    assert not any("should be reviewed" in warning for warning in blueprint["warnings"]), blueprint["warnings"]
+
+    text = _docx_text(chapter_v_export.generate_docx({"thesis_analysis_blueprint": blueprint, "tests": []}))
+    assert "Duplicate raw Ki67 category labels" in text
+    assert "Some predictor labels appeared duplicated after cleaning" not in text
+
+    # A suggestion id that doesn't match the expected pattern can't be
+    # attributed to a specific predictor — it must be dropped, not shown
+    # as a generic, unactionable warning.
+    plan_without_id = {
+        "suggestions": [{
+            "id": "unrelated_suggestion_id",
+            "warning": (
+                "Likely duplicate predictor labels were detected: A / B. "
+                "Analysis can continue, but split categories may affect estimates and should be reviewed."
+            ),
+        }],
+    }
+    dropped_blueprint = build_thesis_analysis_blueprint(
+        df_shape=(50, 2),
+        classifications=[{"column": "Positive/ Negative", "detected_type": "nominal"}],
+        assignment={"outcome": "Positive/ Negative"},
+        tests=[],
+        plan=plan_without_id,
+        session={"study_type": "association"},
+    )
+    assert not any("duplicate" in warning.lower() for warning in dropped_blueprint["warnings"]), dropped_blueprint["warnings"]
+
+
+def test_thesis_conservative_exact_mode() -> None:
+    """Issue 2: an opt-in, default-OFF thesis-conservative mode should use
+    Fisher's exact test for every 2x2 clinical categorical association
+    (even with adequate expected counts), while leaving larger RxC tables
+    and marker-component descriptive columns on the existing chi-square
+    routing. Verify the toggle, the routing, and Word/PDF/Excel consistency."""
+    import app.core.config as config_module
+
+    assert config_module.settings.sigma_thesis_conservative_exact is False, (
+        "SIGMA_THESIS_CONSERVATIVE_EXACT must default to OFF"
+    )
+
+    adequate_2x2 = pd.DataFrame({
+        "Predictor": ["A"] * 20 + ["B"] * 20,
+        "Outcome": (["Yes"] * 10 + ["No"] * 10) * 2,
+    })
+    default_result = results.run_chi_or_fisher("Predictor", "Outcome", {}, adequate_2x2)
+    assert default_result["actual_test_used"] == "Chi-square test"
+
+    conservative_result = results.run_chi_or_fisher(
+        "Predictor", "Outcome", {"thesis_conservative_exact": True}, adequate_2x2
+    )
+    assert conservative_result["actual_test_used"] == "Fisher's exact test"
+    assert "thesis-conservative mode" in conservative_result["note"]
+
+    rxc = pd.DataFrame({
+        "Predictor": ["A"] * 15 + ["B"] * 15 + ["C"] * 15,
+        "Outcome": (["Yes"] * 8 + ["No"] * 7) * 3,
+    })
+    rxc_conservative = results.run_chi_or_fisher(
+        "Predictor", "Outcome", {"thesis_conservative_exact": True}, rxc
+    )
+    assert rxc_conservative["actual_test_used"] == "Chi-square test", (
+        "Conservative mode must not force Fisher's exact onto larger RxC tables"
+    )
+
+    marker_component_df = pd.DataFrame({
+        "Interpretation-site": ["Nuclear"] * 20 + ["Cytoplasmic"] * 20,
+        "Outcome": (["Yes"] * 10 + ["No"] * 10) * 2,
+    })
+    marker_conservative = results.run_chi_or_fisher(
+        "Interpretation-site", "Outcome", {"thesis_conservative_exact": True}, marker_component_df
+    )
+    assert marker_conservative["actual_test_used"] == "Chi-square test", (
+        "Conservative mode must not be forced onto marker-component descriptive columns"
+    )
+
+    # End-to-end: run_plan with the flag set must produce internally
+    # consistent p-values/test labels across the test result, Word/PDF,
+    # and Excel tested-associations output.
+    df = pd.DataFrame({
+        "Positive/ Negative": ["Yes"] * 20 + ["No"] * 20,
+        "ER": (["Positive"] * 10 + ["Negative"] * 10) * 2,
+    })
+    classes = [
+        {"column": "Positive/ Negative", "detected_type": "nominal"},
+        {"column": "ER", "detected_type": "nominal"},
+    ]
+    session = {
+        "study_type": "association",
+        "study_type_confirmed": True,
+        "analysis_predictors": ["ER"],
+        "domain_profile": "breast_pathology",
+        "thesis_conservative_exact": True,
+    }
+    assignment = {"outcome": "Positive/ Negative", "group": None, "covariates": []}
+    sigma_plan_dict = sigma_plan.generate_plan(df, classes, assignment, {"columns": []}, session)
+    output = results.run_plan(df, classes, assignment, sigma_plan_dict, session=session)
+    er_test = next(test for test in output["tests"] if test.get("test_type") == "fisher_exact")
+    assert "In thesis-conservative mode" in output["methods_md"]
+
+    blueprint = output["thesis_analysis_blueprint"]
+    docx_text = _docx_text(chapter_v_export.generate_docx({
+        "thesis_analysis_blueprint": blueprint, "tests": output["tests"],
+    }))
+    pdf_text = chapter_v_export.generate_pdf({
+        "thesis_analysis_blueprint": blueprint, "tests": output["tests"],
+    })
+    assert isinstance(pdf_text, bytes) and len(pdf_text) > 0
+
+    er_row = next(row for row in output["tested_associations"] if row["predictor"] == "ER")
+    assert er_row["test_applied"] == "Fisher's exact test"
+    assert "Fisher's exact test" in docx_text
+
+    workbook = load_workbook(io.BytesIO(export.to_xlsx(FakeEntry(), output, assignment)))
+    excel_rows = list(workbook["tested_associations"].iter_rows(min_row=2, values_only=True))
+    excel_er_row = next(row for row in excel_rows if row[0] == "ER")
+    assert excel_er_row[1] == "Fisher's exact test" == er_row["test_applied"]
+    assert excel_er_row[3] == er_row["p_value"] == output["tested_associations"][0]["p_value"]
+    assert er_test["p"] is not None
+
+
+def test_outcome_duplicate_and_generic_technical_warnings_are_specific_or_dropped() -> None:
+    """Issue 5 (batch 2): the outcome-label counterpart of the predictor
+    duplicate-labels warning must also be made specific (naming the
+    outcome and the raw labels) rather than shown verbatim with internal
+    phrasing like 'test routing may be invalid'. Generic internal
+    QA/implementation-detail warnings (phase_b/objective_routing/etc.)
+    must never reach the main Word/PDF report."""
+    plan_with_outcome_dup = {
+        "suggestions": [{
+            "id": "outcome_duplicate_labels",
+            "title": "Resolve likely duplicate labels in outcome Positive/ Negative",
+            "requires_confirmation": True,
+            "blocking": True,
+            "warning": (
+                "Likely duplicate outcome labels were detected: Postive / Positive. "
+                "Merge or explicitly resolve them before running inferential analyses; "
+                "otherwise group counts and test routing may be invalid."
+            ),
+        }],
+    }
+    blueprint = build_thesis_analysis_blueprint(
+        df_shape=(50, 2),
+        classifications=[{"column": "Positive/ Negative", "detected_type": "nominal"}],
+        assignment={"outcome": "Positive/ Negative"},
+        tests=[],
+        plan=plan_with_outcome_dup,
+        session={"study_type": "association"},
+    )
+    assert any(
+        "Duplicate raw Positive/ Negative category labels (Postive / Positive) were merged before analysis." == warning
+        for warning in blueprint["warnings"]
+    ), blueprint["warnings"]
+    assert not any("test routing may be invalid" in warning for warning in blueprint["warnings"])
+
+    text = _docx_text(chapter_v_export.generate_docx({"thesis_analysis_blueprint": blueprint, "tests": []}))
+    assert "Duplicate raw Positive/ Negative category labels" in text
+    assert "test routing may be invalid" not in text
+
+    plan_with_internal_warning = {
+        "suggestions": [{
+            "id": "internal_thing",
+            "title": "Internal QA Check",
+            "warning": "Internal QA: phase_b trigger entry routing mismatch detected for objective_routing logic.",
+        }],
+    }
+    dropped_blueprint = build_thesis_analysis_blueprint(
+        df_shape=(50, 2),
+        classifications=[{"column": "Positive/ Negative", "detected_type": "nominal"}],
+        assignment={"outcome": "Positive/ Negative"},
+        tests=[],
+        plan=plan_with_internal_warning,
+        session={"study_type": "association"},
+    )
+    assert dropped_blueprint["warnings"] == []
+
+
 def main() -> None:
     test_contingency_selection_policy()
     test_canonical_summary_and_adjusted_status()
     test_section_vi_and_excel_report_all_associations()
     test_nominal_egfr_and_marker_component_reporting()
     test_run_plan_projects_each_canonical_result_once()
+    test_duplicate_predictor_warning_is_specific_or_dropped()
+    test_thesis_conservative_exact_mode()
+    test_outcome_duplicate_and_generic_technical_warnings_are_specific_or_dropped()
     print("Sigma association reporting policy verification passed.")
 
 

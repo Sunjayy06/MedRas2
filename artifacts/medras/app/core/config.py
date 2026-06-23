@@ -62,6 +62,9 @@ class Settings:
     cors_allow_credentials: bool = field(
         default_factory=lambda: os.environ.get("MEDRAS_CORS_CREDENTIALS", "false").lower() == "true"
     )
+    sigma_thesis_conservative_exact: bool = field(
+        default_factory=lambda: os.environ.get("SIGMA_THESIS_CONSERVATIVE_EXACT", "false").lower() == "true"
+    )
     max_upload_bytes: int = 50 * 1024 * 1024  # 50MB
     max_document_words: int = 80_000          # ~200 pages
 

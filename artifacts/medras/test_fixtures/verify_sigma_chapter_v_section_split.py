@@ -528,6 +528,76 @@ def test_no_duplicate_titles_in_word_export() -> None:
     assert len(titles) == len(set(titles)), f"Duplicate table captions found: {titles}"
 
 
+def test_domain_profile_tables_avoid_generic_duplicate_titles() -> None:
+    """Issue 4: distinct variables must not be grouped under the same
+    vague catch-all title (e.g. 'Other pathology characteristics'), and a
+    short ambiguous keyword like 'er' must not false-positive-match an
+    unrelated variable name like 'Laterality' (which contains the
+    substring 'er'), duplicating it into the wrong domain section under a
+    generic title."""
+    table_one = {
+        "headers": ["Variable", "Type", "Overall"],
+        "rows": [
+            {"variable": "Laterality", "type": "n (%)", "cells": ["Left: 58 (50.0%); Right: 58 (50.0%)"]},
+            {"variable": "Grade", "type": "n (%)", "cells": ["Grade 2: 50 (43.1%); Grade 3: 66 (56.9%)"]},
+            {"variable": "Tumour quadrant", "type": "n (%)", "cells": ["Central: 50 (43.1%); Other: 66 (56.9%)"]},
+            {"variable": "ER", "type": "n (%)", "cells": ["Positive: 74 (63.8%); Negative: 42 (36.2%)"]},
+        ],
+    }
+    classifications = [
+        {"column": "Laterality", "detected_type": "nominal"},
+        {"column": "Grade", "detected_type": "nominal"},
+        {"column": "Tumour quadrant", "detected_type": "nominal"},
+        {"column": "ER", "detected_type": "nominal"},
+    ]
+    blueprint = build_thesis_analysis_blueprint(
+        df_shape=(116, 3),
+        classifications=classifications,
+        assignment={"outcome": None},
+        table_one=table_one,
+        tests=[],
+        session={"domain_profile": "breast_pathology"},
+    )
+    clinical_section = next(
+        section for section in blueprint["analysis_sections"]
+        if section["section_id"] == "clinical_study_characteristics"
+    )
+    immuno_section = next(
+        section for section in blueprint["analysis_sections"]
+        if section["section_id"] == "immunophenotype_characteristics"
+    )
+    laterality_table = next(
+        table for table in clinical_section["tables"] if "Laterality" in table.get("source_variables", [])
+    )
+    assert laterality_table["title"] == "Laterality distribution"
+    assert laterality_table["title"] != "Other pathology characteristics"
+    # The 'er' substring inside 'Laterality' must not duplicate it into
+    # the immunophenotype section.
+    assert not any(
+        "Laterality" in table.get("source_variables", []) for table in immuno_section["tables"]
+    )
+    titles_by_variable_set: Dict[str, set] = {}
+    for section in (clinical_section, immuno_section):
+        for table in section["tables"]:
+            variables = frozenset(table.get("source_variables") or [])
+            title = table["title"]
+            for other_variables, other_title in titles_by_variable_set.items():
+                if title in other_title and not (frozenset(other_variables) & variables):
+                    raise AssertionError(
+                        f"Title '{title}' is reused for unrelated variable sets {variables} and {other_variables}"
+                    )
+            titles_by_variable_set[variables] = {title}
+
+    # Grade is not a baseline-demographic term, so (unlike Laterality) it
+    # keeps its own specific table in Section II rather than being folded
+    # into Table 1; verify the rendered Word output uses its specific
+    # title rather than the generic 'Other pathology characteristics'.
+    blob = chapter_v_export.generate_docx({"thesis_analysis_blueprint": blueprint, "tests": []})
+    text = _docx_text(blob)
+    assert "Histological grade distribution" in text
+    assert "Other pathology characteristics" not in text
+
+
 def test_generic_non_breast_fixture_still_exports() -> None:
     blueprint = build_thesis_analysis_blueprint(
         df_shape=(20, 2),
@@ -684,6 +754,8 @@ def main() -> None:
     print("  [ok] Non-significant node-derived association tables excluded from main body")
     test_no_duplicate_titles_in_word_export()
     print("  [ok] No duplicate table titles in Word export")
+    test_domain_profile_tables_avoid_generic_duplicate_titles()
+    print("  [ok] Domain-profile tables avoid generic duplicate titles (Laterality distribution)")
     test_generic_non_breast_fixture_still_exports()
     print("  [ok] Generic non-breast fixture still exports")
     test_continuous_descriptive_explanation_preserves_exact_numbers()
