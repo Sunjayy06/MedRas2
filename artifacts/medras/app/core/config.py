@@ -65,6 +65,15 @@ class Settings:
     sigma_thesis_conservative_exact: bool = field(
         default_factory=lambda: os.environ.get("SIGMA_THESIS_CONSERVATIVE_EXACT", "false").lower() == "true"
     )
+    sigma_ai_polish_enabled: bool = field(
+        default_factory=lambda: os.environ.get("SIGMA_AI_POLISH_ENABLED", "false").lower() == "true"
+    )
+    sigma_ai_polish_timeout_seconds: int = field(
+        default_factory=lambda: int(os.environ.get("SIGMA_AI_POLISH_TIMEOUT_SECONDS", "20") or "20")
+    )
+    sigma_ai_polish_max_tokens: int = field(
+        default_factory=lambda: int(os.environ.get("SIGMA_AI_POLISH_MAX_TOKENS", "800") or "800")
+    )
     max_upload_bytes: int = 50 * 1024 * 1024  # 50MB
     max_document_words: int = 80_000          # ~200 pages
 

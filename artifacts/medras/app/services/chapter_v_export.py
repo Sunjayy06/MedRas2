@@ -2280,6 +2280,8 @@ def _apply_polish_overrides(
     if not overrides:
         return blueprint
     bp = deepcopy(blueprint)
+    if "results_synthesis" in overrides:
+        bp["results_synthesis"] = overrides["results_synthesis"]
     for section in bp.get("analysis_sections") or []:
         section_id = str(section.get("section_id") or "")
         s_key = f"section:{section_id}"
@@ -2360,11 +2362,27 @@ def _section_intro(
     return intros.get(section_id, _clean_interpretation(section.get("interpretation"), label_ctx))
 
 
-def _add_warnings_docx(doc: Document, blueprint: Dict[str, Any]) -> None:
+def _ai_polish_status(requested: bool, applied: bool) -> str:
+    if applied:
+        return "applied"
+    if requested:
+        return "fallback"
+    return "deterministic"
+
+
+def _ai_polish_audit_label(requested: bool, applied: bool) -> str:
+    from app.services import ai_narrative
+    return ai_narrative.audit_label(_ai_polish_status(requested, applied))
+
+
+def _add_warnings_docx(
+    doc: Document, blueprint: Dict[str, Any], *, ai_polish_requested: bool = False, ai_polish_applied: bool = False
+) -> None:
     warnings = list(blueprint.get("warnings") or [])
     unavailable = list(blueprint.get("unavailable_or_recommended_only") or [])
     if not warnings and not unavailable:
         _plain_docx_text(doc, "No major thesis-reporting cautions were recorded.")
+        _plain_docx_text(doc, _ai_polish_audit_label(ai_polish_requested, ai_polish_applied))
         return
     rendered = set()
     for warning in warnings:
@@ -2384,6 +2402,7 @@ def _add_warnings_docx(doc: Document, blueprint: Dict[str, Any]) -> None:
         doc,
         "These are association analyses only; no causal, prognostic, or independent-effect conclusions should be drawn without an appropriate adjusted model and outcome data.",
     )
+    _plain_docx_text(doc, _ai_polish_audit_label(ai_polish_requested, ai_polish_applied))
 
 
 def generate_docx(
@@ -2391,6 +2410,7 @@ def generate_docx(
     *,
     include_optional_figures: bool = False,
     polish_overrides: Optional[Dict[str, str]] = None,
+    ai_polish_requested: bool = False,
 ) -> bytes:
     blueprint = _hydrate_blueprint_result_warnings(_blueprint(results), results)
     if polish_overrides:
@@ -2535,7 +2555,11 @@ def generate_docx(
         _plain_docx_text(doc, results_synthesis)
 
     _add_heading(doc, "Warnings and Interpretation Notes", 1)
-    _add_warnings_docx(doc, blueprint)
+    _add_warnings_docx(
+        doc, blueprint,
+        ai_polish_requested=ai_polish_requested or bool(polish_overrides),
+        ai_polish_applied=bool(polish_overrides),
+    )
 
     out = io.BytesIO()
     doc.save(out)
@@ -2667,6 +2691,7 @@ def generate_pdf(
     *,
     include_optional_figures: bool = False,
     polish_overrides: Optional[Dict[str, str]] = None,
+    ai_polish_requested: bool = False,
 ) -> bytes:
     blueprint = _hydrate_blueprint_result_warnings(_blueprint(results), results)
     if polish_overrides:
@@ -2831,5 +2856,9 @@ def generate_pdf(
             flow.append(Paragraph(f"• {_pdf_escape(cleaned)}", body))
             rendered_warnings.add(cleaned)
     flow.append(Paragraph("These are association analyses only; no causal, prognostic, or independent-effect conclusions should be drawn without an appropriate adjusted model and outcome data.", body))
+    flow.append(Paragraph(
+        _ai_polish_audit_label(ai_polish_requested or bool(polish_overrides), bool(polish_overrides)),
+        body,
+    ))
     doc.build(flow)
     return out.getvalue()

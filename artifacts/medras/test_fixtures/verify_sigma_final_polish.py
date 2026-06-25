@@ -21,6 +21,7 @@ import io
 import re
 from pathlib import Path
 from typing import Any, Dict, List
+from unittest.mock import patch
 
 import pandas as pd
 from docx import Document
@@ -1022,15 +1023,21 @@ def test_generic_non_p27_fixture() -> None:
 # ── Phase B: Narrative polish service ────────────────────────────────────────
 
 def test_polish_skipped_without_consent() -> None:
-    """polish_results must return an empty dict when OpenRouter is not configured."""
-    from app.services import narrative_polish
+    """polish_results must return an empty dict when AI polish is disabled,
+    regardless of whether a local .env happens to have a real key — this
+    test forces sigma_ai_polish_enabled=False (via both the config module
+    and the openrouter_client module's bound reference to it) so it never
+    touches the network even on a machine with a live OPENROUTER_API_KEY."""
+    import dataclasses
+    from app.core import config as config_module
+    from app.services import narrative_polish, openrouter_client
+
     results, _, _ = _build_fixture()
-    # OpenRouter is not configured in the test environment; must return {}
-    overrides = narrative_polish.polish_results(results)
-    assert isinstance(overrides, dict), "polish_results must return a dict"
-    # Without a live key this will always be empty — deterministic fallback
-    # (We can't assert it's empty if somehow a key exists, but we can confirm
-    # generate_docx accepts {} without error.)
+    disabled = dataclasses.replace(config_module.settings, sigma_ai_polish_enabled=False)
+    with patch.object(config_module, "settings", disabled), \
+         patch.object(openrouter_client, "settings", disabled):
+        overrides = narrative_polish.polish_results(results)
+    assert overrides == {}, "polish_results must return {} when AI polish is disabled"
     blob = chapter_v_export.generate_docx(results, polish_overrides=overrides)
     assert blob[:2] == b"PK", "DOCX must still be generated with empty overrides"
 
@@ -1106,6 +1113,48 @@ def test_pvalues_unchanged_by_polish() -> None:
             "Histological type raw p-value must be present regardless of polish"
         assert "p = 0.013" in full_text, \
             "Adjusted p-value must be present regardless of polish"
+
+
+def test_ai_polish_audit_line_reflects_deterministic_vs_applied() -> None:
+    """18. AI narration polish must not change tables, figures, p-values, tests,
+    or remove any required deterministic output, and a metadata/audit line must
+    always state whether AI polish was applied or the report is deterministic
+    only — in Word, PDF, and the Excel Cover sheet."""
+    results, df, meta = _build_fixture()
+
+    deterministic_docx = _docx_text(chapter_v_export.generate_docx(results))
+    assert "AI polish: deterministic only." in deterministic_docx
+    assert "AI polish: OpenRouter narration polish applied." not in deterministic_docx
+
+    polished_docx = _docx_text(chapter_v_export.generate_docx(
+        results, polish_overrides={"section:bivariate_associations": "A polished, deterministic-fact-preserving paragraph."}
+    ))
+    assert "AI polish: OpenRouter narration polish applied." in polished_docx
+    assert "AI polish: deterministic only." not in polished_docx
+
+    deterministic_pdf = _pdf_text(chapter_v_export.generate_pdf(results))
+    assert "AI polish: deterministic only." in deterministic_pdf
+
+    class _FakeEntry:
+        def __init__(self, df, meta):
+            self.df = df
+            self.meta = meta
+
+    xlsx_bytes = export.to_xlsx(_FakeEntry(df, meta), results, {"outcome": "Positive/ Negative"})
+    workbook = load_workbook(io.BytesIO(xlsx_bytes))
+    cover_rows = list(workbook["Cover"].iter_rows(values_only=True))
+    assert any("AI polish: deterministic only." in str(cell) for row in cover_rows for cell in row if cell)
+
+    # Required Chapter V outputs survive both the deterministic and the
+    # AI-polish-applied path identically (AI polish never touches tables).
+    for text in (deterministic_docx, polished_docx):
+        for required in (
+            "Age", "ER", "PR", "AR", "Histological type", "Molecular subtype",
+            "Significant Findings Highlight", "Summary of Tested Associations",
+            "Results Synthesis", "Warnings and Interpretation Notes",
+            "Detailed Association Tables",
+        ):
+            assert required in text, f"required output {required!r} missing"
 
 
 # ── 13. "No" label-vs-value cleaning bug ──────────────────────────────────────
@@ -1476,6 +1525,12 @@ def test_results_synthesis_treatment_timing_label_not_duplicated() -> None:
 
 
 def main() -> None:
+    from test_fixtures._network_guard import block_real_openrouter_calls
+    with block_real_openrouter_calls():
+        _run_all_checks()
+
+
+def _run_all_checks() -> None:
     test_age_baseline_min_max()
     print("  [ok] Age baseline min/max")
 
@@ -1580,6 +1635,9 @@ def main() -> None:
 
     test_pvalues_unchanged_by_polish()
     print("  [ok] p-values are unchanged by narrative polish")
+
+    test_ai_polish_audit_line_reflects_deterministic_vs_applied()
+    print("  [ok] AI polish audit line present in Word/PDF/Excel; required outputs preserved either way")
 
     test_node_label_never_corrupted_to_negative()
     print("  [ok] 'No of nodes involved' never renders as 'Negative of nodes involved'")

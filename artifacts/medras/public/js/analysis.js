@@ -53,6 +53,10 @@ const state = {
 
   // --- Steps 4-8 additions ---
   assignment: null,        // {outcome, group, covariates}
+  selectedPredictors: null, // null until the user saves Step 4 predictor choices
+  selectedPredictorsTouched: false,
+  subgroupVariables: [],
+  subgroupVariablesTouched: false,
   normality: null,         // {columns: [...]}
   plan: null,              // {tests, graphs, outputs, summary}
   confirmedTests: null,    // Set<string>
@@ -305,7 +309,7 @@ const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 // screen 1 / intake would defeat the resume banner (there's nothing to
 // resume to) and would also wipe the saved session every time the page
 // reloads cold.
-const RESUMABLE_SCREENS = new Set(["preview", "setup", "ai-confirm", "3", "4", "missing", "normality", "plan", "results", "export"]);
+const RESUMABLE_SCREENS = new Set(["preview", "setup", "ai-confirm", "3", "4", "missing", "analysis-vars", "normality", "plan", "results", "export"]);
 
 function saveSession() {
   if (!state.jobId) return;
@@ -323,6 +327,9 @@ function saveSession() {
     quality_actions: state.qualityActions || [],
     missing_decisions: state.missingDecisions || {},
     missing_applied_signature: state.missingAppliedSignature || null,
+    assignment: state.assignment || null,
+    selected_predictors: state.selectedPredictors || null,
+    subgroup_variables: state.subgroupVariables || [],
     // Persist AI study plan + description so screen-setup can rehydrate without
     // a network call on resume (fast path in resumeFromSavedSession).
     aiStudy: state.aiStudy || null,
@@ -382,6 +389,9 @@ async function resumeFromSavedSession(saved) {
     ingestDataset(data);
     state.missingDecisions = saved.missing_decisions || {};
     state.missingAppliedSignature = saved.missing_applied_signature || null;
+    if (saved.assignment) state.assignment = saved.assignment;
+    if (Array.isArray(saved.selected_predictors)) state.selectedPredictors = saved.selected_predictors;
+    if (Array.isArray(saved.subgroup_variables)) state.subgroupVariables = saved.subgroup_variables;
     const target = saved.screen;
     // Map legacy screen ids ("soon", "assign") onto the current 8-step
     // model so a saved session from before the refactor still resumes
@@ -475,9 +485,12 @@ async function resumeFromSavedSession(saved) {
     } else if (resolved === "missing") {
       renderMissingScreen();
       showScreen("missing");
+    } else if (resolved === "analysis-vars") {
+      renderAnalysisVariablesScreen();
+      showScreen("analysis-vars");
     } else if (resolved === "normality") {
-      showScreen("normality");
-      loadNormality();
+      renderAnalysisVariablesScreen();
+      showScreen("analysis-vars");
     } else if (resolved === "plan") {
       showScreen("plan");
       loadPlan();
@@ -503,17 +516,18 @@ function renderResumeBanner(saved) {
   const when = _formatRelativeTime(saved.timestamp);
   const stepLabel = (() => {
     switch (saved.screen) {
-      case "4":          return "Step 4 · Review data";
-      case "3":          return "Step 3 · Variables";
-      case "preview":    return "Step 2 · Data preview";
-      case "setup":      return "Step 2.5 · Study setup";
-      case "ai-confirm": return "Step 2.5 · Study setup";
-      case "normality":  return "Step 5 · Normality";
-      case "plan":       return "Step 6 · Plan and Run";
-      case "results":    return "Step 7 · Results";
-      case "export":     return "Step 8 · Export";
-      case "soon":       return "Step 5 · Normality";
-      case "assign":     return "Step 3 · Variables";
+      case "4":          return "Step 3 · Clean variables";
+      case "3":          return "Step 3 · Clean variables";
+      case "preview":    return "Step 2 · Dataset";
+      case "setup":      return "Step 1 · Objective";
+      case "ai-confirm": return "Step 1 · Objective";
+      case "analysis-vars": return "Step 4 · Choose analysis variables";
+      case "normality":  return "Step 5 · Review plan";
+      case "plan":       return "Step 5 · Review plan";
+      case "results":    return "Step 7 · Review results";
+      case "export":     return "Step 8 · Download reports";
+      case "soon":       return "Step 5 · Review plan";
+      case "assign":     return "Step 4 · Choose analysis variables";
       default:           return `Step ${saved.step || 1}`;
     }
   })();
@@ -562,28 +576,30 @@ function renderResumeBanner(saved) {
 const SCREENS = [
   "1", "intake", "2a", "2c", "2c-custom", "preview",
   "setup", "ai-confirm", "corr-results",
-  "3", "4", "missing",
-  "normality", "plan", "results", "export",
+  "3", "4", "missing", "analysis-vars",
+  "normality", "plan", "run", "results", "export",
 ];
 // Map a logical screen id to which step number is "active" in the tracker.
-// 7-step model: 1 Setup, 2 Data, 3 Variables, 4 Data preparation/Normality,
-//               5 Plan, 6 Results, 7 Export.
+// 8-step model: 1 Objective, 2 Dataset, 3 Clean variables, 4 Choose analysis
+// variables, 5 Review plan, 6 Run analysis, 7 Review results, 8 Download reports.
 const SCREEN_TO_STEP = {
   "1": 1, "intake": 1,
-  "2a": 2, "2c": 2, "2c-custom": 2, "preview": 2, "setup": 2, "ai-confirm": 2,
+  "2a": 2, "2c": 2, "2c-custom": 2, "preview": 2, "setup": 1, "ai-confirm": 1,
   "3": 3,
-  "4": 4, "missing": 4,
-  "normality": 4, "plan": 5, "results": 6, "corr-results": 6, "export": 7,
+  "4": 3, "missing": 3,
+  "analysis-vars": 4,
+  "normality": 5, "plan": 5, "run": 6, "results": 7, "corr-results": 7, "export": 8,
 };
 
 function isWizardStepReady(step) {
   if (step <= 1) return Boolean(state.jobId || state.aiStudy || state.proposalUnderstanding);
   if (step === 2) return Boolean(state.jobId && state.summary);
-  if (step === 3) return Boolean(state.assignment && state.assignment.outcome);
-  if (step === 4) return Boolean(state.normality || state.quality || state.classifications?.length);
+  if (step === 3) return Boolean(state.classifications?.length);
+  if (step === 4) return Boolean(state.assignment && state.assignment.outcome);
   if (step === 5) return Boolean(state.plan);
   if (step === 6) return Boolean(state.results && state.resultId);
   if (step === 7) return Boolean(state.results && state.resultId);
+  if (step === 8) return Boolean(state.results && state.resultId);
   return false;
 }
 
@@ -608,8 +624,12 @@ function restoreWizardScreenState(id) {
     updateMissingScreenReadiness();
   } else if (id === "normality" && state.normality) {
     renderNormality();
+  } else if (id === "analysis-vars") {
+    renderAnalysisVariablesScreen();
   } else if (id === "plan" && state.plan) {
     renderPlan();
+  } else if (id === "run") {
+    updateWizardTracker(id);
   } else if (id === "results" && state.results) {
     renderResults();
   } else if (id === "export") {
@@ -670,7 +690,7 @@ function showScreen(id) {
 function bindStepNavBack() {
   const STEP_TO_SCREEN = {
     1: "1", 2: "preview", 3: "3",
-    4: "4", 5: "plan", 6: "results",
+    4: "analysis-vars", 5: "plan", 6: "run", 7: "results", 8: "export",
   };
   $$(".se-step").forEach((node) => {
     node.addEventListener("click", () => {
@@ -1475,6 +1495,10 @@ function ingestDataset(data) {
     state.assignment = null;
     state.assignmentAutoMatched = false;
     state.assignmentConfirmed = false;
+    state.selectedPredictors = null;
+    state.subgroupVariables = [];
+    state.selectedPredictorsTouched = false;
+    state.subgroupVariablesTouched = false;
     state.normality = null;
     state.plan = null;
     state.confirmedTests = null;
@@ -1509,6 +1533,10 @@ function ingestDataset(data) {
   state.repeated = data.repeated_ids || { any_repeats: false, columns: [] };
   state.quality = null;
   state.qualityActions = [];
+  state.selectedPredictors = null;
+  state.subgroupVariables = [];
+  state.selectedPredictorsTouched = false;
+  state.subgroupVariablesTouched = false;
   state.followUp = null;
   // Any sheets the backend told us were blank during the latest /combine-sheets
   // get folded into our local set so we keep them unchecked next render.
@@ -1619,6 +1647,82 @@ function setupVisibleOutcome(plan) {
   );
 }
 
+function _compactColumnKey(value) {
+  return String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+function _knownColumnNames() {
+  const names = [];
+  (state.columns || []).forEach((c) => names.push(typeof c === "string" ? c : c.column));
+  (state.classifications || []).forEach((c) => names.push(c.column));
+  return Array.from(new Set(names.filter(Boolean)));
+}
+
+function _positiveNegativeOutcomeColumnName(column) {
+  const key = _compactColumnKey(column);
+  return key === "positivenegative" || key === "positiveornegative" ||
+    (key.includes("positive") && key.includes("negative"));
+}
+
+function _p27ContextDetected() {
+  const ai = state.aiStudy || {};
+  const proposal = state.proposalUnderstanding || ai.proposal_understanding || {};
+  const objective = state.studyDesc || (state.intake && (state.intake.objectives || state.intake.objective || state.intake.instructions)) || "";
+  const text = [
+    objective,
+    proposal.main_marker,
+    proposal.main_outcome_concept,
+    proposal.study_title,
+    proposal.analysis_intent,
+    ai.main_marker,
+    ai.main_outcome_concept,
+    ai.objective,
+  ].filter(Boolean).join(" ").toLowerCase();
+  const mentionsP27 = /\bp\s*[- ]?\s*27\b/.test(text);
+  const cols = _knownColumnNames();
+  const hasStatus = cols.some(_positiveNegativeOutcomeColumnName);
+  const hasMarkerComponent = cols.some((col) => {
+    const key = _compactColumnKey(col);
+    return key.includes("interpretationsite") || key.includes("stainingresult") ||
+      key.includes("localization") || key.includes("localisation") || key.includes("staining");
+  });
+  return mentionsP27 && hasStatus && hasMarkerComponent;
+}
+
+function outcomeDisplayLabel(column) {
+  if (_p27ContextDetected() && _positiveNegativeOutcomeColumnName(column)) {
+    return "p27 expression status";
+  }
+  return column || "";
+}
+
+function variableDisplayLabel(column) {
+  const key = _compactColumnKey(column);
+  if (_p27ContextDetected()) {
+    if (key.includes("interpretationsite") || key.includes("localization") || key.includes("localisation")) {
+      return "p27 staining localization";
+    }
+    if (key.includes("stainingresult") || key.includes("stainingscore") || key.includes("stainingpattern")) {
+      return "p27 staining score pattern";
+    }
+  }
+  if (key === "her2neu" || key === "her2") return "HER2";
+  if (key === "ki67" || key === "ki67index") return "Ki-67";
+  if (key === "txinfiltratingl" || key.includes("tumourinfiltratinglymphocyte")) return "Tumour-infiltrating lymphocytes";
+  return column || "";
+}
+
+function _displayAnalysisText(text) {
+  let out = String(text || "");
+  const outcome = confirmedOutcomeFromState() || state.outcomeCol || setupVisibleOutcome(state.aiStudy);
+  const displayOutcome = outcomeDisplayLabel(outcome);
+  if (outcome && displayOutcome && displayOutcome !== outcome) {
+    out = out.split(outcome).join(displayOutcome);
+  }
+  return out.replace(/Positive\/ Negative positivity/g, `${displayOutcome} positivity`)
+    .replace(/Positive\/ Negative-negative/g, `${displayOutcome}-negative`);
+}
+
 function normalizeAiStudyPlan(plan) {
   if (!plan) return plan;
   const normalized = Object.assign({}, plan);
@@ -1632,6 +1736,18 @@ function normalizeAiStudyPlan(plan) {
   const outcome = setupVisibleOutcome(normalized);
   if (outcome) {
     normalized.outcome_col = outcome;
+    if (_p27ContextDetected() || _positiveNegativeOutcomeColumnName(outcome)) {
+      const joined = [
+        normalized.main_marker,
+        normalized.main_outcome_concept,
+        normalized.objective,
+        normalized.study_title,
+      ].filter(Boolean).join(" ");
+      if (/\bp\s*[- ]?\s*27\b/i.test(joined) || _p27ContextDetected()) {
+        normalized.main_marker = "p27";
+        normalized.main_outcome_concept = "p27 expression status";
+      }
+    }
     if (normalized.proposal_mapping) {
       normalized.proposal_mapping = Object.assign({}, normalized.proposal_mapping, {
         mapped_outcome: normalized.proposal_mapping.mapped_outcome || outcome,
@@ -1647,6 +1763,12 @@ function applyCanonicalAssignment(data) {
   if (!data) return false;
   if (data.confirmed_outcome_col) {
     state.confirmedOutcomeCol = data.confirmed_outcome_col;
+  }
+  if (Array.isArray(data.selected_predictors)) {
+    state.selectedPredictors = data.selected_predictors;
+  }
+  if (Array.isArray(data.subgroup_variables)) {
+    state.subgroupVariables = data.subgroup_variables;
   }
   if (!data.assignment || !data.assignment.outcome) return false;
   const oldOutcome = state.assignment && state.assignment.outcome;
@@ -1798,6 +1920,7 @@ function renderAssignmentCard(opts) {
   const groupRow = cls.find((c) => c.column === a.group);
   const matched = !!outcomeRow && _isUsableAsOutcome(outcomeRow);
   const confirmedOutcome = confirmedOutcomeFromState();
+  const displayedOutcome = outcomeDisplayLabel(a.outcome);
   const formOpen = (opts && opts.formOpen) || !matched;
 
   // Build dropdown options. ID, exclude and date columns are greyed out
@@ -1808,7 +1931,7 @@ function renderAssignmentCard(opts) {
       ? " (ID — excluded)"
       : c.detected_type === "date" ? " (Date — excluded)" : "";
     const sample = _sampleSnippet(c);
-    const label = `${c.column}${tag}${sample ? `  ·  ${sample}` : ""}`;
+    const label = `${outcomeDisplayLabel(c.column)}${tag}${sample ? `  ·  ${sample}` : ""}`;
     return `<option value="${escapeHtml(c.column)}"${usable ? "" : " disabled"}${a.outcome === c.column ? " selected" : ""}>${escapeHtml(label)}</option>`;
   }).join("");
   const groupOptions = `<option value=""${!a.group ? " selected" : ""}>— No grouping (descriptive only) —</option>` + cls.map((c) => {
@@ -1818,7 +1941,7 @@ function renderAssignmentCard(opts) {
       : c.detected_type === "date" ? " (Date — excluded)"
       : c.detected_type === "scale" ? " (Scale — usually not a grouping variable)" : "";
     const sample = _sampleSnippet(c);
-    const label = `${c.column}${tag}${sample ? `  ·  ${sample}` : ""}`;
+    const label = `${variableDisplayLabel(c.column)}${tag}${sample ? `  ·  ${sample}` : ""}`;
     return `<option value="${escapeHtml(c.column)}"${usable ? "" : " disabled"}${a.group === c.column ? " selected" : ""}>${escapeHtml(label)}</option>`;
   }).join("");
 
@@ -1831,15 +1954,15 @@ function renderAssignmentCard(opts) {
   const summaryRows = matched ? `
     <div class="se-assign-row" data-testid="assign-row-outcome">
       <span class="se-assign-row-label">Outcome variable:</span>
-      <strong>${escapeHtml(a.outcome)}</strong>
+      <strong>${escapeHtml(displayedOutcome)}</strong>
       <span class="se-assign-row-type">— ${escapeHtml(_typeLabel(outcomeRow))}</span>
     </div>
     <div class="se-assign-row" data-testid="assign-row-group">
       <span class="se-assign-row-label">${!a.group && confirmedOutcome === a.outcome ? "Primary outcome/grouping for association:" : "Grouping variable:"}</span>
       ${!a.group && confirmedOutcome === a.outcome
-        ? `<strong>${escapeHtml(a.outcome)}</strong> <span class="se-assign-row-type">— ${escapeHtml(_typeLabel(outcomeRow))}</span>`
+        ? `<strong>${escapeHtml(displayedOutcome)}</strong> <span class="se-assign-row-type">— ${escapeHtml(_typeLabel(outcomeRow))}</span>`
         : a.group
-        ? `<strong>${escapeHtml(a.group)}</strong> <span class="se-assign-row-type">— ${escapeHtml(_typeLabel(groupRow))}</span>`
+        ? `<strong>${escapeHtml(variableDisplayLabel(a.group))}</strong> <span class="se-assign-row-type">— ${escapeHtml(_typeLabel(groupRow))}</span>`
         : `<em>— None (descriptive only) —</em>`}
     </div>
     <p class="se-assign-q">Is this correct?</p>
@@ -1927,10 +2050,187 @@ async function saveAssignmentFromCard() {
     }
     state.assignmentAutoMatched = true;
     state.assignmentConfirmed = !corrected;
-    renderAssignmentCard();
+    state.selectedPredictors = null;
+    state.subgroupVariables = [];
+    state.selectedPredictorsTouched = false;
+    state.subgroupVariablesTouched = false;
+    renderAnalysisVariablesScreen();
   } catch (err) {
     setStatus(status, `Could not save: ${err.message}`, "error");
   }
+}
+
+function _eligibleAnalysisVariable(c) {
+  if (!c || !c.column) return false;
+  const detected = String(c.detected_type || "").toLowerCase();
+  if (["id", "date", "exclude", "text"].includes(detected)) return false;
+  if (String(c.column).startsWith("__") || String(c.column).toLowerCase().startsWith("medras_")) return false;
+  const outcome = state.assignment && state.assignment.outcome;
+  return c.column !== outcome;
+}
+
+function _isP27MarkerComponentColumn(column) {
+  const key = _compactColumnKey(column);
+  return key.includes("interpretationsite") || key.includes("stainingresult") ||
+    key.includes("staininglocalization") || key.includes("staininglocalisation") ||
+    key.includes("p27staining") || key.includes("p27localization") || key.includes("p27localisation");
+}
+
+function _p27DefaultPredictors(candidates) {
+  return candidates
+    .filter((c) => !_isP27MarkerComponentColumn(c.column))
+    .map((c) => c.column);
+}
+
+function _defaultSubgroupSelection(candidates) {
+  if (Array.isArray(state.subgroupVariables) && state.subgroupVariables.length && state.subgroupVariablesTouched) {
+    return state.subgroupVariables.filter((col) => candidates.some((c) => c.column === col));
+  }
+  if (!_p27ContextDetected()) {
+    return (state.subgroupVariables || []).filter((col) => candidates.some((c) => c.column === col));
+  }
+  const preferred = [
+    "molecularsubtype", "nodalstatus", "histologicaltype", "histologicalgrade", "laterality",
+    "er", "pr", "ar", "her2", "her2neu", "ki67",
+  ];
+  return candidates
+    .filter((c) => ["nominal", "ordinal", "binary"].includes(String(c.detected_type || "").toLowerCase()))
+    .filter((c) => !_positiveNegativeOutcomeColumnName(c.column))
+    .filter((c) => preferred.some((key) => _compactColumnKey(c.column).includes(key)))
+    .map((c) => c.column);
+}
+
+function _defaultPredictorSelection(candidates) {
+  if (_p27ContextDetected() && !state.selectedPredictorsTouched) {
+    const expanded = _p27DefaultPredictors(candidates);
+    const current = Array.isArray(state.selectedPredictors)
+      ? state.selectedPredictors.filter((col) => candidates.some((c) => c.column === col))
+      : [];
+    if (!current.length || current.length < Math.min(8, expanded.length)) {
+      return expanded;
+    }
+  }
+  if (Array.isArray(state.selectedPredictors)) {
+    return state.selectedPredictors.filter((col) => candidates.some((c) => c.column === col));
+  }
+  const mapped = new Set([
+    ...(((state.aiStudy || {}).proposal_mapping || {}).mapped_predictors || []),
+    ...((state.aiStudy || {}).predictors || []),
+    ...((state.aiStudy || {}).all_predictors || []),
+  ].filter(Boolean));
+  const fromStudy = candidates.filter((c) => mapped.has(c.column)).map((c) => c.column);
+  // If the proposal did not identify predictors, keep the legacy safe default:
+  // classified eligible variables are preselected, but the user can remove them
+  // before the plan is generated.
+  return fromStudy.length ? fromStudy : candidates.map((c) => c.column);
+}
+
+function renderAnalysisVariablesScreen() {
+  const status = document.getElementById("analysis-vars-status");
+  renderAssignmentCard();
+  const predictorHost = document.getElementById("analysis-predictor-list");
+  const subgroupHost = document.getElementById("analysis-subgroup-list");
+  if (!predictorHost || !subgroupHost) return;
+  const candidates = (state.classifications || []).filter(_eligibleAnalysisVariable);
+  const selected = new Set(_defaultPredictorSelection(candidates));
+  state.selectedPredictors = Array.from(selected);
+  const subgroupSelected = new Set(_defaultSubgroupSelection(candidates));
+  if (state.assignment && state.assignment.group) subgroupSelected.add(state.assignment.group);
+  state.subgroupVariables = Array.from(subgroupSelected).filter((col) => candidates.some((c) => c.column === col));
+
+  if (!candidates.length) {
+    predictorHost.innerHTML = `<p class="se-hint">No eligible predictor variables are available after exclusions.</p>`;
+  } else {
+    predictorHost.innerHTML = candidates.map((c) => {
+      const checked = selected.has(c.column);
+      return `<label class="se-plan-card se-plan-card-fixed" data-testid="predictor-${escapeAttr(c.column)}">
+        <span class="se-plan-card-fixed-row">
+          <input type="checkbox" data-analysis-predictor value="${escapeAttr(c.column)}" ${checked ? "checked" : ""}>
+          <span class="se-plan-card-title">${escapeHtml(variableDisplayLabel(c.column))}</span>
+          <span class="se-plan-badge se-plan-badge-nonparam">${escapeHtml(_typeLabel(c))}</span>
+        </span>
+        <span class="se-plan-card-why">Missing: ${escapeHtml(String(c.missing_pct ?? c.missing_fraction ?? 0))}%</span>
+      </label>`;
+    }).join("");
+  }
+
+  const subgroupCandidates = candidates
+    .filter((c) => ["nominal", "ordinal", "binary"].includes(String(c.detected_type || "").toLowerCase()))
+    .filter((c) => !(_p27ContextDetected() && _isP27MarkerComponentColumn(c.column)));
+  subgroupHost.innerHTML = subgroupCandidates.length ? subgroupCandidates.map((c) => {
+    const checked = state.subgroupVariables.includes(c.column);
+    return `<label class="se-plan-card se-plan-card-fixed" data-testid="subgroup-${escapeAttr(c.column)}">
+      <span class="se-plan-card-fixed-row">
+        <input type="checkbox" data-analysis-subgroup value="${escapeAttr(c.column)}" ${checked ? "checked" : ""}>
+        <span class="se-plan-card-title">${escapeHtml(variableDisplayLabel(c.column))}</span>
+        <span class="se-plan-badge se-plan-badge-nonparam">${escapeHtml(_typeLabel(c))}</span>
+      </span>
+    </label>`;
+  }).join("") : `<p class="se-hint">No categorical subgroup variables are currently eligible.</p>`;
+
+  predictorHost.querySelectorAll("[data-analysis-predictor]").forEach((box) => {
+    box.addEventListener("change", () => {
+      state.selectedPredictorsTouched = true;
+      state.selectedPredictors = Array.from(predictorHost.querySelectorAll("[data-analysis-predictor]:checked")).map((el) => el.value);
+      saveSession();
+    });
+  });
+  subgroupHost.querySelectorAll("[data-analysis-subgroup]").forEach((box) => {
+    box.addEventListener("change", () => {
+      state.subgroupVariablesTouched = true;
+      state.subgroupVariables = Array.from(subgroupHost.querySelectorAll("[data-analysis-subgroup]:checked")).map((el) => el.value);
+      saveSession();
+    });
+  });
+  if (status) setStatus(status, "");
+}
+
+async function saveAnalysisVariablesAndPlan() {
+  const status = document.getElementById("analysis-vars-status");
+  if (!state.assignment || !state.assignment.outcome) {
+    setStatus(status, "Choose one primary outcome before reviewing the plan.", "error");
+    return;
+  }
+  const predictorHost = document.getElementById("analysis-predictor-list");
+  const subgroupHost = document.getElementById("analysis-subgroup-list");
+  state.selectedPredictors = Array.from((predictorHost || document).querySelectorAll("[data-analysis-predictor]:checked")).map((el) => el.value);
+  state.subgroupVariables = Array.from((subgroupHost || document).querySelectorAll("[data-analysis-subgroup]:checked")).map((el) => el.value);
+  state.selectedPredictorsTouched = true;
+  state.subgroupVariablesTouched = true;
+  if (!state.selectedPredictors.length) {
+    setStatus(status, "Select at least one predictor, or mark the study as descriptive before continuing.", "error");
+    return;
+  }
+  setStatus(status, "Saving analysis variables...", "loading");
+  try {
+    const saved = await api("/assign", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        job_id: state.jobId,
+        outcome: state.assignment.outcome,
+        group: state.assignment.group || null,
+        covariates: [],
+        predictors: state.selectedPredictors,
+        subgroup_variables: state.subgroupVariables,
+      }),
+    });
+    applyCanonicalAssignment(saved);
+    setStatus(status, "");
+    showScreen("plan");
+    loadPlan();
+  } catch (err) {
+    setStatus(status, `Could not save analysis variables: ${err.message}`, "error");
+  }
+}
+
+function bindAnalysisVariables() {
+  const screen = document.getElementById("screen-analysis-vars");
+  if (!screen) return;
+  const back = screen.querySelector('[data-action="analysis-vars-back"]');
+  if (back) back.addEventListener("click", () => showScreen("4"));
+  const save = screen.querySelector('[data-action="analysis-vars-save"]');
+  if (save) save.addEventListener("click", saveAnalysisVariablesAndPlan);
 }
 
 /* ------------------------------------------------------------------ */
@@ -4006,8 +4306,8 @@ async function _applyQualityHandler() {
       showScreen("missing");
       return;
     }
-    showScreen("normality");
-    loadNormality();
+    renderAnalysisVariablesScreen();
+    showScreen("analysis-vars");
   } catch (err) {
     setStatus(status, `Could not apply: ${err.message}`, "error");
   }
@@ -4165,7 +4465,7 @@ function bindNormality() {
   const screen = document.getElementById("screen-normality");
   if (!screen) return;
   const back = screen.querySelector('[data-action="back-to-review"]');
-  if (back) back.addEventListener("click", () => showScreen("3"));
+  if (back) back.addEventListener("click", () => showScreen("analysis-vars"));
   const cont = screen.querySelector('[data-action="continue-to-plan"]');
   if (cont) cont.addEventListener("click", () => { showScreen("plan"); loadPlan(); });
 }
@@ -4195,6 +4495,48 @@ async function loadPlan() {
   }
 }
 
+function _compactDisplayList(items, maxItems) {
+  const clean = Array.from(new Set((items || []).filter(Boolean)));
+  if (!clean.length) return "None selected";
+  const max = maxItems || 10;
+  const shown = clean.slice(0, max).join(", ");
+  return clean.length > max ? `${shown}, and ${clean.length - max} more` : shown;
+}
+
+function _planSummaryHtml(plan) {
+  const outcome = outcomeDisplayLabel((state.assignment || {}).outcome || confirmedOutcomeFromState() || state.outcomeCol);
+  const studyType = doctorFacingStudyTypeLabel((state.aiStudy || {}).study_type || plan.study_type || "association");
+  const sampleSize = (state.summary && state.summary.rows) || (state.aiStudy && state.aiStudy.sample_size) || "";
+  const predictorRows = (state.selectedPredictors || []).map((col) =>
+    (state.classifications || []).find((c) => c.column === col) || { column: col }
+  );
+  const predictorNames = predictorRows.map((row) => variableDisplayLabel(row.column));
+  const subgroupNames = (state.subgroupVariables || []).map(variableDisplayLabel);
+  const continuous = predictorRows
+    .filter((row) => String(row.detected_type || "").toLowerCase() === "scale")
+    .map((row) => variableDisplayLabel(row.column));
+  const categorical = predictorRows
+    .filter((row) => ["nominal", "ordinal", "binary"].includes(String(row.detected_type || "").toLowerCase()))
+    .map((row) => variableDisplayLabel(row.column));
+  const graphs = (plan.graphs || []).map((graph) => _displayAnalysisText(graph.title || graph.caption || ""));
+  const fdrText = predictorNames.length > 1
+    ? "Benjamini-Hochberg FDR across the inferential tests."
+    : "Multiple-testing adjustment is not needed for a single inferential test.";
+  return `
+    <div class="se-plan-summary-grid" data-testid="plan-structured-summary">
+      <div><strong>Primary outcome:</strong> ${escapeHtml(outcome || "Not selected")}</div>
+      <div><strong>Study design:</strong> ${escapeHtml(studyType)}</div>
+      <div><strong>Sample size:</strong> ${sampleSize ? `N = ${escapeHtml(String(sampleSize))}` : "Available after upload"}</div>
+      <div><strong>Predictors selected:</strong> ${escapeHtml(String(predictorNames.length))} — ${escapeHtml(_compactDisplayList(predictorNames, 14))}</div>
+      <div><strong>Subgroup variables:</strong> ${escapeHtml(_compactDisplayList(subgroupNames, 8))}</div>
+      <div><strong>Descriptive outputs planned:</strong> Table 1, domain-specific descriptive tables, figures, methods and results text.</div>
+      <div><strong>Continuous predictors:</strong> ${escapeHtml(_compactDisplayList(continuous, 8))}. Welch's t-test or Mann-Whitney U will be selected from distribution and group assumptions.</div>
+      <div><strong>Categorical predictors:</strong> ${escapeHtml(_compactDisplayList(categorical, 10))}. Chi-square or Fisher's exact test will be selected from contingency-table structure and expected counts.</div>
+      <div><strong>Multiple testing:</strong> ${escapeHtml(fdrText)}</div>
+      <div><strong>Graphs planned:</strong> ${escapeHtml(_compactDisplayList(graphs, 8))}</div>
+    </div>`;
+}
+
 function renderPlan() {
   const summary = document.getElementById("plan-summary");
   const descriptive = document.getElementById("plan-descriptive");
@@ -4204,7 +4546,7 @@ function renderPlan() {
   const graphs = document.getElementById("plan-graphs");
   if (!summary || !tests || !graphs) return;
   const p = state.plan || { tests: [], graphs: [], outputs: [], summary: "" };
-  summary.textContent = p.summary || "";
+  summary.innerHTML = _planSummaryHtml(p);
 
   // ── Descriptive section — always-on outputs from the plan ─────────
   const allOutputs = p.outputs || [];
@@ -4233,7 +4575,7 @@ function renderPlan() {
   const bivariateTests = layers.bivariate || (p.tests || []).filter((t) => t.analysis_family !== "regression");
   const multivariateTests = layers.multivariate || (p.tests || []).filter((t) => t.analysis_family === "regression");
   const bivariateHeading = document.querySelector('[data-testid="plan-tests-section"] .se-plan-section-heading');
-  if (bivariateHeading) bivariateHeading.textContent = "Bivariate analysis";
+  if (bivariateHeading) bivariateHeading.textContent = "View detailed test list";
   tests.innerHTML = bivariateTests.map((t) => planCard(t, "tests")).join("");
   if (multivariate) {
     multivariate.innerHTML = multivariateTests.map((item) =>
@@ -4282,12 +4624,12 @@ function planCard(card, kind) {
   let pairHtml = "";
   if (cols.length >= 2) {
     pairHtml = `<div class="se-plan-pair">
-      <code class="se-plan-col">${escapeHtml(cols[0])}</code>
+      <code class="se-plan-col">${escapeHtml(variableDisplayLabel(_displayAnalysisText(cols[0])))}</code>
       <span class="se-plan-pair-sep" aria-hidden="true">↔</span>
-      <code class="se-plan-col">${escapeHtml(cols[1])}</code>
+      <code class="se-plan-col">${escapeHtml(variableDisplayLabel(_displayAnalysisText(cols[1])))}</code>
     </div>`;
   } else if (cols.length === 1) {
-    pairHtml = `<div class="se-plan-pair"><code class="se-plan-col">${escapeHtml(cols[0])}</code></div>`;
+    pairHtml = `<div class="se-plan-pair"><code class="se-plan-col">${escapeHtml(variableDisplayLabel(_displayAnalysisText(cols[0])))}</code></div>`;
   }
 
   // Parametric / non-parametric badge
@@ -4302,12 +4644,12 @@ function planCard(card, kind) {
     <div class="se-plan-card-header">
       <label class="se-plan-card-toggle">
         <input type="checkbox" data-plan-toggle data-kind="${kind}" value="${id}" ${checked ? 'checked' : ''} data-testid="toggle-${id}">
-        <span class="se-plan-card-title">${escapeHtml(card.title)}</span>
+        <span class="se-plan-card-title">${escapeHtml(_displayAnalysisText(card.title))}</span>
       </label>
       ${paramBadge}
     </div>
     ${pairHtml}
-    <p class="se-plan-card-why">${escapeHtml(card.why || '')}</p>
+    <p class="se-plan-card-why">${escapeHtml(_displayAnalysisText(card.why || ''))}</p>
   </article>`;
 }
 
@@ -4332,7 +4674,7 @@ function bindPlan() {
   const screen = document.getElementById("screen-plan");
   if (!screen) return;
   const back = screen.querySelector('[data-action="back-to-normality"]');
-  if (back) back.addEventListener("click", () => showScreen("normality"));
+  if (back) back.addEventListener("click", () => showScreen("analysis-vars"));
   const run = screen.querySelector('[data-action="run-analysis"]');
   if (run) run.addEventListener("click", runAnalysis);
 }
@@ -4342,7 +4684,8 @@ function bindPlan() {
 /* ------------------------------------------------------------------ */
 
 async function runAnalysis() {
-  const status = document.getElementById("plan-status");
+  showScreen("run");
+  const status = document.getElementById("run-status");
   setStatus(status, "Running analysis — this may take a few seconds…", "loading");
   try {
     const data = await api("/run-analysis", {
@@ -4395,7 +4738,7 @@ function renderResults() {
     tabDefs.push({ id: "tab-family-other", label: "Other analyses" });
   }
   if (r.thesis_analysis_blueprint) {
-    tabDefs.push({ id: "tab-thesis-blueprint", label: "Thesis blueprint" });
+    tabDefs.push({ id: "tab-thesis-blueprint", label: "Results chapter preview" });
   }
   tabDefs.push({ id: "tab-significant", label: "Significant findings" });
   tabDefs.push({ id: "tab-narrative", label: "Methods + Results" });
@@ -4548,8 +4891,8 @@ function renderThesisBlueprint(blueprint) {
     figure.detailed_report_only ? "Detailed report only" : "Thesis preview",
     (figure.warnings || []).join("; "),
   ]);
-  return `<h3>${escapeHtml(blueprint.title || "Thesis-ready outline")}</h3>
-    <p><strong>Blueprint status:</strong> ${blueprint.thesis_ready ? "Thesis-ready draft structure" : "Needs review before thesis use"}</p>
+  return `<h3>${escapeHtml(blueprint.title || "Results chapter preview")}</h3>
+    <p><strong>Preview status:</strong> ${blueprint.thesis_ready ? "Thesis-ready draft structure" : "Needs review before thesis use"}</p>
     <p><strong>Study design:</strong> ${escapeHtml(blueprint.study_design || "")}</p>
     <p><strong>Primary outcome:</strong> ${escapeHtml(blueprint.primary_outcome || "")}</p>
     <details class="se-debug-details"><summary>Planning debug</summary>
@@ -4577,9 +4920,9 @@ function renderThesisBlueprint(blueprint) {
     <h4>Significant findings</h4>
     ${findings.length ? tableHtml(["Variable / parameter", "Key finding", "Test statistic", "p-value", "Adjusted p-value", "Test applied", "Effect size", "Notes/warnings"], findings.map((row) => [
       row.variable || "", row.key_finding || "", row.test_statistic || "", row.p_value || "", row.adjusted_p_value || "", row.test_applied || "", row.effect_size || "", row.notes_warnings || ""
-    ])) : "<p>No statistically significant completed tests were available for this blueprint.</p>"}
+    ])) : "<p>No statistically significant completed tests were available for this preview.</p>"}
     <h4>Warnings and cautions</h4>
-    ${warnings.length ? `<ul>${warnings.map((warning) => `<li>${escapeHtml(String(warning))}</li>`).join("")}</ul>` : "<p>No blueprint warnings.</p>"}
+    ${warnings.length ? `<ul>${warnings.map((warning) => `<li>${escapeHtml(String(warning))}</li>`).join("")}</ul>` : "<p>No results-chapter warnings.</p>"}
     <h4>Unavailable or recommended-only analyses</h4>
     ${unavailable.length ? tableHtml(["Analysis", "Status", "Reason"], unavailable.map((item) => [
       item.title || item.section_id || "", item.status || "", item.reason || ""
@@ -4781,6 +5124,13 @@ function bindResults() {
       window.open("/thesis-module/editor.html?ch=results", "_blank");
     });
   }
+}
+
+function bindRunScreen() {
+  const screen = document.getElementById("screen-run");
+  if (!screen) return;
+  const back = screen.querySelector('[data-action="run-back-to-plan"]');
+  if (back) back.addEventListener("click", () => showScreen("plan"));
 }
 
 /* ------------------------------------------------------------------ */
@@ -5138,6 +5488,32 @@ const _STUDY_TYPE_ICONS = {
   descriptive: "📋",
 };
 
+function doctorFacingStudyTypeLabel(studyType) {
+  const st = String(studyType || "descriptive").toLowerCase();
+  if (_p27ContextDetected() && st === "association") return "Cross-sectional association study";
+  return _STUDY_TYPE_LABELS[st] || (st.charAt(0).toUpperCase() + st.slice(1) + " study");
+}
+
+function doctorFacingSetupReason(plan) {
+  if (!plan) return "";
+  const rawParts = [];
+  if (plan.reasoning) rawParts.push(plan.reasoning);
+  if (Array.isArray(plan.warnings)) rawParts.push(...plan.warnings);
+  const safe = rawParts.filter((part) => {
+    const text = String(part || "").toLowerCase();
+    if (!text.trim()) return false;
+    return !(
+      text.includes("diagnostic") ||
+      text.includes("mapped") ||
+      text.includes("stale") ||
+      text.includes("corrected") ||
+      text.includes("normalized") ||
+      text.includes("repair")
+    );
+  });
+  return safe.join(" ");
+}
+
 // Returns the planned statistical test name for a given predictor
 function _getPlannedTest(studyType, predictorType, nOutcomeValues) {
   switch (studyType) {
@@ -5403,17 +5779,14 @@ function renderSetupScreen(plan) {
   const noPairs  = document.getElementById("setup-no-pairs-hint");
 
   const st = (plan.study_type || "descriptive").toLowerCase();
-  const typeLabel = _STUDY_TYPE_LABELS[st] || (st.charAt(0).toUpperCase() + st.slice(1) + " study");
+  const typeLabel = doctorFacingStudyTypeLabel(st);
   if (typeEl)   typeEl.textContent = typeLabel;
   if (iconEl)   iconEl.textContent = _STUDY_TYPE_ICONS[st] || "📊";
   if (objEl)    objEl.textContent  = plan.objective || "—";
   if (reasonEl) {
-    const warnings = Array.isArray(plan.warnings) ? plan.warnings : [];
-    const reasonParts = [];
-    if (plan.reasoning) reasonParts.push(plan.reasoning);
-    if (warnings.length) reasonParts.push(warnings.join(" "));
-    reasonEl.textContent = reasonParts.join(" ");
-    reasonEl.style.display = reasonParts.length ? "" : "none";
+    const visibleReason = doctorFacingSetupReason(plan);
+    reasonEl.textContent = visibleReason;
+    reasonEl.style.display = visibleReason ? "" : "none";
   }
   if (nEl) {
     if (plan.sample_size) {
@@ -5427,11 +5800,8 @@ function renderSetupScreen(plan) {
   if (outEl) {
     const visibleOutcome = setupVisibleOutcome(plan) || canonicalOutcome;
     if (visibleOutcome) {
-      const proposal = plan.proposal_understanding || {};
-      const concept = proposal.main_outcome_concept || plan.main_outcome_concept || "";
-      outEl.innerHTML = concept
-        ? `Outcome: ${escapeHtml(visibleOutcome)}<br><small>Mapped from proposal concept: ${escapeHtml(concept)}</small>`
-        : `Outcome: ${escapeHtml(visibleOutcome)}`;
+      const displayOutcome = outcomeDisplayLabel(visibleOutcome);
+      outEl.innerHTML = `Outcome: ${escapeHtml(displayOutcome)}`;
       outEl.style.display = "";
     } else {
       outEl.style.display = "none";
@@ -5905,9 +6275,9 @@ function renderMissingScreen() {
   );
 
   if (!missingCols.length) {
-    // No high-missing columns — skip this screen and go straight to normality
-    showScreen("normality");
-    loadNormality();
+    // No high-missing columns — skip this screen and go straight to analysis variable selection.
+    renderAnalysisVariablesScreen();
+    showScreen("analysis-vars");
     return;
   }
 
@@ -5995,10 +6365,9 @@ function bindScreenMissing() {
       setStatus(status, "Applying missing-data decisions…", "loading");
       applyBtn.disabled = true;
       if (_missingDecisionsAlreadyApplied(decisions)) {
-        setStatus(status, "Missing-data decisions were already applied. Continuing to normality...", "info");
-        showScreen("normality");
-        if (state.normality) renderNormality();
-        else loadNormality();
+        setStatus(status, "Missing-data decisions were already applied. Continuing to analysis variables...", "info");
+        renderAnalysisVariablesScreen();
+        showScreen("analysis-vars");
         return;
       }
       try {
@@ -6025,8 +6394,8 @@ function bindScreenMissing() {
           throw new Error(`Could not reclassify after missing-data cleanup: ${err.message}`);
         }
         setStatus(status, "");
-        showScreen("normality");
-        loadNormality();
+        renderAnalysisVariablesScreen();
+        showScreen("analysis-vars");
       } catch (err) {
         setStatus(status, `Could not apply: ${err.message}`, "error");
         applyBtn.disabled = false;
@@ -6775,9 +7144,13 @@ async function downloadChapterV(fmt, button) {
   if (button) button.disabled = true;
   setStatus(statusEl, "Generating Chapter V…", "loading");
   try {
+    const headers = { "Content-Type": "application/json" };
+    if (aiPolishConsentRequested()) {
+      headers["X-Narrative-Polish-Consent"] = "true";
+    }
     const res = await fetch(`${API_BASE}/export/chapter-v`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify({
         job_id: state.jobId,
         result_id: state.resultId,
@@ -6937,6 +7310,11 @@ async function restoreVersion(versionNum) {
   }
 }
 
+function aiPolishConsentRequested() {
+  const checkbox = document.getElementById("ai-polish-consent-checkbox");
+  return Boolean(checkbox && checkbox.checked);
+}
+
 async function downloadExport(format, button) {
   const status = document.getElementById("export-status");
   if (!updateExportAvailability("Export state is stale or missing. Run the latest analysis before exporting.")) {
@@ -6947,7 +7325,13 @@ async function downloadExport(format, button) {
   try {
     const resultId = encodeURIComponent(state.resultId);
     const url = `${API_BASE}/export/${state.jobId}/${format}?result_id=${resultId}`;
-    const res = await fetch(url);
+    // AI narration polish only applies to prose in Word/PDF; Excel has no
+    // narrative text, so the consent header is omitted for that format.
+    const headers = {};
+    if (format !== "excel" && aiPolishConsentRequested()) {
+      headers["X-Narrative-Polish-Consent"] = "true";
+    }
+    const res = await fetch(url, { headers });
     if (!res.ok) {
       throw new Error(await exportErrorMessage(res));
     }
@@ -7062,9 +7446,11 @@ function initApp() {
     bindScreen3();
     bindScreen4();
     bindScreenMissing();
+    bindAnalysisVariables();
     bindSoon();
     bindNormality();
     bindPlan();
+    bindRunScreen();
     bindResults();
     bindExport();
     bindChatboxes();

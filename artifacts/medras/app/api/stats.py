@@ -257,20 +257,39 @@ def _build_session_view(entry, classifications, assignment) -> Dict[str, Any]:
     mapped_outcome = proposal_mapping.get("mapped_outcome")
     confirmed_outcome = entry.meta.get("confirmed_outcome_col")
     outcome = (assignment or {}).get("outcome")
+    p27_context = _entry_has_p27_context(entry)
+    main_marker = ai_study.get("main_marker")
+    main_outcome_concept = ai_study.get("main_outcome_concept")
+    if p27_context:
+        main_marker = "p27"
+        main_outcome_concept = "p27 expression status"
     eligible_predictors = [
         c.get("column") for c in (classifications or [])
         if c.get("column") != outcome
         and c.get("detected_type") not in ("id", "date", "exclude")
+        and not (p27_context and _is_p27_marker_component_column(c.get("column") or ""))
     ]
-    analysis_predictors = list(
-        ai_study.get("predictors") or ai_study.get("all_predictors") or []
-    )
-    analysis_predictors = [
-        predictor for predictor in analysis_predictors
-        if predictor and predictor in entry.df.columns and predictor != outcome
-    ]
-    predictor_source = "ai_study"
-    if study_type in {"association", "comparison"} and outcome:
+    selected_predictors = entry.meta.get("selected_predictors")
+    if isinstance(selected_predictors, list):
+        analysis_predictors = [
+            predictor for predictor in selected_predictors
+            if predictor and predictor in entry.df.columns and predictor != outcome
+            and not (p27_context and _is_p27_marker_component_column(predictor))
+        ]
+        predictor_source = "user_selected"
+    else:
+        analysis_predictors = list(
+            ai_study.get("predictors") or ai_study.get("all_predictors") or []
+        )
+        analysis_predictors = [
+            predictor for predictor in analysis_predictors
+            if predictor and predictor in entry.df.columns and predictor != outcome
+            and not (p27_context and _is_p27_marker_component_column(predictor))
+        ]
+        predictor_source = "ai_study"
+    if selected_predictors is not None:
+        pass
+    elif study_type in {"association", "comparison"} and outcome:
         analysis_predictors = list(dict.fromkeys(analysis_predictors + eligible_predictors))
         predictor_source = "ai_study_plus_classified_eligible" if ai_study else "classified_eligible"
     elif not analysis_predictors:
@@ -297,10 +316,14 @@ def _build_session_view(entry, classifications, assignment) -> Dict[str, Any]:
         "mapped_outcome": mapped_outcome,
         "confirmed_outcome_col": confirmed_outcome,
         "displayed_outcome": outcome,
-        "main_marker": ai_study.get("main_marker"),
-        "main_outcome_concept": ai_study.get("main_outcome_concept"),
+        "main_marker": main_marker,
+        "main_outcome_concept": main_outcome_concept,
         "study_type_confirmed": bool(entry.meta.get("confirmed_study_type")),
         "analysis_predictors": analysis_predictors,
+        "subgroup_variables": [
+            col for col in list(entry.meta.get("subgroup_variables") or [])
+            if col in entry.df.columns and col != outcome
+        ],
         "predictor_source": predictor_source,
         "analysis_excluded_columns": _analysis_excluded_columns(entry),
         "domain_profile": _domain_profile(entry),
@@ -687,13 +710,76 @@ def _normalize_study_type_for_dataset(
 
 def _infer_marker_and_outcome(text: str) -> tuple[str, str, list[str]]:
     lower = text.lower()
-    if "p27" in lower:
+    if _re.search(r"\bp\s*[- ]?\s*27\b", lower):
         return "p27", "p27 expression status", ["p27 expression status", "Positive/Negative"]
     markers = ["her2", "er", "pr", "ar", "egfr", "ki67", "p53"]
     for marker in markers:
         if _re.search(rf"\b{_re.escape(marker)}\b", lower):
             return marker.upper() if marker != "ki67" else "Ki67", f"{marker} expression status", [f"{marker} expression status"]
     return "", "", []
+
+
+def _mentions_p27(text: Any) -> bool:
+    return bool(_re.search(r"\bp\s*[- ]?\s*27\b", str(text or "").lower()))
+
+
+def _positive_negative_like_column(columns: list[str]) -> str | None:
+    for col in columns:
+        norm = _norm_label(col)
+        compact = norm.replace(" ", "")
+        if compact in {"positivenegative", "positiveornegative", "positiveandnegative"}:
+            return col
+        if "positive" in norm and "negative" in norm:
+            return col
+    return None
+
+
+def _has_p27_component_columns(columns: list[str]) -> bool:
+    for col in columns:
+        norm = _norm_label(col)
+        if any(term in norm for term in [
+            "interpretation site", "interpretationsite", "staining result",
+            "staining", "localization", "localisation",
+        ]):
+            return True
+    return False
+
+
+def _entry_has_p27_context(entry) -> bool:
+    columns = list(getattr(entry, "df", []).columns) if getattr(entry, "df", None) is not None else []
+    ai_study = entry.meta.get("ai_study") or {}
+    pending = entry.meta.get("pending_ai_study") or {}
+    proposal = (
+        entry.meta.get("proposal_understanding")
+        or ai_study.get("proposal_understanding")
+        or pending.get("proposal_understanding")
+        or {}
+    )
+    intake = entry.meta.get("intake") or {}
+    text_parts = [
+        ai_study.get("main_marker"), ai_study.get("main_outcome_concept"),
+        pending.get("main_marker"), pending.get("main_outcome_concept"),
+        proposal.get("main_marker"), proposal.get("main_outcome_concept"),
+        proposal.get("study_title"), proposal.get("analysis_intent"),
+        (proposal.get("objectives") or {}).get("primary") if isinstance(proposal.get("objectives"), dict) else proposal.get("objectives"),
+        intake.get("objective") if isinstance(intake, dict) else "",
+        intake.get("objectives") if isinstance(intake, dict) else "",
+        intake.get("instructions") if isinstance(intake, dict) else "",
+    ]
+    return (
+        any(_mentions_p27(part) for part in text_parts)
+        and bool(_positive_negative_like_column(columns))
+        and _has_p27_component_columns(columns)
+    )
+
+
+def _is_p27_marker_component_column(column: str) -> bool:
+    norm = _norm_label(column)
+    return any(term in norm for term in [
+        "interpretation site", "interpretationsite", "staining result",
+        "staining score", "staining pattern", "localization", "localisation",
+        "p27 staining", "p27 localization", "p27 localisation",
+    ])
 
 
 def _infer_predictor_concepts(text: str, domain_profile: str) -> list[str]:
@@ -776,13 +862,18 @@ def _normalize_proposal_extract(
             warnings.append(
                 f"AI suggested {proposed_study_type}, but no survival/diagnostic variables were detected; Sigma normalized this to an association study."
             )
-    marker, outcome_concept, outcome_candidates = _infer_marker_and_outcome(text)
-    marker = str(data.get("main_marker") or marker).strip()
+    inferred_marker, inferred_outcome_concept, outcome_candidates = _infer_marker_and_outcome(text)
+    marker = str(data.get("main_marker") or inferred_marker).strip()
     outcome_concept = str(
         data.get("main_outcome_concept")
         or data.get("outcomes")
-        or outcome_concept
+        or inferred_outcome_concept
     ).strip()
+    if inferred_marker.lower() == "p27":
+        marker = "p27"
+        outcome_concept = "p27 expression status"
+        if "p27 expression status" not in outcome_candidates:
+            outcome_candidates.insert(0, "p27 expression status")
     candidate_outcomes = _as_list(data.get("candidate_outcomes")) or outcome_candidates
     if outcome_concept and outcome_concept not in candidate_outcomes:
         candidate_outcomes.insert(0, outcome_concept)
@@ -994,7 +1085,7 @@ def _map_proposal_to_columns(
             "Age", "Laterality", "Tumour site/quadrant", "Tumour size",
             "Histological type", "Histological grade", "pT", "Nodal status",
             "DCIS", "LVI", "Necrosis", "ER", "PR", "HER2", "AR", "EGFR",
-            "Ki67", "Molecular subtype", "Interpretation Site", "Staining Result",
+            "Ki67", "Molecular subtype",
         ]:
             if concept not in predictor_concepts:
                 predictor_concepts.append(concept)
@@ -2085,6 +2176,8 @@ class AssignRequest(BaseModel):
     outcome: Optional[str] = Field(default=None, max_length=200)
     group: Optional[str] = Field(default=None, max_length=200)
     covariates: List[str] = Field(default_factory=list, max_length=20)
+    predictors: Optional[List[str]] = Field(default=None, max_length=200)
+    subgroup_variables: Optional[List[str]] = Field(default=None, max_length=50)
 
 
 def _invalidate_downstream(entry, *, keep_normality: bool = False) -> None:
@@ -2323,6 +2416,12 @@ async def save_assignment(payload: AssignRequest) -> Dict[str, Any]:
     bad = [c for c in payload.covariates if c not in cols]
     if bad:
         raise HTTPException(status_code=400, detail=f"Unknown covariate(s): {', '.join(bad)}")
+    bad_predictors = [c for c in (payload.predictors or []) if c not in cols]
+    if bad_predictors:
+        raise HTTPException(status_code=400, detail=f"Unknown predictor(s): {', '.join(bad_predictors)}")
+    bad_subgroups = [c for c in (payload.subgroup_variables or []) if c not in cols]
+    if bad_subgroups:
+        raise HTTPException(status_code=400, detail=f"Unknown subgroup variable(s): {', '.join(bad_subgroups)}")
     requested_assignment = {
         "outcome": payload.outcome,
         "group": payload.group,
@@ -2342,9 +2441,32 @@ async def save_assignment(payload: AssignRequest) -> Dict[str, Any]:
         # is still valid since the column data hasn't changed.
         _invalidate_downstream(entry, keep_normality=True)
     entry.meta["assignment"] = new_assignment
+    p27_context = _entry_has_p27_context(entry)
+    if payload.predictors is not None:
+        selected_predictors = [
+            c for c in dict.fromkeys(payload.predictors)
+            if c in cols and c != new_assignment.get("outcome")
+            and not (p27_context and _is_p27_marker_component_column(c))
+        ]
+        if entry.meta.get("selected_predictors") != selected_predictors:
+            _invalidate_downstream(entry, keep_normality=True)
+        entry.meta["selected_predictors"] = selected_predictors
+    if payload.subgroup_variables is not None:
+        subgroup_variables = [
+            c for c in dict.fromkeys(payload.subgroup_variables)
+            if c in cols and c != new_assignment.get("outcome")
+        ]
+        if entry.meta.get("subgroup_variables") != subgroup_variables:
+            _invalidate_downstream(entry, keep_normality=True)
+        entry.meta["subgroup_variables"] = subgroup_variables
     if payload.outcome and not confirmed_outcome and payload.outcome == canonical_outcome and new_assignment.get("source") != "mapped_outcome":
         entry.meta["confirmed_outcome_col"] = payload.outcome
-    response = {"status": "saved", "assignment": entry.meta["assignment"]}
+    response = {
+        "status": "saved",
+        "assignment": entry.meta["assignment"],
+        "selected_predictors": entry.meta.get("selected_predictors"),
+        "subgroup_variables": entry.meta.get("subgroup_variables") or [],
+    }
     if warning:
         response["warning"] = warning
         response["status"] = "corrected"
@@ -2620,16 +2742,25 @@ class ChapterVExportRequest(BaseModel):
     include_optional_figures: bool = False
 
 
-def _chapter_v_polish_overrides(consent_header, res: dict) -> dict:
-    """Return narrative polish overrides if the caller opted in and OpenRouter is configured."""
-    if not isinstance(consent_header, str) or consent_header.lower() != "true":
-        return {}
+def _chapter_v_polish_overrides(consent_header, res: dict) -> tuple[bool, dict]:
+    """Return (ai_polish_requested, overrides).
+
+    ai_polish_requested is True whenever the caller opted in via the consent
+    header, regardless of whether AI polish ultimately succeeded — callers
+    use this to distinguish "deterministic only" (never requested) from
+    "deterministic fallback used" (requested but unavailable/rejected) in
+    the exported audit line. Statistics/tables/figures are never affected
+    either way; only narrative wording can change.
+    """
+    requested = isinstance(consent_header, str) and consent_header.lower() == "true"
+    if not requested:
+        return False, {}
     try:
         from app.services import narrative_polish
-        return narrative_polish.polish_results(res)
+        return True, narrative_polish.polish_results(res)
     except Exception:
         log.debug("narrative_polish.polish_results failed; falling back to deterministic text")
-        return {}
+        return True, {}
 
 
 @router.get("/export/{job_id}/chapter_v_word")
@@ -2643,11 +2774,11 @@ async def export_chapter_v_word(
     if entry is None:
         raise HTTPException(status_code=404, detail="Dataset expired or not found.")
     res = _current_export_state(entry, job_id, result_id)
-    overrides = await asyncio.to_thread(_chapter_v_polish_overrides, x_narrative_polish_consent, res)
+    requested, overrides = await asyncio.to_thread(_chapter_v_polish_overrides, x_narrative_polish_consent, res)
     try:
         payload_bytes = await asyncio.to_thread(
             export_service.generate_chapter_v_word,
-            entry, res, entry.meta.get("assignment") or {}, overrides,
+            entry, res, entry.meta.get("assignment") or {}, overrides, requested,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -2692,11 +2823,11 @@ async def export_chapter_v_pdf(
     if entry is None:
         raise HTTPException(status_code=404, detail="Dataset expired or not found.")
     res = _current_export_state(entry, job_id, result_id)
-    overrides = await asyncio.to_thread(_chapter_v_polish_overrides, x_narrative_polish_consent, res)
+    requested, overrides = await asyncio.to_thread(_chapter_v_polish_overrides, x_narrative_polish_consent, res)
     try:
         payload_bytes = await asyncio.to_thread(
             export_service.generate_chapter_v_pdf,
-            entry, res, entry.meta.get("assignment") or {}, overrides,
+            entry, res, entry.meta.get("assignment") or {}, overrides, requested,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -2720,7 +2851,8 @@ async def export_chapter_v_pdf(
 
 @router.get("/export/{job_id}/{fmt}")
 async def export(
-    job_id: str, fmt: str, result_id: Optional[str] = Query(default=None)
+    job_id: str, fmt: str, result_id: Optional[str] = Query(default=None),
+    x_narrative_polish_consent: Optional[str] = Header(default=None),
 ) -> Response:
     entry = dataset_store.get(job_id)
     if entry is None:
@@ -2730,9 +2862,16 @@ async def export(
         raise HTTPException(status_code=400, detail=f"Unsupported format: {fmt}. Use word/pdf/excel.")
     res = _current_export_state(entry, job_id, result_id)
     fn, mime, ext = exporter
+    # Excel has no narrative prose to polish; only ask for AI polish on word/pdf.
+    if fmt.lower() in {"word", "pdf"}:
+        requested, overrides = await asyncio.to_thread(
+            _chapter_v_polish_overrides, x_narrative_polish_consent, res
+        )
+    else:
+        requested, overrides = False, {}
     try:
         payload_bytes = await asyncio.to_thread(
-            fn, entry, res, entry.meta.get("assignment") or {}
+            fn, entry, res, entry.meta.get("assignment") or {}, overrides, requested,
         )
     except Exception as exc:
         log.exception("%s export failed for job %s", fmt, job_id)
@@ -2835,6 +2974,9 @@ async def confirm_study(payload: ConfirmStudyRequest) -> Dict[str, Any]:
         (pending.get("proposal_mapping") or {}).get("mapped_outcome")
         or (existing_ai.get("proposal_mapping") or {}).get("mapped_outcome")
     )
+    p27_context = _entry_has_p27_context(entry)
+    if p27_context and not mapped_outcome:
+        mapped_outcome = _positive_negative_like_column(list(entry.df.columns))
     outcome_col = mapped_outcome if mapped_outcome in entry.df.columns else payload.outcome_col
     if outcome_col and outcome_col not in entry.df.columns:
         raise HTTPException(
@@ -2869,6 +3011,9 @@ async def confirm_study(payload: ConfirmStudyRequest) -> Dict[str, Any]:
         "source": "confirmed",
         "warnings": type_warnings,
     }
+    if p27_context:
+        entry.meta["ai_study"]["main_marker"] = "p27"
+        entry.meta["ai_study"]["main_outcome_concept"] = "p27 expression status"
     if mapped_outcome in entry.df.columns:
         entry.meta["ai_study"].setdefault("proposal_mapping", {})["mapped_outcome"] = mapped_outcome
     current_assignment = dict(entry.meta.get("assignment") or {})
@@ -3197,6 +3342,24 @@ async def setup_study(request: Request, payload: SetupStudyRequest) -> Dict[str,
         profile=profile,
     )
     mapping = _map_proposal_to_columns(proposal_metadata, columns, profile)
+    p27_context = (
+        _entry_has_p27_context(entry)
+        or _mentions_p27(payload.description)
+        or _mentions_p27((proposal_metadata or {}).get("main_marker"))
+        or _mentions_p27((proposal_metadata or {}).get("main_outcome_concept"))
+    )
+    if p27_context:
+        result["main_marker"] = "p27"
+        result["main_outcome_concept"] = "p27 expression status"
+        if not mapping.get("mapped_outcome"):
+            p27_outcome_col = _positive_negative_like_column(columns)
+            if p27_outcome_col:
+                mapping["mapped_outcome"] = p27_outcome_col
+                mapping["mapping_confidence"] = "high"
+        if proposal_metadata:
+            proposal_metadata = dict(proposal_metadata)
+            proposal_metadata["main_marker"] = "p27"
+            proposal_metadata["main_outcome_concept"] = "p27 expression status"
     if proposal_metadata:
         entry.meta["proposal_understanding"] = proposal_metadata
         result["proposal_understanding"] = proposal_metadata

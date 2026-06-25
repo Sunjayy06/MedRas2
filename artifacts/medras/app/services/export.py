@@ -1690,9 +1690,14 @@ def generate_report(session: Dict[str, Any], df: pd.DataFrame) -> Document:
 # ---------------------------------------------------------------------------
 
 
-def to_docx(entry, results: Dict[str, Any], assignment: Dict[str, Any]) -> bytes:
+def to_docx(
+    entry, results: Dict[str, Any], assignment: Dict[str, Any],
+    polish_overrides: Optional[Dict[str, str]] = None, ai_polish_requested: bool = False,
+) -> bytes:
     if results.get("thesis_analysis_blueprint"):
-        return chapter_v_export.generate_docx(results)
+        return chapter_v_export.generate_docx(
+            results, polish_overrides=polish_overrides or {}, ai_polish_requested=ai_polish_requested
+        )
     session = _build_session(entry, results, assignment)
     doc = generate_report(session, entry.df)
     out = io.BytesIO()
@@ -1700,10 +1705,15 @@ def to_docx(entry, results: Dict[str, Any], assignment: Dict[str, Any]) -> bytes
     return out.getvalue()
 
 
-def to_pdf(entry, results: Dict[str, Any], assignment: Dict[str, Any]) -> bytes:
+def to_pdf(
+    entry, results: Dict[str, Any], assignment: Dict[str, Any],
+    polish_overrides: Optional[Dict[str, str]] = None, ai_polish_requested: bool = False,
+) -> bytes:
     """Mirror the 10-section Word report in PDF (best effort, reportlab)."""
     if results.get("thesis_analysis_blueprint"):
-        return chapter_v_export.generate_pdf(results)
+        return chapter_v_export.generate_pdf(
+            results, polish_overrides=polish_overrides or {}, ai_polish_requested=ai_polish_requested
+        )
     session = _build_session(entry, results, assignment)
     out = io.BytesIO()
     pdf = SimpleDocTemplate(out, pagesize=A4, leftMargin=36, rightMargin=36,
@@ -1845,9 +1855,12 @@ def generate_chapter_v_word(
     results: Dict[str, Any],
     assignment: Dict[str, Any],
     polish_overrides: Optional[Dict[str, Any]] = None,
+    ai_polish_requested: bool = False,
 ) -> bytes:
     """Generate Chapter V from Sigma's thesis_analysis_blueprint."""
-    return chapter_v_export.generate_docx(results, polish_overrides=polish_overrides or {})
+    return chapter_v_export.generate_docx(
+        results, polish_overrides=polish_overrides or {}, ai_polish_requested=ai_polish_requested
+    )
 
 
 def generate_chapter_v_pdf(
@@ -1855,9 +1868,12 @@ def generate_chapter_v_pdf(
     results: Dict[str, Any],
     assignment: Dict[str, Any],
     polish_overrides: Optional[Dict[str, Any]] = None,
+    ai_polish_requested: bool = False,
 ) -> bytes:
     """Generate Chapter V PDF from Sigma's thesis_analysis_blueprint."""
-    return chapter_v_export.generate_pdf(results, polish_overrides=polish_overrides or {})
+    return chapter_v_export.generate_pdf(
+        results, polish_overrides=polish_overrides or {}, ai_polish_requested=ai_polish_requested
+    )
 
 
 def _pdf_table(data: List[List[str]]) -> Table:
@@ -2030,7 +2046,14 @@ def _safe_sheet_title(wb: Workbook, raw_title: Any) -> str:
     return candidate
 
 
-def to_xlsx(entry, results: Dict[str, Any], assignment: Dict[str, Any]) -> bytes:
+def to_xlsx(
+    entry, results: Dict[str, Any], assignment: Dict[str, Any],
+    polish_overrides: Optional[Dict[str, str]] = None, ai_polish_requested: bool = False,
+) -> bytes:
+    # polish_overrides/ai_polish_requested accepted only so EXPORTERS can be
+    # called uniformly from the export route — Excel has no narrative prose
+    # to polish, so the Cover sheet always reports "deterministic only".
+    del polish_overrides, ai_polish_requested
     session = _build_session(entry, results, assignment)
     meta = getattr(entry, "meta", {}) or {}
     df = getattr(entry, "df", pd.DataFrame())
@@ -2072,6 +2095,8 @@ def to_xlsx(entry, results: Dict[str, Any], assignment: Dict[str, Any]) -> bytes
             "unless otherwise stated. Percentages in the Significant Findings Highlight describe "
             "marker/category distribution within p27 expression groups."
         )])
+    s.append([])
+    s.append(["AI polish", chapter_v_export._ai_polish_audit_label(False, False)])
 
     # Current analysis-ready data. This is the processed dataframe held by the
     # active Sigma session, not a reload of the original uploaded workbook.

@@ -22,6 +22,9 @@ EXPECTED_EXAMPLE = {
     "OPENROUTER_CODING_MODEL": "poolside/laguna-m.1:free",
     "OPENROUTER_VISION_MODEL": "google/gemma-4-31b-it:free",
     "OPENROUTER_FALLBACK_MODEL": "openrouter/free",
+    "SIGMA_AI_POLISH_ENABLED": "false",
+    "SIGMA_AI_POLISH_TIMEOUT_SECONDS": "20",
+    "SIGMA_AI_POLISH_MAX_TOKENS": "800",
 }
 
 

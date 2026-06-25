@@ -9,12 +9,13 @@ from __future__ import annotations
 import asyncio
 import io
 from pathlib import Path
+from unittest.mock import patch
 
 import pandas as pd
 from docx import Document
 
 from app.api import stats
-from app.services import chapter_v_export, export
+from app.services import chapter_v_export, export, narrative_polish
 from app.services.thesis_blueprint import build_thesis_analysis_blueprint
 
 
@@ -508,6 +509,67 @@ async def verify_post_endpoint() -> None:
         stats.dataset_store.get = original_get
 
 
+async def verify_consent_driven_ai_polish_audit_states() -> None:
+    """The visible Word/PDF export route (/export/{job_id}/{fmt}) must only
+    attempt AI narration polish when the caller sends
+    X-Narrative-Polish-Consent: true, and the exported audit line must
+    correctly distinguish "never requested" from "requested but unavailable
+    or rejected" from "requested and applied". Excel must never request
+    polish at all (it has no narrative prose)."""
+    entry = FakeEntry()
+    original_get = stats.dataset_store.get
+    stats.dataset_store.get = lambda job_id: entry
+    try:
+        published = stats._publish_results(entry, "consent-job", _representative_results())
+        result_id = published["export_metadata"]["result_id"]
+
+        # 1. No consent header -> deterministic only, narrative_polish never called.
+        with patch.object(narrative_polish, "polish_results") as mocked:
+            response = await stats.export("consent-job", "word", result_id=result_id)
+            mocked.assert_not_called()
+        text = _docx_text(response.body)
+        assert "AI polish: deterministic only." in text
+        assert "AI polish: OpenRouter narration polish applied." not in text
+        assert "AI polish: deterministic fallback used." not in text
+
+        # 2. Consent given, AI polish mocked successful -> applied.
+        with patch.object(
+            narrative_polish, "polish_results",
+            return_value={"results_synthesis": "A polished, fact-preserving synthesis paragraph."},
+        ) as mocked:
+            response = await stats.export(
+                "consent-job", "word", result_id=result_id,
+                x_narrative_polish_consent="true",
+            )
+            mocked.assert_called_once()
+        text = _docx_text(response.body)
+        assert "AI polish: OpenRouter narration polish applied." in text
+        assert "A polished, fact-preserving synthesis paragraph." in text
+
+        # 3. Consent given, but AI polish unavailable/rejected (empty overrides)
+        #    -> deterministic fallback used, not "deterministic only".
+        with patch.object(narrative_polish, "polish_results", return_value={}) as mocked:
+            response = await stats.export(
+                "consent-job", "word", result_id=result_id,
+                x_narrative_polish_consent="true",
+            )
+            mocked.assert_called_once()
+        text = _docx_text(response.body)
+        assert "AI polish: deterministic fallback used." in text
+        assert "AI polish: deterministic only." not in text
+        assert "AI polish: OpenRouter narration polish applied." not in text
+
+        # 4. Excel never requests AI polish, even with consent given.
+        with patch.object(narrative_polish, "polish_results") as mocked:
+            await stats.export(
+                "consent-job", "excel", result_id=result_id,
+                x_narrative_polish_consent="true",
+            )
+            mocked.assert_not_called()
+    finally:
+        stats.dataset_store.get = original_get
+
+
 def verify_frontend_wiring() -> None:
     root = Path(__file__).resolve().parents[1]
     html = (root / "public/analysis.html").read_text(encoding="utf-8")
@@ -521,12 +583,35 @@ def verify_frontend_wiring() -> None:
     assert "include_detailed_appendix: false" in js
     assert "include_optional_figures: false" in js
 
+    # AI-polish consent checkbox: present near export controls, default
+    # unchecked (no "checked" attribute), with the required safety note.
+    assert 'id="ai-polish-consent-checkbox"' in html
+    assert 'type="checkbox" id="ai-polish-consent-checkbox"' in html, \
+        "AI polish checkbox must default OFF (no checked attribute)"
+    assert "Polish narrative with AI" in html
+    assert "Only narrative text is polished; statistics and tables remain deterministic." in html
+    assert "X-Narrative-Polish-Consent" not in html  # backend-only header, not user-facing text
+    for secret_name in ("OPENROUTER_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY"):
+        assert secret_name not in html
+
+    # JS must read the checkbox and only send the consent header when checked,
+    # never send it for the Excel format (no narrative prose to polish).
+    assert "function aiPolishConsentRequested" in js
+    assert "ai-polish-consent-checkbox" in js
+    assert 'X-Narrative-Polish-Consent"] = "true"' in js
+    assert 'if (format !== "excel" && aiPolishConsentRequested())' in js
+    for secret_name in ("OPENROUTER_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY"):
+        assert secret_name not in js
+
 
 def main() -> None:
-    verify_service_docx()
-    verify_generic_docx()
-    asyncio.run(verify_post_endpoint())
-    verify_frontend_wiring()
+    from test_fixtures._network_guard import block_real_openrouter_calls
+    with block_real_openrouter_calls():
+        verify_service_docx()
+        verify_generic_docx()
+        asyncio.run(verify_post_endpoint())
+        asyncio.run(verify_consent_driven_ai_polish_audit_states())
+        verify_frontend_wiring()
     print("Sigma Chapter V export verification passed.")
 
 

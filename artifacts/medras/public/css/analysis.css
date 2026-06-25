@@ -2472,6 +2472,26 @@ html[data-medras-init="ok"] .se-actions-fallback { display: none; }
 }
 
 /* Export */
+.se-export-option {
+  margin: 14px 0 4px;
+  padding: 10px 14px;
+  border: 1px solid #d6e0ee;
+  border-radius: 8px;
+  background: #f7faff;
+}
+.se-export-option label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  color: #103a6e;
+  cursor: pointer;
+}
+.se-export-option-note {
+  margin: 4px 0 0 24px;
+  color: #5f6c80;
+  font-size: 13px;
+}
 .se-export-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));

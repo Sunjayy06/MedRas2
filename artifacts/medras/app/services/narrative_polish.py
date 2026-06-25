@@ -1,11 +1,13 @@
-"""OpenRouter-powered narrative polish for Chapter V exports.
+"""Free-model-only OpenRouter narrative polish for Chapter V exports.
 
-Polishes the *prose* layer only — section introductions, table interpretation
-sentences, and figure captions.  Statistical values (p-values, effect sizes,
-sample sizes, percentages, raw numbers) are **never** supplied to the LLM and
-**never** accepted back from it.  A safety validator rejects any AI output that
-slips in new numeric content or causality claims, falling back to the
-deterministic text.
+Collects polishable prose chunks (section introductions, table/figure
+interpretation sentences, Results Synthesis) and routes them through
+``app.services.ai_narrative`` (which in turn uses ``app.services.openrouter_client``
+for the actual free-model-only request). Statistical values are stripped
+before a chunk is sent, and ``ai_narrative.validate_polish`` plus this
+module's own ``_is_safe`` both reject any AI output that slips in new
+numeric content, causality claims, or removes a caution — falling back to
+the deterministic text in every such case.
 
 Usage
 -----
@@ -13,9 +15,9 @@ Call ``polish_results(results)`` to get a ``NarrativeOverrides`` dict.
 Pass that dict to ``generate_docx(results, polish_overrides=overrides)`` or
 ``generate_pdf(results, polish_overrides=overrides)``.
 
-If OpenRouter is not configured or the caller opts out, the functions are
-no-ops that return an empty dict (so exports fall through to deterministic text
-unchanged).
+If ``SIGMA_AI_POLISH_ENABLED`` is not set, OpenRouter is not configured, or
+the caller opts out, the functions are no-ops that return an empty dict (so
+exports fall through to deterministic text unchanged).
 """
 from __future__ import annotations
 
@@ -112,6 +114,13 @@ def _collect_chunks(blueprint: Dict[str, Any]) -> List[Dict[str, str]]:
     """
     chunks: List[Dict[str, str]] = []
 
+    results_synthesis = str(blueprint.get("results_synthesis") or "").strip()
+    if results_synthesis and len(results_synthesis) > 20:
+        chunks.append({
+            "key": "results_synthesis",
+            "text": _strip_numbers(results_synthesis[:MAX_PROSE_CHARS]),
+        })
+
     for section in blueprint.get("analysis_sections") or []:
         section_id = str(section.get("section_id") or "")
         interp = str(section.get("interpretation") or "").strip()
@@ -146,36 +155,18 @@ def _collect_chunks(blueprint: Dict[str, Any]) -> List[Dict[str, str]]:
 # OpenRouter call
 # ---------------------------------------------------------------------------
 
-_SYSTEM_PROMPT = """\
-You are a medical thesis narrative editor. You will receive short prose
-paragraphs from a thesis Chapter V (Observation and Results) and must
-rephrase them to sound formal, precise, and suitable for a PG medical thesis.
-
-Rules you MUST follow:
-1. Do NOT introduce any numbers, percentages, fractions, or statistics of any kind.
-2. Do NOT make causal claims (do not use "causes", "leads to", "responsible for").
-3. Preserve every caution or limitation statement verbatim — do not soften or omit them.
-4. Keep roughly the same length as the original.
-5. Use formal academic English suitable for an Indian MD/MS thesis.
-6. Return ONLY the rewritten paragraph — no preamble, no commentary.
-"""
-
 
 def _polish_one(text: str) -> Optional[str]:
-    """Call OpenRouter to polish a single prose chunk. Returns None on failure."""
+    """Call Sigma's free-model-only OpenRouter narration polish for a single
+    prose chunk. Returns None on failure (missing key, disabled polish,
+    timeout, rate limit, invalid response, network/API error, or output
+    that fails ai_narrative's evidence-pack validation)."""
     try:
-        from app.services.llm_client import openrouter_chat, openrouter_is_configured
-        if not openrouter_is_configured():
-            return None
-        return openrouter_chat(
-            task="thesis_writing",
-            system=_SYSTEM_PROMPT,
-            user=text,
-            max_tokens=400,
-            temperature=0.25,
-        )
+        from app.services import ai_narrative
+        evidence = ai_narrative.build_evidence_pack("section_intro", "", text)
+        return ai_narrative.polish_writing(evidence)
     except Exception as exc:
-        log.debug("narrative_polish: OpenRouter call failed: %s", exc)
+        log.debug("narrative_polish: AI narration polish call failed: %s", exc)
         return None
 
 
@@ -189,12 +180,17 @@ NarrativeOverrides = Dict[str, str]
 def polish_results(results: Dict[str, Any]) -> NarrativeOverrides:
     """Return a dict of {key: polished_text} for all prose chunks in results.
 
-    Keys are produced by _section_key / _table_key / _figure_key.
-    Only chunks where the AI produces safe output are included.
-    Returns an empty dict if OpenRouter is not configured or all calls fail.
+    Keys are produced by _section_key / _table_key / _figure_key, plus the
+    top-level "results_synthesis" key. Only chunks where the AI produces
+    safe output (per ai_narrative.validate_polish and this module's own
+    _is_safe check) are included. Returns an empty dict if AI polish is
+    disabled (SIGMA_AI_POLISH_ENABLED), OpenRouter is not configured, or
+    every call fails or is rejected — callers always fall through to
+    deterministic text in that case.
     """
-    from app.services.llm_client import openrouter_is_configured
-    if not openrouter_is_configured():
+    from app.core.config import settings
+    from app.services import openrouter_client
+    if not settings.sigma_ai_polish_enabled or not openrouter_client.is_configured():
         return {}
 
     blueprint = (results or {}).get("thesis_analysis_blueprint") or {}
