@@ -102,7 +102,9 @@ def test_p27_workflow_uses_clinical_outcome_label_and_full_defaults() -> None:
     assert "Cross-sectional association study" in js
     assert "function doctorFacingSetupReason" in js
     assert "text.includes(\"diagnostic\")" in js
+    assert "text.includes(\"mapped\")" in js
     assert "text.includes(\"stale\")" in js
+    assert "Mapped from proposal concept" not in js
     assert "_p27DefaultPredictors(candidates)" in js
     assert "current.length < Math.min(8, expanded.length)" in js
     assert "selectedPredictorsTouched" in js
@@ -147,6 +149,16 @@ def test_plan_preview_is_structured_with_collapsible_details() -> None:
     assert "View detailed test list" in html
     assert "View detailed test list" in js
     assert "_displayAnalysisText(p.summary || \"\")" not in js
+
+
+def test_results_default_to_chapter_preview_and_advanced_stats_tab() -> None:
+    js = _read_js()
+    assert "tab-thesis-blueprint" in js
+    assert "Results chapter preview" in js
+    assert 'tabDefs.push({ id: "tab-table-one", label: "Tables" })' in js
+    assert 'tabDefs.push({ id: "tab-figures", label: "Figures" })' in js
+    assert 'tabDefs.push({ id: "tab-advanced-stats", label: "Advanced statistics" })' in js
+    assert 'if (tabId === "tab-advanced-stats")' in js
 
 
 def test_normality_is_internal_to_plan_flow() -> None:
@@ -198,6 +210,7 @@ if __name__ == "__main__":
     test_p27_workflow_uses_clinical_outcome_label_and_full_defaults()
     test_p27_subgroup_suggestions_do_not_use_outcome()
     test_plan_preview_is_structured_with_collapsible_details()
+    test_results_default_to_chapter_preview_and_advanced_stats_tab()
     test_normality_is_internal_to_plan_flow()
     test_results_and_export_labels_are_doctor_facing()
     test_missing_decisions_are_persistent_and_idempotent()

@@ -4021,3 +4021,380 @@ td.se-corr-p-sig {
   color: #1f2937;
   line-height: 1.45;
 }
+
+/* ============================================================
+   Sigma doctor-facing visual polish
+   UI-only overrides: reduce visual noise, keep functionality.
+   ============================================================ */
+
+.se-main {
+  color: #182235;
+}
+
+.se-screen {
+  border-color: #e4eaf2;
+  border-radius: 16px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.055);
+  padding: clamp(22px, 3vw, 34px);
+}
+
+.se-screen-head {
+  margin-bottom: 1.35rem;
+}
+
+.se-screen-head h2 {
+  color: #162033;
+  letter-spacing: 0;
+}
+
+.se-screen-head p,
+.se-hint,
+.se-chat-blurb {
+  color: #667085;
+  line-height: 1.6;
+}
+
+/* Stepper: calmer SaaS tracker */
+.se-steps {
+  background: #ffffff;
+  border-color: #e5eaf2;
+  border-radius: 16px;
+  padding: 18px 12px 14px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.045);
+}
+.se-step {
+  gap: 8px;
+  color: #7b8798;
+  font-size: 11px;
+}
+.se-step::after {
+  background: #e4eaf2;
+}
+.se-step.is-done::after {
+  background: #9fd5bf;
+}
+.se-step-num {
+  width: 30px;
+  height: 30px;
+  background: #f4f7fb;
+  border-color: #dce4ef;
+  color: #8190a4;
+  font-size: 12px;
+  box-shadow: none;
+}
+.se-step-label {
+  max-width: 8.5rem;
+  font-size: 11px;
+  line-height: 1.25;
+}
+.se-step.is-done {
+  color: #24745a;
+}
+.se-step.is-done .se-step-num {
+  background: #e7f6ee;
+  border-color: #b9e3cd;
+  color: #24745a;
+}
+.se-step.is-done .se-step-num::before {
+  color: #24745a;
+}
+.se-step.is-active {
+  color: #1f3f85;
+}
+.se-step.is-active .se-step-label {
+  color: #1f3f85;
+  font-weight: 700;
+}
+.se-step.is-active .se-step-num {
+  background: #1f3f85;
+  border-color: #1f3f85;
+  box-shadow: 0 0 0 4px rgba(31, 63, 133, 0.10);
+}
+.se-step.is-future {
+  opacity: 0.62;
+}
+
+/* Buttons: one consistent hierarchy */
+.se-main .btn,
+.se-main .btn-ra-open {
+  min-height: 40px;
+  border-radius: 10px;
+  padding: 0.6rem 1rem;
+  font-weight: 650;
+  box-shadow: none;
+}
+.se-main .btn:hover:not(:disabled),
+.se-main .btn-ra-open:hover:not(:disabled) {
+  transform: none;
+}
+.se-main .btn-primary {
+  background: #1f3f85;
+  border-color: #1f3f85;
+  color: #fff;
+}
+.se-main .btn-primary:hover:not(:disabled) {
+  background: #17346f;
+  border-color: #17346f;
+}
+.se-main .btn-secondary,
+.se-main .btn-ra-open {
+  background: #fff;
+  border-color: #d7dee9;
+  color: #26364d;
+}
+.se-main .btn-tertiary,
+.se-main .btn-ghost {
+  background: transparent;
+  border-color: transparent;
+  color: #526174;
+}
+.se-main .btn-tertiary:hover:not(:disabled),
+.se-main .btn-ghost:hover:not(:disabled) {
+  background: #f3f6fa;
+  border-color: transparent;
+}
+.se-main .btn:focus-visible,
+.se-main .btn-ra-open:focus-visible,
+.se-results-tab:focus-visible,
+.se-step:focus-visible {
+  outline: 3px solid rgba(31, 63, 133, 0.22);
+  outline-offset: 2px;
+}
+
+/* Calmer cards and sections */
+.se-plan-section,
+.se-plan-section-descriptive,
+.se-assistant-panel,
+.se-export-card,
+.se-export-feature,
+.se-category-merge-card,
+.se-assign-card,
+.se-vars-metric {
+  border-color: #e3e9f2;
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.035);
+}
+.se-plan-section,
+.se-plan-section-descriptive {
+  padding: 1.1rem 1.15rem;
+  margin-bottom: 1.15rem;
+}
+.se-plan-section-heading,
+.se-plan-section-title {
+  color: #1d2b3f;
+}
+.se-plan-section-icon,
+.se-plan-section-icon-sm,
+.se-plan-card-icon,
+.se-plan-card-icon-sm,
+.se-category-merge-icon {
+  display: none !important;
+}
+.se-plan-badge,
+.se-plan-badge-always {
+  background: #f2f5f9;
+  border-color: #e1e7ef;
+  color: #6b788a;
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 600;
+}
+.se-plan-cards {
+  gap: 10px;
+}
+.se-plan-card,
+.se-plan-card-fixed {
+  border-color: #e3e9f2;
+  border-radius: 12px;
+  padding: 0.85rem 0.95rem;
+  background: #fff;
+  box-shadow: none;
+}
+.se-plan-card:hover {
+  border-color: #cfd8e6;
+}
+.se-plan-card-fixed-row {
+  gap: 0.55rem;
+}
+.se-plan-card-title {
+  color: #1f2937;
+}
+.se-plan-card-why {
+  margin-left: 0;
+  color: #6b788a;
+  line-height: 1.5;
+}
+.se-plan-col {
+  background: #f5f7fb;
+  border-color: #e0e7f0;
+  color: #39485d;
+}
+
+/* Step 4 cards: clearer doctor-facing variable selection */
+#screen-analysis-vars .se-plan-section {
+  background: #fbfcfe;
+}
+#screen-analysis-vars .se-plan-cards {
+  grid-template-columns: 1fr;
+}
+#screen-analysis-vars .se-plan-card {
+  display: block;
+}
+#screen-analysis-vars input[type="checkbox"],
+.se-plan-confirm input[type="checkbox"],
+.se-export-option input[type="checkbox"] {
+  accent-color: #1f3f85;
+}
+
+/* Step 5 structured plan preview */
+.se-plan-summary {
+  margin-top: 0.85rem;
+}
+.se-plan-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.se-plan-summary-grid > div {
+  min-height: 72px;
+  padding: 0.95rem 1rem;
+  border: 1px solid #e2e8f2;
+  border-radius: 12px;
+  background: #fbfcfe;
+  color: #334155;
+  line-height: 1.45;
+}
+.se-plan-summary-grid strong {
+  display: block;
+  margin-bottom: 0.25rem;
+  color: #172033;
+}
+details.se-plan-section > summary {
+  cursor: pointer;
+  list-style: none;
+}
+details.se-plan-section > summary::-webkit-details-marker {
+  display: none;
+}
+details.se-plan-section > summary::after {
+  content: "Show";
+  margin-left: auto;
+  color: #526174;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+details.se-plan-section[open] > summary::after {
+  content: "Hide";
+}
+.se-plan-confirm {
+  background: #fbfcfe;
+  border-color: #dce4ef;
+}
+.se-plan-confirm legend {
+  color: #26364d;
+}
+.se-plan-cov-note {
+  background: #fbfcfe;
+  border-left-color: #c4cfdd;
+}
+
+/* Results: chapter preview first, details quieter */
+.se-results-tabs {
+  width: 100%;
+  padding: 5px;
+  gap: 4px;
+  background: #f4f7fb;
+  border-radius: 12px;
+}
+.se-results-tab {
+  color: #526174;
+  border-radius: 8px;
+  padding: 8px 13px;
+}
+.se-results-tab.is-active {
+  background: #ffffff;
+  color: #1f3f85;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.08);
+}
+.se-results-pane h3 {
+  color: #172033;
+}
+.se-advanced-results-block {
+  margin-bottom: 1.25rem;
+}
+
+/* Export: three calm final choices */
+.se-export-grid {
+  gap: 14px;
+}
+.se-export-card {
+  padding: 1rem;
+}
+.se-export-card h3 {
+  color: #172033;
+}
+.se-export-option {
+  border: 1px solid #e2e8f2;
+  border-radius: 12px;
+  padding: 0.85rem 1rem;
+  background: #fbfcfe;
+}
+.se-export-option-note {
+  color: #667085;
+}
+
+/* Category/variable cleanup should feel like review, not alarm */
+.se-category-merge-card {
+  background: #fffdf7;
+  border-color: #f0dfb4;
+}
+.se-category-merge-title {
+  color: #4f3f1f;
+}
+.se-category-merge-copy {
+  color: #6f5f3b;
+}
+.se-vars-metrics {
+  gap: 12px;
+}
+.se-vars-metric {
+  background: #fbfcfe;
+}
+.se-vars-type-stack,
+.se-vars-flex,
+.se-vars-interp {
+  color: #667085;
+}
+.se-vars-flex-chip {
+  background: #f4f7fb !important;
+  color: #667085 !important;
+  border-color: #e2e8f2 !important;
+  text-transform: none;
+}
+
+@media (max-width: 840px) {
+  .se-plan-summary-grid {
+    grid-template-columns: 1fr;
+  }
+  .se-results-tabs {
+    width: 100%;
+  }
+  .se-results-tab {
+    flex: 1 1 auto;
+  }
+}
+
+@media (max-width: 720px) {
+  .se-steps {
+    overflow-x: auto;
+    justify-content: flex-start;
+    scrollbar-width: thin;
+  }
+  .se-step {
+    flex: 0 0 88px;
+  }
+  .se-step-label {
+    font-size: 10px;
+  }
+}

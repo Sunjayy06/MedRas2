@@ -2147,9 +2147,8 @@ function renderAnalysisVariablesScreen() {
         <span class="se-plan-card-fixed-row">
           <input type="checkbox" data-analysis-predictor value="${escapeAttr(c.column)}" ${checked ? "checked" : ""}>
           <span class="se-plan-card-title">${escapeHtml(variableDisplayLabel(c.column))}</span>
-          <span class="se-plan-badge se-plan-badge-nonparam">${escapeHtml(_typeLabel(c))}</span>
         </span>
-        <span class="se-plan-card-why">Missing: ${escapeHtml(String(c.missing_pct ?? c.missing_fraction ?? 0))}%</span>
+        <span class="se-plan-card-why">${escapeHtml(_typeLabel(c))} · Missing: ${escapeHtml(String(c.missing_pct ?? c.missing_fraction ?? 0))}%</span>
       </label>`;
     }).join("");
   }
@@ -2163,8 +2162,8 @@ function renderAnalysisVariablesScreen() {
       <span class="se-plan-card-fixed-row">
         <input type="checkbox" data-analysis-subgroup value="${escapeAttr(c.column)}" ${checked ? "checked" : ""}>
         <span class="se-plan-card-title">${escapeHtml(variableDisplayLabel(c.column))}</span>
-        <span class="se-plan-badge se-plan-badge-nonparam">${escapeHtml(_typeLabel(c))}</span>
       </span>
+      <span class="se-plan-card-why">${escapeHtml(_typeLabel(c))}</span>
     </label>`;
   }).join("") : `<p class="se-hint">No categorical subgroup variables are currently eligible.</p>`;
 
@@ -4519,6 +4518,8 @@ function _planSummaryHtml(plan) {
     .filter((row) => ["nominal", "ordinal", "binary"].includes(String(row.detected_type || "").toLowerCase()))
     .map((row) => variableDisplayLabel(row.column));
   const graphs = (plan.graphs || []).map((graph) => _displayAnalysisText(graph.title || graph.caption || ""));
+  const testCount = (plan.tests || []).length;
+  const graphCount = (plan.graphs || []).length;
   const fdrText = predictorNames.length > 1
     ? "Benjamini-Hochberg FDR across the inferential tests."
     : "Multiple-testing adjustment is not needed for a single inferential test.";
@@ -4530,10 +4531,11 @@ function _planSummaryHtml(plan) {
       <div><strong>Predictors selected:</strong> ${escapeHtml(String(predictorNames.length))} — ${escapeHtml(_compactDisplayList(predictorNames, 14))}</div>
       <div><strong>Subgroup variables:</strong> ${escapeHtml(_compactDisplayList(subgroupNames, 8))}</div>
       <div><strong>Descriptive outputs planned:</strong> Table 1, domain-specific descriptive tables, figures, methods and results text.</div>
+      <div><strong>Tests planned:</strong> ${escapeHtml(String(testCount))} deterministic comparisons.</div>
       <div><strong>Continuous predictors:</strong> ${escapeHtml(_compactDisplayList(continuous, 8))}. Welch's t-test or Mann-Whitney U will be selected from distribution and group assumptions.</div>
       <div><strong>Categorical predictors:</strong> ${escapeHtml(_compactDisplayList(categorical, 10))}. Chi-square or Fisher's exact test will be selected from contingency-table structure and expected counts.</div>
       <div><strong>Multiple testing:</strong> ${escapeHtml(fdrText)}</div>
-      <div><strong>Graphs planned:</strong> ${escapeHtml(_compactDisplayList(graphs, 8))}</div>
+      <div><strong>Graphs planned:</strong> ${escapeHtml(String(graphCount))} figures — ${escapeHtml(_compactDisplayList(graphs, 8))}</div>
     </div>`;
 }
 
@@ -4723,24 +4725,18 @@ function renderResults() {
     pane.innerHTML = "<p>No results yet — run the analysis on Step 6.</p>";
     return;
   }
-  const families = [
-    ["bivariate", "Bivariate associations"],
-    ["regression", "Regression models"],
-    ["correlation", "Correlations"],
-  ];
-  const tabDefs = [{ id: "tab-table-one", label: "Table 1" }];
-  families.forEach(([family, label]) => {
-    if ((r.tests || []).some((test) => resultFamily(test) === family)) {
-      tabDefs.push({ id: `tab-family-${family}`, label });
-    }
-  });
-  if ((r.tests || []).some((test) => resultFamily(test) === "other")) {
-    tabDefs.push({ id: "tab-family-other", label: "Other analyses" });
-  }
+  const tabDefs = [];
   if (r.thesis_analysis_blueprint) {
     tabDefs.push({ id: "tab-thesis-blueprint", label: "Results chapter preview" });
   }
+  tabDefs.push({ id: "tab-table-one", label: "Tables" });
+  if ((r.graphs || []).length || r.forest_plot) {
+    tabDefs.push({ id: "tab-figures", label: "Figures" });
+  }
   tabDefs.push({ id: "tab-significant", label: "Significant findings" });
+  if ((r.tests || []).length) {
+    tabDefs.push({ id: "tab-advanced-stats", label: "Advanced statistics" });
+  }
   tabDefs.push({ id: "tab-narrative", label: "Methods + Results" });
   tabs.innerHTML = tabDefs.map((t, i) =>
     `<button type="button" role="tab" class="se-results-tab ${i === 0 ? 'is-active' : ''}" data-tab="${t.id}" data-testid="${t.id}">${t.label}</button>`
@@ -4763,6 +4759,32 @@ function renderResultsPane(tabId) {
     pane.innerHTML = `<h3>Table 1 — Baseline characteristics</h3>
       ${tableHtml(t1.headers, t1.rows.map((row) => [row.variable, row.type, ...(row.cells || [])]))}
       <button type="button" class="btn btn-tertiary" data-action="copy-table" data-testid="button-copy-table-one">Copy table</button>`;
+    bindCopyTable();
+    return;
+  }
+  if (tabId === "tab-figures") {
+    const figures = (r.graphs || []).map((g) =>
+      `<figure class="se-result-figure"><figcaption>${escapeHtml(g.title)}</figcaption><img src="${escapeHtml(g.png_data_uri)}" alt="${escapeHtml(g.title)}"></figure>`
+    ).join("");
+    const forest = r.forest_plot
+      ? `<figure class="se-result-figure"><figcaption>Forest plot — effect sizes</figcaption><img src="${escapeHtml(r.forest_plot)}" alt="Forest plot"></figure>`
+      : "";
+    pane.innerHTML = `<h3>Figures</h3>${figures || forest ? figures + forest : "<p>No figures were generated for this analysis.</p>"}`;
+    return;
+  }
+  if (tabId === "tab-advanced-stats") {
+    const grouped = ["bivariate", "regression", "correlation", "other"].map((family) => {
+      const familyTests = (r.tests || []).filter((test) => resultFamily(test) === family);
+      if (!familyTests.length) return "";
+      const familyTitle = {
+        bivariate: "Bivariate associations",
+        regression: "Regression models",
+        correlation: "Correlations",
+        other: "Other analyses",
+      }[family] || "Analysis results";
+      return `<section class="se-advanced-results-block"><h3>${familyTitle}</h3>${familyTests.map(renderResultTestBlock).join("")}</section>`;
+    }).join("");
+    pane.innerHTML = grouped || "<p>No advanced statistical details are available.</p>";
     bindCopyTable();
     return;
   }
