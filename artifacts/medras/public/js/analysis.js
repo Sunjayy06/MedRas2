@@ -4689,16 +4689,24 @@ function normalizePlanReviewLayout() {
   const actions = runButton ? runButton.closest(".se-actions") : null;
   const details = screen.querySelector('[data-testid="plan-tests-section"]');
   if (!actions || !details) return;
-  const actionBeforeDetails = Boolean(actions.compareDocumentPosition(details) & Node.DOCUMENT_POSITION_FOLLOWING);
-  if (!actionBeforeDetails) {
-    actions.insertAdjacentElement("afterend", details);
+  if (actions === details || actions.contains(details) || details.contains(actions)) {
+    console.warn("Sigma plan layout check skipped: confirm controls and detailed test list are nested unexpectedly.");
+    return;
+  }
+  const actionsBeforeDetails = Boolean(actions.compareDocumentPosition(details) & Node.DOCUMENT_POSITION_FOLLOWING);
+  if (!actionsBeforeDetails) {
+    console.warn("Sigma plan layout check: confirm controls should render before the detailed test list.");
   }
 }
 
 function bindPlan() {
   const screen = document.getElementById("screen-plan");
   if (!screen) return;
-  normalizePlanReviewLayout();
+  try {
+    normalizePlanReviewLayout();
+  } catch (err) {
+    console.warn("Sigma plan layout check failed; continuing without layout normalization.", err);
+  }
   const back = screen.querySelector('[data-action="back-to-cleaning"]');
   if (back) back.addEventListener("click", () => showScreen("3"));
   const run = screen.querySelector('[data-action="run-analysis"]');

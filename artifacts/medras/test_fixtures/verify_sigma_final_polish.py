@@ -872,8 +872,12 @@ def test_significant_findings_pvalues_separate() -> None:
     blob = chapter_v_export.generate_docx(results)
     doc = Document(io.BytesIO(blob))
 
-    # Last table in Chapter V is the significant findings summary
-    sig_table = doc.tables[-1]
+    sig_table = next(
+        table for table in doc.tables
+        if table.rows
+        and "Variable / parameter" in [cell.text for cell in table.rows[0].cells]
+        and "Adjusted p-value" in [cell.text for cell in table.rows[0].cells]
+    )
     headers = [cell.text for cell in sig_table.rows[0].cells]
 
     assert "p-value" in headers, "p-value column must exist in significant findings table"

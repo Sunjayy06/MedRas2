@@ -187,9 +187,12 @@ def test_plan_preview_is_structured_with_collapsible_details() -> None:
     assert "View detailed test list" in html
     assert "View detailed test list" in js
     assert "function normalizePlanReviewLayout" in js
-    assert "actions.insertAdjacentElement(\"afterend\", details)" in js
+    assert "insertAdjacentElement(\"afterend\", details)" not in js
+    assert "actions.contains(details) || details.contains(actions)" in js
     plan_region = html.split('id="screen-plan"', 1)[1].split('data-testid="chatbox-plan-panel"', 1)[0]
     assert plan_region.index('data-testid="plan-confirm"') < plan_region.index('data-testid="button-run-analysis"')
+    assert plan_region.index('data-testid="button-run-analysis"') < plan_region.index('data-testid="plan-tests-section"')
+    assert "</details>" in plan_region
     assert "_displayAnalysisText(p.summary || \"\")" not in js
 
 

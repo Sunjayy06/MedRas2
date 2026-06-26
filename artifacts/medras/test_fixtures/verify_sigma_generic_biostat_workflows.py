@@ -188,6 +188,10 @@ def _assert_generic_outputs(results: Dict[str, Any], entry: Entry, assignment: D
     assert "Marker Expression" not in combined
     assert "marker/category distribution within p27 expression groups" not in combined
     assert "Percentages in detailed association tables are calculated within predictor categories unless otherwise stated." in combined
+    assert "Key Findings" in combined
+    assert "Summary of Significant Associations" in combined
+    assert "Limitations and Interpretation Notes" in combined
+    assert "Analysis Audit Summary" in combined
     for marker in ("HER2", "Ki-67"):
         assert marker not in combined
     for marker in ("ER", "PR", "AR"):

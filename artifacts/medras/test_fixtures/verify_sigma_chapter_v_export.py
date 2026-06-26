@@ -329,13 +329,28 @@ def verify_service_docx() -> None:
     assert "OBSERVATION AND RESULTS" in text
     assert "5.1 Study Summary" in text
     assert "5.2 Statistical Methods" in text
+    assert "5.3 Key Findings" in text
     assert "Section I - Baseline Characteristics" in text
     assert "Section II - Nodal and Prognostic Pathology" in text
     assert "Section III - Immunophenotype" in text
     assert "Section IV - p27 expression status / Marker Expression" in text
     assert "Section V - Statistical Associations" in text
     assert "Section VI - Summary of Tested Associations" in text
+    assert "Summary of Significant Associations" in text
     assert "Significant Findings Highlight" in text
+    assert "Detailed Association Tables" in text
+    assert "Baseline demographic and tumour profile" in text
+    assert "Nodal and adverse pathological features" in text
+    assert "Tumour burden and pathological stage" in text
+    assert "Immunophenotype and molecular subtype profile" in text
+    assert "p27 expression and marker components" in text
+    assert "Adjusted p-value summary for key associations" in text
+    assert "Limitations and Interpretation Notes" in text
+    assert "Analysis Audit Summary" in text
+    assert "Interpretation: Interpretation:" not in text
+    assert "This table summarises the analysed sample." not in text
+    assert "p27 positivity was observed in 9 cases (75.0%), while 3 cases (25.0%) were p27-negative. This distribution formed the basis for subsequent association analyses." in text
+    assert "Missing\n0\n0.0%" not in text
     assert "p27 expression status" in text
     assert "Positive\n9\n75.0%" in text
     assert "No:" not in text and "Yes:" not in text
@@ -367,6 +382,7 @@ def verify_service_docx() -> None:
         return header[:2] == ["Parameter", "n"] or header == ["Parameter", "Category", "n", "%"]
 
     descriptive_tables = [table for table in doc.tables if _is_descriptive_table(table)]
+    assert len(descriptive_tables) <= 6
     continuous_table = next(
         table for table in descriptive_tables
         if [cell.text for cell in table.rows[0].cells][:2] == ["Parameter", "n"]
@@ -394,7 +410,13 @@ def verify_service_docx() -> None:
         if any(row[0] == "p27 expression status" for row in _table_rows(table)[1:])
     )
     assert outcome_table_count == 1
-    final_rows = [[cell.text for cell in row.cells] for row in doc.tables[-1].rows]
+    final_table = next(
+        table for table in doc.tables
+        if table.rows
+        and "Variable / parameter" in [cell.text for cell in table.rows[0].cells]
+        and "Adjusted p-value" in [cell.text for cell in table.rows[0].cells]
+    )
+    final_rows = [[cell.text for cell in row.cells] for row in final_table.rows]
     histology = next(row for row in final_rows if row[0] == "Histological type vs p27 expression status")
     assert histology[3] == "p = 0.004" and histology[4] == "p = 0.013"
     assert "p27 Positive" in text and "p27 Negative" in text
