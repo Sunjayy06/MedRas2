@@ -281,6 +281,7 @@ def _outcome_label_context(blueprint: Dict[str, Any]) -> Dict[str, Any]:
         "raw_values": sorted(raw_values, key=len, reverse=True),
         "core_figure_variables": sorted(core_figure_variables),
         "status_like": any(token in display.lower() for token in ("expression", "status", "marker", "positive", "negative")),
+        "p27_context": _p27_breast_context_from_blueprint(blueprint),
     }
 
 
@@ -2222,12 +2223,14 @@ def _main_sections(blueprint: Dict[str, Any]) -> List[Dict[str, Any]]:
 
 def _section_export_title(section_id: str, fallback: Any, label_ctx: Dict[str, Any]) -> str:
     marker = _text(label_ctx.get("display") or "Marker")
+    if section_id == "marker_outcome_components":
+        return f"Section IV - {marker} / Marker Expression" if label_ctx.get("p27_context") else "Section IV - Outcome Components"
+    if section_id == "primary_outcome_distribution":
+        return f"Section IV - {marker} / Marker Expression" if label_ctx.get("p27_context") else "Section IV - Primary Outcome Distribution"
     titles = {
         "baseline_characteristics": "Section I - Baseline Characteristics",
         "clinical_study_characteristics": "Section II - Nodal and Prognostic Pathology",
         "immunophenotype_characteristics": "Section III - Immunophenotype",
-        "marker_outcome_components": f"Section IV - {marker} / Marker Expression",
-        "primary_outcome_distribution": f"Section IV - {marker} / Marker Expression",
         "bivariate_associations": "Section V - Statistical Associations",
         "correlation_analysis": "Section V - Correlation Analysis",
         "regression_adjusted_analysis": "Section V - Regression / Adjusted Analysis",
