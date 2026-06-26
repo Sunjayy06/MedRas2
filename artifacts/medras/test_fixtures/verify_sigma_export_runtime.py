@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import io
+import time
 from pathlib import Path
+from unittest.mock import patch
 
 import pandas as pd
 from docx import Document
@@ -145,6 +147,16 @@ def _results():
             "effect_size": "Cramer's V = 0.30",
             "notes_warnings": "Sparse cells should be interpreted cautiously.",
         }],
+        "tested_associations": [{
+            "predictor": "ER",
+            "test_applied": "Chi-square test",
+            "test_statistic": "chi-square = 4.20",
+            "p_value": "p = 0.040",
+            "adjusted_p_value": "-",
+            "effect_size": "Cramer's V = 0.30",
+            "significance_status": "Statistically significant",
+            "notes_warnings": "Sparse cells should be interpreted cautiously.",
+        }],
         "methods_text": "Categorical associations used chi-square or Fisher as appropriate.",
         "results_narrative": "ER was associated with PR.",
         "warnings": ["Sparse cells should be interpreted cautiously."],
@@ -219,6 +231,30 @@ async def _verify_endpoints():
         assert b"No primary inferential test ran successfully" not in responses["pdf"]
         assert b"No primary inferential test ran successfully" not in chapter_pdf.body
 
+        def slow_polish(_consent, _res):
+            time.sleep(0.05)
+            return True, {"results_synthesis": "AI text that should miss the deadline."}, "applied"
+
+        with patch.object(stats, "_EXPORT_AI_POLISH_WAIT_SECONDS", 0.01), \
+             patch.object(stats, "_chapter_v_polish_overrides", side_effect=slow_polish):
+            timed_out_word = await stats.export(
+                "runtime-job", "word", result_id=result_id,
+                x_narrative_polish_consent="true",
+            )
+            timed_out_pdf = await stats.export(
+                "runtime-job", "pdf", result_id=result_id,
+                x_narrative_polish_consent="true",
+            )
+        assert timed_out_word.body[:2] == b"PK"
+        assert timed_out_pdf.body.startswith(b"%PDF")
+        assert timed_out_word.headers["x-medras-ai-polish"] == "fallback"
+        assert timed_out_pdf.headers["x-medras-ai-polish"] == "fallback"
+
+        with patch.object(stats, "_chapter_v_polish_overrides", side_effect=AssertionError("Excel must not call AI polish")):
+            excel_response = await stats.export("runtime-job", "excel", result_id=result_id)
+        assert excel_response.body
+        assert excel_response.headers["x-medras-ai-polish"] == "deterministic"
+
         wb = load_workbook(io.BytesIO(responses["excel"]))
         assert {
             "cleaned_processed_dataset", "variable_classification",
@@ -227,6 +263,16 @@ async def _verify_endpoints():
             "tested_associations", "detailed_results", "Table 1", "Data Cleaning Log", "Narrative",
         } <= set(wb.sheetnames)
         assert list(next(wb["cleaned_processed_dataset"].iter_rows(values_only=True))) == ["PR", "ER"]
+        all_excel_text = "\n".join(
+            str(value)
+            for sheet in wb.worksheets
+            for row in sheet.iter_rows(values_only=True)
+            for value in row
+            if value is not None
+        )
+        assert "p27" not in all_excel_text.lower()
+        assert "marker/category distribution within p27 expression groups" not in all_excel_text
+        assert "Percentages in detailed association tables are calculated within predictor categories unless otherwise stated." in all_excel_text
         result_sheets = [
             name for name in wb.sheetnames
             if name not in {
@@ -263,6 +309,13 @@ def main():
     assert '<div class="se-export-feature is-hidden" hidden>' in html
     assert "exportErrorMessage(res)" in js
     assert "downloadBlob(blob" in js
+    assert "X-Narrative-Polish-Consent" in js
+    assert "X-MedRAS-AI-Polish" in js
+    assert "AI polish unavailable; deterministic narration used." in js
+    assert "finally" in js and "button.disabled = false" in js
+    assert "Narrative: deterministic" in html
+    assert "Narrative polish: deterministic fallback" in js
+    assert "Narrative polish: AI-polished" in js
     print("Sigma export runtime/completeness verification passed.")
 
 

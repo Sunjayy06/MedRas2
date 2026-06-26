@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 from io import BytesIO
 from pathlib import Path
 from unittest.mock import patch
@@ -184,6 +185,20 @@ def verify_safe_fallbacks() -> None:
     with (
         patch.object(stats, "_openrouter_is_configured", return_value=True),
         patch.object(stats, "_openrouter_chat", return_value="not json"),
+    ):
+        raw, provider, _, _ = asyncio.run(
+            stats._ai_extract(P27_PROPOSAL, external_ai_consent=True)
+        )
+    assert raw is None and provider is None
+
+    def slow_chat(**_kwargs):
+        time.sleep(0.05)
+        return "{}"
+
+    with (
+        patch.object(stats, "_PROPOSAL_AI_TIMEOUT_SECONDS", 0.01),
+        patch.object(stats, "_openrouter_is_configured", return_value=True),
+        patch.object(stats, "_openrouter_chat", side_effect=slow_chat),
     ):
         raw, provider, _, _ = asyncio.run(
             stats._ai_extract(P27_PROPOSAL, external_ai_consent=True)

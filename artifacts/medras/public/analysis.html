@@ -67,8 +67,8 @@
       <ol class="se-steps" aria-label="Eight-step workflow" data-testid="step-tracker">
         <li class="se-step is-active" data-step="1" data-testid="dot-step-1"><span class="se-step-num">1</span><span class="se-step-label">Objective</span></li>
         <li class="se-step" data-step="2" data-testid="dot-step-2"><span class="se-step-num">2</span><span class="se-step-label">Dataset</span></li>
-        <li class="se-step" data-step="3" data-testid="dot-step-3"><span class="se-step-num">3</span><span class="se-step-label">Clean variables</span></li>
-        <li class="se-step" data-step="4" data-testid="dot-step-4"><span class="se-step-num">4</span><span class="se-step-label">Choose analysis variables</span></li>
+        <li class="se-step" data-step="3" data-testid="dot-step-3"><span class="se-step-num">3</span><span class="se-step-label">Study setup &amp; variables</span></li>
+        <li class="se-step" data-step="4" data-testid="dot-step-4"><span class="se-step-num">4</span><span class="se-step-label">Clean variables</span></li>
         <li class="se-step" data-step="5" data-testid="dot-step-5"><span class="se-step-num">5</span><span class="se-step-label">Review plan</span></li>
         <li class="se-step" data-step="6" data-testid="dot-step-6"><span class="se-step-num">6</span><span class="se-step-label">Run analysis</span></li>
         <li class="se-step" data-step="7" data-testid="dot-step-7"><span class="se-step-num">7</span><span class="se-step-label">Review results</span></li>
@@ -448,7 +448,7 @@
         <!-- Q3 -->
         <div class="se-cw-panel is-hidden" data-q="3" data-testid="panel-cw-q3">
           <h3>3. Any specific ranges or values per variable? <span class="se-optional">(optional)</span></h3>
-          <p class="se-hint">Set min/max for numeric variables, percentages for binary, or category labels for nominal. Leave anything blank to use sensible defaults. You'll classify each variable's full type later in Step 3 — Variables.</p>
+          <p class="se-hint">Set min/max for numeric variables, percentages for binary, or category labels for nominal. Leave anything blank to use sensible defaults. You'll classify each variable's full type during data cleaning.</p>
           <div id="cw-q3-fields" class="se-cw-fields" data-testid="cw-fields"></div>
           <div class="se-actions">
             <button type="button" class="btn btn-secondary" data-cw-action="prev" data-from="3" data-testid="button-cw-q3-prev">← Back</button>
@@ -562,7 +562,7 @@
         <div class="se-zone se-preview-zone" id="preview-zone" data-zone="4">
           <p class="se-zone-label" id="preview-zone-label">Preview — first 5 rows</p>
           <p class="se-preview-step3-note is-hidden" id="preview-step3-note" data-testid="text-step3-note">
-            <strong>Step 3 will confirm</strong> what kind of variable each column is — you can change anything that looks wrong there.
+            <strong>The setup and cleaning steps will confirm</strong> what kind of variable each column is — you can change anything that looks wrong there.
           </p>
 
           <div class="se-preview-placeholder" id="preview-placeholder">
@@ -615,8 +615,8 @@
            =========================================================== -->
       <section class="se-screen se-screen-narrow is-hidden" id="screen-3" data-testid="screen-3">
         <header class="se-screen-head">
-          <h2>Step 3 · Clean variables</h2>
-          <p>Review data cleaning, missingness, label quality, and variable classifications before choosing the final analysis variables.</p>
+          <h2>Step 4 · Clean variables</h2>
+          <p>Review data cleaning, missingness, label quality, and variable classifications while preserving your confirmed study setup.</p>
         </header>
 
         <!-- Zone A · Summary metrics -->
@@ -704,7 +704,7 @@
         <div class="se-validation" id="confirm-validation" data-testid="confirm-validation" hidden></div>
 
         <div class="se-actions">
-          <button type="button" class="btn btn-secondary" data-action="back-to-preview" data-testid="button-back-preview">&larr; Back</button>
+          <button type="button" class="btn btn-secondary" data-action="back-to-preview" data-testid="button-back-preview">&larr; Back to study setup</button>
           <button type="button" class="btn btn-primary" data-action="confirm-classify" data-testid="button-confirm-classify">Confirm cleaning and continue &rarr;</button>
         </div>
 
@@ -712,11 +712,11 @@
       </section>
 
       <!-- ===========================================================
-           SCREEN 3b · Data quality
+           SCREEN 4b · Data quality
            =========================================================== -->
       <section class="se-screen se-screen-narrow is-hidden" id="screen-4" data-testid="screen-4">
         <header class="se-screen-head">
-          <h2>Step 3b · Data quality check</h2>
+          <h2>Step 4b · Data quality check</h2>
           <p>Impossible values, duplicates and logical errors. Choose what to do with each flagged row.</p>
         </header>
 
@@ -786,7 +786,7 @@
              primary always-visible controls live in #dq-sticky-actions
              below, which is fixed-positioned and toggled per-screen. -->
         <div class="se-actions se-actions-fallback">
-          <button type="button" class="btn btn-secondary" data-action="back-to-classify" data-testid="button-back-classify">&larr; Back to Variables</button>
+          <button type="button" class="btn btn-secondary" data-action="back-to-classify" data-testid="button-back-classify">&larr; Back to cleaning</button>
           <button type="button" class="btn btn-primary" data-action="apply-quality" data-testid="button-apply-quality-fallback">Apply actions and continue &rarr;</button>
         </div>
       </section>
@@ -796,16 +796,16 @@
            When the clean-banner is shown they stay hidden because the
            banner provides its own continue button. -->
       <div id="dq-sticky-actions" class="se-sticky-actions is-hidden" data-testid="sticky-actions">
-        <button type="button" class="btn se-sticky-back" data-action="back-to-classify" data-testid="button-sticky-back">&larr; Back to Variables</button>
+        <button type="button" class="btn se-sticky-back" data-action="back-to-classify" data-testid="button-sticky-back">&larr; Back to cleaning</button>
         <button type="button" class="btn btn-primary se-sticky-continue" data-action="apply-quality" data-testid="button-sticky-continue">Apply actions and continue &rarr;</button>
       </div>
 
       <!-- ===========================================================
-           SCREEN MISSING · Step 3c — Missing data decisions
+           SCREEN MISSING · Step 4c — Missing data decisions
            =========================================================== -->
       <section class="se-screen se-screen-narrow is-hidden" id="screen-missing" data-testid="screen-missing">
         <header class="se-screen-head">
-          <h2>Step 3c · Missing data decisions</h2>
+          <h2>Step 4c · Missing data decisions</h2>
           <p>These variables have more than 5% missing values. Choose how to handle each one before the analysis plan is built. The AI assistant can help you decide.</p>
         </header>
 
@@ -841,12 +841,12 @@
       </section>
 
       <!-- ===========================================================
-           SCREEN ANALYSIS VARIABLES · Step 4
+           SCREEN ANALYSIS VARIABLES · Step 3
            =========================================================== -->
       <section class="se-screen se-screen-narrow is-hidden" id="screen-analysis-vars" data-testid="screen-analysis-vars">
         <header class="se-screen-head">
-          <h2>Step 4 · Choose analysis variables</h2>
-          <p>Confirm the primary outcome, choose predictors, and optionally mark subgroup variables before previewing the analysis plan.</p>
+          <h2>Step 3 · Study setup &amp; variables</h2>
+          <p>Confirm what MedRAS will analyse: the primary outcome, clinical predictors, and optional subgroup variables.</p>
         </header>
 
         <div id="assignment-card-host" data-testid="assignment-card-host"></div>
@@ -872,57 +872,8 @@
         <div id="analysis-vars-status" class="se-status" role="status" aria-live="polite" data-testid="status-analysis-vars"></div>
 
         <div class="se-actions">
-          <button type="button" class="btn btn-secondary" data-action="analysis-vars-back" data-testid="button-analysis-vars-back">&larr; Back to cleaning</button>
-          <button type="button" class="btn btn-primary" data-action="analysis-vars-save" data-testid="button-analysis-vars-save">Save analysis variables and review plan &rarr;</button>
-        </div>
-      </section>
-
-      <!-- ===========================================================
-           SCREEN NORMALITY · Internal test-choice rationale
-           =========================================================== -->
-      <section class="se-screen se-screen-narrow is-hidden" id="screen-normality" data-testid="screen-normality">
-        <header class="se-screen-head">
-          <h2>Internal test-choice rationale</h2>
-          <p>For each scale variable we run Shapiro-Wilk (n &lt; 50) or Lilliefors when available with a Shapiro-Wilk fallback (50–2000). Above 2000, formal testing is skipped and the decision requires cautious review of plots and distribution shape.</p>
-        </header>
-
-        <div id="normality-status" class="se-status" role="status" aria-live="polite" data-testid="status-normality"></div>
-
-        <div class="se-table-wrap">
-          <table class="se-table" id="normality-table" data-testid="table-normality">
-            <thead>
-              <tr>
-                <th>Variable</th>
-                <th>n</th>
-                <th>Test</th>
-                <th>p-value</th>
-                <th>Skew</th>
-                <th>Kurt.</th>
-                <th>Verdict</th>
-                <th>QQ plot</th>
-                <th>Override</th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
-        </div>
-
-        <div class="se-actions">
-          <button type="button" class="btn btn-secondary" data-action="back-to-review" data-testid="button-normality-back">&larr; Back to analysis variables</button>
-          <button type="button" class="btn btn-primary" data-action="continue-to-plan" data-testid="button-normality-continue">Continue to Plan &rarr;</button>
-        </div>
-
-        <!-- Chatbox 2 — Normality assistant -->
-        <div class="se-section-label">NORMALITY ASSISTANT</div>
-        <p class="se-chat-blurb">Ask me anything about normality. I explain — the statistical engine calculates.</p>
-        <div class="se-assistant-panel" data-testid="chatbox-normality-panel">
-          <div class="se-chat-thread" id="cb-normality-thread" data-testid="chatbox-normality-thread"></div>
-          <div class="se-chip-row" id="cb-normality-chips" data-testid="chatbox-normality-chips"></div>
-          <form class="se-chat-form" id="cb-normality-form" data-testid="chatbox-normality-form" autocomplete="off">
-            <input type="text" id="cb-normality-input" data-testid="chatbox-normality-input"
-              placeholder="Ask: e.g. ‘what does non-normal mean?’" maxlength="500" />
-            <button type="submit" class="btn btn-primary" data-testid="button-chatbox-normality-send">Send</button>
-          </form>
+          <button type="button" class="btn btn-secondary" data-action="analysis-vars-back" data-testid="button-analysis-vars-back">&larr; Back to dataset</button>
+          <button type="button" class="btn btn-primary" data-action="analysis-vars-save" data-testid="button-analysis-vars-save">Save setup and continue to cleaning &rarr;</button>
         </div>
       </section>
 
@@ -967,15 +918,15 @@
 
         <fieldset class="se-plan-confirm" data-testid="plan-confirm">
           <legend>Before running, confirm</legend>
-          <label><input type="checkbox" data-confirm="data" data-testid="confirm-data"> The data shown in Step 3 is what I want to analyse.</label>
-          <label><input type="checkbox" data-confirm="vars" data-testid="confirm-vars"> The outcome, predictors, and subgroup variables selected on Step 4 are correct.</label>
+          <label><input type="checkbox" data-confirm="data" data-testid="confirm-data"> The cleaned data shown in Step 4 is what I want to analyse.</label>
+          <label><input type="checkbox" data-confirm="vars" data-testid="confirm-vars"> The outcome, predictors, and subgroup variables selected on Step 3 are correct.</label>
           <label><input type="checkbox" data-confirm="tests" data-testid="confirm-tests"> The tests, graphs and outputs above are what I want to run.</label>
         </fieldset>
 
         <div id="plan-status" class="se-status" role="status" aria-live="polite" data-testid="status-plan"></div>
 
         <div class="se-actions">
-          <button type="button" class="btn btn-secondary" data-action="back-to-normality" data-testid="button-plan-back">&larr; Back to analysis variables</button>
+          <button type="button" class="btn btn-secondary" data-action="back-to-cleaning" data-testid="button-plan-back">&larr; Back to cleaning</button>
           <button type="button" class="btn btn-primary" data-action="run-analysis" disabled data-testid="button-run-analysis">Confirm plan and run analysis &rarr;</button>
         </div>
 
@@ -1435,6 +1386,7 @@
             Polish narrative with AI
           </label>
           <p class="se-export-option-note">Only narrative text is polished; statistics and tables remain deterministic.</p>
+          <p class="se-export-option-note" id="ai-polish-status" data-testid="ai-polish-status">Narrative: deterministic</p>
         </div>
 
         <div class="se-export-grid">

@@ -27,6 +27,7 @@ from pydantic import BaseModel, Field
 
 from app.core.limiter import limiter
 from app.core.logging import get_logger
+from app.core.config import settings
 from app.services import (
     ai_bridge as ai_bridge_service,
     ai_chatbox,
@@ -57,6 +58,8 @@ import pandas as pd
 # Allowed extensions for the intake proposal upload (lowercase, with dot).
 _PROPOSAL_EXTS = {".pdf", ".doc", ".docx", ".ppt", ".pptx", ".txt", ".md", ".rtf"}
 _PROPOSAL_MAX_BYTES = 8 * 1024 * 1024  # 8 MB
+_PROPOSAL_AI_TIMEOUT_SECONDS = 20.0
+_EXPORT_AI_POLISH_WAIT_SECONDS = 8.0
 
 
 log = get_logger(__name__)
@@ -1127,18 +1130,24 @@ async def _ai_extract(text: str, external_ai_consent: bool = False) -> tuple[
         return None, None, screening.redaction_applied, True
     if _openrouter_is_configured():
         try:
-            raw = await asyncio.to_thread(
-                _openrouter_chat,
-                task="proposal_parse",
-                system="Extract proposal metadata and return only valid JSON.",
-                user=_PARSE_PROMPT.format(text=screening.value),
-                max_tokens=1400,
-                temperature=0.1,
-                json_mode=True,
+            raw = await asyncio.wait_for(
+                asyncio.to_thread(
+                    _openrouter_chat,
+                    task="proposal_parse",
+                    system="Extract proposal metadata and return only valid JSON.",
+                    user=_PARSE_PROMPT.format(text=screening.value),
+                    max_tokens=1400,
+                    temperature=0.1,
+                    json_mode=True,
+                    timeout=_PROPOSAL_AI_TIMEOUT_SECONDS,
+                ),
+                timeout=_PROPOSAL_AI_TIMEOUT_SECONDS,
             )
             result = _json.loads(raw)
             if isinstance(result, dict):
                 return result, "openrouter", screening.redaction_applied, False
+        except asyncio.TimeoutError:
+            log.info("proposal extraction OpenRouter timeout; deterministic fallback used")
         except Exception:
             pass
 
@@ -1181,7 +1190,9 @@ async def parse_proposal(request: Request, file: UploadFile = File(...)) -> Dict
             detail=f"Could not read the file: {exc}",
         ) from exc
 
-    # Try AI extraction first, fall back to heuristics.
+    # Deterministic extraction is the baseline so proposal upload never waits
+    # on external AI before the user can continue.
+    h = _heuristic_extract(text)
     external_ai_consent = request.headers.get("X-External-AI-Consent", "").lower() == "true"
     ai_result, provider, redaction_applied, phi_blocked = await _ai_extract(
         text, external_ai_consent
@@ -1206,8 +1217,6 @@ async def parse_proposal(request: Request, file: UploadFile = File(...)) -> Dict
             ),
         }
 
-    # Heuristic fallback.
-    h = _heuristic_extract(text)
     return {
         **h,
         **_provider_status_payload(
@@ -2742,8 +2751,8 @@ class ChapterVExportRequest(BaseModel):
     include_optional_figures: bool = False
 
 
-def _chapter_v_polish_overrides(consent_header, res: dict) -> tuple[bool, dict]:
-    """Return (ai_polish_requested, overrides).
+def _chapter_v_polish_overrides(consent_header, res: dict) -> tuple[bool, dict, str]:
+    """Return (ai_polish_requested, overrides, status).
 
     ai_polish_requested is True whenever the caller opted in via the consent
     header, regardless of whether AI polish ultimately succeeded — callers
@@ -2754,13 +2763,35 @@ def _chapter_v_polish_overrides(consent_header, res: dict) -> tuple[bool, dict]:
     """
     requested = isinstance(consent_header, str) and consent_header.lower() == "true"
     if not requested:
-        return False, {}
+        return False, {}, "deterministic"
     try:
         from app.services import narrative_polish
-        return True, narrative_polish.polish_results(res)
+        overrides = narrative_polish.polish_results(res)
+        return True, overrides, "applied" if overrides else "fallback"
     except Exception:
         log.debug("narrative_polish.polish_results failed; falling back to deterministic text")
-        return True, {}
+        return True, {}, "fallback"
+
+
+async def _chapter_v_polish_overrides_with_deadline(consent_header, res: dict) -> tuple[bool, dict, str]:
+    requested = isinstance(consent_header, str) and consent_header.lower() == "true"
+    if not requested:
+        return False, {}, "deterministic"
+    try:
+        timeout = min(
+            _EXPORT_AI_POLISH_WAIT_SECONDS,
+            max(1.0, float(getattr(settings, "sigma_ai_polish_timeout_seconds", 20) or 20)),
+        )
+        return await asyncio.wait_for(
+            asyncio.to_thread(_chapter_v_polish_overrides, consent_header, res),
+            timeout=timeout,
+        )
+    except asyncio.TimeoutError:
+        log.info("AI narrative polish timed out; deterministic fallback used")
+        return True, {}, "fallback"
+    except Exception:
+        log.debug("AI narrative polish failed; deterministic fallback used")
+        return True, {}, "fallback"
 
 
 @router.get("/export/{job_id}/chapter_v_word")
@@ -2774,7 +2805,9 @@ async def export_chapter_v_word(
     if entry is None:
         raise HTTPException(status_code=404, detail="Dataset expired or not found.")
     res = _current_export_state(entry, job_id, result_id)
-    requested, overrides = await asyncio.to_thread(_chapter_v_polish_overrides, x_narrative_polish_consent, res)
+    requested, overrides, polish_status = await _chapter_v_polish_overrides_with_deadline(
+        x_narrative_polish_consent, res
+    )
     try:
         payload_bytes = await asyncio.to_thread(
             export_service.generate_chapter_v_word,
@@ -2791,7 +2824,7 @@ async def export_chapter_v_word(
     return Response(
         content=payload_bytes,
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        headers=_export_headers(entry, filename),
+        headers={**_export_headers(entry, filename), "X-MedRAS-AI-Polish": polish_status},
     )
 
 
@@ -2823,7 +2856,9 @@ async def export_chapter_v_pdf(
     if entry is None:
         raise HTTPException(status_code=404, detail="Dataset expired or not found.")
     res = _current_export_state(entry, job_id, result_id)
-    requested, overrides = await asyncio.to_thread(_chapter_v_polish_overrides, x_narrative_polish_consent, res)
+    requested, overrides, polish_status = await _chapter_v_polish_overrides_with_deadline(
+        x_narrative_polish_consent, res
+    )
     try:
         payload_bytes = await asyncio.to_thread(
             export_service.generate_chapter_v_pdf,
@@ -2840,7 +2875,7 @@ async def export_chapter_v_pdf(
     return Response(
         content=payload_bytes,
         media_type="application/pdf",
-        headers=_export_headers(entry, filename),
+        headers={**_export_headers(entry, filename), "X-MedRAS-AI-Polish": polish_status},
     )
 
 
@@ -2864,11 +2899,11 @@ async def export(
     fn, mime, ext = exporter
     # Excel has no narrative prose to polish; only ask for AI polish on word/pdf.
     if fmt.lower() in {"word", "pdf"}:
-        requested, overrides = await asyncio.to_thread(
-            _chapter_v_polish_overrides, x_narrative_polish_consent, res
+        requested, overrides, polish_status = await _chapter_v_polish_overrides_with_deadline(
+            x_narrative_polish_consent, res
         )
     else:
-        requested, overrides = False, {}
+        requested, overrides, polish_status = False, {}, "deterministic"
     try:
         payload_bytes = await asyncio.to_thread(
             fn, entry, res, entry.meta.get("assignment") or {}, overrides, requested,
@@ -2882,7 +2917,7 @@ async def export(
     return Response(
         content=payload_bytes,
         media_type=mime,
-        headers=_export_headers(entry, filename),
+        headers={**_export_headers(entry, filename), "X-MedRAS-AI-Polish": polish_status},
     )
 
 

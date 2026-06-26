@@ -125,6 +125,7 @@ def _status_label_context(outcome: Optional[str], session: Dict[str, Any]) -> Di
         "display_outcome": display,
         "status_like": status_like,
         "value_map": {"Yes": "Positive", "No": "Negative", "yes": "Positive", "no": "Negative"},
+        "p27_context": False,
     }
 
 
@@ -262,8 +263,7 @@ def _deterministic_key_finding(
     finding: Dict[str, Any], label_ctx: Dict[str, Any], raw_test: Optional[Dict[str, Any]] = None
 ) -> str:
     variable = _display_text(finding.get("variable") or "", label_ctx).lower()
-    outcome_display = str(label_ctx.get("display_outcome") or label_ctx.get("outcome") or "").lower()
-    if "p27" not in outcome_display:
+    if not label_ctx.get("p27_context"):
         return _display_text(finding.get("key_finding") or "", label_ctx)
     marker = re.sub(r"\s+(?:expression\s+)?status$", "", str(label_ctx.get("display_outcome") or "p27"), flags=re.IGNORECASE).strip() or "p27"
     predictor_label = str(finding.get("variable") or "").strip()
@@ -869,6 +869,54 @@ def _outcome_component_variables(
     return components
 
 
+def _strict_p27_breast_context(
+    classifications: List[Dict[str, Any]],
+    outcome: Optional[str],
+    session: Dict[str, Any],
+) -> bool:
+    text_parts = [
+        session.get("domain_profile"),
+        session.get("objective"),
+        session.get("objective_text"),
+        session.get("study_title"),
+        session.get("main_marker"),
+        session.get("main_outcome_concept"),
+        outcome,
+        session.get("mapped_outcome"),
+        session.get("confirmed_outcome_col"),
+    ]
+    text = " ".join(_clean_text(part) for part in text_parts if _clean_text(part)).lower()
+    breast_context = (
+        "breast_pathology" in text
+        or "breast pathology" in text
+        or any(term in text for term in ("breast", "mammary", "carcinoma"))
+    )
+    mentions_p27 = bool(re.search(r"\bp\s*[- ]?\s*27\b", text))
+    explicit_p27_metadata = (
+        breast_context
+        and _clean_text(session.get("main_marker")).lower() == "p27"
+        and "p27" in _clean_text(session.get("main_outcome_concept")).lower()
+    )
+    outcome_key = _compact_key(outcome)
+    has_positive_negative_outcome = (
+        "positive" in outcome_key and "negative" in outcome_key
+    )
+    has_marker_component = False
+    for row in classifications or []:
+        col = str(row.get("column") or "")
+        if col == outcome:
+            sample_values = [str(value).lower() for value in (row.get("sample_values") or [])]
+            if {"positive", "negative"}.issubset(set(sample_values)) or {"yes", "no"}.issubset(set(sample_values)):
+                has_positive_negative_outcome = True
+        low = col.lower()
+        if any(term in low for term in ("staining", "localization", "localisation", "interpretation", "score")):
+            has_marker_component = True
+    if explicit_p27_metadata:
+        has_positive_negative_outcome = has_positive_negative_outcome or "status" in text
+        has_marker_component = True
+    return breast_context and mentions_p27 and has_positive_negative_outcome and has_marker_component
+
+
 def _safe_interpretation(test: Dict[str, Any], label_ctx: Optional[Dict[str, Any]] = None) -> str:
     label_ctx = label_ctx or {}
     p = _significance_p_value(test)
@@ -1399,6 +1447,7 @@ def build_thesis_analysis_blueprint(
     classes = _class_lookup(classifications)
     outcome = assignment.get("outcome") or session.get("outcome_col") or session.get("outcome")
     label_ctx = _status_label_context(outcome, session)
+    label_ctx["p27_context"] = _strict_p27_breast_context(classifications, outcome, session)
     study_design = _study_type_token(
         session.get("study_type") or session.get("design") or session.get("objective") or plan.get("study_type")
     )

@@ -482,11 +482,81 @@ def verify_generic_docx() -> None:
         results_narrative="No significant finding was detected.",
         session={"study_type": "two-group comparison", "domain_profile": "generic"},
     )
+    blueprint["analysis_sections"].append({
+        "section_id": "bivariate_associations",
+        "title": "Bivariate Associations / Group Comparisons",
+        "purpose": "Summarise predictor-by-outcome tests.",
+        "source_results": ["generic_assoc"],
+        "tables": [{
+            "table_id": "generic_assoc_table",
+            "title": "Association of Score with Treatment",
+            "table_type": "categorical_association_thesis_table",
+            "columns": ["Predictor", "p-value", "Test applied"],
+            "rows": [["Treatment", "p = 0.120", "Chi-square test"]],
+            "source_variables": ["Treatment", "Score"],
+            "source_test_ids": ["generic_assoc"],
+            "interpretation": "Treatment did not show a statistically significant association with Score.",
+            "thesis_ready": True,
+            "priority": "thesis_ready_primary",
+            "optional": False,
+            "detailed_report_only": False,
+            "warnings": [],
+        }],
+        "figures": [],
+        "interpretation": "Bivariate associations were reviewed.",
+    })
+    blueprint["tested_associations"] = [{
+        "predictor": "Treatment",
+        "test_applied": "Chi-square test",
+        "p_value": "p = 0.120",
+        "adjusted_p_value": "-",
+        "effect_size": "-",
+        "significance_status": "Not statistically significant",
+        "notes_warnings": "",
+    }]
     blob = chapter_v_export.generate_docx({"thesis_analysis_blueprint": blueprint, "export_metadata": {"result_id": "generic-result"}})
     text = _docx_text(blob)
     assert "CHAPTER V" in text
     assert "Two Group Comparison" in text or "two-group comparison" in text.lower()
     assert "p27" not in text
+    assert "Percentages in detailed association tables are calculated within predictor categories unless otherwise stated." in text
+    assert "marker/category distribution within p27 expression groups" not in text
+
+
+def verify_p27_fallback_is_strictly_gated() -> None:
+    blueprint = build_thesis_analysis_blueprint(
+        df_shape=(12, 2),
+        classifications=[
+            {"column": "p27 expression status", "detected_type": "nominal"},
+            {"column": "Education group", "detected_type": "nominal"},
+        ],
+        assignment={"outcome": "p27 expression status"},
+        table_one={
+            "headers": ["Variable", "Type", "Overall"],
+            "rows": [{"variable": "Education group", "type": "n (%)", "cells": ["A: 6 (50.0%); B: 6 (50.0%)"]}],
+        },
+        tests=[],
+        graphs=[],
+        significant_findings=[{
+            "variable": "Education group vs p27 expression status",
+            "key_finding": "Education group was associated with the outcome.",
+            "test_statistic": "chi-square = 4.00",
+            "p_value": "p = 0.046",
+            "adjusted_p_value": "-",
+            "test_applied": "Chi-square test",
+            "effect_size": "Cramer's V = 0.20",
+            "notes_warnings": "",
+        }],
+        methods_text="Chi-square testing was used.",
+        results_narrative="Education group was associated with the outcome.",
+        session={"study_type": "association", "domain_profile": "generic"},
+    )
+    findings = blueprint["significant_findings"]
+    assert findings
+    key_finding = findings[0]["key_finding"]
+    assert key_finding == "Education group was associated with the outcome."
+    assert "p27 positivity" not in key_finding
+    assert "p27-negative" not in key_finding
 
 
 async def verify_post_endpoint() -> None:
@@ -598,8 +668,9 @@ def verify_frontend_wiring() -> None:
     # never send it for the Excel format (no narrative prose to polish).
     assert "function aiPolishConsentRequested" in js
     assert "ai-polish-consent-checkbox" in js
+    assert 'const aiRequested = format !== "excel" && aiPolishConsentRequested();' in js
     assert 'X-Narrative-Polish-Consent"] = "true"' in js
-    assert 'if (format !== "excel" && aiPolishConsentRequested())' in js
+    assert 'if (aiRequested)' in js
     for secret_name in ("OPENROUTER_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY"):
         assert secret_name not in js
 
@@ -609,6 +680,7 @@ def main() -> None:
     with block_real_openrouter_calls():
         verify_service_docx()
         verify_generic_docx()
+        verify_p27_fallback_is_strictly_gated()
         asyncio.run(verify_post_endpoint())
         asyncio.run(verify_consent_driven_ai_polish_audit_states())
         verify_frontend_wiring()

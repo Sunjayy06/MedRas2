@@ -2090,11 +2090,7 @@ def to_xlsx(
     )])
     if blueprint.get("tested_associations"):
         s.append([])
-        s.append(["Percentage denominators", (
-            "Percentages in detailed association tables are calculated within predictor categories "
-            "unless otherwise stated. Percentages in the Significant Findings Highlight describe "
-            "marker/category distribution within p27 expression groups."
-        )])
+        s.append(["Percentage denominators", chapter_v_export._percentage_denominator_note(blueprint)])
     s.append([])
     s.append(["AI polish", chapter_v_export._ai_polish_audit_label(False, False)])
 

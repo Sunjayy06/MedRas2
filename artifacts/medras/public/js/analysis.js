@@ -45,7 +45,7 @@ const state = {
   rejectedMergeSuggestions: new Set(),
   setupGroupCol: "",           // grouping variable selected on setup screen
 
-  // --- Step 3 (Variables) additions ---
+  // --- Step 3 (Study setup & variables) additions ---
   issues: [],            // [{column, type, severity, message}]
   autoCoding: [],        // [{column, kind, mapping, note, columns?}]
   assistantThread: [],   // [{role: "system"|"user"|"action"|"clarify", text}]
@@ -53,7 +53,7 @@ const state = {
 
   // --- Steps 4-8 additions ---
   assignment: null,        // {outcome, group, covariates}
-  selectedPredictors: null, // null until the user saves Step 4 predictor choices
+  selectedPredictors: null, // null until the user saves Step 3 predictor choices
   selectedPredictorsTouched: false,
   subgroupVariables: [],
   subgroupVariablesTouched: false,
@@ -73,8 +73,8 @@ const state = {
   correctionVersions: [],  // [{version, timestamp, instructions, applied, skipped}]
 
   // --- Chatboxes 2/3/4 (PART 5) ---
-  chatThreads: { normality: [], plan: [], results: [] },
-  chatOpened:  { normality: false, plan: false, results: false },
+  chatThreads: { plan: [], results: [] },
+  chatOpened:  { plan: false, results: false },
 
   // --- Inline Custom Practice Wizard (Step 2C → 4-question card) ---
   // Tracks the user's answers across the 4 question panels so "Regenerate
@@ -309,7 +309,7 @@ const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 // screen 1 / intake would defeat the resume banner (there's nothing to
 // resume to) and would also wipe the saved session every time the page
 // reloads cold.
-const RESUMABLE_SCREENS = new Set(["preview", "setup", "ai-confirm", "3", "4", "missing", "analysis-vars", "normality", "plan", "results", "export"]);
+const RESUMABLE_SCREENS = new Set(["preview", "setup", "ai-confirm", "3", "4", "missing", "analysis-vars", "plan", "results", "export"]);
 
 function saveSession() {
   if (!state.jobId) return;
@@ -396,7 +396,7 @@ async function resumeFromSavedSession(saved) {
     // Map legacy screen ids ("soon", "assign") onto the current 8-step
     // model so a saved session from before the refactor still resumes
     // somewhere valid instead of silently hiding every screen.
-    const LEGACY_REMAP = { soon: "normality", assign: "3" };
+    const LEGACY_REMAP = { soon: "plan", assign: "3", normality: "plan" };
     const resolved = LEGACY_REMAP[target] || target;
     if (resolved === "4") {
       showScreen("4");
@@ -480,15 +480,12 @@ async function resumeFromSavedSession(saved) {
     } else if (resolved === "preview") {
       showScreen("preview");
       // Without renderPreview() the zone label, conditional buttons, and
-      // Step-3 reassurance note never get rebuilt for the resumed dataset.
+      // dataset reassurance note never get rebuilt for the resumed dataset.
       renderPreview();
     } else if (resolved === "missing") {
       renderMissingScreen();
       showScreen("missing");
     } else if (resolved === "analysis-vars") {
-      renderAnalysisVariablesScreen();
-      showScreen("analysis-vars");
-    } else if (resolved === "normality") {
       renderAnalysisVariablesScreen();
       showScreen("analysis-vars");
     } else if (resolved === "plan") {
@@ -516,18 +513,18 @@ function renderResumeBanner(saved) {
   const when = _formatRelativeTime(saved.timestamp);
   const stepLabel = (() => {
     switch (saved.screen) {
-      case "4":          return "Step 3 · Clean variables";
-      case "3":          return "Step 3 · Clean variables";
+      case "4":          return "Step 4 · Clean variables";
+      case "3":          return "Step 4 · Clean variables";
       case "preview":    return "Step 2 · Dataset";
-      case "setup":      return "Step 1 · Objective";
-      case "ai-confirm": return "Step 1 · Objective";
-      case "analysis-vars": return "Step 4 · Choose analysis variables";
+      case "setup":      return "Step 3 · Study setup & variables";
+      case "ai-confirm": return "Step 3 · Study setup & variables";
+      case "analysis-vars": return "Step 3 · Study setup & variables";
       case "normality":  return "Step 5 · Review plan";
       case "plan":       return "Step 5 · Review plan";
       case "results":    return "Step 7 · Review results";
       case "export":     return "Step 8 · Download reports";
       case "soon":       return "Step 5 · Review plan";
-      case "assign":     return "Step 4 · Choose analysis variables";
+      case "assign":     return "Step 3 · Study setup & variables";
       default:           return `Step ${saved.step || 1}`;
     }
   })();
@@ -577,25 +574,25 @@ const SCREENS = [
   "1", "intake", "2a", "2c", "2c-custom", "preview",
   "setup", "ai-confirm", "corr-results",
   "3", "4", "missing", "analysis-vars",
-  "normality", "plan", "run", "results", "export",
+  "plan", "run", "results", "export",
 ];
 // Map a logical screen id to which step number is "active" in the tracker.
-// 8-step model: 1 Objective, 2 Dataset, 3 Clean variables, 4 Choose analysis
-// variables, 5 Review plan, 6 Run analysis, 7 Review results, 8 Download reports.
+// 8-step model: 1 Objective, 2 Dataset, 3 Study setup & variables,
+// 4 Clean variables, 5 Review plan, 6 Run analysis, 7 Review results,
+// 8 Download reports.
 const SCREEN_TO_STEP = {
   "1": 1, "intake": 1,
-  "2a": 2, "2c": 2, "2c-custom": 2, "preview": 2, "setup": 1, "ai-confirm": 1,
-  "3": 3,
-  "4": 3, "missing": 3,
-  "analysis-vars": 4,
-  "normality": 5, "plan": 5, "run": 6, "results": 7, "corr-results": 7, "export": 8,
+  "2a": 2, "2c": 2, "2c-custom": 2, "preview": 2,
+  "setup": 3, "ai-confirm": 3, "analysis-vars": 3,
+  "3": 4, "4": 4, "missing": 4,
+  "plan": 5, "run": 6, "results": 7, "corr-results": 7, "export": 8,
 };
 
 function isWizardStepReady(step) {
   if (step <= 1) return Boolean(state.jobId || state.aiStudy || state.proposalUnderstanding);
   if (step === 2) return Boolean(state.jobId && state.summary);
-  if (step === 3) return Boolean(state.classifications?.length);
-  if (step === 4) return Boolean(state.assignment && state.assignment.outcome);
+  if (step === 3) return Boolean(state.assignment && state.assignment.outcome);
+  if (step === 4) return Boolean(state.classifications?.length);
   if (step === 5) return Boolean(state.plan);
   if (step === 6) return Boolean(state.results && state.resultId);
   if (step === 7) return Boolean(state.results && state.resultId);
@@ -622,8 +619,11 @@ function restoreWizardScreenState(id) {
   if (id === "missing") {
     renderMissingScreen();
     updateMissingScreenReadiness();
-  } else if (id === "normality" && state.normality) {
-    renderNormality();
+  } else if (id === "3" && state.classifications?.length) {
+    renderClassify();
+    validateConfirm();
+  } else if (id === "4" && state.quality) {
+    renderQuality();
   } else if (id === "analysis-vars") {
     renderAnalysisVariablesScreen();
   } else if (id === "plan" && state.plan) {
@@ -689,8 +689,8 @@ function showScreen(id) {
 // screen so users can jump back without burrowing through the wizard.
 function bindStepNavBack() {
   const STEP_TO_SCREEN = {
-    1: "1", 2: "preview", 3: "3",
-    4: "analysis-vars", 5: "plan", 6: "run", 7: "results", 8: "export",
+    1: "1", 2: "preview", 3: "analysis-vars",
+    4: "3", 5: "plan", 6: "run", 7: "results", 8: "export",
   };
   $$(".se-step").forEach((node) => {
     node.addEventListener("click", () => {
@@ -816,11 +816,11 @@ function _bindS1ProposalUpload() {
     try {
       const fd = new FormData();
       fd.append("file", file);
-      const r = await fetch(`${API_BASE}/parse-proposal`, {
+      const r = await fetchWithTimeout(`${API_BASE}/parse-proposal`, {
         method: "POST",
         headers: externalAIHeaders(),
         body: fd,
-      });
+      }, 25000);
       if (!r.ok) {
         const errText = await r.text();
         let errMsg = errText;
@@ -837,10 +837,11 @@ function _bindS1ProposalUpload() {
       const aiBadge         = $("#s1-prop-ai-badge");
 
       const primaryObjective = data.objective || (data.objectives && data.objectives.primary) || "";
+      const visibleStudyType = _proposalVisibleStudyType(data);
       if (descField)    descField.value = primaryObjective;
       if (outcomeField) outcomeField.value = data.main_outcome_concept || data.outcomes || "";
-      if (studyTypeField && (data.study_type_normalized || data.study_type)) {
-        studyTypeField.value = data.study_type_normalized || data.study_type;
+      if (studyTypeField && visibleStudyType) {
+        studyTypeField.value = visibleStudyType;
       }
       if (sampleSizeField && data.sample_size) sampleSizeField.value = data.sample_size;
       if (data.domain_profile) {
@@ -861,7 +862,7 @@ function _bindS1ProposalUpload() {
 
       // Cache extracted values in state for downstream use.
       state.intake = Object.assign({}, state.intake || {}, {
-        study_type:  data.study_type  || null,
+        study_type:  visibleStudyType || data.study_type || null,
         sample_size: data.sample_size || null,
         study_title: data.study_title || null,
         main_marker: data.main_marker || null,
@@ -878,9 +879,32 @@ function _bindS1ProposalUpload() {
       }
     } catch (e) {
       if (fields) fields.classList.remove("is-hidden");
-      if (status) status.textContent = `Could not parse file: ${e.message}. Please fill the fields manually.`;
+      const message = e && e.name === "AbortError"
+        ? "Proposal parsing took too long. Please continue with the deterministic fields shown here."
+        : `Could not parse file: ${e.message}. Please fill the fields manually.`;
+      if (status) status.textContent = message;
     }
   });
+}
+
+function _proposalVisibleStudyType(data) {
+  const proposed = data && (data.study_type_normalized || data.study_type);
+  const text = [
+    data && data.study_title,
+    data && data.objective,
+    data && data.objectives && data.objectives.primary,
+    data && data.outcomes,
+    data && data.main_marker,
+    data && data.main_outcome_concept,
+    data && data.analysis_intent,
+    data && data.domain_profile,
+  ].filter(Boolean).join(" ").toLowerCase();
+  const mentionsP27 = /\bp\s*[- ]?\s*27\b/.test(text);
+  const breastContext = text.includes("breast") || text.includes("mammary") ||
+    text.includes("carcinoma") || text.includes("breast_pathology") ||
+    text.includes("breast pathology");
+  if (mentionsP27 && breastContext) return "association";
+  return proposed || "";
 }
 
 /* ------------------------------------------------------------------ */
@@ -1506,8 +1530,8 @@ function ingestDataset(data) {
     state.results = null;
     state.resultId = null;
     state.analysisVersion = null;
-    state.chatThreads = { normality: [], plan: [], results: [] };
-    state.chatOpened  = { normality: false, plan: false, results: false };
+    state.chatThreads = { plan: [], results: [] };
+    state.chatOpened  = { plan: false, results: false };
     try { sessionStorage.removeItem('medras.nav.returnHint'); } catch (_) {}
   }
   state.jobId = data.job_id;
@@ -1686,7 +1710,31 @@ function _p27ContextDetected() {
     return key.includes("interpretationsite") || key.includes("stainingresult") ||
       key.includes("localization") || key.includes("localisation") || key.includes("staining");
   });
-  return mentionsP27 && hasStatus && hasMarkerComponent;
+  return _breastPathologyContextDetected() && mentionsP27 && hasStatus && hasMarkerComponent;
+}
+
+function _breastPathologyContextDetected() {
+  const ai = state.aiStudy || {};
+  const proposal = state.proposalUnderstanding || ai.proposal_understanding || {};
+  const profile = [
+    state.domainProfile,
+    ai.domain_profile,
+    proposal.domain_profile,
+  ].filter(Boolean).join(" ").toLowerCase();
+  if (profile.includes("breast_pathology") || profile.includes("breast pathology")) return true;
+  const text = [
+    state.studyDesc,
+    proposal.study_title,
+    proposal.objective,
+    proposal.objectives && proposal.objectives.primary,
+    proposal.analysis_intent,
+    ai.objective,
+    ai.study_title,
+  ].filter(Boolean).join(" ").toLowerCase();
+  if (/\b(breast|mammary|carcinoma|patholog)/i.test(text)) return true;
+  const breastMarkers = new Set(["er", "pr", "her2", "her2neu", "ki67", "molecularsubtype"]);
+  const markerHits = _knownColumnNames().filter((col) => breastMarkers.has(_compactColumnKey(col))).length;
+  return markerHits >= 3;
 }
 
 function outcomeDisplayLabel(column) {
@@ -1907,6 +1955,37 @@ function _sampleSnippet(c) {
   return vals.slice(0, 3).map((v) => String(v)).join(", ");
 }
 
+function _compactVariableLabelList(columns, maxItems = 8) {
+  const labels = Array.from(new Set((columns || []).filter(Boolean).map(variableDisplayLabel)));
+  if (!labels.length) return "None selected";
+  const shown = labels.slice(0, maxItems).join(", ");
+  const remaining = labels.length - maxItems;
+  return remaining > 0 ? `${shown}, +${remaining} more` : shown;
+}
+
+function mappedColumnDisplayLabel(column) {
+  if (_positiveNegativeOutcomeColumnName(column)) return "Positive / Negative";
+  return column || "";
+}
+
+function _step3PredictorColumns(cls) {
+  if (Array.isArray(state.selectedPredictors) && state.selectedPredictors.length) {
+    return state.selectedPredictors;
+  }
+  const candidates = (cls || []).filter(_eligibleAnalysisVariable);
+  return _p27ContextDetected()
+    ? _p27DefaultPredictors(candidates)
+    : candidates.map((c) => c.column);
+}
+
+function _step3SubgroupColumns(cls) {
+  if (Array.isArray(state.subgroupVariables) && state.subgroupVariables.length) {
+    return state.subgroupVariables;
+  }
+  const candidates = (cls || []).filter(_eligibleAnalysisVariable);
+  return _defaultSubgroupSelection(candidates);
+}
+
 function renderAssignmentCard(opts) {
   // opts.formOpen forces the change form to be visible (used by the amber
   // warning state and by the "Let me change this" button).
@@ -1921,6 +2000,14 @@ function renderAssignmentCard(opts) {
   const matched = !!outcomeRow && _isUsableAsOutcome(outcomeRow);
   const confirmedOutcome = confirmedOutcomeFromState();
   const displayedOutcome = outcomeDisplayLabel(a.outcome);
+  const mappedColumn = a.outcome && displayedOutcome !== a.outcome ? a.outcome : "";
+  const studyDesign = doctorFacingStudyTypeLabel(state.studyType || (state.aiStudy && state.aiStudy.study_type) || "association");
+  const predictorColumns = _step3PredictorColumns(cls).filter((col) => col !== a.outcome);
+  const subgroupColumns = _step3SubgroupColumns(cls).filter((col) => col !== a.outcome);
+  const excludedColumns = cls.filter((c) => String(c.detected_type || "").toLowerCase() === "exclude").map((c) => c.column);
+  const markerComponents = _p27ContextDetected()
+    ? cls.filter((c) => _isP27MarkerComponentColumn(c.column)).map((c) => c.column)
+    : [];
   const formOpen = (opts && opts.formOpen) || !matched;
 
   // Build dropdown options. ID, exclude and date columns are greyed out
@@ -1953,18 +2040,35 @@ function renderAssignmentCard(opts) {
 
   const summaryRows = matched ? `
     <div class="se-assign-row" data-testid="assign-row-outcome">
-      <span class="se-assign-row-label">Outcome variable:</span>
+      <span class="se-assign-row-label">Study design:</span>
+      <strong>${escapeHtml(studyDesign)}</strong>
+    </div>
+    <div class="se-assign-row" data-testid="assign-row-primary-outcome">
+      <span class="se-assign-row-label">Primary outcome:</span>
       <strong>${escapeHtml(displayedOutcome)}</strong>
       <span class="se-assign-row-type">— ${escapeHtml(_typeLabel(outcomeRow))}</span>
     </div>
-    <div class="se-assign-row" data-testid="assign-row-group">
-      <span class="se-assign-row-label">${!a.group && confirmedOutcome === a.outcome ? "Primary outcome/grouping for association:" : "Grouping variable:"}</span>
-      ${!a.group && confirmedOutcome === a.outcome
-        ? `<strong>${escapeHtml(displayedOutcome)}</strong> <span class="se-assign-row-type">— ${escapeHtml(_typeLabel(outcomeRow))}</span>`
-        : a.group
-        ? `<strong>${escapeHtml(variableDisplayLabel(a.group))}</strong> <span class="se-assign-row-type">— ${escapeHtml(_typeLabel(groupRow))}</span>`
-        : `<em>— None (descriptive only) —</em>`}
+    ${mappedColumn ? `<div class="se-assign-row" data-testid="assign-row-mapped-column">
+      <span class="se-assign-row-label">Mapped Excel column:</span>
+      <strong>${escapeHtml(mappedColumnDisplayLabel(mappedColumn))}</strong>
+    </div>` : ""}
+    <div class="se-assign-row" data-testid="assign-row-predictors">
+      <span class="se-assign-row-label">Predictors selected:</span>
+      <strong>${predictorColumns.length}</strong>
+      <span class="se-assign-row-type">— ${escapeHtml(_compactVariableLabelList(predictorColumns))}</span>
     </div>
+    <div class="se-assign-row" data-testid="assign-row-subgroups">
+      <span class="se-assign-row-label">Subgroup variables:</span>
+      <span>${escapeHtml(_compactVariableLabelList(subgroupColumns, 6))}</span>
+    </div>
+    ${excludedColumns.length ? `<div class="se-assign-row" data-testid="assign-row-excluded">
+      <span class="se-assign-row-label">Excluded variables:</span>
+      <span>${escapeHtml(_compactVariableLabelList(excludedColumns, 6))}</span>
+    </div>` : ""}
+    ${markerComponents.length ? `<div class="se-assign-row" data-testid="assign-row-marker-components">
+      <span class="se-assign-row-label">Descriptive-only marker components:</span>
+      <span>${escapeHtml(_compactVariableLabelList(markerComponents, 6))}</span>
+    </div>` : ""}
     <p class="se-assign-q">Is this correct?</p>
     <div class="se-assign-buttons">
       <button type="button" class="btn btn-primary" data-action="assign-confirm" data-testid="button-assign-confirm">Yes, looks right →</button>
@@ -2200,7 +2304,7 @@ async function saveAnalysisVariablesAndPlan() {
     setStatus(status, "Select at least one predictor, or mark the study as descriptive before continuing.", "error");
     return;
   }
-  setStatus(status, "Saving analysis variables...", "loading");
+  setStatus(status, "Saving study setup...", "loading");
   try {
     const saved = await api("/assign", {
       method: "POST",
@@ -2216,10 +2320,11 @@ async function saveAnalysisVariablesAndPlan() {
     });
     applyCanonicalAssignment(saved);
     setStatus(status, "");
-    showScreen("plan");
-    loadPlan();
+    showScreen("3");
+    await loadVariablesData();
+    validateConfirm();
   } catch (err) {
-    setStatus(status, `Could not save analysis variables: ${err.message}`, "error");
+    setStatus(status, `Could not save study setup: ${err.message}`, "error");
   }
 }
 
@@ -2227,7 +2332,7 @@ function bindAnalysisVariables() {
   const screen = document.getElementById("screen-analysis-vars");
   if (!screen) return;
   const back = screen.querySelector('[data-action="analysis-vars-back"]');
-  if (back) back.addEventListener("click", () => showScreen("4"));
+  if (back) back.addEventListener("click", () => showScreen(state.aiStudy ? "setup" : "preview"));
   const save = screen.querySelector('[data-action="analysis-vars-save"]');
   if (save) save.addEventListener("click", saveAnalysisVariablesAndPlan);
 }
@@ -3896,7 +4001,7 @@ function validateConfirm() {
 }
 
 function bindScreen3() {
-  $('[data-action="back-to-preview"]').addEventListener("click", () => showScreen("preview"));
+  $('[data-action="back-to-preview"]').addEventListener("click", () => showScreen("analysis-vars"));
   $('[data-action="confirm-classify"]').addEventListener("click", async () => {
     const status = $("#classify-status");
     setStatus(status, "Saving classifications…", "loading");
@@ -4277,8 +4382,7 @@ async function _applyQualityHandler() {
       `Done. Removed ${log.removed_rows || 0} rows, capped ${log.capped_values || 0} values.`,
       "success"
     );
-    // Skip the old Assign step — the wizard's outcome/group answers were
-    // auto-matched during ingestDataset and confirmed on the Step 3 card.
+    // Keep the confirmed Step 3 setup while cleaning decisions are applied.
     // Re-save assignment defensively in case the user changed it on the card.
     if (state.assignment && state.assignment.outcome) {
       try {
@@ -4292,7 +4396,7 @@ async function _applyQualityHandler() {
             covariates: [],
           }),
         });
-      } catch (_) { /* tolerate; loadNormality doesn't need assignment */ }
+      } catch (_) { /* tolerate; plan generation can still validate assignment */ }
     }
     // Route to screen-missing based on state.classifications (>= 5% missing),
     // not DOM content — the DOM isn't populated until renderMissingScreen() runs.
@@ -4305,8 +4409,8 @@ async function _applyQualityHandler() {
       showScreen("missing");
       return;
     }
-    renderAnalysisVariablesScreen();
-    showScreen("analysis-vars");
+    showScreen("plan");
+    loadPlan();
   } catch (err) {
     setStatus(status, `Could not apply: ${err.message}`, "error");
   }
@@ -4373,100 +4477,6 @@ function bindSoon() {
   if (restartBtn) restartBtn.addEventListener("click", restart);
   const back = node.querySelector('[data-action="back-to-quality"]');
   if (back) back.addEventListener("click", () => showScreen("4"));
-}
-
-/* ------------------------------------------------------------------ */
-/*  Step 4 — Normality                                                 */
-/*  (Old Step 4 "Assign" was removed — wizard answers are auto-matched  */
-/*  on Step 3 via renderAssignmentCard / saveAssignmentFromCard.)       */
-/* ------------------------------------------------------------------ */
-
-async function loadNormality() {
-  const status = document.getElementById("normality-status");
-  setStatus(status, "Running normality tests…", "loading");
-  try {
-    const data = await api(`/normality/${state.jobId}`);
-    state.normality = data;
-    renderNormality();
-    openChatbox("normality");
-    setStatus(status, `Tested ${data.columns.length} scale variable(s).`, "success");
-  } catch (err) {
-    setStatus(status, `Could not load: ${err.message}`, "error");
-  }
-}
-
-function renderNormality() {
-  const tbody = document.querySelector("#normality-table tbody");
-  if (!tbody) return;
-  tbody.innerHTML = "";
-  const rows = (state.normality && state.normality.columns) || [];
-  if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="9"><em>No scale variables to test. Move to the next step.</em></td></tr>`;
-    return;
-  }
-  rows.forEach((r) => {
-    const chip = r.decision === "normal"
-      ? `<span class="se-chip se-chip-good" data-testid="chip-${r.column}">Normal</span>`
-      : r.decision === "non_normal"
-        ? `<span class="se-chip se-chip-warn" data-testid="chip-${r.column}">Non-normal</span>`
-        : `<span class="se-chip se-chip-muted" data-testid="chip-${r.column}">Insufficient</span>`;
-    const overrideBtn = r.decision === "insufficient" ? "" : `
-      <button type="button" class="btn btn-tertiary se-norm-override"
-        data-col="${r.column}" data-flip="${r.decision === 'normal' ? 'non_normal' : 'normal'}"
-        data-testid="override-${r.column}">
-        Mark as ${r.decision === 'normal' ? 'non-normal' : 'normal'}
-      </button>`;
-    const qq = r.qq_png
-      ? `<img class="se-qq-thumb" src="${r.qq_png}" alt="QQ plot for ${r.column}" loading="lazy">`
-      : `<span class="se-cov-type">—</span>`;
-    const note = r.note ? `<div class="se-norm-note">${r.note}</div>` : "";
-    const tr = document.createElement("tr");
-    tr.dataset.col = r.column;
-    tr.innerHTML = `
-      <td><strong>${r.column}</strong>${note}</td>
-      <td>${r.n}</td>
-      <td>${r.test || '—'}</td>
-      <td>${r.p_value === null || r.p_value === undefined ? '—' : (r.p_value < 0.001 ? '&lt;0.001' : r.p_value.toFixed(3))}</td>
-      <td>${r.skewness === null || r.skewness === undefined ? '—' : r.skewness.toFixed(2)}</td>
-      <td>${r.kurtosis === null || r.kurtosis === undefined ? '—' : r.kurtosis.toFixed(2)}</td>
-      <td>${chip}</td>
-      <td>${qq}</td>
-      <td>${overrideBtn}</td>
-    `;
-    tbody.appendChild(tr);
-  });
-  tbody.querySelectorAll(".se-norm-override").forEach((btn) => {
-    btn.addEventListener("click", () => overrideNormality(btn.dataset.col, btn.dataset.flip));
-  });
-}
-
-async function overrideNormality(column, decision) {
-  try {
-    await api("/normality/override", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ job_id: state.jobId, column, decision }),
-    });
-    const row = (state.normality.columns || []).find((c) => c.column === column);
-    if (row) {
-      row.decision = decision;
-      row.overridden = true;
-      row.note = (row.note || "") + " (Manually overridden by user.)";
-    }
-    renderNormality();
-  } catch (err) {
-    const status = document.getElementById("normality-status");
-    setStatus(status, `Override failed: ${err.message}`, "error");
-  }
-}
-
-function bindNormality() {
-  const screen = document.getElementById("screen-normality");
-  if (!screen) return;
-  const back = screen.querySelector('[data-action="back-to-review"]');
-  if (back) back.addEventListener("click", () => showScreen("analysis-vars"));
-  const cont = screen.querySelector('[data-action="continue-to-plan"]');
-  if (cont) cont.addEventListener("click", () => { showScreen("plan"); loadPlan(); });
 }
 
 /* ------------------------------------------------------------------ */
@@ -4672,11 +4682,25 @@ function updateRunButton() {
   if (btn) btn.disabled = !allChecked || hasBlockingSuggestion;
 }
 
+function normalizePlanReviewLayout() {
+  const screen = document.getElementById("screen-plan");
+  if (!screen) return;
+  const runButton = screen.querySelector('[data-action="run-analysis"]');
+  const actions = runButton ? runButton.closest(".se-actions") : null;
+  const details = screen.querySelector('[data-testid="plan-tests-section"]');
+  if (!actions || !details) return;
+  const actionBeforeDetails = Boolean(actions.compareDocumentPosition(details) & Node.DOCUMENT_POSITION_FOLLOWING);
+  if (!actionBeforeDetails) {
+    actions.insertAdjacentElement("afterend", details);
+  }
+}
+
 function bindPlan() {
   const screen = document.getElementById("screen-plan");
   if (!screen) return;
-  const back = screen.querySelector('[data-action="back-to-normality"]');
-  if (back) back.addEventListener("click", () => showScreen("analysis-vars"));
+  normalizePlanReviewLayout();
+  const back = screen.querySelector('[data-action="back-to-cleaning"]');
+  if (back) back.addEventListener("click", () => showScreen("3"));
   const run = screen.querySelector('[data-action="run-analysis"]');
   if (run) run.addEventListener("click", runAnalysis);
 }
@@ -5161,12 +5185,6 @@ function bindRunScreen() {
 /* ------------------------------------------------------------------ */
 
 const CHATBOX_CHIPS = {
-  normality: [
-    "Why does normality matter for test selection?",
-    "Explain what skewness means",
-    "Which variable was borderline?",
-    "Can I override a normality decision?",
-  ],
   plan: [
     "Add survival analysis (Kaplan-Meier)",
     "Remove regression — I only want comparison",
@@ -5470,7 +5488,7 @@ function bindChatbox(kind) {
 }
 
 function bindChatboxes() {
-  ["normality", "plan", "results"].forEach(bindChatbox);
+  ["plan", "results"].forEach(bindChatbox);
 }
 
 /* ------------------------------------------------------------------ */
@@ -5927,8 +5945,16 @@ function bindScreenSetup() {
         return;
       }
     }
-    showScreen("3");
-    await loadVariablesData();
+    if (!state.classifications?.length) {
+      try {
+        await refreshClassifications([], { render: false, detectCategoryDupes: false });
+      } catch (err) {
+        setStatus(statusEl, `Could not prepare study variables: ${err.message}`, "error");
+        return;
+      }
+    }
+    renderAnalysisVariablesScreen();
+    showScreen("analysis-vars");
   });
 
   // ── Re-analyse (free-text path) ───────────────────────────────────────────
@@ -6104,8 +6130,11 @@ function bindAiConfirm() {
         }
         state.assignmentConfirmed = !!outCol;
         setStatus(status, "");
-        showScreen("3");
-        await loadVariablesData();
+        if (!state.classifications?.length) {
+          await refreshClassifications([], { render: false, detectCategoryDupes: false });
+        }
+        renderAnalysisVariablesScreen();
+        showScreen("analysis-vars");
       } catch (err) {
         setStatus(status, `Error: ${err.message}`, "error");
       }
@@ -6297,9 +6326,9 @@ function renderMissingScreen() {
   );
 
   if (!missingCols.length) {
-    // No high-missing columns — skip this screen and go straight to analysis variable selection.
-    renderAnalysisVariablesScreen();
-    showScreen("analysis-vars");
+    // No high-missing columns — skip this screen and go straight to plan review.
+    showScreen("plan");
+    loadPlan();
     return;
   }
 
@@ -6361,7 +6390,7 @@ function bindScreenMissing() {
   const backBtn = document.querySelector('[data-action="back-to-quality-from-missing"]');
   if (backBtn) backBtn.addEventListener("click", () => showScreen("4"));
 
-  // ── Apply decisions and continue → normality ───────────────────────────
+  // ── Apply decisions and continue → plan review ─────────────────────────
   const applyBtn = document.getElementById("btn-apply-missing");
   if (applyBtn) {
     applyBtn.addEventListener("click", async () => {
@@ -6387,9 +6416,9 @@ function bindScreenMissing() {
       setStatus(status, "Applying missing-data decisions…", "loading");
       applyBtn.disabled = true;
       if (_missingDecisionsAlreadyApplied(decisions)) {
-        setStatus(status, "Missing-data decisions were already applied. Continuing to analysis variables...", "info");
-        renderAnalysisVariablesScreen();
-        showScreen("analysis-vars");
+        setStatus(status, "Missing-data decisions were already applied. Continuing to plan review...", "info");
+        showScreen("plan");
+        loadPlan();
         return;
       }
       try {
@@ -6416,8 +6445,8 @@ function bindScreenMissing() {
           throw new Error(`Could not reclassify after missing-data cleanup: ${err.message}`);
         }
         setStatus(status, "");
-        renderAnalysisVariablesScreen();
-        showScreen("analysis-vars");
+        showScreen("plan");
+        loadPlan();
       } catch (err) {
         setStatus(status, `Could not apply: ${err.message}`, "error");
         applyBtn.disabled = false;
@@ -7121,6 +7150,12 @@ function bindExport() {
   if (back) back.addEventListener("click", () => showScreen("results"));
   const restartBtn = screen.querySelector('[data-action="restart"]');
   if (restartBtn) restartBtn.addEventListener("click", restart);
+  const polishCheckbox = document.getElementById("ai-polish-consent-checkbox");
+  if (polishCheckbox) {
+    polishCheckbox.addEventListener("change", () => {
+      updateAiPolishStatus(polishCheckbox.checked ? "preparing" : "deterministic");
+    });
+  }
   bindCorrectionSystem();
   updateExportAvailability();
 }
@@ -7337,12 +7372,38 @@ function aiPolishConsentRequested() {
   return Boolean(checkbox && checkbox.checked);
 }
 
+function updateAiPolishStatus(status) {
+  const el = document.getElementById("ai-polish-status");
+  if (!el) return;
+  if (status === "applied" || status === "ready" || status === "ai-polished") {
+    el.textContent = "Narrative polish: AI-polished";
+  } else if (status === "preparing") {
+    el.textContent = "Narrative polish: preparing";
+  } else if (status === "fallback") {
+    el.textContent = "Narrative polish: deterministic fallback";
+  } else {
+    el.textContent = "Narrative: deterministic";
+  }
+}
+
+async function fetchWithTimeout(url, options = {}, timeoutMs = 120000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function downloadExport(format, button) {
   const status = document.getElementById("export-status");
   if (!updateExportAvailability("Export state is stale or missing. Run the latest analysis before exporting.")) {
     return;
   }
   if (button) button.disabled = true;
+  const aiRequested = format !== "excel" && aiPolishConsentRequested();
+  if (aiRequested) updateAiPolishStatus("preparing");
   setStatus(status, `Building ${format.toUpperCase()} file…`, "loading");
   try {
     const resultId = encodeURIComponent(state.resultId);
@@ -7350,21 +7411,32 @@ async function downloadExport(format, button) {
     // AI narration polish only applies to prose in Word/PDF; Excel has no
     // narrative text, so the consent header is omitted for that format.
     const headers = {};
-    if (format !== "excel" && aiPolishConsentRequested()) {
+    if (aiRequested) {
       headers["X-Narrative-Polish-Consent"] = "true";
     }
-    const res = await fetch(url, { headers });
+    const res = await fetchWithTimeout(url, { headers }, 120000);
     if (!res.ok) {
       throw new Error(await exportErrorMessage(res));
     }
+    const polishStatus = res.headers.get("X-MedRAS-AI-Polish") || "deterministic";
     const blob = await res.blob();
     const ext = format === "word" ? "docx" : (format === "excel" ? "xlsx" : "pdf");
     downloadBlob(blob, `medras_results.${ext}`);
-    setStatus(status, `${format.toUpperCase()} downloaded.`, "success");
+    if (format !== "excel") updateAiPolishStatus(polishStatus);
+    if (aiRequested && polishStatus === "fallback") {
+      setStatus(status, `${format.toUpperCase()} downloaded. AI polish unavailable; deterministic narration used.`, "success");
+    } else {
+      setStatus(status, `${format.toUpperCase()} downloaded.`, "success");
+    }
   } catch (err) {
-    setStatus(status, `Download failed: ${err.message}`, "error");
+    if (aiRequested) updateAiPolishStatus("fallback");
+    const msg = err && err.name === "AbortError"
+      ? "Download timed out. Please try again; deterministic narration remains available."
+      : `Download failed: ${err.message}`;
+    setStatus(status, msg, "error");
   } finally {
     if (button) button.disabled = false;
+    updateExportAvailability();
   }
 }
 
@@ -7411,9 +7483,9 @@ function restart() {
   state.aiStudy = null;
   state.corrResults = null;
   state.correctionVersions = [];
-  state.chatThreads = { normality: [], plan: [], results: [] };
-  state.chatOpened  = { normality: false, plan: false, results: false };
-  ["normality", "plan", "results"].forEach((k) => {
+  state.chatThreads = { plan: [], results: [] };
+  state.chatOpened  = { plan: false, results: false };
+  ["plan", "results"].forEach((k) => {
     const t = document.getElementById(`cb-${k}-thread`);
     if (t) t.innerHTML = "";
     const c = document.getElementById(`cb-${k}-chips`);
@@ -7470,7 +7542,6 @@ function initApp() {
     bindScreenMissing();
     bindAnalysisVariables();
     bindSoon();
-    bindNormality();
     bindPlan();
     bindRunScreen();
     bindResults();
@@ -7668,16 +7739,16 @@ async function runSelfTest() {
   const records = document.querySelector('[data-testid="q-total-records"]');
   log(`q-total-records: ${records ? records.textContent : "MISSING"}`);
 
-  // Apply quality → screen normality (legacy "Assign" step is gone in the 8-step model)
+  // Apply quality → plan review (standalone normality screen is gone in the 8-step model)
   click('[data-testid="button-apply-quality"]');
-  log("waiting for screen-normality…");
+  log("waiting for screen-plan…");
   for (let i = 0; i < 60; i++) {
-    if (!document.getElementById("screen-normality").classList.contains("is-hidden")) break;
+    if (!document.getElementById("screen-plan").classList.contains("is-hidden")) break;
     await wait(100);
   }
-  const normVisible = !document.getElementById("screen-normality").classList.contains("is-hidden");
-  log(`screen-normality visible: ${normVisible}`);
-  if (!normVisible) throw new Error("screen-normality never became visible");
+  const planVisible = !document.getElementById("screen-plan").classList.contains("is-hidden");
+  log(`screen-plan visible: ${planVisible}`);
+  if (!planVisible) throw new Error("screen-plan never became visible");
 
   log("\n✅ SELFTEST PASSED");
   banner.style.background = "#1f5d36";

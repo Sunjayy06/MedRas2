@@ -53,6 +53,19 @@ _CAUTION_REMOVAL_RE = re.compile(
     re.IGNORECASE,
 )
 
+_ARTIFACT_RE = re.compile(
+    r"domain\s*[■�]\s*profile|domain\s+profile\s+grouping|selected\s+domain\s+profile"
+    r"|the\s+table\s+is\s+organi[sz]ed\s+by|selected\s+outcome\s+variable|■|�",
+    re.IGNORECASE,
+)
+
+_GENERIC_TEMPLATE_RE = re.compile(
+    r"\b(the\s+table\s+presents\s+the\s+characteristics\s+of\s+the\s+analy[sz]ed\s+sample"
+    r"|this\s+table\s+presents\s+a\s+comprehensive\s+overview"
+    r"|the\s+figure\s+shows\s+the\s+distribution\s+of\s+the\s+selected\s+variables)\b",
+    re.IGNORECASE,
+)
+
 MAX_PROSE_CHARS = 1200
 
 
@@ -60,6 +73,25 @@ def _is_safe(original: str, proposed: str) -> bool:
     """Return True if the AI-proposed text is safe to use."""
     if not proposed or not proposed.strip():
         return False
+    if _ARTIFACT_RE.search(proposed) or _GENERIC_TEMPLATE_RE.search(proposed):
+        log.debug("narrative_polish: rejected – artifact or generic template phrase")
+        return False
+    lowered_original = (original or "").lower()
+    lowered_proposed = proposed.lower()
+    if "p27 expression status" in lowered_original:
+        forbidden_p27_labels = (
+            "positive/negative", "positive / negative",
+            "positive/ negative", "positive/negative-positive",
+            "positive/negative-negative", "positive / negative positivity",
+        )
+        if any(label in lowered_proposed for label in forbidden_p27_labels):
+            log.debug("narrative_polish: rejected – p27 outcome label changed")
+            return False
+        if "p27 expression status" not in lowered_proposed and not any(
+            token in lowered_proposed for token in ("p27-positive", "p27-negative", "p27 positive", "p27 negative")
+        ):
+            log.debug("narrative_polish: rejected – p27 outcome label omitted")
+            return False
     # Must not introduce new numeric tokens absent from original
     orig_nums = set(_NUMBER_RE.findall(original))
     prop_nums = set(_NUMBER_RE.findall(proposed))

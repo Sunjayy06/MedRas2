@@ -46,7 +46,7 @@ def openrouter_auth_header() -> str:
     return f"Bearer {settings.openrouter_api_key or ''}"
 
 
-def get_openrouter_client(*, async_client: bool = False):
+def get_openrouter_client(*, async_client: bool = False, timeout: float | None = None):
     """Return a fresh OpenAI-compatible client configured for OpenRouter."""
     if not openrouter_is_configured():
         raise RuntimeError("OpenRouter is not configured. Set OPENROUTER_API_KEY.")
@@ -56,12 +56,14 @@ def get_openrouter_client(*, async_client: bool = False):
         return AsyncOpenAI(
             api_key=settings.openrouter_api_key,
             base_url=settings.openrouter_base_url,
+            timeout=timeout,
         )
     from openai import OpenAI
 
     return OpenAI(
         api_key=settings.openrouter_api_key,
         base_url=settings.openrouter_base_url,
+        timeout=timeout,
     )
 
 
@@ -73,6 +75,7 @@ def openrouter_chat(
     max_tokens: int = 1000,
     temperature: float = 0.2,
     json_mode: bool = False,
+    timeout: float | None = None,
 ) -> str:
     """Run one synchronous OpenRouter chat-completions request."""
     from app.services.phi_redaction import screen_external_ai_payload
@@ -84,7 +87,7 @@ def openrouter_chat(
         )
     system = screening.value["system"]
     user = screening.value["user"]
-    client = get_openrouter_client()
+    client = get_openrouter_client(timeout=timeout)
     kwargs: dict[str, Any] = {
         "model": openrouter_model_for_task(task),
         "messages": [

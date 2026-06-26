@@ -1072,6 +1072,24 @@ def test_polish_safety_preserves_cautions() -> None:
         "Safety validator must reject prose that removes a caution phrase"
 
 
+def test_polish_safety_rejects_artifacts_and_p27_label_drift() -> None:
+    from app.services.narrative_polish import _is_safe
+    original = "ER showed a statistically significant association with p27 expression status."
+    unsafe_outputs = [
+        "Domain■profile grouping is descriptive and ER was associated with p27 expression status.",
+        "The table is organized by the selected domain profile.",
+        "ER showed a statistically significant association with Positive/Negative.",
+        "ER showed a statistically significant association with Positive / Negative.",
+        "This table presents the characteristics of the analyzed sample.",
+    ]
+    for proposed in unsafe_outputs:
+        assert not _is_safe(original, proposed), proposed
+    assert _is_safe(
+        original,
+        "ER showed a statistically significant association with p27 expression status.",
+    )
+
+
 def test_polish_overrides_applied_to_docx() -> None:
     """If polish_overrides contains a table interpretation, DOCX must use it."""
     results, _, _ = _build_fixture()
@@ -1629,6 +1647,9 @@ def _run_all_checks() -> None:
 
     test_polish_safety_preserves_cautions()
     print("  [ok] Narrative polish safety validator rejects prose that removes cautions")
+
+    test_polish_safety_rejects_artifacts_and_p27_label_drift()
+    print("  [ok] Narrative polish safety validator rejects artifacts and p27 label drift")
 
     test_polish_overrides_applied_to_docx()
     print("  [ok] Polished overrides are applied to DOCX interpretation text")

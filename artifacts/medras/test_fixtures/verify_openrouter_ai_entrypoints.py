@@ -345,6 +345,16 @@ def verify_validation_rejects_unsafe_ai_output() -> None:
     with_citation = original + " (Smith et al., 2021)."
     assert ai_narrative.validate_polish(original, with_citation) is False
 
+    p27_original = "ER showed a statistically significant association with p27 expression status."
+    for artifact in (
+        "Domain■profile grouping is descriptive and ER was associated with p27 expression status.",
+        "The table is organized by the selected domain profile.",
+        "ER showed a statistically significant association with Positive/Negative.",
+        "ER showed a statistically significant association with Positive / Negative.",
+        "This table presents the characteristics of the analyzed sample.",
+    ):
+        assert ai_narrative.validate_polish(p27_original, artifact) is False, artifact
+
     # Sanity check: a genuinely safe rewording (same facts, same numbers) is accepted.
     safe_rewrite = (
         "A statistically significant association was observed between ER and the primary outcome. "

@@ -21,8 +21,8 @@ def test_doctor_facing_eight_step_order() -> None:
     expected = [
         "Objective",
         "Dataset",
+        "Study setup &amp; variables",
         "Clean variables",
-        "Choose analysis variables",
         "Review plan",
         "Run analysis",
         "Review results",
@@ -45,9 +45,12 @@ def test_doctor_facing_eight_step_order() -> None:
 def test_missing_screen_is_resumable_and_step4_scoped() -> None:
     js = _read_js()
     assert '"missing"' in js
-    assert '"missing": 3' in js
-    assert '"analysis-vars": 4' in js
-    assert '"normality": 5' in js
+    assert '"analysis-vars": 3' in js
+    assert '"3": 4' in js
+    assert '"4": 4' in js
+    assert '"missing": 4' in js
+    assert '"normality": 5' not in js
+    assert 'normality: "plan"' in js
     assert '"plan": 5' in js
     assert '"run": 6' in js
     assert '"results": 7' in js
@@ -65,6 +68,10 @@ def test_show_screen_restores_saved_state() -> None:
     assert 'if (id === "missing")' in js
     assert "renderMissingScreen()" in js
     assert "updateMissingScreenReadiness()" in js
+    assert 'else if (id === "3" && state.classifications?.length)' in js
+    assert "renderClassify()" in js
+    assert 'else if (id === "4" && state.quality)' in js
+    assert "renderQuality()" in js
     assert 'else if (id === "analysis-vars")' in js
     assert "renderAnalysisVariablesScreen()" in js
     assert 'else if (id === "plan" && state.plan)' in js
@@ -76,7 +83,15 @@ def test_analysis_variable_selection_is_explicit_and_persisted() -> None:
     js = _read_js()
     html = _read_html()
     assert 'id="screen-analysis-vars"' in html
+    assert "Step 3 · Study setup &amp; variables" in html
+    assert "Confirm what MedRAS will analyse" in html
     assert "Choose one primary outcome" in js
+    assert "Primary outcome:" in js
+    assert "Mapped Excel column:" in js
+    assert "Predictors selected:" in js
+    assert "Subgroup variables:" in js
+    assert "Primary outcome/grouping for association" not in js
+    assert "Outcome variable:" not in js
     assert "Candidate predictors" in html
     assert "Subgroup / grouping variables" in html
     assert "function renderAnalysisVariablesScreen" in js
@@ -85,18 +100,39 @@ def test_analysis_variable_selection_is_explicit_and_persisted() -> None:
     assert "predictors: state.selectedPredictors" in js
     assert "subgroup_variables: state.subgroupVariables" in js
     assert "Select at least one predictor" in js
+    assert "Save setup and continue to cleaning" in html
+    assert "Saving study setup" in js
     assert 'id="screen-run"' in html
     assert "showScreen(\"run\")" in js
+
+
+def test_setup_variables_then_cleaning_route() -> None:
+    js = _read_js()
+    html = _read_html()
+    assert "showScreen(\"analysis-vars\")" in js.split("function bindScreenSetup()", 1)[1].split("setup-reanalyse", 1)[0]
+    save_region = js.split("async function saveAnalysisVariablesAndPlan()", 1)[1].split("function bindAnalysisVariables", 1)[0]
+    assert "showScreen(\"3\")" in save_region
+    assert "await loadVariablesData()" in save_region
+    assert "loadPlan()" not in save_region
+    assert "showScreen(\"plan\")" in js.split("async function _applyQualityHandler()", 1)[1].split("function _toggleStickyStep4Buttons", 1)[0]
+    assert 'if (back) back.addEventListener("click", () => showScreen("3"));' in js.split("function bindPlan()", 1)[1].split("async function runAnalysis", 1)[0]
+    missing_region = js.split("function renderMissingScreen()", 1)[1].split("function _renderMissingThread", 1)[0]
+    assert "Continuing to plan review" in missing_region
+    assert "showScreen(\"plan\")" in missing_region
+    assert "Save analysis variables and review plan" not in html
+    assert "Choose analysis variables" not in html
 
 
 def test_p27_workflow_uses_clinical_outcome_label_and_full_defaults() -> None:
     js = _read_js()
     html = _read_html()
     assert "function _p27ContextDetected" in js
+    assert "function _breastPathologyContextDetected" in js
+    assert "return _breastPathologyContextDetected() && mentionsP27 && hasStatus && hasMarkerComponent" in js
     assert "p27 expression status" in js
     assert "function outcomeDisplayLabel" in js
     assert "_positiveNegativeOutcomeColumnName(column)" in js
-    assert "Outcome: ${escapeHtml(displayOutcome)}" in js
+    assert "mappedColumnDisplayLabel(mappedColumn)" in js
     assert "Mapped from proposal concept" not in js
     assert "function doctorFacingStudyTypeLabel" in js
     assert "Cross-sectional association study" in js
@@ -113,6 +149,8 @@ def test_p27_workflow_uses_clinical_outcome_label_and_full_defaults() -> None:
     assert "p27 staining score pattern" in js
     assert 'id="setup-study-type-display"' in html
     assert 'id="setup-outcome-display"' in html
+    assert "function _proposalVisibleStudyType" in js
+    assert "if (mentionsP27 && breastContext) return \"association\"" in js
 
 
 def test_p27_subgroup_suggestions_do_not_use_outcome() -> None:
@@ -148,6 +186,10 @@ def test_plan_preview_is_structured_with_collapsible_details() -> None:
     assert "<details class=\"se-plan-section\" data-testid=\"plan-tests-section\">" in html
     assert "View detailed test list" in html
     assert "View detailed test list" in js
+    assert "function normalizePlanReviewLayout" in js
+    assert "actions.insertAdjacentElement(\"afterend\", details)" in js
+    plan_region = html.split('id="screen-plan"', 1)[1].split('data-testid="chatbox-plan-panel"', 1)[0]
+    assert plan_region.index('data-testid="plan-confirm"') < plan_region.index('data-testid="button-run-analysis"')
     assert "_displayAnalysisText(p.summary || \"\")" not in js
 
 
@@ -164,10 +206,18 @@ def test_results_default_to_chapter_preview_and_advanced_stats_tab() -> None:
 def test_normality_is_internal_to_plan_flow() -> None:
     js = _read_js()
     html = _read_html()
-    assert "Internal test-choice rationale" in html
+    assert 'id="screen-normality"' not in html
+    assert "Internal test-choice rationale" not in html
+    assert "screen-normality" not in js
+    assert "function bindNormality" not in js
+    assert "function loadNormality" not in js
+    assert "function renderNormality" not in js
+    assert "function overrideNormality" not in js
     assert "showScreen(\"normality\")" not in js
-    assert "loadNormality();" not in js.split("function bindNormality", 1)[0]
+    assert "loadNormality();" not in js
+    assert 'const RESUMABLE_SCREENS = new Set(["preview", "setup", "ai-confirm", "3", "4", "missing", "analysis-vars", "plan", "results", "export"])' in js
     assert "showScreen(\"analysis-vars\")" in js
+    assert "showScreen(\"plan\")" in js
     assert "Parametric" in js and "Non-parametric" in js
 
 
@@ -183,6 +233,9 @@ def test_results_and_export_labels_are_doctor_facing() -> None:
     assert "is-hidden" in chapter_block and "hidden" in chapter_block
     assert 'id="ai-polish-consent-checkbox"' in html
     assert "checked" not in html.split('id="ai-polish-consent-checkbox"', 1)[0][-120:]
+    assert "Narrative: deterministic" in html
+    assert "Narrative polish: AI-polished" in js
+    assert "Narrative polish: deterministic fallback" in js
 
 
 def test_missing_decisions_are_persistent_and_idempotent() -> None:
@@ -207,6 +260,7 @@ if __name__ == "__main__":
     test_missing_screen_is_resumable_and_step4_scoped()
     test_show_screen_restores_saved_state()
     test_analysis_variable_selection_is_explicit_and_persisted()
+    test_setup_variables_then_cleaning_route()
     test_p27_workflow_uses_clinical_outcome_label_and_full_defaults()
     test_p27_subgroup_suggestions_do_not_use_outcome()
     test_plan_preview_is_structured_with_collapsible_details()

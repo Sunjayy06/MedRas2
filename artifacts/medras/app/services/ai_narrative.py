@@ -103,6 +103,19 @@ _CITATION_RE = re.compile(
     re.IGNORECASE,
 )
 
+_ARTIFACT_RE = re.compile(
+    r"domain\s*[■�]\s*profile|domain\s+profile\s+grouping|selected\s+domain\s+profile"
+    r"|the\s+table\s+is\s+organi[sz]ed\s+by|selected\s+outcome\s+variable|■|�",
+    re.IGNORECASE,
+)
+
+_GENERIC_TEMPLATE_RE = re.compile(
+    r"\b(the\s+table\s+presents\s+the\s+characteristics\s+of\s+the\s+analy[sz]ed\s+sample"
+    r"|this\s+table\s+presents\s+a\s+comprehensive\s+overview"
+    r"|the\s+figure\s+shows\s+the\s+distribution\s+of\s+the\s+selected\s+variables)\b",
+    re.IGNORECASE,
+)
+
 # Verbatim per the Sigma AI narration policy — any of these appearing in AI
 # output is a hard rejection, regardless of surrounding context.
 FORBIDDEN_CLAIM_PHRASES = (
@@ -152,6 +165,25 @@ def validate_polish(original: str, proposed: str) -> bool:
     if forbidden:
         log.debug("ai_narrative: rejected - forbidden claim phrase %r", forbidden)
         return False
+    if _ARTIFACT_RE.search(proposed) or _GENERIC_TEMPLATE_RE.search(proposed):
+        log.debug("ai_narrative: rejected - artifact or generic template phrase")
+        return False
+    original_lower = (original or "").lower()
+    proposed_lower = proposed.lower()
+    if "p27 expression status" in original_lower:
+        forbidden_p27_labels = (
+            "positive/negative", "positive / negative",
+            "positive/ negative", "positive/negative-positive",
+            "positive/negative-negative", "positive / negative positivity",
+        )
+        if any(label in proposed_lower for label in forbidden_p27_labels):
+            log.debug("ai_narrative: rejected - p27 outcome label changed")
+            return False
+        if "p27 expression status" not in proposed_lower and not any(
+            token in proposed_lower for token in ("p27-positive", "p27-negative", "p27 positive", "p27 negative")
+        ):
+            log.debug("ai_narrative: rejected - p27 outcome label omitted")
+            return False
     if contains_citation(proposed):
         log.debug("ai_narrative: rejected - citation/reference detected")
         return False

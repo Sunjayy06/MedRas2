@@ -487,11 +487,63 @@ def _expand_export_tables(tables: List[Dict[str, Any]], label_ctx: Dict[str, Any
 
 BASELINE_TERMS = ("age", "sex", "gender", "laterality", "side", "group", "cohort")
 
-_PERCENTAGE_DENOMINATOR_NOTE = (
+_GENERIC_PERCENTAGE_DENOMINATOR_NOTE = (
+    "Percentages in detailed association tables are calculated within predictor categories "
+    "unless otherwise stated."
+)
+
+_P27_PERCENTAGE_DENOMINATOR_NOTE = (
     "Percentages in detailed association tables are calculated within predictor categories "
     "unless otherwise stated. Percentages in the Significant Findings Highlight describe "
     "marker/category distribution within p27 expression groups."
 )
+
+
+def _p27_breast_context_from_blueprint(blueprint: Dict[str, Any]) -> bool:
+    summary = blueprint.get("study_summary") or {}
+    debug = blueprint.get("debug_metadata") or {}
+    text_parts = [
+        blueprint.get("primary_outcome"),
+        summary.get("objective"),
+        summary.get("domain_profile"),
+        blueprint.get("study_design"),
+        debug.get("canonical_outcome"),
+        debug.get("mapped_outcome"),
+        debug.get("confirmed_outcome_col"),
+    ]
+    text = " ".join(_text(part) for part in text_parts if _text(part)).lower()
+    breast_context = (
+        "breast_pathology" in text
+        or "breast pathology" in text
+        or any(term in text for term in ("breast", "mammary", "carcinoma"))
+    )
+    mentions_p27 = bool(re.search(r"\bp\s*[- ]?\s*27\b", text))
+    has_positive_negative = False
+    has_marker_component = False
+    for section in blueprint.get("analysis_sections") or []:
+        for table in section.get("tables") or []:
+            table_type = _text(table.get("table_type")).lower()
+            if "marker_component" in table_type:
+                has_marker_component = True
+            variables = " ".join(_text(var) for var in (table.get("source_variables") or []))
+            if any(term in variables.lower() for term in ("staining", "localization", "localisation", "interpretation", "score")):
+                has_marker_component = True
+            rows_text = " ".join(_text(cell) for row in (table.get("rows") or []) for cell in (row if isinstance(row, (list, tuple)) else row.values() if isinstance(row, dict) else [row]))
+            if "positive" in rows_text.lower() and "negative" in rows_text.lower():
+                has_positive_negative = True
+        for figure in section.get("figures") or []:
+            variables = " ".join(_text(var) for var in (figure.get("source_variables") or []))
+            if "positive" in variables.lower() and "negative" in variables.lower():
+                has_positive_negative = True
+    return breast_context and mentions_p27 and has_positive_negative and has_marker_component
+
+
+def _percentage_denominator_note(blueprint: Dict[str, Any]) -> str:
+    return (
+        _P27_PERCENTAGE_DENOMINATOR_NOTE
+        if _p27_breast_context_from_blueprint(blueprint)
+        else _GENERIC_PERCENTAGE_DENOMINATOR_NOTE
+    )
 
 DESCRIPTIVE_TABLE_TYPES = {
     "descriptive_table",
@@ -2512,7 +2564,7 @@ def generate_docx(
         )
 
     if inferential_sections:
-        _plain_docx_text(doc, _PERCENTAGE_DENOMINATOR_NOTE)
+        _plain_docx_text(doc, _percentage_denominator_note(blueprint))
 
     _add_heading(doc, "Section VI - Summary of Tested Associations", 1)
     association_summary = _tested_associations_table(blueprint)
@@ -2787,7 +2839,7 @@ def generate_pdf(
             table_no=table_no, h2=h2,
         )
     if pdf_inferential_sections:
-        flow.append(Paragraph(_pdf_escape(_PERCENTAGE_DENOMINATOR_NOTE), small))
+        flow.append(Paragraph(_pdf_escape(_percentage_denominator_note(blueprint)), small))
     flow.append(Paragraph("Section VI - Summary of Tested Associations", h1))
     association_summary = _tested_associations_table(blueprint)
     if association_summary:
