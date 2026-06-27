@@ -499,6 +499,19 @@ class _FakeEntry:
         self.meta = meta
 
 
+def test_thesis_presentation_planner_adds_age_group_figure_from_row_data() -> None:
+    """Normal Word export should use row-level data for a presentation-only
+    age-group figure without changing the continuous inferential analysis."""
+    results, df, meta = _build_fixture()
+    blob = export.to_docx(_FakeEntry(df, meta), results, {"outcome": "Positive/ Negative"})
+    text = _docx_text(blob)
+    assert "The present chapter summarises" in text
+    assert "Descriptive Visual Profile" in text
+    assert "Figure 2. Age group distribution." in text
+    assert "Age was grouped into decade bands for descriptive presentation only" in text
+    assert "Welch's t-test" in text
+
+
 def test_category_merges_records_system_display_typos() -> None:
     """category_merges sheet must record Postive->Positive and Ki67 normalisation."""
     results, df, meta = _build_fixture()
@@ -1561,6 +1574,9 @@ def _run_all_checks() -> None:
 
     test_primary_outcome_figure_before_age_figure()
     print("  [ok] Primary outcome distribution figure before Age figure")
+
+    test_thesis_presentation_planner_adds_age_group_figure_from_row_data()
+    print("  [ok] Thesis presentation planner adds row-data age-group figure")
 
     test_nonsignificant_figures_absent()
     print("  [ok] pT / Nodal status / LVI figures absent from main report")

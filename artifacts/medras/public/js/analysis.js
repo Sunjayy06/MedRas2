@@ -4512,26 +4512,108 @@ function _compactDisplayList(items, maxItems) {
   return clean.length > max ? `${shown}, and ${clean.length - max} more` : shown;
 }
 
+function _classificationForColumn(column) {
+  const key = String(column || "").trim().toLowerCase();
+  return (state.classifications || []).find((c) =>
+    String(c.column || "").trim().toLowerCase() === key
+  ) || null;
+}
+
+function _plannedInferentialTests(plan) {
+  const layers = plan.analysis_layers || {};
+  const tests = Array.isArray(layers.bivariate)
+    ? layers.bivariate
+    : (Array.isArray(plan.tests) ? plan.tests.filter((t) => t.analysis_family !== "regression") : []);
+  return tests.filter((test) => {
+    const family = String(test.analysis_family || test.family || "").toLowerCase();
+    const type = String(test.test_type || test.type || test.id || "").toLowerCase();
+    if (family === "descriptive" || type.includes("descriptive")) return false;
+    if (test.execution_status === "recommended_only") return false;
+    return true;
+  });
+}
+
+function _plannedPredictorRows(plan) {
+  const explicit = Array.isArray(state.selectedPredictors) ? state.selectedPredictors.filter(Boolean) : [];
+  const plannedTests = _plannedInferentialTests(plan);
+  const explicitRows = explicit.map((col) => _classificationForColumn(col) || { column: col, detected_type: "" });
+
+  const outcomeCandidates = new Set([
+    (state.assignment || {}).outcome,
+    confirmedOutcomeFromState(),
+    state.outcomeCol,
+    (state.aiStudy || {}).outcome_col,
+    (state.aiStudy || {}).mapped_outcome,
+  ].filter(Boolean).map((value) => String(value).trim().toLowerCase()));
+
+  const predictors = [];
+  plannedTests.forEach((test) => {
+    if (test.predictor) predictors.push(test.predictor);
+    const cols = Array.isArray(test.columns) ? test.columns : [];
+    cols.forEach((col) => {
+      const clean = String(col || "").trim();
+      if (!clean || outcomeCandidates.has(clean.toLowerCase())) return;
+      predictors.push(clean);
+    });
+    if (!cols.length && !test.predictor && test.title) {
+      const title = _displayAnalysisText(test.title);
+      const match = title.match(/^(.+?)\s+(?:by|vs\.?|versus)\s+(.+)$/i);
+      if (match && match[1]) predictors.push(match[1].trim());
+    }
+  });
+
+  const plannedRows = Array.from(new Set(predictors.filter(Boolean))).map((col) =>
+    _classificationForColumn(col) || { column: col, detected_type: "" }
+  );
+  if (plannedRows.length > explicitRows.length) return plannedRows;
+  if (explicitRows.length) return explicitRows;
+  return plannedRows;
+}
+
+function _inferPredictorKind(row, plan) {
+  const detected = String(row.detected_type || "").toLowerCase();
+  if (detected === "scale") return "continuous";
+  if (["nominal", "ordinal", "binary"].includes(detected)) return "categorical";
+
+  const labelKey = String(row.column || "").trim().toLowerCase();
+  const matchingTests = _plannedInferentialTests(plan).filter((test) => {
+    const haystack = [
+      test.predictor,
+      ...(Array.isArray(test.columns) ? test.columns : []),
+      test.title,
+      test.why,
+      test.test_type,
+      test.test_name,
+      test.id,
+    ].map((value) => String(value || "").toLowerCase()).join(" ");
+    return labelKey && haystack.includes(labelKey);
+  });
+  const testText = matchingTests.map((test) =>
+    [test.test_type, test.test_name, test.title, test.why, test.id].join(" ").toLowerCase()
+  ).join(" ");
+  if (/(welch|t-test|ttest|mann|anova|kruskal|continuous|mean|median)/.test(testText)) return "continuous";
+  if (/(chi|fisher|categorical|contingency|association)/.test(testText)) return "categorical";
+  return "";
+}
+
 function _planSummaryHtml(plan) {
   const outcome = outcomeDisplayLabel((state.assignment || {}).outcome || confirmedOutcomeFromState() || state.outcomeCol);
   const studyType = doctorFacingStudyTypeLabel((state.aiStudy || {}).study_type || plan.study_type || "association");
   const sampleSize = (state.summary && state.summary.rows) || (state.aiStudy && state.aiStudy.sample_size) || "";
-  const predictorRows = (state.selectedPredictors || []).map((col) =>
-    (state.classifications || []).find((c) => c.column === col) || { column: col }
-  );
+  const predictorRows = _plannedPredictorRows(plan);
   const predictorNames = predictorRows.map((row) => variableDisplayLabel(row.column));
   const subgroupNames = (state.subgroupVariables || []).map(variableDisplayLabel);
   const continuous = predictorRows
-    .filter((row) => String(row.detected_type || "").toLowerCase() === "scale")
+    .filter((row) => _inferPredictorKind(row, plan) === "continuous")
     .map((row) => variableDisplayLabel(row.column));
   const categorical = predictorRows
-    .filter((row) => ["nominal", "ordinal", "binary"].includes(String(row.detected_type || "").toLowerCase()))
+    .filter((row) => _inferPredictorKind(row, plan) === "categorical")
     .map((row) => variableDisplayLabel(row.column));
   const graphs = (plan.graphs || []).map((graph) => _displayAnalysisText(graph.title || graph.caption || ""));
-  const testCount = (plan.tests || []).length;
+  const testCount = _plannedInferentialTests(plan).length || (plan.tests || []).length;
   const graphCount = (plan.graphs || []).length;
-  const fdrText = predictorNames.length > 1
-    ? "Benjamini-Hochberg FDR across the inferential tests."
+  const fdrText = testCount > 1
+    ? `Benjamini-Hochberg FDR across ${testCount} inferential tests.`
     : "Multiple-testing adjustment is not needed for a single inferential test.";
   return `
     <div class="se-plan-summary-grid" data-testid="plan-structured-summary">
@@ -4590,11 +4672,15 @@ function renderPlan() {
   if (bivariateHeading) bivariateHeading.textContent = "View detailed test list";
   tests.innerHTML = bivariateTests.map((t) => planCard(t, "tests")).join("");
   if (multivariate) {
-    multivariate.innerHTML = multivariateTests.map((item) =>
-      item.execution_status === "recommended_only"
-        ? planSuggestionCard({ ...item, warning: item.why || "Requires researcher confirmation." })
-        : planCard(item, "tests")
-    ).join("");
+    multivariate.innerHTML = multivariateTests.length
+      ? multivariateTests.map((item) =>
+        item.execution_status === "recommended_only"
+          ? planSuggestionCard({ ...item, warning: item.why || "Requires researcher confirmation." })
+          : planCard(item, "tests")
+      ).join("")
+      : `<article class="se-plan-card se-plan-card-fixed" data-testid="plan-adjusted-model-not-run">
+          <p class="se-plan-card-why">No adjusted multivariable model was run. Current results are bivariate association analyses.</p>
+        </article>`;
   }
   if (unavailable) {
     unavailable.innerHTML = [

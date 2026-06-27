@@ -168,6 +168,14 @@ def test_plan_preview_is_structured_with_collapsible_details() -> None:
     html = _read_html()
     assert 'class="se-plan-summary"' in html
     assert "function _planSummaryHtml" in js
+    assert "function _plannedPredictorRows" in js
+    assert "function _plannedInferentialTests" in js
+    assert "_plannedPredictorRows(plan)" in js
+    assert "if (plannedRows.length > explicitRows.length) return plannedRows;" in js
+    assert "_plannedInferentialTests(plan).length" in js
+    assert "Benjamini-Hochberg FDR across ${testCount} inferential tests." in js
+    assert "No adjusted multivariable model was run. Current results are bivariate association analyses." in js
+    assert 'data-testid="plan-adjusted-model-not-run"' in js
     assert 'data-testid="plan-structured-summary"' in js
     for label in [
         "Primary outcome:",

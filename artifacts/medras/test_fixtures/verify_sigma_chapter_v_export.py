@@ -327,6 +327,7 @@ def verify_service_docx() -> None:
     text = _docx_text(blob)
     assert "CHAPTER V" in text
     assert "OBSERVATION AND RESULTS" in text
+    assert "The present chapter summarises" in text
     assert "5.1 Study Summary" in text
     assert "5.2 Statistical Methods" in text
     assert "5.3 Key Findings" in text
@@ -345,6 +346,11 @@ def verify_service_docx() -> None:
     assert "Immunophenotype and molecular subtype profile" in text
     assert "p27 expression and marker components" in text
     assert "Adjusted p-value summary for key associations" in text
+    assert "Descriptive Visual Profile" in text
+    assert "Age summary" in text
+    assert "Distribution of Pathological T stage" in text
+    assert "Positive/present profile" in text
+    assert "Distribution of Molecular subtype" in text
     assert "Limitations and Interpretation Notes" in text
     assert "Analysis Audit Summary" in text
     assert "Interpretation: Interpretation:" not in text

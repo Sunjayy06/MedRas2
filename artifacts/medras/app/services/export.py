@@ -1696,7 +1696,10 @@ def to_docx(
 ) -> bytes:
     if results.get("thesis_analysis_blueprint"):
         return chapter_v_export.generate_docx(
-            results, polish_overrides=polish_overrides or {}, ai_polish_requested=ai_polish_requested
+            results,
+            polish_overrides=polish_overrides or {},
+            ai_polish_requested=ai_polish_requested,
+            presentation_df=getattr(entry, "df", None),
         )
     session = _build_session(entry, results, assignment)
     doc = generate_report(session, entry.df)
@@ -1712,7 +1715,10 @@ def to_pdf(
     """Mirror the 10-section Word report in PDF (best effort, reportlab)."""
     if results.get("thesis_analysis_blueprint"):
         return chapter_v_export.generate_pdf(
-            results, polish_overrides=polish_overrides or {}, ai_polish_requested=ai_polish_requested
+            results,
+            polish_overrides=polish_overrides or {},
+            ai_polish_requested=ai_polish_requested,
+            presentation_df=getattr(entry, "df", None),
         )
     session = _build_session(entry, results, assignment)
     out = io.BytesIO()

@@ -731,6 +731,60 @@ _P27_PERCENTAGE_DENOMINATOR_NOTE = (
     "marker/category distribution within p27 expression groups."
 )
 
+REPORT_DEPTHS = {"concise_report", "thesis_chapter", "full_thesis_chapter"}
+
+
+def _normalise_report_depth(value: Any) -> str:
+    depth = _text(value).strip().lower() or "thesis_chapter"
+    return depth if depth in REPORT_DEPTHS else "thesis_chapter"
+
+
+def _presentation_plan(report_depth: str = "thesis_chapter") -> Dict[str, Any]:
+    depth = _normalise_report_depth(report_depth)
+    if depth == "concise_report":
+        return {
+            "depth": depth,
+            "chapter_opening": True,
+            "descriptive_figures": 1,
+            "association_blocks": "key_only",
+            "table_row_threshold": 18,
+        }
+    if depth == "full_thesis_chapter":
+        return {
+            "depth": depth,
+            "chapter_opening": True,
+            "descriptive_figures": 6,
+            "association_blocks": "expanded",
+            "table_row_threshold": 24,
+        }
+    return {
+        "depth": depth,
+        "chapter_opening": True,
+        "descriptive_figures": 4,
+        "association_blocks": "important",
+        "table_row_threshold": 20,
+    }
+
+
+def _without_descriptive_figures(plan: Dict[str, Any]) -> Dict[str, Any]:
+    clone = dict(plan)
+    clone["descriptive_figures"] = 0
+    return clone
+
+
+def _chapter_opening_paragraph(blueprint: Dict[str, Any], label_ctx: Dict[str, Any]) -> str:
+    design = _readable_study_design(blueprint.get("study_design")).strip() or "biostatistical study"
+    outcome = _text(label_ctx.get("display") or blueprint.get("primary_outcome") or "the primary outcome")
+    if _p27_breast_context_from_blueprint(blueprint):
+        return (
+            "The present chapter summarises the study population, breast pathology profile, "
+            f"{outcome} distribution, and statistical associations relevant to the study objective."
+        )
+    return (
+        "The present chapter summarises the study population, baseline characteristics, "
+        f"{outcome} distribution, and statistical findings relevant to this {design.lower()}."
+    )
+
 
 def _p27_breast_context_from_blueprint(blueprint: Dict[str, Any]) -> bool:
     summary = blueprint.get("study_summary") or {}
@@ -1782,7 +1836,16 @@ def _parse_distribution_counts(table: Dict[str, Any], label_ctx: Dict[str, Any])
     return labels, counts
 
 
-def _bar_chart_data_uri(labels: List[str], counts: List[float], title: str) -> str:
+def _bar_chart_data_uri(
+    labels: List[str],
+    counts: List[float],
+    title: str,
+    *,
+    ylabel: str = "n",
+    horizontal: bool = False,
+    value_suffix: str = "",
+    max_axis_value: Optional[float] = None,
+) -> str:
     if not labels or not counts:
         return ""
     try:
@@ -1791,19 +1854,387 @@ def _bar_chart_data_uri(labels: List[str], counts: List[float], title: str) -> s
         import matplotlib.pyplot as plt
     except Exception:
         return ""
-    fig, ax = plt.subplots(figsize=(5.5, 3.4), dpi=160)
-    colours = ["#4B78A8", "#F58518", "#54A24B", "#B279A2", "#E45756"]
-    bars = ax.bar(labels, counts, color=colours[:len(labels)], edgecolor="white")
+    width = 6.2 if horizontal else 5.8
+    height = max(3.4, 0.35 * len(labels) + 1.6) if horizontal else 3.6
+    fig, ax = plt.subplots(figsize=(width, height), dpi=160)
+    colours = ["#4B78A8", "#F58518", "#54A24B", "#B279A2", "#E45756", "#72B7B2", "#EECA3B", "#9D755D"]
+    palette = [colours[idx % len(colours)] for idx, _ in enumerate(labels)]
     ax.set_title(title)
-    ax.set_ylabel("n")
     ax.spines[["top", "right"]].set_visible(False)
-    for bar, value in zip(bars, counts):
-        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + max(counts) * 0.02, f"{value:g}", ha="center", va="bottom", fontsize=8)
+    if horizontal:
+        bars = ax.barh(labels, counts, color=palette, edgecolor="white")
+        ax.set_xlabel(ylabel)
+        if max_axis_value:
+            ax.set_xlim(0, max_axis_value)
+        ax.invert_yaxis()
+        offset = (max(counts) if counts else 1) * 0.02
+        for bar, value in zip(bars, counts):
+            ax.text(bar.get_width() + offset, bar.get_y() + bar.get_height() / 2, f"{value:g}{value_suffix}", ha="left", va="center", fontsize=8)
+    else:
+        bars = ax.bar(labels, counts, color=palette, edgecolor="white")
+        ax.set_ylabel(ylabel)
+        if max_axis_value:
+            ax.set_ylim(0, max_axis_value)
+        if len(labels) > 4 or any(len(_text(label)) > 12 for label in labels):
+            ax.tick_params(axis="x", labelrotation=30)
+            for tick in ax.get_xticklabels():
+                tick.set_ha("right")
+        offset = (max(counts) if counts else 1) * 0.02
+        for bar, value in zip(bars, counts):
+            ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + offset, f"{value:g}{value_suffix}", ha="center", va="bottom", fontsize=8)
     fig.tight_layout()
     out = io.BytesIO()
     fig.savefig(out, format="png", bbox_inches="tight")
     plt.close(fig)
     return "data:image/png;base64," + base64.b64encode(out.getvalue()).decode("ascii")
+
+
+def _dataframe_column_values(data: Any, variable: Any) -> List[Any]:
+    if data is None or not hasattr(data, "columns"):
+        return []
+    target = _variable_key(variable)
+    for column in list(getattr(data, "columns", [])):
+        if _variable_key(column) == target:
+            try:
+                return list(data[column])
+            except Exception:
+                return []
+    return []
+
+
+def _age_band_counts(values: List[Any]) -> Tuple[List[str], List[float]]:
+    bands = [("<30", None, 30), ("30-39", 30, 40), ("40-49", 40, 50), ("50-59", 50, 60), ("60-69", 60, 70), (">=70", 70, None)]
+    counts = [0.0 for _ in bands]
+    for value in values:
+        text = _text(value).strip()
+        if not text:
+            continue
+        try:
+            age = float(text)
+        except ValueError:
+            continue
+        for idx, (_, low, high) in enumerate(bands):
+            if (low is None or age >= low) and (high is None or age < high):
+                counts[idx] += 1
+                break
+    labels = [label for label, count in zip([band[0] for band in bands], counts) if count > 0]
+    out_counts = [count for count in counts if count > 0]
+    return labels, out_counts
+
+
+def _continuous_summary_figure(table: Dict[str, Any], label_ctx: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    _, rows = _table_rows(table)
+    for row in rows:
+        if len(row) < 6 or _variable_key(row[0]) != "age":
+            continue
+        mean_sd = _text(row[2])
+        mean_match = re.search(r"([0-9]+(?:\.[0-9]+)?)", mean_sd)
+        values = []
+        labels = []
+        if mean_match:
+            labels.append("Mean")
+            values.append(float(mean_match.group(1)))
+        for label, cell in [("Minimum", row[4]), ("Maximum", row[5])]:
+            value = _safe_float(cell)
+            if value is not None:
+                labels.append(label)
+                values.append(value)
+        png = _bar_chart_data_uri(labels, values, "Age summary")
+        if not png:
+            return None
+        return {
+            "figure_id": "age_summary_presentation",
+            "title": "Age summary",
+            "caption": "Age summary.",
+            "interpretation": "The figure summarises the age profile using the available continuous descriptive statistics.",
+            "source_variables": ["Age"],
+            "png_data_uri": png,
+            "thesis_ready": True,
+            "priority": "thesis_ready_primary",
+        }
+    return None
+
+
+def _age_group_figure_from_data(table: Dict[str, Any], label_ctx: Dict[str, Any], presentation_df: Any = None) -> Optional[Dict[str, Any]]:
+    _, rows = _table_rows(table)
+    has_age = any(row and _variable_key(row[0]) == "age" for row in rows)
+    if not has_age:
+        return None
+    values = _dataframe_column_values(presentation_df, "Age")
+    labels, counts = _age_band_counts(values)
+    if not labels or not counts:
+        return _continuous_summary_figure(table, label_ctx)
+    png = _bar_chart_data_uri(labels, counts, "Age group distribution")
+    if not png:
+        return None
+    return {
+        "figure_id": "age_group_distribution_presentation",
+        "title": "Age group distribution",
+        "caption": "Age group distribution.",
+        "interpretation": "Age was grouped into decade bands for descriptive presentation only; inferential testing continues to use the planned continuous-variable analysis unless specified otherwise.",
+        "source_variables": ["Age"],
+        "png_data_uri": png,
+        "thesis_ready": True,
+        "priority": "thesis_ready_primary",
+    }
+
+
+def _figure_priority_score(parameter: str, section_id: str = "") -> int:
+    key = _variable_key(parameter)
+    score = 0
+    if any(token in key for token in ["histological", "grade", "stage", "pt", "tumour_size", "tumor_size"]):
+        score += 40
+    if any(token in key for token in ["molecular_subtype", "subtype", "treatment", "group", "outcome"]):
+        score += 35
+    if any(token in key for token in ["er", "pr", "ar", "her2", "egfr", "ki67", "marker", "receptor", "biomarker"]):
+        score += 30
+    if any(token in key for token in ["nodal", "node", "lvi", "dcis", "ene", "necrosis", "adverse", "complication", "event"]):
+        score += 25
+    if "baseline" in section_id and any(token in key for token in ["sex", "gender", "age", "laterality"]):
+        score += 15
+    return score
+
+
+def _positive_or_present_row(rows: List[List[str]]) -> Optional[List[str]]:
+    preferred = {
+        "positive", "present", "yes", "event", "response", "responder", "treated",
+        "exposed", "high", "elevated", "abnormal", ">=14%",
+    }
+    for row in rows:
+        if not isinstance(row, list) or len(row) < 4:
+            continue
+        label = _text(row[1]).strip().lower()
+        if label in preferred or label.startswith("positive") or label.startswith("present"):
+            return row
+    return None
+
+
+def _binary_profile_figure(
+    table: Dict[str, Any],
+    label_ctx: Dict[str, Any],
+    section_id: str,
+) -> Optional[Dict[str, Any]]:
+    headers, rows = _table_rows(table)
+    if [header.strip().lower() for header in headers] != ["parameter", "category", "n", "%"]:
+        return None
+    labels: List[str] = []
+    values: List[float] = []
+    notes: List[str] = []
+    for parameter, param_rows in _rows_by_parameter(rows).items():
+        visible_rows = [
+            row for row in param_rows
+            if len(row) >= 4 and _text(row[1]).strip().lower() != "missing" and _safe_float(row[2]) > 0
+        ]
+        if len(visible_rows) != 2:
+            continue
+        positive = _positive_or_present_row(visible_rows)
+        if not positive:
+            continue
+        labels.append(_display_value(parameter, label_ctx))
+        values.append(_safe_float(positive[3]))
+        notes.append(f"{_display_value(parameter, label_ctx)} {_text(positive[1]).lower()}: {_text(positive[2])} cases ({_text(positive[3])}).")
+    if len(labels) < 2:
+        return None
+    paired = sorted(
+        zip(labels, values, notes),
+        key=lambda item: (_figure_priority_score(item[0], section_id), item[1]),
+        reverse=True,
+    )[:8]
+    labels = [item[0] for item in paired]
+    values = [item[1] for item in paired]
+    notes = [item[2] for item in paired[:2]]
+    title = "Positive/present profile"
+    png = _bar_chart_data_uri(
+        labels,
+        values,
+        title,
+        ylabel="%",
+        horizontal=True,
+        value_suffix="%",
+        max_axis_value=100,
+    )
+    if not png:
+        return None
+    interpretation = " ".join(notes) + " These variables are shown as percentage summaries for descriptive thesis presentation."
+    return {
+        "figure_id": f"{_variable_key(section_id)}_binary_profile_presentation",
+        "title": title,
+        "caption": f"{title}.",
+        "interpretation": interpretation,
+        "source_variables": labels,
+        "png_data_uri": png,
+        "thesis_ready": True,
+        "priority": "thesis_ready_primary",
+    }
+
+
+def _categorical_distribution_figures(
+    table: Dict[str, Any],
+    label_ctx: Dict[str, Any],
+    section_id: str,
+    max_figures: int,
+) -> List[Dict[str, Any]]:
+    headers, rows = _table_rows(table)
+    if [header.strip().lower() for header in headers] != ["parameter", "category", "n", "%"]:
+        return []
+    candidates: List[Tuple[int, Dict[str, Any]]] = []
+    grouped = _rows_by_parameter(rows)
+    for parameter, param_rows in grouped.items():
+        visible_rows = [
+            row for row in param_rows
+            if len(row) >= 3 and _text(row[1]).strip().lower() != "missing" and _safe_float(row[2]) > 0
+        ]
+        if not (2 <= len(visible_rows) <= 8):
+            continue
+        labels = [_text(row[1]) for row in visible_rows]
+        counts = [_safe_float(row[2]) for row in visible_rows]
+        if not labels or any(count is None for count in counts):
+            continue
+        clean_param = _display_value(parameter, label_ctx)
+        percentages = [_safe_float(row[3]) if len(row) > 3 else 0.0 for row in visible_rows]
+        use_percent = any(value > 0 for value in percentages)
+        values = percentages if use_percent else [float(count or 0) for count in counts]
+        horizontal = len(labels) > 4 or any(len(_text(label)) > 12 for label in labels)
+        png = _bar_chart_data_uri(
+            labels,
+            values,
+            f"Distribution of {clean_param}",
+            ylabel="%" if use_percent else "n",
+            horizontal=horizontal,
+            value_suffix="%" if use_percent else "",
+            max_axis_value=100 if use_percent else None,
+        )
+        if not png:
+            continue
+        ranked = _ranked_rows(visible_rows)
+        top = ranked[0] if ranked else None
+        interpretation = (
+            f"{_text(top[1])} was the most frequent {clean_param.lower()} category, observed in {_text(top[2])} cases ({_text(top[3])})."
+            if top else f"The figure shows the distribution of {clean_param}."
+        )
+        figure = {
+            "figure_id": f"{_variable_key(clean_param)}_distribution_presentation",
+            "title": f"Distribution of {clean_param}",
+            "caption": f"Distribution of {clean_param}.",
+            "interpretation": interpretation,
+            "source_variables": [clean_param],
+            "png_data_uri": png,
+            "thesis_ready": True,
+            "priority": "thesis_ready_primary",
+        }
+        candidates.append((_figure_priority_score(clean_param, section_id), figure))
+    candidates.sort(key=lambda item: item[0], reverse=True)
+    return [figure for _, figure in candidates[:max_figures]]
+
+
+def _categorical_distribution_figure(table: Dict[str, Any], label_ctx: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    figures = _categorical_distribution_figures(table, label_ctx, "", 1)
+    return figures[0] if figures else None
+
+
+def _presentation_descriptive_figures(
+    section_id: str,
+    tables: List[Dict[str, Any]],
+    label_ctx: Dict[str, Any],
+    presentation_plan: Dict[str, Any],
+    presentation_df: Any = None,
+) -> List[Dict[str, Any]]:
+    if section_id not in {
+        "baseline_characteristics",
+        "clinical_study_characteristics",
+        "immunophenotype_characteristics",
+        "marker_outcome_components",
+        "descriptive_results",
+    }:
+        return []
+    limit = int(presentation_plan.get("descriptive_figures") or 0)
+    if limit <= 0:
+        return []
+    figures: List[Dict[str, Any]] = []
+    for table in tables:
+        age_figure = _age_group_figure_from_data(table, label_ctx, presentation_df)
+        if age_figure:
+            figures.append(age_figure)
+            break
+    for table in tables:
+        if len(figures) >= limit:
+            break
+        binary_profile = _binary_profile_figure(table, label_ctx, section_id)
+        if binary_profile and _text(binary_profile.get("figure_id")) not in {_text(item.get("figure_id")) for item in figures}:
+            figures.append(binary_profile)
+        if len(figures) >= limit:
+            break
+        for fig in _categorical_distribution_figures(table, label_ctx, section_id, limit - len(figures)):
+            if fig and _text(fig.get("figure_id")) not in {_text(item.get("figure_id")) for item in figures}:
+                figures.append(fig)
+            if len(figures) >= limit:
+                break
+    return figures[:limit]
+
+
+def _presentation_figures_from_sections(
+    sections: List[Dict[str, Any]],
+    label_ctx: Dict[str, Any],
+    presentation_plan: Dict[str, Any],
+    presentation_df: Any = None,
+) -> List[Dict[str, Any]]:
+    figures: List[Dict[str, Any]] = []
+    seen: Set[str] = set()
+    total_limit = 6 if presentation_plan.get("depth") == "thesis_chapter" else 12
+    if presentation_plan.get("depth") == "concise_report":
+        total_limit = 2
+    for section in sections:
+        if section.get("section_id") == "marker_outcome_components":
+            continue
+        section_id = str(section.get("section_id") or "")
+        tables = _expand_export_tables(_section_tables(section), label_ctx)
+        tables = _consolidate_descriptive_export_tables(tables, section_id, label_ctx)
+        for figure in _presentation_descriptive_figures(section_id, tables, label_ctx, presentation_plan, presentation_df):
+            figure_id = _text(figure.get("figure_id") or figure.get("title"))
+            if figure_id in seen:
+                continue
+            figures.append(figure)
+            seen.add(figure_id)
+            if len(figures) >= total_limit:
+                return figures
+    return figures
+
+
+def _add_descriptive_visual_profile_docx(
+    doc: Document,
+    sections: List[Dict[str, Any]],
+    figure_no: int,
+    label_ctx: Dict[str, Any],
+    presentation_plan: Dict[str, Any],
+    presentation_df: Any = None,
+) -> int:
+    figures = _presentation_figures_from_sections(sections, label_ctx, presentation_plan, presentation_df)
+    if not figures:
+        return figure_no
+    _add_heading(doc, "Descriptive Visual Profile", 1)
+    for figure in figures:
+        figure_no = _add_figure_docx(doc, figure, figure_no, label_ctx)
+    return figure_no
+
+
+def _add_descriptive_visual_profile_pdf(
+    flow: List[Any],
+    sections: List[Dict[str, Any]],
+    figure_no: int,
+    label_ctx: Dict[str, Any],
+    presentation_plan: Dict[str, Any],
+    presentation_df: Any,
+    h1,
+    body,
+    small,
+) -> int:
+    figures = _presentation_figures_from_sections(sections, label_ctx, presentation_plan, presentation_df)
+    if not figures:
+        return figure_no
+    flow.append(Paragraph("Descriptive Visual Profile", h1))
+    for figure in figures:
+        figure_no = _add_pdf_figure(flow, figure, figure_no, label_ctx, body, small)
+    return figure_no
 
 
 def _primary_outcome_figure(blueprint: Dict[str, Any], table: Dict[str, Any], label_ctx: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -2360,6 +2791,8 @@ def _render_section_docx(
     figure_no: int,
     label_ctx: Dict[str, Any],
     include_optional_figures: bool = False,
+    presentation_plan: Optional[Dict[str, Any]] = None,
+    presentation_df: Any = None,
 ) -> tuple[int, int]:
     section_id = str(section.get("section_id") or "")
     figures = [
@@ -2370,6 +2803,9 @@ def _render_section_docx(
     used_figures: Set[str] = set()
     tables = _expand_export_tables(_section_tables(section), label_ctx)
     tables = _consolidate_descriptive_export_tables(tables, section_id, label_ctx)
+    figures.extend(_presentation_descriptive_figures(
+        section_id, tables, label_ctx, presentation_plan or _presentation_plan(), presentation_df
+    ))
     figures = _enrich_figures_from_tables(figures, tables, label_ctx)
     if section_id == "bivariate_associations":
         for figure in sorted(figures, key=lambda item: _association_figure_sort_key(item, label_ctx)):
@@ -2994,11 +3430,15 @@ def generate_docx(
     include_optional_figures: bool = False,
     polish_overrides: Optional[Dict[str, str]] = None,
     ai_polish_requested: bool = False,
+    report_depth: str = "thesis_chapter",
+    presentation_df: Any = None,
 ) -> bytes:
     blueprint = _hydrate_blueprint_result_warnings(_blueprint(results), results)
     if polish_overrides:
         blueprint = _apply_polish_overrides(blueprint, polish_overrides)
     label_ctx = _outcome_label_context(blueprint)
+    plan = _presentation_plan(report_depth)
+    section_plan = _without_descriptive_figures(plan)
     doc = Document()
     _set_docx_styles(doc)
 
@@ -3007,6 +3447,8 @@ def generate_docx(
     run = title.add_run("CHAPTER V\nOBSERVATION AND RESULTS")
     run.bold = True
     run.font.size = Pt(14)
+    if plan.get("chapter_opening"):
+        _plain_docx_text(doc, _chapter_opening_paragraph(blueprint, label_ctx))
 
     _add_heading(doc, "5.1 Study Summary", 1)
     _add_summary_docx(doc, blueprint, results)
@@ -3038,7 +3480,8 @@ def generate_docx(
         if intro:
             _plain_docx_text(doc, intro)
         table_no, figure_no = _render_section_docx(
-            doc, section, table_no, figure_no, label_ctx, include_optional_figures
+            doc, section, table_no, figure_no, label_ctx, include_optional_figures,
+            presentation_plan=section_plan, presentation_df=presentation_df,
         )
 
     _add_heading(doc, _section_export_title("primary_outcome_distribution", "Marker Expression", label_ctx), 1)
@@ -3075,8 +3518,17 @@ def generate_docx(
         _plain_docx_text(doc, "Primary outcome distribution was not available in the blueprint.")
     for section in marker_sections:
         table_no, figure_no = _render_section_docx(
-            doc, section, table_no, figure_no, label_ctx, include_optional_figures
+            doc, section, table_no, figure_no, label_ctx, include_optional_figures,
+            presentation_plan=section_plan, presentation_df=presentation_df,
         )
+    figure_no = _add_descriptive_visual_profile_docx(
+        doc,
+        [section for section in baseline_sections if section.get("section_id") != "marker_outcome_components"],
+        figure_no,
+        label_ctx,
+        plan,
+        presentation_df,
+    )
 
     compact_summary = _compact_significant_associations_table(blueprint, label_ctx)
     if compact_summary:
@@ -3101,7 +3553,8 @@ def generate_docx(
         if intro:
             _plain_docx_text(doc, intro)
         table_no, figure_no = _render_section_docx(
-            doc, section, table_no, figure_no, label_ctx, include_optional_figures
+            doc, section, table_no, figure_no, label_ctx, include_optional_figures,
+            presentation_plan=plan, presentation_df=presentation_df,
         )
 
     if inferential_sections:
@@ -3223,6 +3676,8 @@ def _render_section_pdf(
     include_optional_figures: bool = False,
     table_no: int = 1,
     h2: Any = None,
+    presentation_plan: Optional[Dict[str, Any]] = None,
+    presentation_df: Any = None,
 ) -> Tuple[int, int]:
     section_id = str(section.get("section_id") or "")
     figures = [
@@ -3233,6 +3688,9 @@ def _render_section_pdf(
     used_figures: Set[str] = set()
     tables = _expand_export_tables(_section_tables(section), label_ctx)
     tables = _consolidate_descriptive_export_tables(tables, section_id, label_ctx)
+    figures.extend(_presentation_descriptive_figures(
+        section_id, tables, label_ctx, presentation_plan or _presentation_plan(), presentation_df
+    ))
     figures = _enrich_figures_from_tables(figures, tables, label_ctx)
     if section_id == "bivariate_associations":
         for figure in sorted(figures, key=lambda item: _association_figure_sort_key(item, label_ctx)):
@@ -3293,11 +3751,15 @@ def generate_pdf(
     include_optional_figures: bool = False,
     polish_overrides: Optional[Dict[str, str]] = None,
     ai_polish_requested: bool = False,
+    report_depth: str = "thesis_chapter",
+    presentation_df: Any = None,
 ) -> bytes:
     blueprint = _hydrate_blueprint_result_warnings(_blueprint(results), results)
     if polish_overrides:
         blueprint = _apply_polish_overrides(blueprint, polish_overrides)
     label_ctx = _outcome_label_context(blueprint)
+    plan = _presentation_plan(report_depth)
+    section_plan = _without_descriptive_figures(plan)
     out = io.BytesIO()
     page_size = landscape(A4)
     available_width = page_size[0] - 72
@@ -3313,6 +3775,9 @@ def generate_pdf(
 
     flow.append(Paragraph("CHAPTER V<br/>OBSERVATION AND RESULTS", styles["Title"]))
     flow.append(Spacer(1, 10))
+    if plan.get("chapter_opening"):
+        flow.append(Paragraph(_pdf_escape(_chapter_opening_paragraph(blueprint, label_ctx)), body))
+        flow.append(Spacer(1, 6))
     flow.append(Paragraph("5.1 Study Summary", h1))
     for label, value in _study_summary(blueprint, results):
         flow.append(Paragraph(f"<b>{_pdf_escape(label)}:</b> {_pdf_escape(value)}", body))
@@ -3333,7 +3798,7 @@ def generate_pdf(
             flow.append(Paragraph(_pdf_escape(intro), body))
         figure_no, table_no = _render_section_pdf(
             flow, section, figure_no, label_ctx, available_width, body, small, include_optional_figures,
-            table_no=table_no,
+            table_no=table_no, presentation_plan=section_plan, presentation_df=presentation_df,
         )
 
     flow.append(Paragraph(_pdf_escape(_section_export_title("primary_outcome_distribution", "Marker Expression", label_ctx)), h1))
@@ -3375,8 +3840,19 @@ def generate_pdf(
     for section in [s for s in descriptive_sections if s.get("section_id") == "marker_outcome_components"]:
         figure_no, table_no = _render_section_pdf(
             flow, section, figure_no, label_ctx, available_width, body, small, include_optional_figures,
-            table_no=table_no,
+            table_no=table_no, presentation_plan=section_plan, presentation_df=presentation_df,
         )
+    figure_no = _add_descriptive_visual_profile_pdf(
+        flow,
+        [section for section in descriptive_sections if section.get("section_id") != "marker_outcome_components"],
+        figure_no,
+        label_ctx,
+        plan,
+        presentation_df,
+        h1,
+        body,
+        small,
+    )
 
     compact_summary = _compact_significant_associations_table(blueprint, label_ctx)
     if compact_summary:
@@ -3403,7 +3879,7 @@ def generate_pdf(
             flow.append(Paragraph(_pdf_escape(intro), body))
         figure_no, table_no = _render_section_pdf(
             flow, section, figure_no, label_ctx, available_width, body, small, include_optional_figures,
-            table_no=table_no, h2=h2,
+            table_no=table_no, h2=h2, presentation_plan=section_plan, presentation_df=presentation_df,
         )
     if pdf_inferential_sections:
         flow.append(Paragraph(_pdf_escape(_percentage_denominator_note(blueprint)), small))
