@@ -17,6 +17,13 @@ body.home {
   line-height: 1.6;
 }
 
+/* PRX layout: sidebar + content side by side */
+body.home.prx-layout {
+  display: flex;
+  min-height: 100vh;
+  padding-top: 0 !important;
+}
+
 .hp-section-inner {
   max-width: 1120px;
   margin: 0 auto;
@@ -828,4 +835,926 @@ body.home {
   .hp-workflow-inner { gap: 4px 2px; }
   .hp-workflow-step { font-size: 11px; }
   .hp-workflow-arrow { display: none; }
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   PRX — Perplexity-inspired layout (sidebar + topbar + launch box)
+   Uses only existing color tokens. Applied only on body.home.prx-layout.
+═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  --prx-sidebar-w: 220px;
+  --prx-topbar-h: 44px;
+}
+
+/* ── Suppress global nav bar on homepage (sidebar replaces it) ─── */
+body.home .mn-bar { display: none !important; }
+
+/* ── Sidebar ─────────────────────────────────────────────────────── */
+.prx-sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: var(--prx-sidebar-w);
+  height: 100vh;
+  background: #060d1f;
+  border-right: 1px solid rgba(255,255,255,.07);
+  display: flex;
+  flex-direction: column;
+  z-index: 900;
+  transition: transform 280ms cubic-bezier(.4,0,.2,1);
+  overflow: hidden;
+}
+body.prx-collapsed .prx-sidebar {
+  transform: translateX(-100%);
+}
+
+.prx-sidebar-inner {
+  flex: 1;
+  overflow-y: auto;
+  scrollbar-width: none;
+  padding: 14px 10px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.prx-sidebar-inner::-webkit-scrollbar { display: none; }
+
+/* Logo */
+.prx-logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+  padding: 4px 6px 14px;
+  border-bottom: 1px solid rgba(255,255,255,.06);
+  margin-bottom: 12px;
+}
+.prx-logo-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  background: #3b82f6;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: -.5px;
+  flex-shrink: 0;
+}
+.prx-logo-text {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: rgba(255,255,255,.85);
+  letter-spacing: .01em;
+}
+.prx-logo:hover .prx-logo-text { color: #fff; }
+.prx-logo:hover { text-decoration: none; }
+
+/* New button */
+.prx-new-btn {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 8px 10px;
+  background: rgba(255,255,255,.06);
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 8px;
+  color: rgba(255,255,255,.75);
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 150ms, color 150ms;
+  margin-bottom: 18px;
+}
+.prx-new-btn:hover {
+  background: rgba(255,255,255,.1);
+  color: #fff;
+}
+
+/* Nav group */
+.prx-nav-group {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-bottom: 16px;
+}
+.prx-nav-section-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,.25);
+  padding: 0 8px 7px;
+}
+.prx-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 8px;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(255,255,255,.52);
+  text-decoration: none;
+  transition: background 120ms, color 120ms;
+  cursor: pointer;
+}
+.prx-nav-item:hover {
+  background: rgba(255,255,255,.07);
+  color: rgba(255,255,255,.9);
+  text-decoration: none;
+}
+.prx-nav-item-soon {
+  opacity: .35;
+  pointer-events: none;
+}
+.prx-nav-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.prx-nav-badge {
+  margin-left: auto;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+.prx-badge-live {
+  background: rgba(16,185,129,.12);
+  color: #34d399;
+}
+.prx-badge-beta {
+  background: rgba(99,102,241,.12);
+  color: #a5b4fc;
+}
+.prx-soon-pill {
+  margin-left: auto;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  background: rgba(255,255,255,.07);
+  color: rgba(255,255,255,.32);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+
+/* History */
+.prx-history-group { flex: 0 0 auto; max-height: 38vh; overflow-y: auto; }
+.prx-no-history {
+  font-size: 12px;
+  color: rgba(255,255,255,.2);
+  padding: 3px 8px;
+}
+.prx-history-item {
+  display: block;
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  color: rgba(255,255,255,.48);
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: background 120ms, color 120ms;
+}
+.prx-history-item:hover {
+  background: rgba(255,255,255,.06);
+  color: rgba(255,255,255,.85);
+  text-decoration: none;
+}
+
+/* Projects */
+.prx-projects-group {
+  flex: 1;
+  overflow-y: auto;
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255,255,255,.07);
+}
+.prx-section-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-right: 4px;
+  margin-bottom: 4px;
+}
+.prx-new-project-btn {
+  background: none;
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 5px;
+  color: rgba(255,255,255,.45);
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 120ms, color 120ms;
+}
+.prx-new-project-btn:hover {
+  background: rgba(255,255,255,.08);
+  color: rgba(255,255,255,.85);
+}
+.prx-project-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  color: rgba(255,255,255,.48);
+  cursor: pointer;
+  transition: background 120ms, color 120ms;
+  text-decoration: none;
+}
+.prx-project-item:hover {
+  background: rgba(255,255,255,.06);
+  color: rgba(255,255,255,.85);
+}
+.prx-project-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.prx-project-body {
+  flex: 1;
+  min-width: 0;
+}
+.prx-project-name {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 12px;
+  font-weight: 500;
+  color: inherit;
+}
+.prx-project-meta {
+  display: block;
+  font-size: 10px;
+  color: rgba(255,255,255,.25);
+  margin-top: 1px;
+}
+.prx-project-del {
+  background: none;
+  border: none;
+  color: rgba(255,255,255,.18);
+  cursor: pointer;
+  padding: 2px;
+  font-size: 13px;
+  line-height: 1;
+  border-radius: 3px;
+  flex-shrink: 0;
+  display: none;
+}
+.prx-project-item:hover .prx-project-del { display: block; }
+.prx-project-del:hover { color: #f87171; }
+
+/* project name input dialog */
+.prx-proj-dialog-backdrop {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.55);
+  z-index: 9000;
+  display: flex; align-items: center; justify-content: center;
+}
+.prx-proj-dialog {
+  background: #111827;
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 12px;
+  padding: 22px 24px;
+  width: 320px;
+  box-shadow: 0 24px 60px rgba(0,0,0,.6);
+}
+.prx-proj-dialog h3 {
+  font-size: 14px; font-weight: 600;
+  color: rgba(255,255,255,.85);
+  margin: 0 0 14px;
+}
+.prx-proj-dialog input {
+  width: 100%; box-sizing: border-box;
+  background: rgba(255,255,255,.06);
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 7px;
+  color: #fff;
+  font-size: 13px;
+  padding: 9px 12px;
+  outline: none;
+  margin-bottom: 14px;
+}
+.prx-proj-dialog input:focus { border-color: rgba(99,102,241,.6); }
+.prx-proj-dialog-actions {
+  display: flex; gap: 8px; justify-content: flex-end;
+}
+.prx-proj-dialog-actions button {
+  border: none; border-radius: 7px;
+  font-size: 12px; font-weight: 600;
+  padding: 7px 16px; cursor: pointer;
+}
+.prx-proj-btn-cancel {
+  background: rgba(255,255,255,.07);
+  color: rgba(255,255,255,.55);
+}
+.prx-proj-btn-create {
+  background: linear-gradient(135deg,#6366f1,#38bdf8);
+  color: #fff;
+}
+
+/* Sidebar footer */
+.prx-sidebar-footer {
+  padding: 12px 14px 14px;
+  border-top: 1px solid rgba(255,255,255,.06);
+}
+.prx-status-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.prx-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #22c55e;
+  box-shadow: 0 0 0 2px rgba(34,197,94,.2);
+  flex-shrink: 0;
+}
+.prx-status-text {
+  font-size: 11px;
+  color: rgba(255,255,255,.28);
+}
+
+/* ── Content wrap ────────────────────────────────────────────────── */
+.prx-content-wrap {
+  margin-left: var(--prx-sidebar-w);
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-width: 0;
+  transition: margin-left 280ms cubic-bezier(.4,0,.2,1);
+}
+body.prx-collapsed .prx-content-wrap {
+  margin-left: 0;
+}
+
+/* ── Top bar ─────────────────────────────────────────────────────── */
+.prx-topbar {
+  position: sticky;
+  top: 0;
+  height: var(--prx-topbar-h);
+  background: rgba(6,13,31,.88);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-bottom: 1px solid rgba(255,255,255,.07);
+  display: flex;
+  align-items: center;
+  padding: 0 14px 0 4px;
+  gap: 0;
+  z-index: 800;
+}
+.prx-toggle-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: transparent;
+  color: rgba(255,255,255,.42);
+  cursor: pointer;
+  border-radius: 6px;
+  flex-shrink: 0;
+  transition: background 120ms, color 120ms;
+}
+.prx-toggle-btn:hover {
+  background: rgba(255,255,255,.07);
+  color: rgba(255,255,255,.85);
+}
+.prx-tabs {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.prx-tabs::-webkit-scrollbar { display: none; }
+.prx-tab {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 12px;
+  height: var(--prx-topbar-h);
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(255,255,255,.48);
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+  transition: color 120ms, border-color 120ms;
+}
+.prx-tab:hover {
+  color: rgba(255,255,255,.88);
+  text-decoration: none;
+}
+.prx-topbar-right {
+  margin-left: auto;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.prx-new-chat-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: rgba(255,255,255,.75);
+  background: rgba(255,255,255,.06);
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 8px;
+  padding: 5px 11px;
+  cursor: pointer;
+  transition: background 150ms, color 150ms, border-color 150ms;
+  white-space: nowrap;
+}
+.prx-new-chat-btn:hover {
+  background: rgba(255,255,255,.12);
+  border-color: rgba(255,255,255,.22);
+  color: #fff;
+}
+.prx-live-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: rgba(255,255,255,.35);
+  padding: 4px 10px;
+  background: rgba(255,255,255,.04);
+  border: 1px solid rgba(255,255,255,.07);
+  border-radius: 20px;
+}
+.prx-live-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #22c55e;
+  animation: mn-pulse 2.4s ease-in-out infinite;
+}
+
+/* ── Hero ────────────────────────────────────────────────────────── */
+.prx-hero {
+  background: linear-gradient(160deg, #060d1f 0%, #0f1d3d 55%, #08122e 100%);
+  padding: 64px 32px 72px;
+  color: #fff;
+  flex: 1;
+}
+main {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  background: transparent;
+  min-height: 0;
+}
+.prx-hero-inner {
+  max-width: 680px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+.prx-hero-eyebrow {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,.35);
+  margin-bottom: 20px;
+}
+.prx-wordmark {
+  font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
+  font-size: clamp(52px, 9vw, 88px);
+  font-weight: 800;
+  letter-spacing: -.04em;
+  color: #fff;
+  margin: 0 0 10px;
+  line-height: 1;
+}
+.prx-hero-tagline {
+  font-size: 15px;
+  color: rgba(255,255,255,.45);
+  margin: 0 0 40px;
+  font-weight: 400;
+  letter-spacing: .01em;
+}
+.prx-hero-status {
+  margin-top: 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: rgba(255,255,255,.35);
+}
+
+/* ── Launch box ──────────────────────────────────────────────────── */
+.prx-launch-box {
+  width: 100%;
+  max-width: 620px;
+  background: rgba(255,255,255,.05);
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 16px;
+  overflow: visible;
+  position: relative;
+  transition: border-color 200ms, box-shadow 200ms;
+}
+.prx-launch-box:focus-within {
+  border-color: rgba(255,255,255,.26);
+  box-shadow: 0 0 0 3px rgba(59,130,246,.18), 0 8px 32px rgba(0,0,0,.3);
+}
+.prx-launch-input {
+  display: block;
+  width: 100%;
+  background: transparent;
+  border: none;
+  outline: none;
+  padding: 18px 20px 10px;
+  font-family: 'Inter', sans-serif;
+  font-size: 15px;
+  color: rgba(255,255,255,.9);
+  resize: none;
+  line-height: 1.55;
+  box-sizing: border-box;
+}
+.prx-launch-input::placeholder { color: rgba(255,255,255,.28); }
+.prx-launch-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px 10px;
+  gap: 8px;
+}
+.prx-launch-chips {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+/* Chips */
+.prx-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  background: rgba(255,255,255,.07);
+  border: 1px solid rgba(255,255,255,.11);
+  border-radius: 20px;
+  font-family: 'Inter', sans-serif;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: rgba(255,255,255,.62);
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 150ms, border-color 150ms, color 150ms;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.prx-chip:hover {
+  background: rgba(255,255,255,.12);
+  border-color: rgba(255,255,255,.22);
+  color: #fff;
+  text-decoration: none;
+}
+.prx-chip-dropdown {
+  font-weight: 600;
+  gap: 6px;
+}
+.prx-chip-helix    { border-color: rgba(13,148,136,.35); }
+.prx-chip-sigma    { border-color: rgba(124,58,237,.35); }
+.prx-chip-prologue { border-color: rgba(74,122,200,.35); }
+.prx-chip-novus    { border-color: rgba(217,119,6,.35); }
+.prx-chevron { flex-shrink: 0; }
+
+/* Submit button */
+.prx-launch-submit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #3b82f6;
+  border: none;
+  color: #fff;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 150ms, transform 150ms, box-shadow 150ms;
+  box-shadow: 0 2px 8px rgba(59,130,246,.3);
+}
+.prx-launch-submit:hover {
+  background: #2563eb;
+  transform: scale(1.07);
+  box-shadow: 0 4px 14px rgba(59,130,246,.4);
+}
+
+/* Chip wrap for dropdown positioning */
+.prx-chip-wrap {
+  position: relative;
+}
+
+/* ── Perplexity-style Search / mode button ────────────────────────── */
+.prx-mode-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 12px 6px 10px;
+  background: rgba(255,255,255,.06);
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 8px;
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(255,255,255,.7);
+  cursor: pointer;
+  transition: background 150ms, border-color 150ms, color 150ms;
+  white-space: nowrap;
+}
+.prx-mode-btn:hover {
+  background: rgba(255,255,255,.1);
+  border-color: rgba(255,255,255,.18);
+  color: rgba(255,255,255,.92);
+}
+.prx-mode-icon { flex-shrink: 0; opacity: .7; }
+.prx-mode-label { flex: 1; text-align: left; }
+.prx-mode-chevron { flex-shrink: 0; opacity: .45; }
+
+/* ── Module dropdown ──────────────────────────────────────────────── */
+.prx-module-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  min-width: 260px;
+  max-height: 420px;
+  overflow-y: auto;
+  background: #0c1733;
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 14px;
+  padding: 8px 6px 6px;
+  box-shadow: 0 20px 48px rgba(0,0,0,.55), 0 4px 12px rgba(0,0,0,.3);
+  z-index: 999;
+  animation: prx-dd-in 160ms ease-out;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,.15) transparent;
+}
+@keyframes prx-dd-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Dropdown header */
+.prx-dd-header {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,.25);
+  padding: 2px 10px 8px;
+  margin: 0;
+}
+
+/* Dropdown item */
+.prx-dd-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: 9px;
+  text-decoration: none;
+  transition: background 120ms;
+  cursor: pointer;
+}
+.prx-dd-item:hover {
+  background: rgba(255,255,255,.07);
+  text-decoration: none;
+}
+.prx-dd-item--active {
+  background: rgba(255,255,255,.06);
+}
+
+.prx-dd-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* Name + desc stacked */
+.prx-dd-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
+  min-width: 0;
+}
+.prx-dd-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255,255,255,.88);
+  line-height: 1.2;
+}
+.prx-dd-desc {
+  font-size: 11.5px;
+  color: rgba(255,255,255,.35);
+  line-height: 1.2;
+}
+
+/* Checkmark — hidden by default, shown when item is active */
+.prx-dd-check {
+  flex-shrink: 0;
+  color: rgba(255,255,255,.0);
+  transition: color 120ms;
+}
+.prx-dd-item--active .prx-dd-check,
+.prx-dd-check--visible {
+  color: #22d3ee;
+}
+
+/* Toolbar left — holds Model + Search buttons */
+.prx-toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Coming-soon items in dropdown */
+.prx-dd-item-soon {
+  cursor: default;
+  opacity: .55;
+}
+.prx-dd-item-soon:hover {
+  background: none;
+}
+.prx-dd-soon-pill {
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,.35);
+  background: rgba(255,255,255,.07);
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 5px;
+  padding: 1px 6px;
+  flex-shrink: 0;
+}
+
+/* Search mode dropdown — slightly narrower */
+.prx-search-dropdown {
+  min-width: 230px;
+}
+
+/* ── MedRAS E. coli mascot symbol ─────────────────────────────────────── */
+.mrs-symbol {
+  position: relative;
+  width: 150px;
+  height: 170px;
+  margin: 0 auto 18px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+#mrs-canvas {
+  width: 150px;
+  height: 170px;
+  display: block;
+}
+
+/* ── Helix-home integration ───────────────────────────────────── */
+body.home {
+  background: #070c1a;
+}
+/* Centre the welcome content */
+body.home .welcome {
+  align-items: center;
+  text-align: center;
+}
+body.home .welcome-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+body.home .helix-input-box,
+body.home .welcome-sources,
+body.home .ws-key-note-text,
+body.home .topics-label,
+body.home .topic-grid {
+  text-align: left;
+}
+body.home .ra-wrap {
+  flex: 1;
+  overflow-y: auto;
+}
+body.home .welcome {
+  min-height: calc(100vh - var(--prx-topbar-h, 44px));
+}
+/* chat-bar sticks to bottom of .prx-content-wrap flex column */
+body.home .chat-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 200;
+}
+/* folio panel: account for our 44px topbar */
+body.home .folio-panel {
+  top: var(--prx-topbar-h, 44px);
+}
+
+/* Mascot canvas in Helix welcome */
+body.home .mrs-symbol {
+  width: 140px;
+  height: 140px;
+  margin: 0 auto 8px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+body.home #mrs-canvas {
+  width: 140px;
+  height: 140px;
+  display: block;
+}
+
+/* Input box wrapper */
+.helix-input-box {
+  width: 100%;
+  background: rgba(255,255,255,.05);
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 14px;
+  overflow: visible;
+  margin-bottom: 1.2rem;
+}
+body.home .helix-input-box .welcome-input-wrap {
+  background: transparent;
+  border: none;
+  border-radius: 14px 14px 0 0;
+  margin-bottom: 0;
+}
+body.home .helix-input-box .welcome-input-wrap:focus-within {
+  box-shadow: none;
+}
+
+/* Toolbar row inside input box */
+.helix-input-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px 10px;
+  border-top: 1px solid rgba(255,255,255,.07);
+}
+
+/* Helix welcome — hero greeting */
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&display=swap');
+
+.helix-greeting {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: clamp(32px, 5vw, 58px);
+  font-weight: 400;
+  font-style: normal;
+  line-height: 1.15;
+  letter-spacing: -.01em;
+  background: linear-gradient(135deg, #e0e8ff 0%, #a5b4fc 40%, #38bdf8 80%, #34d399 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin: 0 0 28px;
+  text-align: center;
+}
+.helix-wordmark {
+  font-size: clamp(48px, 8vw, 80px);
+  font-weight: 800;
+  letter-spacing: -.02em;
+  line-height: 1;
+  margin: 0 0 6px;
+  background: linear-gradient(135deg, #e0e8ff 0%, #a5b4fc 40%, #38bdf8 80%, #34d399 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.helix-tagline {
+  font-size: 14px;
+  font-weight: 400;
+  color: rgba(255,255,255,.38);
+  letter-spacing: .04em;
+  margin: 0 0 28px;
 }

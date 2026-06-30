@@ -3,11 +3,11 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=900, initial-scale=1.0" />
-    <title>MedRAS — Medical Research Acceleration System</title>
+    <title>MedRAS — Medical Research Automation Suite</title>
     <meta name="description" content="MedRAS is a structured research operating system for medical and academic research. Plan, calculate, analyse, write, and verify — end to end." />
     <meta property="og:type"        content="website" />
     <meta property="og:site_name"   content="MedRAS" />
-    <meta property="og:title"       content="MedRAS — Medical Research Acceleration System" />
+    <meta property="og:title"       content="MedRAS — Medical Research Automation Suite" />
     <meta property="og:description" content="Seven integrated modules that take medical and academic researchers from objective to submission-ready manuscript — all in one place, no account required." />
     <meta name="twitter:card"        content="summary" />
     <meta name="twitter:title"       content="MedRAS — Medical Research OS" />
@@ -15,310 +15,1503 @@
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%233b82f6'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-family='Inter,sans-serif' font-size='18' font-weight='700' fill='white'%3EM%3C/text%3E%3C/svg%3E" />
     <link rel="stylesheet" href="/css/tokens.css" />
     <link rel="stylesheet" href="/css/style.css?v=2026052501" />
-    <link rel="stylesheet" href="/css/home.css?v=2026052501" />
+    <link rel="stylesheet" href="/study-builder/css/sb.css"/>
+    <link rel="stylesheet" href="/css/home.css?v=2026063002" />
     <link rel="stylesheet" href="/css/medras-nav.css" />
   </head>
-  <body class="home" data-medras-module="">
+  <body class="home prx-layout" data-medras-module="">
 
-    <main>
+    <!-- ================================================================
+         SIDEBAR
+    ================================================================ -->
+    <aside class="prx-sidebar" id="prx-sidebar" aria-label="Application sidebar">
+      <div class="prx-sidebar-inner">
 
-      <!-- ============================================================ -->
-      <!-- HERO — single panel, no slider                               -->
-      <!-- ============================================================ -->
-      <section class="hp-hero" data-testid="hero-section">
-        <div class="hp-hero-inner">
-          <span class="hp-eyebrow" data-testid="hero-eyebrow">From Chennai, for researchers everywhere</span>
-          <h1 class="hp-hero-headline" data-testid="hero-headline">
-            Your research<br>
-            <span class="hp-grad">operating system.</span>
-          </h1>
-          <p class="hp-hero-sub" data-testid="hero-sub">
-            A structured OS for medical and academic researchers — from objective to submission-ready manuscript. Guided, validated, compliance-aware.
-          </p>
-          <div class="hp-hero-ctas" data-testid="hero-ctas">
-            <a href="/study-builder/chat.html" class="hp-cta-primary" data-testid="link-hero-helix">Helix — Study Builder →</a>
-            <a href="/sample-size.html" class="hp-cta-secondary" data-testid="link-hero-cohort">Cohort</a>
-            <a href="/analysis.html" class="hp-cta-secondary" data-testid="link-hero-sigma">Sigma</a>
-            <a href="/proposal-module/" class="hp-cta-secondary" data-testid="link-hero-prologue">Prologue</a>
-            <a href="/thesis-module/" class="hp-cta-secondary" data-testid="link-hero-scriptorium">Scriptorium</a>
-            <a href="/plagiarism-module/" class="hp-cta-secondary" data-testid="link-hero-novus">Novus</a>
-            <a href="/folio-module/" class="hp-cta-secondary" data-testid="link-hero-folio">Folio</a>
-          </div>
-          <div class="hp-status-row" data-testid="hero-status">
-            <span class="hp-status-dot"></span>
-            <span>7 modules live &middot; All processing in-browser &middot; No account required</span>
+        <!-- Logo -->
+        <a href="/" class="prx-logo" data-testid="sidebar-logo">
+          <span class="prx-logo-mark">M</span>
+          <span class="prx-logo-text">MedRAS</span>
+        </a>
+
+        <!-- New session button -->
+        <button class="prx-new-btn" onclick="window.location.href='/'" data-testid="sidebar-new">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+            <path d="M7 1v12M1 7h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+          </svg>
+          New
+        </button>
+
+        <!-- History -->
+        <div class="prx-nav-group prx-history-group">
+          <span class="prx-nav-section-label">History</span>
+          <div id="prx-history-list">
+            <span class="prx-no-history">No recent sessions</span>
           </div>
         </div>
 
-        <!-- Workflow strip -->
-        <div class="hp-workflow-strip" data-testid="workflow-strip">
-          <div class="hp-workflow-inner">
-            <span class="hp-workflow-step" data-testid="ws-1"><span class="hp-ws-n">1</span>Design</span>
-            <span class="hp-workflow-arrow" aria-hidden="true">→</span>
-            <span class="hp-workflow-step" data-testid="ws-2"><span class="hp-ws-n">2</span>Size</span>
-            <span class="hp-workflow-arrow" aria-hidden="true">→</span>
-            <span class="hp-workflow-step" data-testid="ws-3"><span class="hp-ws-n">3</span>Propose</span>
-            <span class="hp-workflow-arrow" aria-hidden="true">→</span>
-            <span class="hp-workflow-step" data-testid="ws-4"><span class="hp-ws-n">4</span>Collect</span>
-            <span class="hp-workflow-arrow" aria-hidden="true">→</span>
-            <span class="hp-workflow-step" data-testid="ws-5"><span class="hp-ws-n">5</span>Analyse</span>
-            <span class="hp-workflow-arrow" aria-hidden="true">→</span>
-            <span class="hp-workflow-step" data-testid="ws-6"><span class="hp-ws-n">6</span>Write</span>
-            <span class="hp-workflow-arrow" aria-hidden="true">→</span>
-            <span class="hp-workflow-step" data-testid="ws-7"><span class="hp-ws-n">7</span>Polish</span>
-            <span class="hp-workflow-arrow" aria-hidden="true">→</span>
-            <span class="hp-workflow-step" data-testid="ws-8"><span class="hp-ws-n">8</span>Submit</span>
+        <!-- Projects -->
+        <div class="prx-nav-group prx-projects-group">
+          <div class="prx-section-header-row">
+            <span class="prx-nav-section-label">Projects</span>
+            <button class="prx-new-project-btn" id="prx-new-project-btn" title="New project">
+              <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+            </button>
+          </div>
+          <div id="prx-projects-list">
+            <span class="prx-no-history">No projects yet</span>
           </div>
         </div>
-      </section>
 
-      <!-- ============================================================ -->
-      <!-- RECENT ANALYSES — session history (hidden by default)        -->
-      <!-- ============================================================ -->
-      <section id="recent-analyses" class="recent-analyses-section"
-               data-testid="recent-analyses-section"
-               style="display:none;">
-        <div class="hp-section-inner">
-          <header class="hp-section-head">
-            <p class="hp-eyebrow-sm">Continue where you left off</p>
-            <h2 class="hp-section-title">Recent analyses</h2>
-            <p class="hp-section-sub">Your last 5 completed sessions, kept for 15 days from the last access.</p>
-          </header>
-          <div id="recent-analyses-list" class="hp-recent-grid"></div>
+      </div>
+
+      <!-- Sidebar footer -->
+      <div class="prx-sidebar-footer">
+        <div class="prx-status-row">
+          <span class="prx-status-dot"></span>
+          <span class="prx-status-text">7 modules live &middot; No account needed</span>
         </div>
-      </section>
+      </div>
+    </aside>
 
-      <script>
-      (function () {
-        function escRa(s) {
-          return String(s == null ? "" : s)
-            .replace(/&/g, "&amp;").replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-        }
-        function fmtDate(ts) {
-          if (!ts) return "—";
-          try { return new Date(ts * 1000).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }); }
-          catch (_) { return new Date(ts * 1000).toLocaleString(); }
-        }
-        function fmtExpiry(days) {
-          if (days <= 0) return { text: "Expired", color: "#dc2626", bold: true };
-          if (days < 1) return { text: "Expires today", color: "#d97706", bold: true };
-          if (days < 2) return { text: "Expires tomorrow", color: "#d97706", bold: true };
-          if (days <= 2) return { text: Math.ceil(days) + " days remaining", color: "#d97706", bold: true };
-          return { text: Math.ceil(days) + " days remaining", color: "#6b7280", bold: false };
-        }
-        async function loadRecentAnalyses() {
-          try {
-            const res = await fetch("/api/stats/recent-sessions");
-            if (!res.ok) return;
-            const data = await res.json();
-            const sessions = data.sessions || [];
-            if (!sessions.length) return;
-            const section = document.getElementById("recent-analyses");
-            const list = document.getElementById("recent-analyses-list");
-            if (!section || !list) return;
-            section.style.display = "";
-            list.innerHTML = sessions.map(function (s) {
-              const exp = fmtExpiry(s.expires_in_days || 0);
-              const href = "/analysis.html?restore=" + encodeURIComponent(s.job_id);
-              const vars = (s.variable_count || 0) + " variable" + (s.variable_count !== 1 ? "s" : "") + " analysed";
-              return '<div class="hp-recent-card">'
-                + '<div class="hp-recent-title">' + escRa(s.title) + '</div>'
-                + '<div class="hp-recent-meta">' + fmtDate(s.completed_at) + '</div>'
-                + '<div class="hp-recent-meta">' + escRa(vars) + '</div>'
-                + '<div class="hp-recent-exp" style="color:' + exp.color + ';font-weight:' + (exp.bold ? '600' : '400') + ';">' + exp.text + '</div>'
-                + '<a href="' + href + '" class="hp-recent-btn" data-testid="btn-open-session-' + escRa(s.job_id) + '">Open and continue</a>'
-                + '</div>';
-            }).join("");
-          } catch (_) {}
-        }
-        if (document.readyState === "loading") {
-          document.addEventListener("DOMContentLoaded", loadRecentAnalyses);
-        } else {
-          loadRecentAnalyses();
-        }
-      })();
-      </script>
+    <!-- ================================================================
+         CONTENT WRAP
+    ================================================================ -->
+    <div class="prx-content-wrap">
 
-      <!-- ============================================================ -->
-      <!-- MODULES GRID — 3×3 desktop grid                             -->
-      <!-- ============================================================ -->
-      <section id="modules" class="hp-modules-section" data-testid="modules-section">
-        <div class="hp-section-inner">
-          <header class="hp-section-head">
-            <p class="hp-eyebrow-sm">Nine modules</p>
-            <h2 class="hp-section-title">Built for every stage of research</h2>
-            <p class="hp-section-sub">Each module is a standalone capability. Available modules are live; the rest are on the way.</p>
-          </header>
+      <!-- Top bar -->
+      <div class="prx-topbar" role="banner">
+        <button class="prx-toggle-btn" id="prx-toggle" aria-label="Toggle sidebar">
+          <svg width="16" height="12" viewBox="0 0 16 12" fill="none" aria-hidden="true">
+            <rect width="16" height="1.5" rx=".75" fill="currentColor"/>
+            <rect y="5.25" width="16" height="1.5" rx=".75" fill="currentColor"/>
+            <rect y="10.5" width="16" height="1.5" rx=".75" fill="currentColor"/>
+          </svg>
+        </button>
+        <nav class="prx-tabs" aria-label="Quick access">
+          <a href="/study-builder/chat.html" class="prx-tab" data-testid="tab-helix">Helix</a>
+          <a href="/sample-size.html"        class="prx-tab" data-testid="tab-cohort">Cohort</a>
+          <a href="/analysis.html"           class="prx-tab" data-testid="tab-sigma">Sigma</a>
+          <a href="/proposal-module/"        class="prx-tab" data-testid="tab-prologue">Prologue</a>
+          <a href="/thesis-module/"          class="prx-tab" data-testid="tab-scriptorium">Scriptorium</a>
+          <a href="/plagiarism-module/"      class="prx-tab" data-testid="tab-novus">Novus</a>
+          <a href="/folio-module/"           class="prx-tab" data-testid="tab-folio">Folio</a>
+        </nav>
+        <div class="prx-topbar-right">
+          <button class="prx-new-chat-btn new-chat-btn" id="new-chat-btn" data-testid="topbar-new-chat" aria-label="New chat">
+            <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
+              <path d="M6.5 1v11M1 6.5h11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+            </svg>
+            New chat
+          </button>
+          <span class="prx-live-chip">
+            <span class="prx-live-dot"></span>
+            All systems live
+          </span>
+        </div>
+      </div>
 
-          <div class="hp-modules-grid" data-testid="list-modules">
+      <!-- Main -->
+      <main>
 
-            <a class="m-card" href="/study-builder/chat.html" data-testid="card-module-1" style="--m-accent:#0891b2;">
-              <div class="m-card-head">
-                <span class="m-card-num">01</span>
-                <span class="m-card-status" data-state="available">Available</span>
+        <!-- ============================================================
+             HELIX — embedded research assistant
+        ============================================================ -->
+        <!-- Helix welcome state -->
+        <div class="ra-wrap" id="ra-wrap">
+          <div class="welcome" id="welcome">
+            <div class="welcome-inner">
+
+              <!-- Animated mascot -->
+              <div class="mrs-symbol" id="mrs-symbol" aria-hidden="true">
+                <canvas id="mrs-canvas" width="200" height="200"></canvas>
               </div>
-              <h3 class="m-card-title">Helix</h3>
-              <p class="m-card-desc"><strong>Study Builder.</strong> Translate a research objective into a structured methodology — study type, design, variables and analysis plan in one place.</p>
-              <span class="m-card-cta">Open module →</span>
-            </a>
 
-            <a class="m-card" href="/sample-size.html" data-testid="card-module-2" style="--m-accent:#2563eb;">
-              <div class="m-card-head">
-                <span class="m-card-num">02</span>
-                <span class="m-card-status" data-state="available">Available</span>
-              </div>
-              <h3 class="m-card-title">Cohort</h3>
-              <p class="m-card-desc"><strong>Sample Size Calculator.</strong> Formula-driven <em>n</em> with explicit power, alpha and effect size — 14 study designs covered.</p>
-              <span class="m-card-cta">Open calculator →</span>
-            </a>
+              <!-- Dynamic greeting — hero -->
+              <h1 class="helix-greeting" id="helix-greeting"></h1>
 
-            <a class="m-card" href="/analysis.html" data-testid="card-module-3" style="--m-accent:#7c3aed;">
-              <div class="m-card-head">
-                <span class="m-card-num">03</span>
-                <span class="m-card-status" data-state="beta">Available · Beta</span>
-              </div>
-              <h3 class="m-card-title">Sigma</h3>
-              <p class="m-card-desc"><strong>Statistical Analysis Engine.</strong> Upload Excel, classify variables, run normality-aware tests and get publication-ready tables, figures and APA write-ups.</p>
-              <span class="m-card-cta">Open analysis engine →</span>
-            </a>
+              <div class="helix-input-box">
+                <div class="welcome-input-wrap">
+                  <textarea class="welcome-input" id="welcome-input"
+                    placeholder="e.g. What is the latest evidence for SGLT-2 inhibitors in heart failure?"
+                    rows="1" autocomplete="off" spellcheck="true"></textarea>
+                  <button class="welcome-send" id="welcome-send" title="Ask">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <!-- orbit ring -->
+                      <ellipse cx="12" cy="12" rx="9" ry="4.5" stroke="currentColor" stroke-width="1.4" stroke-dasharray="3 2.5" opacity="0.45" transform="rotate(-35 12 12)"/>
+                      <!-- upward arrow shaft -->
+                      <line x1="12" y1="18" x2="12" y2="7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                      <!-- arrowhead -->
+                      <polyline points="8,11 12,6.5 16,11" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                      <!-- small dot at base — like a launch point -->
+                      <circle cx="12" cy="18.5" r="1.2" fill="currentColor" opacity="0.6"/>
+                    </svg>
+                  </button>
+                </div>
 
-            <a class="m-card" href="/proposal-module/" data-testid="card-module-4" style="--m-accent:#4a7ac8;">
-              <div class="m-card-head">
-                <span class="m-card-num">04</span>
-                <span class="m-card-status" data-state="available">Available</span>
-              </div>
-              <h3 class="m-card-title">Prologue</h3>
-              <p class="m-card-desc"><strong>Proposal Writer.</strong> From research idea to submission-ready proposal — guided step by step. RAG-grounded from PubMed, Cochrane and preprints. Supports ICMR, IEC, UGC, DST-SERB, NIH, WHO and more.</p>
-              <span class="m-card-cta">Open module →</span>
-            </a>
+                <!-- Toolbar: Model + Search mode -->
+                <div class="helix-input-toolbar">
 
-            <a class="m-card" href="/thesis-module/" data-testid="card-module-5" style="--m-accent:#059669;">
-              <div class="m-card-head">
-                <span class="m-card-num">05</span>
-                <span class="m-card-status" data-state="beta">Available · Beta</span>
-              </div>
-              <h3 class="m-card-title">Scriptorium</h3>
-              <p class="m-card-desc"><strong>Write from scratch.</strong> Guided 9-station flow for MD / DNB / PhD theses <em>and</em> journal articles. AI drafts grounded in Cochrane, PubMed &amp; preprints — locked numbers, track changes, CONSORT / STROBE / PRISMA checklists.</p>
-              <span class="m-card-cta">Open module →</span>
-            </a>
+                  <!-- Button 1: Helix module selector -->
+                  <div class="prx-chip-wrap">
+                    <button class="prx-mode-btn" id="prx-module-btn"
+                            aria-haspopup="listbox" aria-expanded="false">
+                      <svg class="prx-mode-icon" width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden="true">
+                        <rect x="1" y="1" width="5.5" height="5.5" rx="1.2" stroke="currentColor" stroke-width="1.4"/>
+                        <rect x="8.5" y="1" width="5.5" height="5.5" rx="1.2" stroke="currentColor" stroke-width="1.4"/>
+                        <rect x="1" y="8.5" width="5.5" height="5.5" rx="1.2" stroke="currentColor" stroke-width="1.4"/>
+                        <rect x="8.5" y="8.5" width="5.5" height="5.5" rx="1.2" stroke="currentColor" stroke-width="1.4"/>
+                      </svg>
+                      <span class="prx-mode-label" id="prx-mode-label">Module</span>
+                      <svg class="prx-mode-chevron" width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
+                        <path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+                      </svg>
+                    </button>
 
-            <a class="m-card" href="/plagiarism-module/" data-testid="card-module-6" style="--m-accent:#d97706;">
-              <div class="m-card-head">
-                <span class="m-card-num">06</span>
-                <span class="m-card-status" data-state="available">Available</span>
-              </div>
-              <h3 class="m-card-title">Novus</h3>
-              <p class="m-card-desc"><strong>Plagiarism &amp; AI Reduction.</strong> Originality scoring, AI-likelihood detection, and a 3-stage rewrite pipeline that preserves academic integrity.</p>
-              <span class="m-card-cta">Open module →</span>
-            </a>
+                    <div class="prx-module-dropdown" id="prx-module-dropdown" role="listbox" aria-label="Select a module" hidden>
+                      <p class="prx-dd-header">Switch module</p>
 
-            <a class="m-card" href="/folio-module/" data-testid="card-module-7" style="--m-accent:#ea580c;">
-              <div class="m-card-head">
-                <span class="m-card-num">07</span>
-                <span class="m-card-status" data-state="available">Available</span>
-              </div>
-              <h3 class="m-card-title">Folio</h3>
-              <p class="m-card-desc"><strong>Polish an existing document.</strong> Import your draft DOCX — auto-renumber references, reformat citations (Vancouver / APA / Harvard), apply supervisor feedback.</p>
-              <span class="m-card-cta">Open module →</span>
-            </a>
+                      <a href="/sample-size.html" class="prx-dd-item" role="option" data-label="Cohort">
+                        <span class="prx-dd-dot" style="background:#2563eb"></span>
+                        <span class="prx-dd-body">
+                          <span class="prx-dd-name">Cohort</span>
+                          <span class="prx-dd-desc">Sample Size Calculator</span>
+                        </span>
+                        <svg class="prx-dd-check" width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M2.5 6.5L5.5 9.5L10.5 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                      </a>
+                      <a href="/analysis.html" class="prx-dd-item" role="option" data-label="Sigma">
+                        <span class="prx-dd-dot" style="background:#7c3aed"></span>
+                        <span class="prx-dd-body">
+                          <span class="prx-dd-name">Sigma</span>
+                          <span class="prx-dd-desc">Statistical Analysis</span>
+                        </span>
+                        <svg class="prx-dd-check" width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M2.5 6.5L5.5 9.5L10.5 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                      </a>
+                      <a href="/proposal-module/" class="prx-dd-item" role="option" data-label="Prologue">
+                        <span class="prx-dd-dot" style="background:#4a7ac8"></span>
+                        <span class="prx-dd-body">
+                          <span class="prx-dd-name">Prologue</span>
+                          <span class="prx-dd-desc">Proposal Writer</span>
+                        </span>
+                        <svg class="prx-dd-check" width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M2.5 6.5L5.5 9.5L10.5 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                      </a>
+                      <a href="/thesis-module/" class="prx-dd-item" role="option" data-label="Scriptorium">
+                        <span class="prx-dd-dot" style="background:#059669"></span>
+                        <span class="prx-dd-body">
+                          <span class="prx-dd-name">Scriptorium</span>
+                          <span class="prx-dd-desc">Thesis &amp; Article Writer</span>
+                        </span>
+                        <svg class="prx-dd-check" width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M2.5 6.5L5.5 9.5L10.5 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                      </a>
+                      <a href="/plagiarism-module/" class="prx-dd-item" role="option" data-label="Novus">
+                        <span class="prx-dd-dot" style="background:#d97706"></span>
+                        <span class="prx-dd-body">
+                          <span class="prx-dd-name">Novus</span>
+                          <span class="prx-dd-desc">Plagiarism &amp; AI Reduction</span>
+                        </span>
+                        <svg class="prx-dd-check" width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M2.5 6.5L5.5 9.5L10.5 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                      </a>
+                      <a href="/folio-module/" class="prx-dd-item" role="option" data-label="Folio">
+                        <span class="prx-dd-dot" style="background:#ea580c"></span>
+                        <span class="prx-dd-body">
+                          <span class="prx-dd-name">Folio</span>
+                          <span class="prx-dd-desc">Document Polish</span>
+                        </span>
+                        <svg class="prx-dd-check" width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M2.5 6.5L5.5 9.5L10.5 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                      </a>
+                      <div class="prx-dd-item prx-dd-item-soon" role="option" aria-disabled="true">
+                        <span class="prx-dd-dot" style="background:#6b7280"></span>
+                        <span class="prx-dd-body">
+                          <span class="prx-dd-name" style="color:rgba(255,255,255,.4)">Compass</span>
+                          <span class="prx-dd-desc">Journal Finder</span>
+                        </span>
+                        <span class="prx-dd-soon-pill">Soon</span>
+                      </div>
+                      <div class="prx-dd-item prx-dd-item-soon" role="option" aria-disabled="true">
+                        <span class="prx-dd-dot" style="background:#6b7280"></span>
+                        <span class="prx-dd-body">
+                          <span class="prx-dd-name" style="color:rgba(255,255,255,.4)">Fieldwork</span>
+                          <span class="prx-dd-desc">Data Collection</span>
+                        </span>
+                        <span class="prx-dd-soon-pill">Soon</span>
+                      </div>
+                    </div>
+                  </div>
 
-            <div class="m-card m-card-soon" data-testid="card-module-8" style="--m-accent:#6b7280;">
-              <div class="m-card-head">
-                <span class="m-card-num">08</span>
-                <span class="m-card-status" data-state="coming-soon">In development</span>
-              </div>
-              <h3 class="m-card-title">Compass</h3>
-              <p class="m-card-desc"><strong>Journal Finder.</strong> Describe your study or paste your abstract — Compass matches it against thousands of journals by scope, impact factor, and indexing.</p>
-              <span class="m-card-cta m-card-cta-muted">Coming soon</span>
+                  <!-- Button 2: Search depth -->
+                  <div class="prx-chip-wrap">
+                    <button class="prx-mode-btn" id="prx-search-btn"
+                            aria-haspopup="listbox" aria-expanded="false">
+                      <svg class="prx-mode-icon" width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden="true">
+                        <circle cx="6.5" cy="6.5" r="4.25" stroke="currentColor" stroke-width="1.5"/>
+                        <path d="M10 10L13 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                      </svg>
+                      <span class="prx-mode-label" id="prx-search-label">General</span>
+                      <svg class="prx-mode-chevron" width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
+                        <path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+                      </svg>
+                    </button>
+
+                    <div class="prx-module-dropdown prx-search-dropdown" id="prx-search-dropdown" role="listbox" aria-label="Select search mode" hidden>
+                      <p class="prx-dd-header">Search mode</p>
+
+                      <div class="prx-dd-item prx-search-mode-item prx-dd-item--active" role="option" data-mode="general">
+                        <span class="prx-dd-dot" style="background:#3b82f6"></span>
+                        <span class="prx-dd-body">
+                          <span class="prx-dd-name">General</span>
+                          <span class="prx-dd-desc">Broad research assistance</span>
+                        </span>
+                        <svg class="prx-dd-check prx-dd-check--visible" width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M2.5 6.5L5.5 9.5L10.5 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                      </div>
+                      <div class="prx-dd-item prx-search-mode-item" role="option" data-mode="deep">
+                        <span class="prx-dd-dot" style="background:#8b5cf6"></span>
+                        <span class="prx-dd-body">
+                          <span class="prx-dd-name">Deep Research</span>
+                          <span class="prx-dd-desc">Exhaustive multi-database search</span>
+                        </span>
+                        <svg class="prx-dd-check" width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M2.5 6.5L5.5 9.5L10.5 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                      </div>
+                    </div>
+                  </div>
+                </div><!-- /.helix-input-toolbar -->
+              </div><!-- /.helix-input-box -->
+
+
+              <div class="topics-label">Or explore a topic</div>
+              <div class="topic-grid" id="topic-grid"></div>
             </div>
-
-            <div class="m-card m-card-soon" data-testid="card-module-9" style="--m-accent:#6b7280;">
-              <div class="m-card-head">
-                <span class="m-card-num">09</span>
-                <span class="m-card-status" data-state="coming-soon">In development</span>
-              </div>
-              <h3 class="m-card-title">Fieldwork</h3>
-              <p class="m-card-desc"><strong>Data Collection.</strong> Build and deploy research-grade data collection forms — participant enrolment, CRFs, follow-up schedules — with built-in validation.</p>
-              <span class="m-card-cta m-card-cta-muted">Coming soon</span>
-            </div>
-
           </div>
-        </div>
-      </section>
 
-      <!-- ============================================================ -->
-      <!-- NOT A CHATBOT — standalone callout                          -->
-      <!-- ============================================================ -->
-      <section class="hp-notbot-section" data-testid="notbot-section">
-        <div class="hp-section-inner">
-          <div class="hp-notbot-inner">
-            <div class="hp-notbot-copy">
-              <p class="hp-eyebrow-sm">What MedRAS is</p>
-              <h2 class="hp-notbot-headline" data-testid="text-about-heading">Not a chatbot.<br>A research operating system.</h2>
-              <p class="hp-notbot-body">MedRAS is structured and menu-driven. Statistical results come from validated libraries — not language models. AI assists only with planning and writing, and every suggestion requires your explicit approval.</p>
-            </div>
-            <div class="hp-notbot-tags" aria-hidden="true">
-              <span class="hp-notbot-tag hp-notbot-tag--yes">✓ Library-backed numbers</span>
-              <span class="hp-notbot-tag hp-notbot-tag--yes">✓ Locked study values</span>
-              <span class="hp-notbot-tag hp-notbot-tag--yes">✓ Track-change AI drafts</span>
-              <span class="hp-notbot-tag hp-notbot-tag--yes">✓ Compliance pre-flight</span>
-              <span class="hp-notbot-tag hp-notbot-tag--no">✗ AI-generated statistics</span>
-              <span class="hp-notbot-tag hp-notbot-tag--no">✗ Hallucinated citations</span>
-              <span class="hp-notbot-tag hp-notbot-tag--no">✗ Silent AI number edits</span>
-              <span class="hp-notbot-tag hp-notbot-tag--no">✗ Data stored on servers</span>
-            </div>
+          <!-- Chat thread -->
+          <div class="thread" id="thread" style="display:none"></div>
+
+        </div><!-- /.ra-wrap -->
+
+        <!-- old placeholder removed — dropdowns now live in helix-input-toolbar -->
+        <div style="display:none">
+          <div class="prx-toolbar-left-removed">
+
+                  <!-- Button 1: Model (9 modules) -->
+                  <div class="prx-chip-wrap">
+                    <button class="prx-mode-btn" id="prx-module-btn"
+                            aria-haspopup="listbox" aria-expanded="false"
+                            data-testid="chip-module">
+                      <!-- Grid icon -->
+                      <svg class="prx-mode-icon" width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden="true">
+                        <rect x="1" y="1" width="5.5" height="5.5" rx="1.2" stroke="currentColor" stroke-width="1.4"/>
+                        <rect x="8.5" y="1" width="5.5" height="5.5" rx="1.2" stroke="currentColor" stroke-width="1.4"/>
+                        <rect x="1" y="8.5" width="5.5" height="5.5" rx="1.2" stroke="currentColor" stroke-width="1.4"/>
+                        <rect x="8.5" y="8.5" width="5.5" height="5.5" rx="1.2" stroke="currentColor" stroke-width="1.4"/>
+                      </svg>
+                      <span class="prx-mode-label" id="prx-mode-label">Model</span>
+                      <svg class="prx-mode-chevron" width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
+                        <path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+                      </svg>
+                    </button>
+
+                    <!-- Module dropdown — all 9 modules -->
+                    <div class="prx-module-dropdown" id="prx-module-dropdown"
+                         role="listbox" aria-label="Select a module" hidden>
+                      <p class="prx-dd-header">Nine modules</p>
+
+                      <a href="/study-builder/chat.html" class="prx-dd-item" role="option"
+                         data-label="Helix" data-testid="dd-helix">
+                        <span class="prx-dd-dot" style="background:#0d9488"></span>
+                        <span class="prx-dd-body">
+                          <span class="prx-dd-name">Helix</span>
+                          <span class="prx-dd-desc">Study Builder</span>
+                        </span>
+                        <svg class="prx-dd-check" width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
+                          <path d="M2.5 6.5L5.5 9.5L10.5 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                      </a>
+
+                      <a href="/sample-size.html" class="prx-dd-item" role="option"
+                         data-label="Cohort" data-testid="dd-cohort">
+                        <span class="prx-dd-dot" style="background:#2563eb"></span>
+                        <span class="prx-dd-body">
+                          <span class="prx-dd-name">Cohort</span>
+                          <span class="prx-dd-desc">Sample Size Calculator</span>
+                        </span>
+                        <svg class="prx-dd-check" width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
+                          <path d="M2.5 6.5L5.5 9.5L10.5 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                      </a>
+
+                      <a href="/analysis.html" class="prx-dd-item" role="option"
+                         data-label="Sigma" data-testid="dd-sigma">
+                        <span class="prx-dd-dot" style="background:#7c3aed"></span>
+                        <span class="prx-dd-body">
+                          <span class="prx-dd-name">Sigma</span>
+                          <span class="prx-dd-desc">Statistical Analysis Engine</span>
+                        </span>
+                        <svg class="prx-dd-check" width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
+                          <path d="M2.5 6.5L5.5 9.5L10.5 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                      </a>
+
+                      <a href="/proposal-module/" class="prx-dd-item" role="option"
+                         data-label="Prologue" data-testid="dd-prologue">
+                        <span class="prx-dd-dot" style="background:#4a7ac8"></span>
+                        <span class="prx-dd-body">
+                          <span class="prx-dd-name">Prologue</span>
+                          <span class="prx-dd-desc">Proposal Writer</span>
+                        </span>
+                        <svg class="prx-dd-check" width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
+                          <path d="M2.5 6.5L5.5 9.5L10.5 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                      </a>
+
+                      <a href="/thesis-module/" class="prx-dd-item" role="option"
+                         data-label="Scriptorium" data-testid="dd-scriptorium">
+                        <span class="prx-dd-dot" style="background:#059669"></span>
+                        <span class="prx-dd-body">
+                          <span class="prx-dd-name">Scriptorium</span>
+                          <span class="prx-dd-desc">Thesis &amp; Article Writer</span>
+                        </span>
+                        <svg class="prx-dd-check" width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
+                          <path d="M2.5 6.5L5.5 9.5L10.5 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                      </a>
+
+                      <a href="/plagiarism-module/" class="prx-dd-item" role="option"
+                         data-label="Novus" data-testid="dd-novus">
+                        <span class="prx-dd-dot" style="background:#d97706"></span>
+                        <span class="prx-dd-body">
+                          <span class="prx-dd-name">Novus</span>
+                          <span class="prx-dd-desc">Plagiarism &amp; AI Reduction</span>
+                        </span>
+                        <svg class="prx-dd-check" width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
+                          <path d="M2.5 6.5L5.5 9.5L10.5 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                      </a>
+
+                      <a href="/folio-module/" class="prx-dd-item" role="option"
+                         data-label="Folio" data-testid="dd-folio">
+                        <span class="prx-dd-dot" style="background:#ea580c"></span>
+                        <span class="prx-dd-body">
+                          <span class="prx-dd-name">Folio</span>
+                          <span class="prx-dd-desc">Document Polish</span>
+                        </span>
+                        <svg class="prx-dd-check" width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
+                          <path d="M2.5 6.5L5.5 9.5L10.5 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                      </a>
+
+                      <div class="prx-dd-item prx-dd-item-soon" role="option" aria-disabled="true" data-testid="dd-compass">
+                        <span class="prx-dd-dot" style="background:#6b7280"></span>
+                        <span class="prx-dd-body">
+                          <span class="prx-dd-name" style="color:rgba(255,255,255,.4)">Compass</span>
+                          <span class="prx-dd-desc">Journal Finder</span>
+                        </span>
+                        <span class="prx-dd-soon-pill">Soon</span>
+                      </div>
+
+                      <div class="prx-dd-item prx-dd-item-soon" role="option" aria-disabled="true" data-testid="dd-fieldwork">
+                        <span class="prx-dd-dot" style="background:#6b7280"></span>
+                        <span class="prx-dd-body">
+                          <span class="prx-dd-name" style="color:rgba(255,255,255,.4)">Fieldwork</span>
+                          <span class="prx-dd-desc">Data Collection</span>
+                        </span>
+                        <span class="prx-dd-soon-pill">Soon</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Button 2: Search mode (General / Research) -->
+                  <div class="prx-chip-wrap">
+                    <button class="prx-mode-btn" id="prx-search-btn"
+                            aria-haspopup="listbox" aria-expanded="false"
+                            data-testid="chip-search">
+                      <!-- Search icon -->
+                      <svg class="prx-mode-icon" width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden="true">
+                        <circle cx="6.5" cy="6.5" r="4.25" stroke="currentColor" stroke-width="1.5"/>
+                        <path d="M10 10L13 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                      </svg>
+                      <span class="prx-mode-label" id="prx-search-label">Search</span>
+                      <svg class="prx-mode-chevron" width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
+                        <path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+                      </svg>
+                    </button>
+
+                    <!-- Search mode dropdown -->
+                    <div class="prx-module-dropdown prx-search-dropdown" id="prx-search-dropdown"
+                         role="listbox" aria-label="Select search mode" hidden>
+                      <p class="prx-dd-header">Search mode</p>
+
+                      <div class="prx-dd-item prx-search-mode-item prx-dd-item--active" role="option"
+                           data-mode="general" data-testid="dd-general">
+                        <span class="prx-dd-dot" style="background:#3b82f6"></span>
+                        <span class="prx-dd-body">
+                          <span class="prx-dd-name">General</span>
+                          <span class="prx-dd-desc">Broad research assistance</span>
+                        </span>
+                        <svg class="prx-dd-check prx-dd-check--visible" width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
+                          <path d="M2.5 6.5L5.5 9.5L10.5 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                      </div>
+
+                      <div class="prx-dd-item prx-search-mode-item" role="option"
+                           data-mode="research" data-testid="dd-research">
+                        <span class="prx-dd-dot" style="background:#8b5cf6"></span>
+                        <span class="prx-dd-body">
+                          <span class="prx-dd-name">Research</span>
+                          <span class="prx-dd-desc">Deep academic search &amp; citations</span>
+                        </span>
+                        <svg class="prx-dd-check" width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
+                          <path d="M2.5 6.5L5.5 9.5L10.5 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                      </div>
+                    </div>
+                  </div>
+
+                </div>
+
+        </div><!-- end hidden placeholder -->
+
+      </main>
+
+      <!-- ── Helix chat input bar (sticky bottom) ── -->
+      <div class="chat-bar" id="chat-bar" style="display:none">
+        <div class="chat-bar-inner">
+          <div class="pdf-input-pill" id="pdf-input-pill" style="display:none">
+            <svg class="pip-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="16" y1="13" x2="8" y2="13"/>
+              <line x1="16" y1="17" x2="8" y2="17"/>
+              <polyline points="10 9 9 9 8 9"/>
+            </svg>
+            <span class="pip-name" id="pip-name">document.pdf</span>
+            <span class="pip-pages" id="pip-pages">0 pages</span>
+            <span class="pip-note">· included in every answer</span>
+            <button class="pip-clear" id="pip-clear" title="Remove PDF from session">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
           </div>
-        </div>
-      </section>
-
-      <!-- ============================================================ -->
-      <!-- ABOUT — centred single-column                               -->
-      <!-- ============================================================ -->
-      <section id="about" class="hp-about-section" data-testid="about-section">
-        <div class="hp-section-inner">
-          <div class="hp-about-solo" data-testid="about-card">
-            <p class="hp-eyebrow-sm about-eyebrow">About MedRAS</p>
-            <h2 class="hp-about-headline">Built for Indian and international academic publishing.</h2>
-            <p class="hp-about-body">
-              MedRAS is purpose-built for medical, biomedical, and academic researchers who need methodological rigour at every step — from ICMR ethics submissions to journal-ready manuscripts. Built from Chennai, for researchers navigating the demands of Indian and international academic publishing.
-            </p>
+          <div class="chat-input-wrap">
+            <textarea class="chat-input" id="chat-input"
+              placeholder="Ask a follow-up or a new question…"
+              rows="1" autocomplete="off" spellcheck="true"></textarea>
+            <input type="file" id="file-input" accept=".pdf" style="display:none">
+            <button class="attach-btn" id="attach-btn" title="Attach a PDF (up to 10 MB)">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+            </button>
+            <button class="chat-send" id="chat-send" title="Send (Enter)">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+            </button>
           </div>
-        </div>
-      </section>
-
-      <!-- ============================================================ -->
-      <!-- WORKSPACE DETAIL MODAL                                       -->
-      <!-- ============================================================ -->
-      <div id="ws-bd" class="ws-bd" role="dialog" aria-modal="true" aria-labelledby="ws-title">
-        <div class="ws-modal">
-          <div class="ws-modal-vis" id="ws-vis"></div>
-          <div class="ws-modal-cnt">
-            <button class="ws-modal-x" id="ws-close" aria-label="Close preview">&times;</button>
-            <p class="ws-modal-eyebrow" id="ws-eyebrow"></p>
-            <h2 class="ws-modal-title" id="ws-title"></h2>
-            <p class="ws-modal-desc" id="ws-desc"></p>
-            <ul class="ws-modal-caps" id="ws-caps"></ul>
-            <div class="ws-modal-cta-row">
-              <a class="ws-modal-cta" id="ws-cta" href="#"></a>
+          <div class="chat-bar-meta">
+            <span id="db-strip" class="db-strip"></span>
+            <div class="copy-all-wrap" id="copy-all-wrap" style="display:none">
+              <button class="export-chip export-copy" id="copy-all-van">Copy all — Vancouver</button>
+              <button class="export-chip export-copy" id="copy-all-apa">Copy all — APA</button>
             </div>
+            <button class="folio-toggle-btn" id="folio-toggle-btn" title="Saved papers (Folio)" style="display:none">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+              Folio <span class="folio-badge" id="folio-badge">0</span>
+            </button>
           </div>
         </div>
       </div>
 
-    </main>
-
-    <footer class="site-footer">
-      <div class="footer-inner">
-        <p data-testid="text-footer">MedRAS &middot; Medical Research Acceleration System</p>
-        <p class="footer-meta">Documents are processed securely and never stored.</p>
+      <!-- ── Folio panel ── -->
+      <div class="folio-panel" id="folio-panel">
+        <div class="folio-hdr">
+          <div class="folio-hdr-left">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="opacity:.7"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+            <span class="folio-title">Folio</span>
+            <span class="folio-count" id="folio-count"></span>
+          </div>
+          <button class="folio-close-btn" id="folio-close-btn" title="Close Folio">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div class="folio-body" id="folio-body">
+          <div class="folio-empty" id="folio-empty">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="opacity:.3"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+            <p>Bookmark papers from any answer to build your reading list.</p>
+            <p class="fe-hint">Click the bookmark icon on any source card.</p>
+          </div>
+          <div class="folio-list" id="folio-list" style="display:none"></div>
+        </div>
+        <div class="folio-foot" id="folio-foot" style="display:none">
+          <span class="folio-foot-label">Export saved papers:</span>
+          <div class="folio-export-chips">
+            <button class="export-chip" id="folio-exp-bibtex">BibTeX</button>
+            <button class="export-chip" id="folio-exp-ris">RIS</button>
+            <button class="export-chip" id="folio-exp-van">Vancouver</button>
+            <button class="export-chip" id="folio-exp-apa">APA 7th</button>
+            <button class="export-chip export-copy" id="folio-copy-van">Copy Vancouver</button>
+            <button class="export-chip export-copy" id="folio-copy-apa">Copy APA</button>
+          </div>
+        </div>
       </div>
-    </footer>
 
-    <script src="/js/app.js?v=2026052501" defer></script>
-    <script src="/js/home.js?v=2026052501" defer></script>
+    </div><!-- /.prx-content-wrap -->
+
+    <script src="/study-builder/js/sb.js"></script>
     <script src="/js/medras-nav.js" defer></script>
+
     <script>
+    /* ── Living crystal mascot ── */
+    (function () {
+      var cvs = document.getElementById('mrs-canvas');
+      if (!cvs) return;
+      var ctx = cvs.getContext('2d');
+      var W = 200, H = 200, cx = 100, cy = 100, t = 0;
+      cvs.width = W; cvs.height = H;
+
+      function ss(x) { return x * x * (3 - 2 * x); }
+
+      var HOLD = 3.8, TRANS = 1.4, SLOT = HOLD + TRANS;
+      function wt(time) {
+        var pos = (time % (SLOT * 3)) / SLOT;
+        var ph  = Math.floor(pos) % 3;
+        var fr  = pos - Math.floor(pos);
+        var hf  = HOLD / SLOT;
+        var w   = [0, 0, 0];
+        if (fr < hf) { w[ph] = 1; }
+        else { var e = ss((fr - hf) / (1 - hf)); w[ph] = 1 - e; w[(ph + 1) % 3] = e; }
+        return w;
+      }
+
+      var tendrils = [];
+      for (var i = 0; i < 12; i++) {
+        tendrils.push({ angle: (i / 12) * Math.PI * 2, len: 0, targetLen: 0,
+          waveOff: Math.random() * Math.PI * 2, retracting: false, active: false,
+          hue: 200 + Math.random() * 130 });
+      }
+
+      var aperRot = 0, dilation = 0.6, dilTarget = 0.6, nextDil = 2.5;
+
+      function blobPts(wA, wB, wC, time) {
+        var N = 20, pts = [], R = 42;
+        var br = 1 + Math.sin(time * 0.88) * 0.038;
+        for (var i = 0; i < N; i++) {
+          var ba = (i / N) * Math.PI * 2 - Math.PI / 2;
+          var seg = 6;
+          var snap = Math.round(ba / (Math.PI * 2 / seg)) * (Math.PI * 2 / seg);
+          var ga = ba * 0.28 + snap * 0.72;
+          var gR = R * 0.92 + (i % 2 === 0 ? 6 : -3);
+          var bR = R * br + Math.sin(time * 0.95 + i * 0.65) * 6
+                         + Math.sin(time * 1.55 + i * 1.2)  * 3
+                         + Math.sin(time * 2.3  + i * 0.45) * 1.8;
+          var bloom = 0.65 + Math.sin(time * 0.55) * 0.35;
+          var lR = 23 + Math.pow(Math.abs(Math.cos(4 * ba)), 0.6) * 30 * bloom;
+          pts.push({
+            x: (cx + Math.cos(ga) * gR) * wA + (cx + Math.cos(ba) * bR) * wB + (cx + Math.cos(ba) * lR) * wC,
+            y: (cy + Math.sin(ga) * gR) * wA + (cy + Math.sin(ba) * bR) * wB + (cy + Math.sin(ba) * lR) * wC
+          });
+        }
+        return pts;
+      }
+
+      function curve(pts) {
+        var N = pts.length, ten = 0.18;
+        ctx.beginPath();
+        for (var i = 0; i < N; i++) {
+          var a = pts[(i-1+N)%N], b = pts[i], c = pts[(i+1)%N], d = pts[(i+2)%N];
+          if (i === 0) ctx.moveTo(b.x, b.y);
+          ctx.bezierCurveTo(b.x+(c.x-a.x)*ten, b.y+(c.y-a.y)*ten,
+                            c.x-(d.x-b.x)*ten, c.y-(d.y-b.y)*ten, c.x, c.y);
+        }
+        ctx.closePath();
+      }
+
+      function drawBody(wA, wB, wC, time) {
+        var pts = blobPts(wA, wB, wC, time);
+        var hue = 215*wA + 268*wB + 340*wC;
+        ctx.save();
+        ctx.shadowColor = 'hsla('+hue+',80%,72%,0.55)'; ctx.shadowBlur = 38;
+        curve(pts);
+        var g = ctx.createRadialGradient(cx-16, cy-20, 4, cx, cy, 68);
+        g.addColorStop(0,    'hsla('+(hue-22)+',30%,96%,0.97)');
+        g.addColorStop(0.22, 'hsla('+hue+',52%,82%,0.93)');
+        g.addColorStop(0.52, 'hsla('+(hue+12)+',68%,62%,0.88)');
+        g.addColorStop(0.82, 'hsla('+(hue+24)+',78%,42%,0.83)');
+        g.addColorStop(1,    'hsla('+(hue+38)+',82%,24%,0.76)');
+        ctx.fillStyle = g; ctx.fill();
+        ctx.restore();
+        curve(pts);
+        var sa = time * 0.65;
+        var shi = ctx.createLinearGradient(cx+Math.cos(sa)*64, cy+Math.sin(sa)*64,
+                                           cx-Math.cos(sa)*64, cy-Math.sin(sa)*64);
+        shi.addColorStop(0,    'rgba(255,255,255,0.22)');
+        shi.addColorStop(0.35, 'hsla('+(hue+70)+',100%,85%,0.11)');
+        shi.addColorStop(0.65, 'rgba(255,255,255,0.04)');
+        shi.addColorStop(1,    'hsla('+(hue-40)+',100%,78%,0.14)');
+        ctx.fillStyle = shi; ctx.fill();
+        curve(pts);
+        var gl = ctx.createRadialGradient(cx-20, cy-24, 1, cx-8, cy-14, 42);
+        gl.addColorStop(0,   'rgba(255,255,255,0.56)');
+        gl.addColorStop(0.45,'rgba(255,255,255,0.12)');
+        gl.addColorStop(1,   'rgba(255,255,255,0)');
+        ctx.fillStyle = gl; ctx.fill();
+        if (wA > 0.1) {
+          ctx.save();
+          ctx.shadowColor = 'hsla('+hue+',100%,90%,0.7)'; ctx.shadowBlur = 4;
+          for (var i = 0; i < pts.length; i += 2) {
+            ctx.beginPath(); ctx.moveTo(pts[i].x, pts[i].y); ctx.lineTo(cx, cy);
+            ctx.strokeStyle = 'hsla('+hue+',65%,90%,'+(wA*0.38)+')';
+            ctx.lineWidth = 0.6; ctx.stroke();
+          }
+          ctx.restore();
+        }
+        curve(pts);
+        ctx.strokeStyle = 'hsla('+(hue+10)+',70%,88%,0.22)';
+        ctx.lineWidth = 1.0; ctx.stroke();
+      }
+
+      function drawAperture(wA, wB, wC, time) {
+        aperRot += 0.005;
+        if (time > nextDil) {
+          dilTarget = 0.22 + Math.random() * 0.76;
+          nextDil = time + 2.2 + Math.random() * 3.8;
+        }
+        dilation += (dilTarget - dilation) * 0.025;
+        var hue = 215*wA + 268*wB + 340*wC;
+        var OR = 18, blades = 8;
+        var innerR = OR * (0.11 + dilation * 0.58);
+        ctx.save(); ctx.translate(cx, cy);
+        ctx.save();
+        ctx.shadowColor = 'hsla('+hue+',90%,88%,0.8)'; ctx.shadowBlur = 14;
+        ctx.beginPath(); ctx.arc(0,0,OR,0,Math.PI*2);
+        ctx.strokeStyle = 'hsla('+hue+',65%,90%,0.55)';
+        ctx.lineWidth = 1.0; ctx.stroke();
+        ctx.restore();
+        ctx.beginPath(); ctx.arc(0,0,OR*0.76,0,Math.PI*2);
+        ctx.strokeStyle = 'hsla('+(hue-15)+',50%,78%,0.28)';
+        ctx.lineWidth = 0.7; ctx.stroke();
+        ctx.save(); ctx.rotate(aperRot);
+        for (var i = 0; i < blades; i++) {
+          var span = (Math.PI*2/blades) * (0.5 + (1-dilation)*0.42);
+          ctx.save(); ctx.rotate((i/blades)*Math.PI*2);
+          ctx.beginPath(); ctx.moveTo(innerR,0);
+          ctx.arc(0,0,OR*0.9,-span*0.5,span*0.5);
+          ctx.arc(0,0,innerR, span*0.5,-span*0.5,true);
+          ctx.closePath();
+          ctx.fillStyle = 'rgba(3,3,10,0.88)'; ctx.fill();
+          ctx.restore();
+        }
+        ctx.restore();
+        var ch = 340*wC + 215*wA*0.5 + 268*wB*0.5;
+        var cg = ctx.createRadialGradient(0,0,0,0,0,innerR*1.55);
+        cg.addColorStop(0,    'rgba(255,255,255,1)');
+        cg.addColorStop(0.25, 'hsla('+ch+',90%,84%,0.9)');
+        cg.addColorStop(0.7,  'hsla('+ch+',95%,62%,0.5)');
+        cg.addColorStop(1,    'rgba(0,0,0,0)');
+        ctx.save();
+        ctx.shadowColor = 'hsla('+ch+',100%,82%,0.9)'; ctx.shadowBlur = 17;
+        ctx.beginPath(); ctx.arc(0,0,innerR*1.55,0,Math.PI*2);
+        ctx.fillStyle = cg; ctx.fill();
+        ctx.restore();
+        ctx.restore();
+      }
+
+      function updateTendrils(wB, time) {
+        tendrils.forEach(function(td) {
+          if (!td.active && Math.random() < 0.008 && wB > 0.18) {
+            td.active = true; td.retracting = false;
+            td.targetLen = 13 + Math.random() * 42;
+            td.angle = Math.random() * Math.PI * 2;
+            td.hue = 200 + Math.random() * 140; td.len = 0;
+          }
+          if (!td.active) return;
+          if (!td.retracting) {
+            td.len += (td.targetLen - td.len) * 0.06;
+            if (td.len > td.targetLen * 0.92 && Math.random() < 0.012) td.retracting = true;
+          } else {
+            td.len *= 0.88;
+            if (td.len < 0.8) { td.active = false; td.len = 0; }
+          }
+        });
+      }
+
+      function drawTendrils(wB, time) {
+        if (wB < 0.05) return;
+        tendrils.forEach(function(td) {
+          if (!td.active || td.len < 0.5) return;
+          var al = wB * (td.retracting ? td.len / td.targetLen : 1) * 0.85;
+          var R0 = 42;
+          var sx = cx + Math.cos(td.angle) * R0;
+          var sy = cy + Math.sin(td.angle) * R0;
+          var ex = cx + Math.cos(td.angle) * (R0 + td.len);
+          var ey = cy + Math.sin(td.angle) * (R0 + td.len);
+          var wave = Math.sin(time * 2.4 + td.waveOff) * td.len * 0.22;
+          var perp = td.angle + Math.PI / 2;
+          var cpx = (sx+ex)/2 + Math.cos(perp) * wave;
+          var cpy = (sy+ey)/2 + Math.sin(perp) * wave;
+          ctx.save();
+          ctx.shadowColor = 'hsla('+td.hue+',100%,90%,0.6)'; ctx.shadowBlur = 9;
+          ctx.beginPath(); ctx.moveTo(sx,sy); ctx.quadraticCurveTo(cpx,cpy,ex,ey);
+          ctx.strokeStyle = 'hsla('+td.hue+',75%,85%,'+(al*0.5)+')';
+          ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.stroke();
+          ctx.restore();
+          ctx.save();
+          ctx.shadowColor = 'hsla('+td.hue+',100%,92%,0.9)'; ctx.shadowBlur = 5;
+          ctx.beginPath(); ctx.moveTo(sx,sy); ctx.quadraticCurveTo(cpx,cpy,ex,ey);
+          ctx.strokeStyle = 'hsla('+td.hue+',60%,95%,'+(al*0.88)+')';
+          ctx.lineWidth = 0.9; ctx.lineCap = 'round'; ctx.stroke();
+          ctx.restore();
+          ctx.save();
+          ctx.shadowColor = 'hsla('+td.hue+',100%,92%,1)'; ctx.shadowBlur = 13;
+          ctx.beginPath(); ctx.arc(ex,ey,2,0,Math.PI*2);
+          ctx.fillStyle = 'hsla('+td.hue+',80%,96%,'+(al*0.92)+')'; ctx.fill();
+          ctx.restore();
+        });
+      }
+
+      function frame() {
+        t += 0.016;
+        var w = wt(t);
+        ctx.clearRect(0, 0, W, H);
+        updateTendrils(w[1], t);
+        drawBody(w[0], w[1], w[2], t);
+        drawTendrils(w[1], t);
+        drawAperture(w[0], w[1], w[2], t);
+        requestAnimationFrame(frame);
+      }
+      frame();
+
+      cvs.addEventListener('click', function () {
+        dilTarget = dilation < 0.5 ? 0.9 : 0.2;
+        nextDil = t + 99;
+      });
+    })();
+    </script>
+
+    <script>
+    /* ── Helix toolbar dropdowns ── */
+    (function () {
+      var moduleBtn  = document.getElementById('prx-module-btn');
+      var moduleDrop = document.getElementById('prx-module-dropdown');
+      var modeLabel  = document.getElementById('prx-mode-label');
+      var searchBtn  = document.getElementById('prx-search-btn');
+      var searchDrop = document.getElementById('prx-search-dropdown');
+      var searchLbl  = document.getElementById('prx-search-label');
+
+      function closeAll() {
+        if (moduleDrop) moduleDrop.hidden = true;
+        if (searchDrop) searchDrop.hidden = true;
+        if (moduleBtn)  moduleBtn.setAttribute('aria-expanded','false');
+        if (searchBtn)  searchBtn.setAttribute('aria-expanded','false');
+      }
+
+      if (moduleBtn && moduleDrop) {
+        moduleBtn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          var open = !moduleDrop.hidden;
+          closeAll();
+          if (!open) { moduleDrop.hidden = false; moduleBtn.setAttribute('aria-expanded','true'); }
+        });
+        moduleDrop.addEventListener('click', function (e) { e.stopPropagation(); });
+        moduleDrop.querySelectorAll('.prx-dd-item:not(.prx-dd-item-soon)').forEach(function (item) {
+          item.addEventListener('click', function (e) {
+            var href = item.getAttribute('href');
+            if (href && href !== '/') { e.preventDefault(); window.location.href = href; return; }
+            /* Helix — just update label */
+            if (modeLabel) modeLabel.textContent = item.getAttribute('data-label') || 'Helix';
+            moduleDrop.querySelectorAll('.prx-dd-item').forEach(function (i) {
+              i.classList.remove('prx-dd-item--active');
+              var c = i.querySelector('.prx-dd-check'); if (c) c.classList.remove('prx-dd-check--visible');
+            });
+            item.classList.add('prx-dd-item--active');
+            var ck = item.querySelector('.prx-dd-check'); if (ck) ck.classList.add('prx-dd-check--visible');
+            closeAll();
+          });
+        });
+      }
+
+      if (searchBtn && searchDrop) {
+        searchBtn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          var open = !searchDrop.hidden;
+          closeAll();
+          if (!open) { searchDrop.hidden = false; searchBtn.setAttribute('aria-expanded','true'); }
+        });
+        searchDrop.addEventListener('click', function (e) { e.stopPropagation(); });
+        searchDrop.querySelectorAll('.prx-search-mode-item').forEach(function (item) {
+          item.addEventListener('click', function () {
+            if (searchLbl) searchLbl.textContent = item.querySelector('.prx-dd-name').textContent;
+            searchDrop.querySelectorAll('.prx-search-mode-item').forEach(function (i) {
+              i.classList.remove('prx-dd-item--active');
+              var c = i.querySelector('.prx-dd-check'); if (c) c.classList.remove('prx-dd-check--visible');
+            });
+            item.classList.add('prx-dd-item--active');
+            var ck = item.querySelector('.prx-dd-check'); if (ck) ck.classList.add('prx-dd-check--visible');
+            closeAll();
+            try { sessionStorage.setItem('helix.searchMode', item.dataset.mode); } catch(_) {}
+          });
+        });
+      }
+
+      document.addEventListener('click', closeAll);
+    })();
+    </script>
+
+    <script>
+    /* ── Daily rotating hot-topic cards (seed = calendar date) ── */
+    (function () {
+      /* Curated 2024–2025 trending medical research topics */
+      var ALL_TOPICS = [
+        /* GLP-1 / metabolic */
+        { icon:'💉', text:'Semaglutide & cardiovascular outcomes', badge:'🔥 Trending',   q:'What does the SELECT trial tell us about semaglutide reducing cardiovascular events beyond weight loss?' },
+        { icon:'🫃', text:'Tirzepatide vs semaglutide in obesity', badge:'Head-to-Head',  q:'Comparative efficacy of tirzepatide versus semaglutide for weight loss: systematic review 2024' },
+        { icon:'🧠', text:'GLP-1 agonists in Alzheimer\'s disease',badge:'Emerging',      q:'Evidence for GLP-1 receptor agonists in neurodegeneration and Alzheimer\'s disease prevention' },
+        /* Alzheimer's / neurology */
+        { icon:'🧬', text:'Lecanemab & donanemab in early AD',     badge:'🔥 Trending',   q:'Clinical trial results for lecanemab and donanemab in early Alzheimer\'s disease 2024' },
+        { icon:'⚡', text:'Transcranial magnetic stimulation for depression', badge:'RCT', q:'TMS versus antidepressants in treatment-resistant depression: latest RCT evidence' },
+        /* Cancer immunotherapy */
+        { icon:'🎯', text:'CAR-T cell therapy in solid tumours',    badge:'Emerging',      q:'Current evidence and challenges for CAR-T cell therapy in solid tumours 2024-2025' },
+        { icon:'🛡️', text:'PD-1/PD-L1 inhibitors — real-world outcomes', badge:'Cohort', q:'Real-world effectiveness of PD-1 and PD-L1 checkpoint inhibitors across cancer types' },
+        { icon:'🔬', text:'ctDNA liquid biopsy for cancer screening',badge:'Review',       q:'Circulating tumour DNA liquid biopsy accuracy for early cancer detection: meta-analysis' },
+        /* AI in medicine */
+        { icon:'🤖', text:'LLM clinical decision support safety',   badge:'🔥 Trending',   q:'Safety and accuracy of large language models used as clinical decision support tools 2024' },
+        { icon:'🩻', text:'AI vs radiologist in mammography',       badge:'Diagnostic',    q:'Diagnostic accuracy of AI systems versus radiologists in mammography screening: 2024 review' },
+        { icon:'👁️', text:'Retinal AI for systemic disease prediction', badge:'Emerging', q:'Using retinal fundus AI to predict cardiovascular risk and systemic disease biomarkers' },
+        /* Infectious disease */
+        { icon:'🦠', text:'MPOX outbreak — vaccine effectiveness',  badge:'Cohort',        q:'Real-world effectiveness of JYNNEOS vaccine against mpox clade I and clade II 2024' },
+        { icon:'🧪', text:'Long COVID pathophysiology & treatment', badge:'🔥 Trending',   q:'Current evidence on long COVID mechanisms and emerging treatment strategies 2025' },
+        { icon:'💊', text:'Antifungal resistance in Candida auris', badge:'Epidemiology',  q:'Global epidemiology and antifungal resistance patterns of Candida auris 2024' },
+        /* Cardiology */
+        { icon:'🫀', text:'SGLT-2 inhibitors in heart failure',     badge:'Meta-analysis', q:'SGLT-2 inhibitors across heart failure subtypes: pooled meta-analysis of major trials' },
+        { icon:'❤️', text:'Colchicine post-MI — CLEAR trial',      badge:'RCT',           q:'Low-dose colchicine after myocardial infarction: CLEAR trial results and implications' },
+        /* Mental health */
+        { icon:'🍄', text:'Psilocybin for treatment-resistant depression', badge:'🔥 Trending', q:'Phase 2 and 3 trial evidence for psilocybin in treatment-resistant depression 2024' },
+        { icon:'📱', text:'Digital therapeutics for anxiety disorders', badge:'Review',    q:'Effectiveness of smartphone-based digital therapeutics for generalised anxiety disorder' },
+        /* Maternal / paediatric */
+        { icon:'🤰', text:'Maternal RSV vaccination — efficacy',    badge:'RCT',           q:'Maternal RSVpreF vaccine efficacy for protecting newborns from severe RSV: trial data' },
+        { icon:'👶', text:'Nirsevimab for RSV in neonates',         badge:'Cohort',        q:'Real-world effectiveness of nirsevimab monoclonal antibody for RSV prevention in infants' },
+        /* Genomics / precision medicine */
+        { icon:'🧬', text:'Polygenic risk scores in clinical practice', badge:'Emerging',  q:'Clinical utility and implementation of polygenic risk scores for common diseases 2024' },
+        { icon:'✂️', text:'CRISPR base editing for sickle cell disease', badge:'🔥 Trending', q:'Casgevy and exagamglogene: CRISPR gene editing outcomes in sickle cell disease 2024' },
+        /* Global health */
+        { icon:'🌍', text:'Malaria vaccine RTS,S / R21 rollout',    badge:'Guideline',     q:'WHO recommendations and real-world rollout data for RTS,S and R21 malaria vaccines' },
+        { icon:'🏥', text:'Antimicrobial resistance — global burden 2024', badge:'Epidemiology', q:'Updated global burden of antimicrobial resistance and priority pathogens WHO 2024' },
+      ];
+
+      /* Seeded shuffle: rotates every refresh (random each visit) but stays
+         anchored to the ISO week number so the same pool dominates the week */
+      function seededRand(seed) {
+        var x = Math.sin(seed + 1) * 10000;
+        return x - Math.floor(x);
+      }
+      function getISOWeek(d) {
+        var date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+        date.setUTCDate(date.getUTCDate() + 4 - (date.getUTCDay() || 7));
+        var yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+        return Math.ceil((((date - yearStart) / 86400000) + 1) / 7);
+      }
+      function weeklyShuffle(arr) {
+        var d = new Date();
+        /* week seed — changes every Monday */
+        var weekSeed = d.getFullYear() * 100 + getISOWeek(d);
+        var a = arr.slice();
+        for (var i = a.length - 1; i > 0; i--) {
+          var j = Math.floor(seededRand(weekSeed + i) * (i + 1));
+          var tmp = a[i]; a[i] = a[j]; a[j] = tmp;
+        }
+        /* within the week's shuffled order, pick a random 6 each visit */
+        var weekPool = a.slice(0, 12);
+        for (var k = weekPool.length - 1; k > 0; k--) {
+          var r = Math.floor(Math.random() * (k + 1));
+          var t = weekPool[k]; weekPool[k] = weekPool[r]; weekPool[r] = t;
+        }
+        return weekPool;
+      }
+
+      var grid = document.getElementById('topic-grid');
+      if (!grid) return;
+      var picked = weeklyShuffle(ALL_TOPICS).slice(0, 6);
+      grid.innerHTML = picked.map(function (t) {
+        return '<button class="topic-card" data-q="' + t.q.replace(/"/g, '&quot;') + '">'
+          + '<span class="tc-icon">' + t.icon + '</span>'
+          + '<span class="tc-text">' + t.text + '</span>'
+          + '<span class="tc-badge">' + t.badge + '</span>'
+          + '</button>';
+      }).join('');
+    })();
+    </script>
+
+    <script>
+    /* ── Dynamic greeting ── */
+    (function () {
+      var greetings = [
+        "Good to see you again.",
+        "Ready when you are.",
+        "What are we researching today?",
+        "Let's build something rigorous.",
+        "Welcome back, researcher.",
+        "Your next paper starts here.",
+        "Time to do great science.",
+        "Where shall we begin?",
+        "A new session awaits.",
+        "Let's make research easier.",
+        "Back at it — let's go.",
+        "What's the question today?",
+        "Every study starts with a question.",
+        "Fresh session. Fresh thinking.",
+        "The data won't analyse itself.",
+        "Let's turn ideas into evidence.",
+      ];
+      var el = document.getElementById('helix-greeting');
+      if (el) el.textContent = greetings[Math.floor(Math.random() * greetings.length)];
+    })();
+    </script>
+
+    <script>
+    /* ── Index-page integration ── */
+    (function () {
+      /* Sidebar toggle */
+      var toggleBtn = document.getElementById('prx-toggle');
+      if (toggleBtn) {
+        toggleBtn.addEventListener('click', function () {
+          document.body.classList.toggle('prx-collapsed');
+        });
+      }
+
+      /* ── Helix history: persist sessions to localStorage ── */
+      var HIST_KEY = 'medras.helix.history';
+      function loadHistory() {
+        try { return JSON.parse(localStorage.getItem(HIST_KEY) || '[]'); } catch (_) { return []; }
+      }
+      function saveHistory(items) {
+        try { localStorage.setItem(HIST_KEY, JSON.stringify(items.slice(0, 20))); } catch (_) {}
+      }
+      function renderHistory() {
+        var histEl = document.getElementById('prx-history-list');
+        if (!histEl) return;
+        var items = loadHistory();
+        if (!items.length) {
+          histEl.innerHTML = '<span class="prx-no-history">No recent sessions</span>';
+          return;
+        }
+        histEl.innerHTML = items.map(function (it) {
+          return '<a href="/" class="prx-history-item" data-session-q="' + it.q.replace(/"/g,'&quot;') + '">'
+            + it.title + '</a>';
+        }).join('');
+        histEl.querySelectorAll('[data-session-q]').forEach(function (a) {
+          a.addEventListener('click', function (e) {
+            e.preventDefault();
+            var q = a.getAttribute('data-session-q');
+            var inp = document.getElementById('welcome-input');
+            var send = document.getElementById('welcome-send');
+            if (inp && send) { inp.value = q; send.click(); }
+          });
+        });
+      }
+      /* Watch for first AI message to save session title */
+      var observer = new MutationObserver(function () {
+        var thread = document.getElementById('thread');
+        if (!thread || thread.style.display === 'none') return;
+        var userMsg = thread.querySelector('.msg-user .msg-text');
+        if (!userMsg) return;
+        var q = userMsg.textContent.trim().slice(0, 80);
+        if (!q) return;
+        var title = q.length > 55 ? q.slice(0, 55) + '…' : q;
+        var items = loadHistory();
+        if (!items.length || items[0].q !== q) {
+          items.unshift({ q: q, title: title, ts: Date.now() });
+          saveHistory(items);
+          renderHistory();
+        }
+      });
+      observer.observe(document.body, { childList: true, subtree: true });
+      renderHistory();
+
+      /* New chat also refreshes history display */
+      var ncBtn = document.getElementById('new-chat-btn');
+      if (ncBtn) {
+        ncBtn.addEventListener('click', function () { renderHistory(); }, true);
+      }
+    })();
+    </script>
+
+    <!-- ── Projects section JS ── -->
+    <script>
+    (function () {
+      var PROJ_KEY = 'medras.projects';
+
+      /* Module colour map */
+      var MOD_COLORS = {
+        'Helix': '#38bdf8', 'Cohort': '#2563eb', 'Sigma': '#7c3aed',
+        'Prologue': '#4a7ac8', 'Scriptorium': '#059669', 'Novus': '#d97706',
+        'Folio': '#ea580c', 'Compass': '#6b7280', 'Fieldwork': '#6b7280'
+      };
+
+      function loadProjects() {
+        try { return JSON.parse(localStorage.getItem(PROJ_KEY) || '[]'); } catch (_) { return []; }
+      }
+      function saveProjects(arr) {
+        localStorage.setItem(PROJ_KEY, JSON.stringify(arr.slice(0, 40)));
+      }
+
+      function renderProjects() {
+        var el = document.getElementById('prx-projects-list');
+        if (!el) return;
+        var items = loadProjects();
+        if (!items.length) {
+          el.innerHTML = '<span class="prx-no-history">No projects yet</span>';
+          return;
+        }
+        el.innerHTML = items.map(function (p, i) {
+          var dot = MOD_COLORS[p.module] || '#6b7280';
+          var date = new Date(p.ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+          return '<div class="prx-project-item" data-idx="' + i + '">'
+            + '<span class="prx-project-dot" style="background:' + dot + '"></span>'
+            + '<span class="prx-project-body">'
+            +   '<span class="prx-project-name">' + escHtml(p.name) + '</span>'
+            +   '<span class="prx-project-meta">' + escHtml(p.module) + ' &middot; ' + date + '</span>'
+            + '</span>'
+            + '<button class="prx-project-del" data-idx="' + i + '" title="Remove">&times;</button>'
+            + '</div>';
+        }).join('');
+
+        el.querySelectorAll('.prx-project-del').forEach(function (btn) {
+          btn.addEventListener('click', function (e) {
+            e.stopPropagation();
+            var idx = parseInt(btn.getAttribute('data-idx'));
+            var items = loadProjects();
+            items.splice(idx, 1);
+            saveProjects(items);
+            renderProjects();
+          });
+        });
+      }
+
+      function escHtml(s) {
+        return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+      }
+
+      /* New-project dialog */
+      function openNewProjectDialog() {
+        var backdrop = document.createElement('div');
+        backdrop.className = 'prx-proj-dialog-backdrop';
+        backdrop.innerHTML =
+          '<div class="prx-proj-dialog">'
+          + '<h3>New Project</h3>'
+          + '<input id="prx-proj-name-inp" type="text" placeholder="Project name…" maxlength="80" autocomplete="off"/>'
+          + '<div style="font-size:11px;color:rgba(255,255,255,.3);margin-bottom:12px;">Module</div>'
+          + '<select id="prx-proj-mod-sel" style="width:100%;box-sizing:border-box;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);border-radius:7px;color:#fff;font-size:13px;padding:8px 12px;margin-bottom:16px;outline:none;">'
+          + ['Helix','Cohort','Sigma','Prologue','Scriptorium','Novus','Folio','Compass','Fieldwork'].map(function(m){ return '<option value="'+m+'">'+m+'</option>'; }).join('')
+          + '</select>'
+          + '<div class="prx-proj-dialog-actions">'
+          +   '<button class="prx-proj-btn-cancel">Cancel</button>'
+          +   '<button class="prx-proj-btn-create">Create</button>'
+          + '</div>'
+          + '</div>';
+        document.body.appendChild(backdrop);
+
+        var inp = backdrop.querySelector('#prx-proj-name-inp');
+        var sel = backdrop.querySelector('#prx-proj-mod-sel');
+        setTimeout(function(){ inp.focus(); }, 50);
+
+        backdrop.querySelector('.prx-proj-btn-cancel').addEventListener('click', function () {
+          document.body.removeChild(backdrop);
+        });
+        backdrop.addEventListener('click', function (e) {
+          if (e.target === backdrop) document.body.removeChild(backdrop);
+        });
+        backdrop.querySelector('.prx-proj-btn-create').addEventListener('click', function () {
+          var name = inp.value.trim();
+          if (!name) { inp.focus(); return; }
+          var items = loadProjects();
+          items.unshift({ name: name, module: sel.value, ts: Date.now() });
+          saveProjects(items);
+          renderProjects();
+          document.body.removeChild(backdrop);
+        });
+        inp.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter') backdrop.querySelector('.prx-proj-btn-create').click();
+          if (e.key === 'Escape') document.body.removeChild(backdrop);
+        });
+      }
+
+      var newBtn = document.getElementById('prx-new-project-btn');
+      if (newBtn) newBtn.addEventListener('click', openNewProjectDialog);
+
+      renderProjects();
+    })();
+    </script>
+
+    <script>
+    /* keep alive — was previously mascot canvas animation ── */
+    (function () {
+      /* nothing */
+      void 0;
+      /* old mascot code removed */
+      return;
+      var ctx = cvs;
+      cvs.width = 280; cvs.height = 280;
+      var W = 280, H = 280, cx = 140, cy = 140, t = 0;
+
+      function ss(x) { return x * x * (3 - 2 * x); }
+
+      /* ── Phase system: 0=geometric  1=blob+tendrils  2=lotus ── */
+      var HOLD = 3.8, TRANS = 1.4, SLOT = HOLD + TRANS;
+      function wt(time) {
+        var pos = (time % (SLOT * 3)) / SLOT;
+        var ph  = Math.floor(pos) % 3;
+        var fr  = pos - Math.floor(pos);
+        var hf  = HOLD / SLOT;
+        var w   = [0, 0, 0];
+        if (fr < hf) { w[ph] = 1; }
+        else { var e = ss((fr - hf) / (1 - hf)); w[ph] = 1 - e; w[(ph + 1) % 3] = e; }
+        return w;
+      }
+
+      /* ── Tendrils ── */
+      var tendrils = [];
+      for (var i = 0; i < 12; i++) {
+        tendrils.push({ angle: (i / 12) * Math.PI * 2, len: 0, targetLen: 0,
+          waveOff: Math.random() * Math.PI * 2, retracting: false, active: false,
+          hue: 200 + Math.random() * 130 });
+      }
+
+      /* ── Aperture state ── */
+      var aperRot = 0, dilation = 0.6, dilTarget = 0.6, nextDil = 2.5;
+
+      /* ── Body shape: blends 3 forms ── */
+      function blobPts(wA, wB, wC, time) {
+        var N = 20, pts = [];
+        var br = 1 + Math.sin(time * 0.88) * 0.038; /* breathe */
+        for (var i = 0; i < N; i++) {
+          var ba = (i / N) * Math.PI * 2 - Math.PI / 2;
+
+          /* Geometric facets */
+          var seg = 6;
+          var snap = Math.round(ba / (Math.PI * 2 / seg)) * (Math.PI * 2 / seg);
+          var ga = ba * 0.28 + snap * 0.72;
+          var gR = 58 + (i % 2 === 0 ? 9 : -5);
+
+          /* Organic blob */
+          var bR = 60 * br + Math.sin(time * 0.95 + i * 0.65) * 9
+                           + Math.sin(time * 1.55 + i * 1.2)  * 5
+                           + Math.sin(time * 2.3  + i * 0.45) * 2.5;
+
+          /* Lotus petals */
+          var bloom = 0.65 + Math.sin(time * 0.55) * 0.35;
+          var lR = 32 + Math.pow(Math.abs(Math.cos(4 * ba)), 0.6) * 42 * bloom;
+
+          pts.push({
+            x: (cx + Math.cos(ga) * gR) * wA + (cx + Math.cos(ba) * bR) * wB + (cx + Math.cos(ba) * lR) * wC,
+            y: (cy + Math.sin(ga) * gR) * wA + (cy + Math.sin(ba) * bR) * wB + (cy + Math.sin(ba) * lR) * wC
+          });
+        }
+        return pts;
+      }
+
+      function curve(pts, ten) {
+        ten = ten || 0.18;
+        var N = pts.length;
+        ctx.beginPath();
+        for (var i = 0; i < N; i++) {
+          var a = pts[(i-1+N)%N], b = pts[i], c = pts[(i+1)%N], d = pts[(i+2)%N];
+          if (i === 0) ctx.moveTo(b.x, b.y);
+          ctx.bezierCurveTo(b.x+(c.x-a.x)*ten, b.y+(c.y-a.y)*ten,
+                            c.x-(d.x-b.x)*ten, c.y-(d.y-b.y)*ten, c.x, c.y);
+        }
+        ctx.closePath();
+      }
+
+      function drawBody(wA, wB, wC, time) {
+        var pts = blobPts(wA, wB, wC, time);
+        var hue = 215*wA + 268*wB + 340*wC;
+
+        /* deep glow */
+        ctx.save();
+        ctx.shadowColor = 'hsla('+hue+',80%,72%,0.55)'; ctx.shadowBlur = 52;
+        curve(pts);
+        var g = ctx.createRadialGradient(cx-22, cy-28, 5, cx, cy, 96);
+        g.addColorStop(0,    'hsla('+(hue-22)+',30%,96%,0.97)');
+        g.addColorStop(0.22, 'hsla('+hue+',52%,82%,0.93)');
+        g.addColorStop(0.52, 'hsla('+(hue+12)+',68%,62%,0.88)');
+        g.addColorStop(0.82, 'hsla('+(hue+24)+',78%,42%,0.83)');
+        g.addColorStop(1,    'hsla('+(hue+38)+',82%,24%,0.76)');
+        ctx.fillStyle = g; ctx.fill();
+        ctx.restore();
+
+        /* iridescent shimmer */
+        curve(pts);
+        var sa = time * 0.65;
+        var shi = ctx.createLinearGradient(cx+Math.cos(sa)*88, cy+Math.sin(sa)*88,
+                                           cx-Math.cos(sa)*88, cy-Math.sin(sa)*88);
+        shi.addColorStop(0,    'rgba(255,255,255,0.22)');
+        shi.addColorStop(0.35, 'hsla('+(hue+70)+',100%,85%,0.11)');
+        shi.addColorStop(0.65, 'rgba(255,255,255,0.04)');
+        shi.addColorStop(1,    'hsla('+(hue-40)+',100%,78%,0.14)');
+        ctx.fillStyle = shi; ctx.fill();
+
+        /* top-left glass gloss */
+        curve(pts);
+        var gl = ctx.createRadialGradient(cx-28, cy-34, 2, cx-12, cy-20, 58);
+        gl.addColorStop(0,   'rgba(255,255,255,0.56)');
+        gl.addColorStop(0.45,'rgba(255,255,255,0.12)');
+        gl.addColorStop(1,   'rgba(255,255,255,0)');
+        ctx.fillStyle = gl; ctx.fill();
+
+        /* facet lines in geo phase */
+        if (wA > 0.1) {
+          ctx.save();
+          ctx.shadowColor = 'hsla('+hue+',100%,90%,0.7)'; ctx.shadowBlur = 5;
+          for (var i = 0; i < pts.length; i += 2) {
+            ctx.beginPath(); ctx.moveTo(pts[i].x, pts[i].y); ctx.lineTo(cx, cy);
+            ctx.strokeStyle = 'hsla('+hue+',65%,90%,'+(wA*0.38)+')';
+            ctx.lineWidth = 0.7; ctx.stroke();
+          }
+          ctx.restore();
+        }
+
+        /* edge */
+        curve(pts);
+        ctx.strokeStyle = 'hsla('+(hue+10)+',70%,88%,0.22)';
+        ctx.lineWidth = 1.0; ctx.stroke();
+      }
+
+      function drawAperture(wA, wB, wC, time) {
+        aperRot += 0.005;
+        if (time > nextDil) {
+          dilTarget = 0.22 + Math.random() * 0.76;
+          nextDil = time + 2.2 + Math.random() * 3.8;
+        }
+        dilation += (dilTarget - dilation) * 0.025;
+
+        var hue = 215*wA + 268*wB + 340*wC;
+        var OR = 26, blades = 8;
+        var innerR = OR * (0.11 + dilation * 0.58);
+
+        ctx.save(); ctx.translate(cx, cy);
+
+        /* outer ring */
+        ctx.save();
+        ctx.shadowColor = 'hsla('+hue+',90%,88%,0.8)'; ctx.shadowBlur = 20;
+        ctx.beginPath(); ctx.arc(0,0,OR,0,Math.PI*2);
+        ctx.strokeStyle = 'hsla('+hue+',65%,90%,0.55)';
+        ctx.lineWidth = 1.0; ctx.stroke();
+        ctx.restore();
+
+        ctx.beginPath(); ctx.arc(0,0,OR*0.76,0,Math.PI*2);
+        ctx.strokeStyle = 'hsla('+(hue-15)+',50%,78%,0.28)';
+        ctx.lineWidth = 0.7; ctx.stroke();
+
+        /* blades */
+        ctx.save(); ctx.rotate(aperRot);
+        for (var i = 0; i < blades; i++) {
+          var span = (Math.PI*2/blades) * (0.5 + (1-dilation)*0.42);
+          ctx.save(); ctx.rotate((i/blades)*Math.PI*2);
+          ctx.beginPath(); ctx.moveTo(innerR,0);
+          ctx.arc(0,0,OR*0.9,-span*0.5,span*0.5);
+          ctx.arc(0,0,innerR, span*0.5,-span*0.5,true);
+          ctx.closePath();
+          ctx.fillStyle = 'rgba(3,3,10,0.88)'; ctx.fill();
+          ctx.restore();
+        }
+        ctx.restore();
+
+        /* core glow */
+        var ch = 340*wC + 215*wA*0.5 + 268*wB*0.5;
+        var cg = ctx.createRadialGradient(0,0,0,0,0,innerR*1.55);
+        cg.addColorStop(0,    'rgba(255,255,255,1)');
+        cg.addColorStop(0.25, 'hsla('+ch+',90%,84%,0.9)');
+        cg.addColorStop(0.7,  'hsla('+ch+',95%,62%,0.5)');
+        cg.addColorStop(1,    'rgba(0,0,0,0)');
+        ctx.save();
+        ctx.shadowColor = 'hsla('+ch+',100%,82%,0.9)'; ctx.shadowBlur = 24;
+        ctx.beginPath(); ctx.arc(0,0,innerR*1.55,0,Math.PI*2);
+        ctx.fillStyle = cg; ctx.fill();
+        ctx.restore();
+
+        ctx.restore();
+      }
+
+      function updateTendrils(wB, time) {
+        tendrils.forEach(function(td) {
+          if (!td.active && Math.random() < 0.008 && wB > 0.18) {
+            td.active = true; td.retracting = false;
+            td.targetLen = 18 + Math.random() * 58;
+            td.angle = Math.random() * Math.PI * 2;
+            td.hue = 200 + Math.random() * 140; td.len = 0;
+          }
+          if (td.active) {
+            if (!td.retracting) {
+              td.len += (td.targetLen - td.len) * 0.055;
+              if (td.len > td.targetLen * 0.9) td.retracting = true;
+            } else {
+              td.len *= 0.91;
+              if (td.len < 0.8) { td.active = false; td.len = 0; }
+            }
+          }
+          td.waveOff += 0.038;
+        });
+      }
+
+      function drawTendrils(wB, time) {
+        tendrils.forEach(function(td) {
+          if (!td.active || td.len < 0.5) return;
+          var bR = 62;
+          var sx = cx + Math.cos(td.angle) * bR, sy = cy + Math.sin(td.angle) * bR;
+          var wave = Math.sin(time*2.8 + td.waveOff) * td.len * 0.32;
+          var pa = td.angle + Math.PI/2;
+          var er = bR + td.len;
+          var ex = cx + Math.cos(td.angle)*er + Math.cos(pa)*wave;
+          var ey = cy + Math.sin(td.angle)*er + Math.sin(pa)*wave;
+          var cr2 = bR + td.len*0.5;
+          var cw = Math.sin(time*2.2 + td.waveOff + 1.2) * td.len * 0.22;
+          var cpx = cx + Math.cos(td.angle)*cr2 + Math.cos(pa)*cw;
+          var cpy = cy + Math.sin(td.angle)*cr2 + Math.sin(pa)*cw;
+          var al = Math.min(1, td.len/12) * wB;
+
+          ctx.save();
+          ctx.shadowColor = 'hsla('+td.hue+',85%,82%,0.75)'; ctx.shadowBlur = 14;
+          ctx.beginPath(); ctx.moveTo(sx,sy); ctx.quadraticCurveTo(cpx,cpy,ex,ey);
+          ctx.strokeStyle = 'hsla('+td.hue+',80%,82%,'+(al*0.38)+')';
+          ctx.lineWidth = 4; ctx.lineCap = 'round'; ctx.stroke();
+          ctx.restore();
+
+          ctx.save();
+          ctx.shadowColor = 'hsla('+td.hue+',100%,92%,0.9)'; ctx.shadowBlur = 7;
+          ctx.beginPath(); ctx.moveTo(sx,sy); ctx.quadraticCurveTo(cpx,cpy,ex,ey);
+          ctx.strokeStyle = 'hsla('+td.hue+',60%,95%,'+(al*0.88)+')';
+          ctx.lineWidth = 1.1; ctx.lineCap = 'round'; ctx.stroke();
+          ctx.restore();
+
+          ctx.save();
+          ctx.shadowColor = 'hsla('+td.hue+',100%,92%,1)'; ctx.shadowBlur = 18;
+          ctx.beginPath(); ctx.arc(ex,ey,2.8,0,Math.PI*2);
+          ctx.fillStyle = 'hsla('+td.hue+',80%,96%,'+(al*0.92)+')'; ctx.fill();
+          ctx.restore();
+        });
+      }
+
+      function frame() {
+        t += 0.016;
+        ctx.clearRect(0, 0, W, H);
+        var w = wt(t);
+        updateTendrils(w[1], t);
+        drawTendrils(w[1], t);
+        drawBody(w[0], w[1], w[2], t);
+        drawAperture(w[0], w[1], w[2], t);
+        requestAnimationFrame(frame);
+      }
+      frame();
+
+      document.getElementById('mrs-symbol').addEventListener('click', function() {
+        dilTarget = dilation < 0.5 ? 0.92 : 0.12;
+        nextDil = t + 1.2;
+      });
+    })();
+    </script>
+
+    <script>
+    (function () {
+      /* placeholder — old PRX interactions removed */
+      void 0;
+      return;
+      var selectedUrl = null;
+
+      /* Launch: route to selectedUrl, or Helix if text present, else scroll */
+      var submitBtn   = document.getElementById('prx-submit');
+      var launchInput = document.getElementById('prx-launch-input');
+      function handleLaunch() {
+        var text = launchInput ? launchInput.value.trim() : '';
+        if (selectedUrl) {
+          window.location.href = selectedUrl;
+        } else if (text) {
+          window.location.href = '/study-builder/chat.html';
+        } else {
+          var mod = document.getElementById('modules');
+          if (mod) mod.scrollIntoView({ behavior: 'smooth' });
+        }
+      }
+      if (submitBtn)   { submitBtn.addEventListener('click', handleLaunch); }
+      if (launchInput) {
+        launchInput.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleLaunch(); }
+        });
+      }
+
+      /* ── Module picker dropdown ───────────────────────────────────── */
+      var moduleBtn  = document.getElementById('prx-module-btn');
+      var moduleDrop = document.getElementById('prx-module-dropdown');
+      var modeLabel  = document.getElementById('prx-mode-label');
+      if (moduleBtn && moduleDrop) {
+        moduleBtn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          var open = !moduleDrop.hidden;
+          moduleDrop.hidden = open;
+          moduleBtn.setAttribute('aria-expanded', String(!open));
+          /* close search dropdown */
+          if (searchDrop) searchDrop.hidden = true;
+          if (searchBtn)  searchBtn.setAttribute('aria-expanded', 'false');
+        });
+        document.addEventListener('click', function () {
+          if (moduleDrop) moduleDrop.hidden = true;
+          if (moduleBtn)  moduleBtn.setAttribute('aria-expanded', 'false');
+        });
+        moduleDrop.addEventListener('click', function (e) { e.stopPropagation(); });
+
+        /* Module item selected — update label, check, store URL */
+        moduleDrop.querySelectorAll('.prx-dd-item:not(.prx-dd-item-soon)').forEach(function (item) {
+          item.addEventListener('click', function (e) {
+            e.preventDefault();
+            selectedUrl = item.getAttribute('href');
+            var label = item.getAttribute('data-label') ||
+                        (item.querySelector('.prx-dd-name') || {}).textContent || 'Model';
+            if (modeLabel) modeLabel.textContent = label;
+
+            moduleDrop.querySelectorAll('.prx-dd-item').forEach(function (i) {
+              i.classList.remove('prx-dd-item--active');
+            });
+            item.classList.add('prx-dd-item--active');
+
+            moduleDrop.hidden = true;
+            moduleBtn.setAttribute('aria-expanded', 'false');
+            if (launchInput) launchInput.focus();
+          });
+        });
+      }
+
+      /* ── Search mode dropdown ─────────────────────────────────────── */
+      var searchBtn   = document.getElementById('prx-search-btn');
+      var searchDrop  = document.getElementById('prx-search-dropdown');
+      var searchLabel = document.getElementById('prx-search-label');
+      var currentMode = 'general';
+      if (searchBtn && searchDrop) {
+        searchBtn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          var open = !searchDrop.hidden;
+          searchDrop.hidden = open;
+          searchBtn.setAttribute('aria-expanded', String(!open));
+          /* close module dropdown */
+          if (moduleDrop) moduleDrop.hidden = true;
+          if (moduleBtn)  moduleBtn.setAttribute('aria-expanded', 'false');
+        });
+        searchDrop.addEventListener('click', function (e) { e.stopPropagation(); });
+
+        searchDrop.querySelectorAll('.prx-search-mode-item').forEach(function (item) {
+          item.addEventListener('click', function () {
+            currentMode = item.getAttribute('data-mode');
+            var name = (item.querySelector('.prx-dd-name') || {}).textContent || 'Search';
+            if (searchLabel) searchLabel.textContent = name;
+
+            searchDrop.querySelectorAll('.prx-search-mode-item').forEach(function (i) {
+              i.classList.remove('prx-dd-item--active');
+              var chk = i.querySelector('.prx-dd-check');
+              if (chk) chk.classList.remove('prx-dd-check--visible');
+            });
+            item.classList.add('prx-dd-item--active');
+            var chk = item.querySelector('.prx-dd-check');
+            if (chk) chk.classList.add('prx-dd-check--visible');
+
+            searchDrop.hidden = true;
+            searchBtn.setAttribute('aria-expanded', 'false');
+            if (launchInput) launchInput.focus();
+          });
+        });
+      }
+    })();
+
+    /* ── Workspace Detail Modal (unchanged from original) ──────────── */
     (function () {
       var VIS = {};
 
@@ -382,45 +1575,42 @@
         },
       };
 
-      var bd      = document.getElementById('ws-bd');
-      var visEl   = document.getElementById('ws-vis');
-      var eyEl    = document.getElementById('ws-eyebrow');
-      var titEl   = document.getElementById('ws-title');
-      var descEl  = document.getElementById('ws-desc');
-      var capsEl  = document.getElementById('ws-caps');
-      var ctaEl   = document.getElementById('ws-cta');
+      var bd = document.getElementById('ws-bd');
+      var visEl = document.getElementById('ws-vis');
+      var eyEl = document.getElementById('ws-eyebrow');
+      var titEl = document.getElementById('ws-title');
+      var descEl = document.getElementById('ws-desc');
+      var capsEl = document.getElementById('ws-caps');
+      var ctaEl = document.getElementById('ws-cta');
       var closeBtn = document.getElementById('ws-close');
 
       function openModal(cardId) {
         var c = CARDS[cardId];
         if (!c || !bd) return;
-        visEl.innerHTML  = VIS[cardId] || '';
+        visEl.innerHTML = VIS[cardId] || '';
         eyEl.textContent = c.eyebrow;
-        eyEl.className   = 'ws-modal-eyebrow ' + c.eyebrowClass;
+        eyEl.className = 'ws-modal-eyebrow ' + c.eyebrowClass;
         titEl.textContent = c.title;
         descEl.textContent = c.desc;
         capsEl.innerHTML = c.caps.map(function (cap) {
           return '<li' + (cap[0] ? ' class="is-live"' : '') + '>' + cap[1] + '</li>';
         }).join('');
         ctaEl.textContent = c.cta;
-        ctaEl.href        = c.ctaHref;
-        ctaEl.className   = 'ws-modal-cta ' + c.ctaClass;
+        ctaEl.href = c.ctaHref;
+        ctaEl.className = 'ws-modal-cta ' + c.ctaClass;
         bd.classList.add('is-open');
         document.body.style.overflow = 'hidden';
       }
-
       function closeModal() {
         if (!bd) return;
         bd.classList.remove('is-open');
         document.body.style.overflow = '';
       }
-
       if (bd && closeBtn) {
         closeBtn.addEventListener('click', closeModal);
         bd.addEventListener('click', function (e) { if (e.target === bd) closeModal(); });
       }
       document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeModal(); });
-
       function initCards() {
         document.querySelectorAll('[data-ws-card]').forEach(function (card) {
           var mock = card.querySelector('.dash-mock');
@@ -433,7 +1623,6 @@
           card.addEventListener('click', function () { openModal(card.dataset.wsCard); });
         });
       }
-
       if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', initCards);
       } else {

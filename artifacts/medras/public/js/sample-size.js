@@ -2957,7 +2957,7 @@
       "</tbody></table></section>" +
       (notes ? "<section><h2>Notes</h2><ul>" + notes + "</ul></section>" : "") +
       (warnings ? "<section><h2>Warnings</h2><ul>" + warnings + "</ul></section>" : "") +
-      "<footer>MedRAS — Medical Research Acceleration System. " +
+      "<footer>MedRAS — Medical Research Automation Suite. " +
       "All statistics computed by validated formulas, not language models. " +
       "Cite this report's formula and constants in your protocol's sample-size justification." +
       "</footer></body></html>";
